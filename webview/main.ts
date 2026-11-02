@@ -6,6 +6,7 @@
  * access (CSP default-src 'none'); all actions are postMessage'd to the host.
  */
 import { groupLabel, VERDICT_LEGEND } from '../src/grader/verdicts';
+import { menuLabelMax, middleEllipsis } from './text';
 import { SERVER_SCORE_CAP } from '../src/shared/constants';
 import { filterProblems, matches, SORTS, sortProblems } from './filters';
 import { installTooltips } from './tooltip';
@@ -80,55 +81,86 @@ export interface MenuItem {
   disabledReason?: string | null;
 }
 
-/** Which "…" menu is open (one at a time); kept across re-renders. */
-let openMenu: string | null = null;
-
 /**
- * "…" menu for secondary actions. Opens below the button, closes on outside
- * click, Escape or after choosing an item.
+ * Right-click menu with the same actions as the visible icons (in addition
+ * to them, never instead). Opens at the pointer (or under the element for
+ * the keyboard context-menu key / Shift+F10); closes on outside click,
+ * Escape, Tab, scroll or after choosing. Long labels are cut in the middle;
+ * the full label is in the item's tooltip and aria-label.
  */
-function menuButton(id: string, label: string, items: MenuItem[]): HTMLElement {
-  const wrap = el('span', { class: 'menu-wrap' });
-  const btn = iconButton('ellipsis', label, () => {
-    openMenu = openMenu === id ? null : id;
-    forceRender();
-    if (openMenu === id) document.querySelector<HTMLButtonElement>(`[data-menu="${id}"] .menu-item:not([disabled])`)?.focus();
+let ctxMenu: HTMLElement | null = null;
+let ctxReturnFocus: HTMLElement | null = null;
+
+function closeContextMenu(refocus = false): void {
+  if (!ctxMenu) return;
+  ctxMenu.remove();
+  ctxMenu = null;
+  if (refocus) ctxReturnFocus?.focus();
+  ctxReturnFocus = null;
+}
+
+function openContextMenu(x: number, y: number, items: MenuItem[], from: HTMLElement | null): void {
+  closeContextMenu();
+  const max = menuLabelMax(window.innerWidth);
+  const menu = el('div', { class: 'menu context-menu', role: 'menu' },
+    ...items.map((it) => {
+      const shown = middleEllipsis(it.label, max);
+      const tip = [shown !== it.label ? it.label : '', it.tip ?? '', it.disabledReason ? `(${it.disabledReason})` : ''].filter(Boolean).join(' — ');
+      const b = el('button', {
+        class: 'menu-item', type: 'button', role: 'menuitem', disabled: !!it.disabledReason,
+        title: tip || undefined,
+        onclick: () => {
+          closeContextMenu();
+          it.onclick();
+        },
+      }, icon(it.icon), el('span', { class: 'menu-label' }, shown));
+      b.setAttribute('aria-label', it.label);
+      return b;
+    }),
+  );
+  document.body.append(menu);
+  const w = menu.offsetWidth;
+  const h = menu.offsetHeight;
+  menu.style.left = `${Math.max(4, Math.min(x, window.innerWidth - w - 4))}px`;
+  menu.style.top = `${y + h > window.innerHeight - 4 ? Math.max(4, y - h) : y}px`;
+  ctxMenu = menu;
+  ctxReturnFocus = from;
+  menu.querySelector<HTMLButtonElement>('.menu-item:not([disabled])')?.focus();
+}
+
+/** Attach the right-click menu to an element; `items` is evaluated when it opens. */
+function withContextMenu<T extends HTMLElement>(target: T, items: () => MenuItem[]): T {
+  target.addEventListener('contextmenu', (e) => {
+    // Text fields keep the normal Cut / Copy / Paste menu.
+    if ((e.target as Element).closest?.('input, textarea, select')) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const r = target.getBoundingClientRect();
+    const keyboard = e.clientX === 0 && e.clientY === 0;
+    openContextMenu(keyboard ? r.left + 8 : e.clientX, keyboard ? r.bottom : e.clientY, items(), (document.activeElement as HTMLElement) ?? null);
   });
-  btn.setAttribute('aria-haspopup', 'menu');
-  btn.setAttribute('aria-expanded', String(openMenu === id));
-  wrap.append(btn);
-  if (openMenu === id) {
-    wrap.append(
-      el('div', { class: 'menu', role: 'menu', 'data-menu': id },
-        ...items.map((it) =>
-          el('button', {
-            class: 'menu-item', type: 'button', role: 'menuitem', disabled: !!it.disabledReason,
-            title: it.disabledReason ? `${it.tip ?? it.label} (${it.disabledReason})` : it.tip ?? undefined,
-            onclick: () => {
-              openMenu = null;
-              forceRender();
-              it.onclick();
-            },
-          }, icon(it.icon), el('span', {}, it.label)),
-        ),
-      ),
-    );
-  }
-  return wrap;
+  return target;
 }
 
 document.addEventListener('mousedown', (e) => {
-  if (openMenu && !(e.target as Element).closest?.('.menu-wrap')) {
-    openMenu = null;
-    forceRender();
-  }
+  if (ctxMenu && !(e.target as Element).closest?.('.context-menu')) closeContextMenu();
 });
 document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape' && openMenu) {
-    openMenu = null;
-    forceRender();
+  if (!ctxMenu) return;
+  if (e.key === 'Escape') {
+    e.preventDefault();
+    closeContextMenu(true);
+  } else if (e.key === 'Tab') {
+    closeContextMenu();
+  } else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+    e.preventDefault();
+    const items = [...ctxMenu.querySelectorAll<HTMLButtonElement>('.menu-item:not([disabled])')];
+    const i = items.indexOf(document.activeElement as HTMLButtonElement);
+    items[(i + (e.key === 'ArrowDown' ? 1 : items.length - 1)) % items.length]?.focus();
   }
 });
+window.addEventListener('blur', () => closeContextMenu());
+document.addEventListener('scroll', () => closeContextMenu(), true);
 
 function fmt(n: number | null): string {
   if (n === null) return '–';
@@ -143,12 +175,17 @@ function scoreClass(score: number | null, rawSum = false, full: number | null = 
   return 'score-partial';
 }
 
+/** "Out of" for a score: null for raw-sum; the server cap when the value is missing (older saved state). */
+function outOf(s: ScoreView): number | null {
+  return s.fullScore === undefined ? (s.rawSum ? null : SERVER_SCORE_CAP) : s.fullScore;
+}
+
 function scorePill(s: ScoreView): HTMLElement {
   const tip =
     s.counted === null
       ? 'Not attempted yet'
-      : `Counted score: ${fmt(s.counted)}${s.fullScore !== null ? ` / ${fmt(s.fullScore)}` : ''} (your best submission${s.penaltyLabel ? `, ${s.penaltyLabel}` : ''}) · ${s.attempts} attempt${s.attempts === 1 ? '' : 's'}`;
-  return el('span', { class: `pill score-pill ${scoreClass(s.counted, s.rawSum, s.fullScore)}`, title: tip, 'aria-label': tip }, fmt(s.counted));
+      : `Counted score: ${fmt(s.counted)}${outOf(s) !== null ? ` / ${fmt(outOf(s))}` : ''} (your best submission${s.penaltyLabel ? `, ${s.penaltyLabel}` : ''}) · ${s.attempts} attempt${s.attempts === 1 ? '' : 's'}`;
+  return el('span', { class: `pill score-pill ${scoreClass(s.counted, s.rawSum, outOf(s))}`, title: tip, 'aria-label': tip }, fmt(s.counted));
 }
 
 /** Name and subtitle without repeating the name ("104_68_1_exam2_P1: Scholarship" → subtitle "Scholarship"). */
@@ -383,7 +420,7 @@ function scoreCard(sc: ScoreView): HTMLElement {
       el('span', { class: 'grow' }),
       sc.source === 'problem-list' ? el('span', { class: 'muted small', title: 'Hint/AI-assist penalties read from the problem list page' }, 'from problem list') : null,
     ),
-    el('div', { class: `score ${scoreClass(sc.counted, sc.rawSum, sc.fullScore)}` }, sc.counted === null ? 'Not attempted' : sc.fullScore === null ? fmt(sc.counted) : `${fmt(sc.counted)} / ${fmt(sc.fullScore)}`),
+    el('div', { class: `score ${scoreClass(sc.counted, sc.rawSum, outOf(sc))}` }, sc.counted === null ? 'Not attempted' : outOf(sc) === null ? fmt(sc.counted) : `${fmt(sc.counted)} / ${fmt(outOf(sc))}`),
     el('div', { class: 'score-facts small' },
       el('span', {}, 'Best ', el('strong', {}, fmt(sc.best))),
       el('span', {}, 'Latest ', el('strong', {}, fmt(sc.latest))),
@@ -432,22 +469,15 @@ function renderCurrent(s: ViewState): void {
     icon(pickerOpen ? 'chevron-up' : 'chevron-down'),
   );
   b.append(
-    el('div', { class: 'field' },
+    withContextMenu(el('div', { class: 'field problem-field' },
       el('div', { class: 'field-label' }, 'Problem',
         el('span', { class: 'grow' }),
+        // All actions visible (as before the "…" menu); right-click offers the same.
         p ? iconButton('book', 'Open statement', () => send({ type: 'openStatement', problemId: p.id })) : null,
-        menuButton('problem', 'More actions for this problem', [
-          ...(p
-            ? [
-                { icon: 'copy', label: 'Copy problem name', onclick: () => send({ type: 'copyName', problemId: p.id }) },
-                { icon: 'globe', label: 'Open on the grader website', onclick: () => send({ type: 'openProblemInBrowser', problemId: p.id }) },
-              ]
-            : []),
-          { icon: 'sparkle', label: 'Auto-detect the problem', tip: 'Match this file to a problem again (file name, CPH data)', onclick: () => send({ type: 'autoDetect' }) },
-          ...(p && p.source !== 'suggested'
-            ? [{ icon: 'close', label: 'Unlink this file', tip: 'Remove the link and stop auto-detecting a problem for this file', onclick: () => send({ type: 'unmapProblem' }) }]
-            : []),
-        ]),
+        p ? iconButton('copy', 'Copy problem name', () => send({ type: 'copyName', problemId: p.id })) : null,
+        p ? iconButton('globe', 'Open on the grader website', () => send({ type: 'openProblemInBrowser', problemId: p.id })) : null,
+        iconButton('sparkle', 'Auto-detect the problem for this file again', () => send({ type: 'autoDetect' })),
+        p && p.source !== 'suggested' ? iconButton('close', 'Unlink this file', () => send({ type: 'unmapProblem' })) : null,
       ),
       combo,
       pickerOpen ? (renderPickerList(s), pickerBox) : null,
@@ -472,7 +502,7 @@ function renderCurrent(s: ViewState): void {
         : null,
       s.matching.note ? el('p', { class: 'hint' }, icon('info'), ' ', s.matching.note) : null,
       s.linkedFiles.length > 1 ? linkedFilesNotice(s) : null,
-    ),
+    ), () => headerMenuItems(p)),
   );
 
   if (p) {
@@ -767,6 +797,36 @@ function renderHistory(s: ViewState): void {
   if (H.error) b.append(el('div', { class: 'error' }, icon('error'), ' ', H.error));
 }
 
+/** Right-click on the problem header: the same actions as its icons. */
+function headerMenuItems(p: ViewState['problem']): MenuItem[] {
+  return [
+    ...(p
+      ? [
+          { icon: 'book', label: 'Open statement', onclick: () => send({ type: 'openStatement', problemId: p.id }) },
+          { icon: 'copy', label: 'Copy problem name', onclick: () => send({ type: 'copyName', problemId: p.id }) },
+          { icon: 'globe', label: 'Open on the grader website', onclick: () => send({ type: 'openProblemInBrowser', problemId: p.id }) },
+        ]
+      : []),
+    { icon: 'sparkle', label: 'Auto-detect the problem for this file again', onclick: () => send({ type: 'autoDetect' }) },
+    ...(p && p.source !== 'suggested' ? [{ icon: 'close', label: 'Unlink this file', tip: "Auto-detect won't re-link it", onclick: () => send({ type: 'unmapProblem' }) }] : []),
+  ];
+}
+
+/** Right-click on a problem row: the row's icons, plus linking the open file and the website. */
+function rowMenuItems(p: ProblemView, s: ViewState): MenuItem[] {
+  const fileName = s.file?.name;
+  return [
+    ...(fileName ? [{ icon: 'link', label: `Link to ${fileName}`, tip: `Use ${p.name} for ${fileName}`, onclick: () => send({ type: 'mapProblem', problemId: p.id }) }] : []),
+    { icon: 'copy', label: 'Copy problem name', onclick: () => send({ type: 'copyName', problemId: p.id }) },
+    p.hasFile
+      ? { icon: 'go-to-file', label: 'Go to linked file', onclick: () => send({ type: 'goToFile', problemId: p.id }) }
+      : { icon: 'search', label: 'Find file by name', onclick: () => send({ type: 'findFile', problemId: p.id }) },
+    { icon: 'new-file', label: 'New file for this problem', onclick: () => send({ type: 'newFile', problemId: p.id }) },
+    { icon: 'book', label: 'Open statement', onclick: () => send({ type: 'openStatement', problemId: p.id }) },
+    { icon: 'globe', label: 'Open on the grader website', onclick: () => send({ type: 'openProblemInBrowser', problemId: p.id }) },
+  ];
+}
+
 function problemRow(p: ProblemView, s: ViewState, where: 'picker' | 'list'): HTMLElement {
   const mapped = s.problem?.id === p.id;
   const sub = titleParts(p).subtitle;
@@ -792,22 +852,21 @@ function problemRow(p: ProblemView, s: ViewState, where: 'picker' | 'list'): HTM
   // Tooltip: just the names (bold "name #id", the title below).
   main.dataset.tipTitle = `${p.name} #${p.id}`;
   main.dataset.tip = main.disabled ? `${sub ? `${sub} · ` : ''}Open a source file to link a problem` : (sub ?? '');
-  const fileName = s.file?.name;
-  return el('div', { class: `problem-row${mapped ? ' mapped' : ''}`, role: where === 'picker' ? 'option' : undefined, 'aria-selected': where === 'picker' ? String(mapped) : undefined },
-    main,
-    scorePill(p.score),
-    el('span', { class: 'row-actions' },
-      iconButton('book', 'Open statement', () => send({ type: 'openStatement', problemId: p.id })),
-      menuButton(`row-${where}-${p.id}`, `More actions for ${p.name}`, [
-        ...(fileName && where === 'list' ? [{ icon: 'link', label: `Link to ${fileName}`, tip: `Use ${p.name} for ${fileName}`, onclick: () => send({ type: 'mapProblem', problemId: p.id }) }] : []),
-        { icon: 'copy', label: 'Copy problem name', onclick: () => send({ type: 'copyName', problemId: p.id }) },
+  // Icons as before the "…" menu (shown on hover / keyboard focus); right-click offers the same and more.
+  return withContextMenu(
+    el('div', { class: `problem-row${mapped ? ' mapped' : ''}`, role: where === 'picker' ? 'option' : undefined, 'aria-selected': where === 'picker' ? String(mapped) : undefined },
+      main,
+      scorePill(p.score),
+      el('span', { class: 'row-actions' },
+        iconButton('copy', 'Copy problem name', () => send({ type: 'copyName', problemId: p.id })),
         p.hasFile
-          ? { icon: 'go-to-file', label: 'Go to linked file', onclick: () => send({ type: 'goToFile', problemId: p.id }) }
-          : { icon: 'search', label: 'Find file by name', onclick: () => send({ type: 'findFile', problemId: p.id }) },
-        { icon: 'new-file', label: 'New file for this problem', onclick: () => send({ type: 'newFile', problemId: p.id }) },
-        { icon: 'globe', label: 'Open on the grader website', onclick: () => send({ type: 'openProblemInBrowser', problemId: p.id }) },
-      ]),
+          ? iconButton('go-to-file', 'Go to linked file', () => send({ type: 'goToFile', problemId: p.id }))
+          : iconButton('search', 'Find file by name', () => send({ type: 'findFile', problemId: p.id })),
+        iconButton('new-file', 'New file for this problem', () => send({ type: 'newFile', problemId: p.id })),
+        iconButton('book', 'Open statement', () => send({ type: 'openStatement', problemId: p.id })),
+      ),
     ),
+    () => rowMenuItems(p, s),
   );
 }
 
@@ -954,10 +1013,10 @@ function sectionKeys(s: ViewState): Record<string, string> {
     banner: j([s.connection, s.problems.loaded, s.history.items.length > 0]),
     prompt: j([s.prompt]),
     account: j([s.account, s.baseUrl, showLoginForm]),
-    current: j([openMenu, s.notLinked, s.linkedNotice, s.linkedFiles, s.file, s.problem, s.languages, s.submit, s.matching, s.testcases, s.cph, s.gradingElsewhere, pickerOpen, pickerOpen ? s.problems : s.problems.loaded]),
+    current: j([s.notLinked, s.linkedNotice, s.linkedFiles, s.file, s.problem, s.languages, s.submit, s.matching, s.testcases, s.cph, s.gradingElsewhere, pickerOpen, pickerOpen ? s.problems : s.problems.loaded]),
     result: j([s.result, s.submit.enabled, s.submit.reason, legendOpen === 'result']),
     history: j([pid, s.history, legendOpen === 'history']),
-    problems: j([openMenu, s.problems, !!s.file, pid, ui.filter]),
+    problems: j([s.problems, !!s.file, pid, ui.filter]),
   };
 }
 
