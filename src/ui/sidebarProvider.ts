@@ -114,6 +114,9 @@ export class SidebarProvider implements vscode.WebviewViewProvider, vscode.Dispo
       case 'setFilter':
         if (m.filter && typeof m.filter === 'object') await c.setProblemFilter(m.filter);
         return;
+      case 'unlinkLinkedFile':
+        if (Number.isInteger(m.index)) await c.unlinkLinkedFile(m.index);
+        return;
       case 'promptAnswer':
         if (Number.isInteger(m.id)) c.answerPrompt(m.id, typeof m.button === 'string' ? m.button : null);
         return;

@@ -12,11 +12,14 @@ import {
 } from './mappingFile';
 import { affectedByDelete, expired, type LocatedEntry, planRename } from './mappingOps';
 import { normalizeAbsPath, normalizeRelPath, pathKey, remapPath } from './paths';
+import { type AutoMatch, autoAfterDelete, autoAfterRename } from './problemFiles';
 
 const STATE_KEY = 'cedtGrader.mappings';
 const LEGACY_KEY = 'cedtGrader.mapping';
 /** Files the user explicitly unlinked: auto-detection must not re-link them. */
 const UNLINKED_KEY = 'cedtGrader.unlinked';
+/** Remembered auto-matches (file name / CPH data) of files that were open. */
+const AUTO_KEY = 'cedtGrader.autoMatches';
 
 /** workspaceState entry: also remembers the absolute path, for reverse lookup. */
 interface StateEntry extends MappingEntry {
@@ -42,6 +45,46 @@ export class MappingStore {
     if (!folder) return { memento: this.ctx.globalState, key: pathKey(uri.fsPath), oldKey: uri.fsPath };
     const rel = normalizeRelPath(vscode.workspace.asRelativePath(uri, false));
     return { memento: this.ctx.workspaceState, key: `${folder.name}/${pathKey(rel)}`, oldKey: `${folder.name}/${rel}`, folder, rel };
+  }
+
+  // ------------------------------------------------- remembered auto-matches
+
+  autoMatches(): AutoMatch[] {
+    return this.ctx.workspaceState.get<AutoMatch[]>(AUTO_KEY, []);
+  }
+
+  /** Remember that an open file matched a problem automatically (never over a manual link or "not linked"). */
+  async recordAuto(uri: vscode.Uri, problemId: number, how: 'cph' | 'filename'): Promise<void> {
+    const k = pathKey(uri.fsPath);
+    const list = this.autoMatches().filter((a) => pathKey(a.fsPath) !== k);
+    list.push({ fsPath: normalizeAbsPath(uri.fsPath), problemId, how, at: Date.now() });
+    await this.ctx.workspaceState.update(AUTO_KEY, list.slice(-500));
+  }
+
+  async dropAuto(uri: vscode.Uri): Promise<void> {
+    const k = pathKey(uri.fsPath);
+    const list = this.autoMatches();
+    const next = list.filter((a) => pathKey(a.fsPath) !== k);
+    if (next.length !== list.length) await this.ctx.workspaceState.update(AUTO_KEY, next);
+  }
+
+  /** Rename: an auto-match follows the file only if it still matches by name. */
+  async renameAuto(oldUri: vscode.Uri, newUri: vscode.Uri, problemName: (id: number) => string | undefined): Promise<void> {
+    await this.ctx.workspaceState.update(AUTO_KEY, autoAfterRename(this.autoMatches(), oldUri.fsPath, newUri.fsPath, problemName));
+  }
+
+  async deleteAuto(uri: vscode.Uri): Promise<void> {
+    await this.ctx.workspaceState.update(AUTO_KEY, autoAfterDelete(this.autoMatches(), uri.fsPath));
+  }
+
+  /** Absolute paths of files explicitly marked "not linked". */
+  unlinkedPaths(): string[] {
+    return [this.ctx.workspaceState, this.ctx.globalState].flatMap((m) => Object.values(m.get<Record<string, string>>(UNLINKED_KEY, {})));
+  }
+
+  /** Files with a saved (non-stale) link to a problem other than `problemId`. */
+  async linkedElsewhere(problemId: number, baseUrl: string): Promise<string[]> {
+    return (await this.allEntries()).filter((e) => !e.entry.staleSince && e.entry.problemId !== problemId && (!e.entry.baseUrl || e.entry.baseUrl === baseUrl)).map((e) => e.fsPath);
   }
 
   // ------------------------------------------------- explicit "not linked"

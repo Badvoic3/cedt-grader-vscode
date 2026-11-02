@@ -811,21 +811,35 @@ function problemRow(p: ProblemView, s: ViewState, where: 'picker' | 'list'): HTM
 }
 
 let linkedOpen = false;
+const HOW_TEXT: Record<string, string> = { chosen: 'chosen by you', filename: 'matched by file name', cph: 'matched from CPH data' };
 function linkedFilesNotice(s: ViewState): HTMLElement {
   const box = el('div', { class: 'notice linked' });
   box.append(
     el('div', { class: 'row' },
       icon('files'),
-      el('span', { class: 'grow small' }, `${s.linkedFiles.length} files are linked to this problem`),
-      el('button', { class: 'link small', type: 'button', 'aria-expanded': String(linkedOpen), title: linkedOpen ? 'Hide the list' : 'Show the linked files', onclick: () => { linkedOpen = !linkedOpen; forceRender(); } }, linkedOpen ? 'Hide' : 'Show'),
+      el('span', { class: 'grow small' }, s.linkedNotice ?? `${s.linkedFiles.length} files are linked to this problem`),
+      el('button', { class: 'link small', type: 'button', 'aria-expanded': String(linkedOpen), title: linkedOpen ? 'Hide the list' : 'Show the files', onclick: () => { linkedOpen = !linkedOpen; forceRender(); } }, linkedOpen ? 'Hide' : 'Show'),
     ),
   );
   if (linkedOpen) {
     box.append(
       el('div', { class: 'linked-list' },
         ...s.linkedFiles.map((f, i) =>
-          el('button', { class: `history-row${f.current ? ' current' : ''}`, type: 'button', title: f.current ? 'This file' : `Open ${f.path}`, disabled: f.current, onclick: () => send({ type: 'openLinkedFile', index: i }) },
-            icon(f.current ? 'circle-filled' : 'go-to-file'), el('span', { class: 'grow ellipsis' }, f.path), f.current ? el('span', { class: 'muted small' }, 'this file') : null),
+          el('div', { class: `linked-row${f.current ? ' current' : ''}` },
+            el('div', { class: 'row' },
+              icon(f.current ? 'circle-filled' : 'file'),
+              el('span', { class: 'grow ellipsis', title: f.path }, f.path),
+            ),
+            el('div', { class: 'row gap small' },
+              el('span', { class: 'muted grow' }, f.current ? `this file · ${HOW_TEXT[f.how]}` : HOW_TEXT[f.how]),
+              f.current ? null : button('Open', () => send({ type: 'openLinkedFile', index: i }), { title: `Open ${f.path}` }),
+              f.current
+                ? null
+                : f.how === 'chosen'
+                  ? button('Unlink', () => send({ type: 'unlinkLinkedFile', index: i }), { title: `Remove the link of ${f.path} (the file is not deleted)` })
+                  : button("Don't match this file", () => send({ type: 'unlinkLinkedFile', index: i }), { title: `Stop matching ${f.path} to this problem (the file is not changed)` }),
+            ),
+          ),
         ),
       ),
       el('div', { class: 'row gap' }, button('Unlink the other files', () => send({ type: 'keepOnlyThisFile' }), { title: 'Removes only the links; the files themselves are not deleted' })),
@@ -930,7 +944,7 @@ function sectionKeys(s: ViewState): Record<string, string> {
     banner: j([s.connection, s.problems.loaded, s.history.items.length > 0]),
     prompt: j([s.prompt]),
     account: j([s.account, s.baseUrl, showLoginForm]),
-    current: j([openMenu, s.notLinked, s.file, s.problem, s.languages, s.submit, s.matching, s.testcases, s.cph, s.gradingElsewhere, pickerOpen, pickerOpen ? s.problems : s.problems.loaded]),
+    current: j([openMenu, s.notLinked, s.linkedNotice, s.file, s.problem, s.languages, s.submit, s.matching, s.testcases, s.cph, s.gradingElsewhere, pickerOpen, pickerOpen ? s.problems : s.problems.loaded]),
     result: j([s.result, s.submit.enabled, s.submit.reason, legendOpen === 'result']),
     history: j([pid, s.history, legendOpen === 'history']),
     problems: j([openMenu, s.problems, !!s.file, pid, ui.filter]),

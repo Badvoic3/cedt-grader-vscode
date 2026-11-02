@@ -40,6 +40,7 @@ const base: ViewState = {
   problem: null,
   matching: { suggestions: [], ambiguous: null, note: null },
   linkedFiles: [],
+  linkedNotice: null,
   cphTip: false,
   notLinked: false,
   prompt: null,
@@ -488,15 +489,18 @@ describe.runIf(existsSync(resolve(__dirname, '../esbuild.mjs')))('sidebar webvie
 
   it('duplicate links notice, jump to a file, keep only this one', () => {
     const { doc, sent, post } = boot();
-    post({ ...loggedIn, linkedFiles: [{ path: 'a/sol.cpp', current: true }, { path: 'b/sol_v2.cpp', current: false }] });
+    post({ ...loggedIn, linkedFiles: [{ path: 'a/sol.cpp', current: true, how: 'chosen' }, { path: 'b/sol_v2.cpp', current: false, how: 'chosen' }], linkedNotice: '2 files are linked to this problem' });
     const n = doc.querySelector('#sec-current .notice.linked')!;
     expect(n.textContent).toContain('2 files are linked to this problem');
     [...n.querySelectorAll<HTMLButtonElement>('button')].find((b) => b.textContent === 'Show')!.click();
-    const rows = doc.querySelectorAll<HTMLButtonElement>('#sec-current .notice.linked .history-row');
+    const rows = doc.querySelectorAll<HTMLElement>('#sec-current .notice.linked .linked-row');
     expect(rows).toHaveLength(2);
-    expect(rows[0].disabled).toBe(true); // this file
-    rows[1].click();
+    expect(rows[0].textContent).toContain('this file · chosen by you');
+    expect(rows[0].querySelector('button')).toBeNull(); // no actions on this file
+    [...rows[1].querySelectorAll<HTMLButtonElement>('button')].find((b) => b.textContent === 'Open')!.click();
     expect(sent.at(-1)).toEqual({ type: 'openLinkedFile', index: 1 });
+    [...rows[1].querySelectorAll<HTMLButtonElement>('button')].find((b) => b.textContent === 'Unlink')!.click();
+    expect(sent.at(-1)).toEqual({ type: 'unlinkLinkedFile', index: 1 });
     [...doc.querySelectorAll<HTMLButtonElement>('#sec-current .notice.linked button')].find((b) => b.textContent === 'Unlink the other files')!.click();
     expect(sent.at(-1)).toEqual({ type: 'keepOnlyThisFile' });
   });
@@ -537,6 +541,36 @@ describe.runIf(existsSync(resolve(__dirname, '../esbuild.mjs')))('sidebar webvie
     sel.value = 'score-desc';
     sel.dispatchEvent(new dom.window.Event('change'));
     expect(sent.at(-1)).toEqual({ type: 'setFilter', filter: { status: 'all', topic: null, sort: 'score-desc' } });
+  });
+
+  it('same-name notice: name-matched other file offers "Don\'t match this file"', () => {
+    const { doc, sent, post } = boot();
+    post({
+      ...loggedIn,
+      linkedFiles: [
+        { path: 'data algo/da68_f2_zero_one_subset_sum.cpp', current: true, how: 'filename' },
+        { path: 'i2cedt/da68_f2_zero_one_subset_sum.cpp', current: false, how: 'chosen' },
+      ],
+      linkedNotice: 'Another file with the same name also matches this problem: i2cedt/da68_f2_zero_one_subset_sum.cpp',
+    });
+    const n = doc.querySelector('#sec-current .notice.linked')!;
+    expect(n.textContent).toContain('Another file with the same name also matches this problem: i2cedt/da68_f2_zero_one_subset_sum.cpp');
+    [...n.querySelectorAll<HTMLButtonElement>('button')].find((b) => b.textContent === 'Show')!.click();
+    const rows = doc.querySelectorAll<HTMLElement>('#sec-current .linked-row');
+    expect(rows[0].textContent).toContain('this file · matched by file name');
+    expect(rows[1].textContent).toContain('chosen by you');
+    post({
+      ...loggedIn,
+      linkedFiles: [
+        { path: 'i2cedt/da68_f2_zero_one_subset_sum.cpp', current: true, how: 'chosen' },
+        { path: 'data algo/da68_f2_zero_one_subset_sum.cpp', current: false, how: 'filename' },
+      ],
+      linkedNotice: 'Another file with the same name also matches this problem: data algo/da68_f2_zero_one_subset_sum.cpp',
+    });
+    const row = doc.querySelectorAll<HTMLElement>('#sec-current .linked-row')[1];
+    expect(row.textContent).toContain('matched by file name');
+    [...row.querySelectorAll<HTMLButtonElement>('button')].find((b) => b.textContent === "Don't match this file")!.click();
+    expect(sent.at(-1)).toEqual({ type: 'unlinkLinkedFile', index: 1 });
   });
 
   it('inline prompt (no modal): text, detail and plain buttons answer by id', () => {

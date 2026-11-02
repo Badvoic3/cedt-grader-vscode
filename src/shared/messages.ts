@@ -142,7 +142,10 @@ export interface ViewState {
   } | null;
   problem: (ProblemView & { source: MatchSourceView; sourceLabel: string; unavailable: boolean }) | null;
   /** All files linked to the current problem when there are several (duplicate notice). */
-  linkedFiles: { path: string; current: boolean }[];
+  /** Files for the current problem (2+ → notice); current file first. */
+  linkedFiles: { path: string; current: boolean; how: 'chosen' | 'cph' | 'filename' }[];
+  /** "Another file with the same name also matches…" / "N files are linked to this problem". */
+  linkedNotice: string | null;
   /** Show the dismissible "install CPH" tip. */
   cphTip: boolean;
   /** The file was explicitly unlinked: "Not linked to a problem" (auto-detection off). */
@@ -236,6 +239,7 @@ export type FromWebview =
   | { type: 'setFilter'; filter: ProblemFilter }
   | { type: 'autoDetect' }
   | { type: 'promptAnswer'; id: number; button: string | null }
+  | { type: 'unlinkLinkedFile'; index: number }
   | { type: 'problemRowClick'; problemId: number }
   | { type: 'openLinkedFile'; index: number }
   | { type: 'keepOnlyThisFile' }
