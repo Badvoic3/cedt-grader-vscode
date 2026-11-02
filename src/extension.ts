@@ -1,3 +1,4 @@
+import { TIMING } from './shared/constants';
 import * as vscode from 'vscode';
 import { GraderController, SUBMISSION_SCHEME } from './controller';
 import { SidebarProvider } from './ui/sidebarProvider';
@@ -18,7 +19,7 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
 
   const reveal = async (target?: 'login' | 'problem-search' | 'submit') => {
     await vscode.commands.executeCommand(`${SidebarProvider.viewId}.focus`);
-    if (target) setTimeout(() => sidebar.focus(target), 150);
+    if (target) setTimeout(() => sidebar.focus(target), TIMING.focusDelayMs);
   };
 
   ctx.subscriptions.push(
@@ -69,7 +70,7 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
     await controller.init();
   } catch (err) {
     // Activation must not fail because of bad saved data; the panel still works.
-    console.error('CEDT Grader: init failed', err);
+    controller.logError('Init failed', err);
   }
 }
 

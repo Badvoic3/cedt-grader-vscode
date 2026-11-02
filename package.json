@@ -2,7 +2,7 @@
   "name": "cedt-grader-submit",
   "displayName": "CEDT Grader Submit",
   "description": "Submit your code to CEDT Grader (cafe-grader) from VS Code: see scores, verdicts, history and problem statements in a sidebar.",
-  "version": "0.1.0",
+  "version": "0.5.0",
   "publisher": "cedt-student",
   "license": "MIT",
   "private": true,

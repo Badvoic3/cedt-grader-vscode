@@ -61,11 +61,6 @@ export function serializeMappingFile(d: MappingFileData): string {
   return JSON.stringify({ version: 1, files: sorted }, null, 2) + '\n';
 }
 
-/** @see normalizeRelPath (one normalization for all link paths). */
-export function normalizeRel(p: string): string {
-  return normalizeRelPath(p);
-}
-
 /** Entry for `rel`, ignoring entries made for a different grader server. */
 export function lookup(d: MappingFileData, rel: string, baseUrl: string): MappingEntry | undefined {
   const want = pathKey(rel);

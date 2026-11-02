@@ -1,3 +1,4 @@
+import { PANEL } from '../src/shared/constants';
 /**
  * One small tooltip for a whole webview (replaces native `title` tooltips,
  * which disappear when the element under the cursor is re-rendered).
@@ -17,7 +18,7 @@ export interface TooltipApi {
   readonly element: HTMLElement;
 }
 
-export function installTooltips(doc: Document = document, delay = 300): TooltipApi {
+export function installTooltips(doc: Document = document, delay: number = PANEL.tooltipDelayMs): TooltipApi {
   const tip = doc.createElement('div');
   tip.className = 'tooltip';
   tip.setAttribute('role', 'tooltip');

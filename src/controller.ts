@@ -368,6 +368,11 @@ export class GraderController implements vscode.Disposable {
     for (const l of this.listeners) l(s);
   }
 
+  /** Errors outside a request (e.g. activation) go to the extension's output channel, not the console. */
+  logError(context: string, err: unknown): void {
+    this.log(`${context}: ${err instanceof Error ? err.message : String(err)}`);
+  }
+
   private log(msg: string): void {
     this.output.appendLine(msg);
   }
@@ -696,7 +701,7 @@ export class GraderController implements vscode.Disposable {
   private async noteOpened(problemId: number): Promise<void> {
     const all = { ...this.ctx.workspaceState.get<Record<string, number>>(OPENED_KEY, {}) };
     all[problemId] = Date.now();
-    const keep = Object.entries(all).sort((a, b) => b[1] - a[1]).slice(0, 300);
+    const keep = Object.entries(all).sort((a, b) => b[1] - a[1]).slice(0, LIMITS.recentlyOpenedMax);
     await this.ctx.workspaceState.update(OPENED_KEY, Object.fromEntries(keep));
   }
 
@@ -1047,7 +1052,7 @@ export class GraderController implements vscode.Disposable {
   /** Stale mappings (older than 30 days) are removed, at most once a day. */
   private async dailyCleanup(): Promise<void> {
     const last = this.ctx.globalState.get<number>(CLEANUP_KEY, 0);
-    if (Date.now() - last < 86_400_000) return;
+    if (Date.now() - last < TIMING.dailyCleanupMs) return;
     await this.ctx.globalState.update(CLEANUP_KEY, Date.now());
     const n = await this.mapping.expireStale();
     if (n) this.log(`Removed ${n} mapping(s) whose file has been missing for 30 days.`);
@@ -1403,7 +1408,7 @@ export class GraderController implements vscode.Disposable {
     if (!p) return;
     const name = cleanName(p.name);
     await vscode.env.clipboard.writeText(name);
-    void vscode.window.setStatusBarMessage(S.files.copied(name), 2500);
+    void vscode.window.setStatusBarMessage(S.files.copied(name), TIMING.statusMessageMs);
   }
 
   /** Create `<clean name>.<ext>` next to the active file (or in the workspace root), open it and map it. */

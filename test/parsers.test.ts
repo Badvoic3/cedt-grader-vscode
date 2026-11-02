@@ -51,9 +51,9 @@ describe('sanitizers', () => {
       <a href="/main/logout"><span class="mi md-18">exit_to_app</span> Somchai Jaidee</a>
       <input type="hidden" name="authenticity_token" value="SECRETTOKEN456">
       <a href="/submissions/get_latest_submission_status/4242/9">x</a>
-      Hello Somchai Jaidee (6730123421) somchai@student.chula.ac.th login 6730123421</body></html>`;
-    const out = sanitizeHtml(html, { personal: ['6730123421'], userId: 4242 });
-    expect(out).not.toMatch(/SECRETTOKEN|Somchai|4242|6730123421|chula/);
+      Hello Somchai Jaidee (1234567890) somchai@university.example login 1234567890</body></html>`;
+    const out = sanitizeHtml(html, { personal: ['1234567890'], userId: 4242 });
+    expect(out).not.toMatch(/SECRETTOKEN|Somchai|4242|1234567890|university\.example/);
     expect(out).toContain('get_latest_submission_status/12345/9');
     expect(out).toContain('>settings<');
   });
@@ -69,8 +69,8 @@ describe('sanitizers', () => {
 
   it('sanitizeJson scrubs user fields and source code', () => {
     const out = sanitizeJson(
-      { id: 9, user_id: 4242, login: '6730123421', full_name: 'Somchai Jaidee', source: 'int main(){}', token: 'abc', note: 'by 6730123421' },
-      { personal: ['6730123421', 'Somchai Jaidee'], userId: 4242 },
+      { id: 9, user_id: 4242, login: '1234567890', full_name: 'Somchai Jaidee', source: 'int main(){}', token: 'abc', note: 'by 1234567890' },
+      { personal: ['1234567890', 'Somchai Jaidee'], userId: 4242 },
     );
     expect(out).toEqual({ id: 9, user_id: 12345, login: 'student', full_name: 'Student Name', source: '// source removed', token: 'REDACTED', note: 'by student' });
   });

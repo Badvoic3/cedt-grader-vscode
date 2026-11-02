@@ -136,11 +136,3 @@ function getSetCookies(headers: Headers): string[] {
   const single = headers.get('set-cookie');
   return single ? [single] : [];
 }
-
-export function pathOf(url: string): string {
-  try {
-    return new URL(url).pathname;
-  } catch {
-    return url;
-  }
-}

@@ -168,7 +168,7 @@ export class GraderClient {
     }
     this.redactor.add(creds.password);
     const res = await this.api.login(creds.username, creds.password);
-    this.tokenExpiresAt = Date.parse(res.expires_at) || this.now().getTime() + 11 * 3600_000;
+    this.tokenExpiresAt = Date.parse(res.expires_at) || this.now().getTime() + TIMING.tokenFallbackTtlMs;
     this.user = { id: res.user.id, login: res.user.login, fullName: res.user.full_name };
     await this.opts.tokenStore?.save({ token: res.token, expiresAt: new Date(this.tokenExpiresAt).toISOString() });
     // Web session for /main/list (penalties). Its failure does not fail the login.

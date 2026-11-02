@@ -51,6 +51,28 @@ export const TIMING = {
   tokenMinValidityMs: 60_000,
   /** File create/delete/rename events are batched this long before name searches rerun. */
   fileEventDebounceMs: 1_000,
+  /** Token lifetime assumed when the login response has no expiry (server default is 12 h). */
+  tokenFallbackTtlMs: 11 * 3_600_000,
+  /** Housekeeping (stale links) runs at most this often. */
+  dailyCleanupMs: 86_400_000,
+  /** Short confirmations in the status bar ("Copied …"). */
+  statusMessageMs: 2_500,
+  /** Delay before focusing something in the panel after revealing it. */
+  focusDelayMs: 150,
+} as const;
+
+/** Webview timings and sizes (sidebar and statement viewer). */
+export const PANEL = {
+  /** Hover / focus delay before a tooltip appears. */
+  tooltipDelayMs: 300,
+  /** Problem list viewport height cap (px); the list scrolls inside it. */
+  listMaxHeightPx: 420,
+  /** Saving the list scroll position is batched this long. */
+  scrollSaveMs: 150,
+  /** An editor switch within this time after a row click never scrolls the list. */
+  rowClickWindowMs: 3_000,
+  /** Statement viewer: page / zoom / scroll saved this long after the last change. */
+  statementStateSaveMs: 400,
 } as const;
 
 /** Links of deleted files are kept (stale) this many days, so a moved file can reconnect. */
@@ -85,4 +107,6 @@ export const LIMITS = {
   findFilesKept: 20,
   /** Remembered auto-matches (oldest dropped). */
   autoMatchesMax: 500,
+  /** "Recently opened" problems remembered for sorting. */
+  recentlyOpenedMax: 300,
 } as const;

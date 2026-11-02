@@ -162,7 +162,7 @@ export class ApiClient {
       if (res.status !== 429 && res.status < 500) throw new GraderError(G.theGraderRefusedTheRequest(res.status));
       await res.body?.cancel().catch(() => {});
       if (attempt >= GET_RETRIES) throw new ServerBusyError(G.theGraderReturnedAnError(res.status), res.status);
-      await this.sleep(2000 * 2 ** attempt);
+      await this.sleep(TIMING.retryBaseMs * 2 ** attempt);
     }
   }
 
@@ -184,7 +184,7 @@ export class ApiClient {
       if (res.status !== 429 && res.status < 500) return this.handle(res, path);
       await res.body?.cancel().catch(() => {});
       if (attempt >= GET_RETRIES) throw new ServerBusyError(G.theGraderReturnedAnError(res.status), res.status);
-      await this.sleep(2000 * 2 ** attempt);
+      await this.sleep(TIMING.retryBaseMs * 2 ** attempt);
     }
   }
 

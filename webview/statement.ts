@@ -1,3 +1,4 @@
+import { PANEL } from '../src/shared/constants';
 /*
  * Read-only statement viewer: bundled pdf.js (no CDN), worker loaded from the
  * extension's media folder via a blob URL, strict CSP. Zoom, fit width, page
@@ -69,7 +70,7 @@ function saveView(): void {
     persisted = { ...persisted, ...v };
     vscode.setState(persisted);
     send({ type: 'viewState', state: v });
-  }, 400);
+  }, PANEL.statementStateSaveMs);
 }
 
 /** Start the pdf.js worker from the media folder through a blob URL (CSP: worker-src blob:). */
