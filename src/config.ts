@@ -8,6 +8,8 @@ export interface GraderConfig {
   confirmBeforeSubmit: boolean;
   /** Log method, path, status and cache hit/miss to the "CEDT Grader: Requests" channel. */
   debugRequests: boolean;
+  /** Open problem statements beside the code (ViewColumn.Beside). */
+  statementBeside: boolean;
 }
 
 /**
@@ -35,5 +37,6 @@ export function readConfig(): GraderConfig {
     pollIntervalSeconds: Math.max(3, Number(c.get('pollIntervalSeconds', 5)) || 5),
     confirmBeforeSubmit: c.get<boolean>('confirmBeforeSubmit', true),
     debugRequests: c.get<boolean>('debugRequests', false) === true,
+    statementBeside: c.get<boolean>('statementBeside', true) !== false,
   };
 }

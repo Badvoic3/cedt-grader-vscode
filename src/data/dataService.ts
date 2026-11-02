@@ -1,5 +1,5 @@
 import { type GraderClient, isFinalStatus } from '../grader/client';
-import { NetworkError } from '../grader/errors';
+import { classifyConnectionError } from '../grader/connection';
 import type { Language, Problem, SubmissionBrief, SubmissionDetail } from '../grader/types';
 import type { ProblemList } from '../grader/client';
 import { type Freshness, RequestCache } from './cache';
@@ -50,8 +50,10 @@ export class DataService {
   readonly cache: RequestCache;
   /** Called after any cached data or load state changed. */
   onChange: () => void = () => {};
-  /** Errors that the controller should handle (e.g. session expired → login form). */
-  onError: (err: unknown) => void = () => {};
+  /** Every failed load, with its cache key (the controller shows the connection banner / Retry). */
+  onError: (err: unknown, key: string) => void = () => {};
+  /** A load succeeded (the connection banner can be hidden). */
+  onSuccess: () => void = () => {};
   /** Called after the problem list was (re)loaded, e.g. to re-run local CPH matching. */
   onProblemsLoaded: () => void = () => {};
 
@@ -207,17 +209,16 @@ export class DataService {
     try {
       const v = await fn();
       this.states.set(key, IDLE);
+      this.onSuccess();
       return v;
     } catch (err) {
       const cached = this.cache.peek<T>(key);
       const msg = this.opts.describe?.(err) ?? (err instanceof Error ? err.message : String(err));
-      if (err instanceof NetworkError && cached) {
-        this.states.set(key, { loading: false, stale: true, error: null });
-        this.log(`${key}: showing cached data (${msg})`);
-        return cached.value;
-      }
-      this.states.set(key, { loading: false, stale: !!cached, error: msg });
-      this.onError(err);
+      // Connection problems are shown once, in the banner; the section only says "may be out of date".
+      const connection = classifyConnectionError(err) !== null;
+      this.states.set(key, { loading: false, stale: !!cached, error: connection ? null : msg });
+      if (cached) this.log(`${key}: showing cached data (${msg})`);
+      this.onError(err, key);
       return cached?.value;
     } finally {
       this.onChange();

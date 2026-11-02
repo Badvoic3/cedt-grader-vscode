@@ -26,15 +26,18 @@ Press F5 to start an Extension Development Host (`.vscode/launch.json` runs `npm
   - `verdicts.ts`: `parseGraderComment`.
   - `languages.ts`: file extension → language.
   - `contest.ts`: `isContestPage`.
+  - `connection.ts`: `classifyConnectionError` (banner kinds/messages), `describeSubmitFailure`.
   - `sanitize.ts`: HTML/JSON fixture scrubbing.
   - `redact.ts`: strips secrets from logs.
 - `src/data/`: the one shared cache layer (no `vscode` import; request counts are unit tested).
   - `cache.ts`: `RequestCache` (session / TTL / final-only entries, in-flight de-duplication).
-  - `dataService.ts`: `DataService` (problems, languages, history, details; debounce, visibility, after-submit refresh, stale-on-error).
+  - `dataService.ts`: `DataService` (problems, languages, history, details; debounce, visibility, after-submit refresh, stale-on-error; reports failures to the controller's banner).
+  - `statementStore.ts`: statement PDF / description cache in `globalStorage/statements/<host>/<id>.pdf|json`.
 - `src/controller.ts`: session, mapping and UI state (results per file, expanded history entry). All grader data goes through `DataService`. Commands, sidebar and status bar all go through the controller.
 - `src/shared/messages.ts`: typed `ViewState` / `ToWebview` / `FromWebview`.
 - `src/ui/sidebarProvider.ts`: `WebviewViewProvider`; CSP with nonce, `localResourceRoots: [media]`.
-- `src/ui/statusBar.ts`: status bar shortcut that reveals the panel.
+- `src/ui/statusBar.ts`: status bar shortcut that reveals the panel (warning icon while the connection banner is up).
+- `src/ui/statementPanel.ts` + `webview/statement.ts`: "Statement: <problem>" editor tabs (bundled pdf.js 4.10 viewer: zoom, fit width, pages, text selection, search; description fallback rendered with markdown-it `html: false`).
 - `webview/main.ts`, `webview/style.css`: plain DOM sidebar, bundled to `media/dist/` (git-ignored).
 - `src/mapping/`: `.cedt-grader.json` + workspaceState mapping; read-only CPH `.prob` lookup.
 - `test/fixtures/`: `*.synthetic.*` files are hand-built from the cafe-grader views and controllers. The others are real data captured by the probe and sanitized.
@@ -54,6 +57,7 @@ Press F5 to start an Extension Development Host (`.vscode/launch.json` runs `npm
 | History | `GET /api/v1/problems/{id}/submissions` | All regular submissions, newest first, incl. website ones. |
 | Detail | `GET /api/v1/submissions/{id}` | `source` (own only), `source_filename`, `max_runtime` ms, `peak_memory` KB, `evaluations[{testcase_id, result, score, time ms, memory KB}]`. |
 | Test cases | `GET /api/v1/problems/{id}/testcases`, `/api/v1/testcases/{id}/input`, `/sol` | Phase 3 import. |
+| Statement | `GET /api/v1/problems/{id}/files/pdf` | 403 = PDF hidden, 404 = none → fallback `GET /api/v1/problems/{id}/description` `{markdown, description}`. |
 
 **HTML (only what the API lacks)**, via a cookie session opened at login:
 - `GET /` (CSRF) → `POST /login/login` → `GET /main/list`. This page provides:
@@ -94,7 +98,11 @@ Press F5 to start an Extension Development Host (`.vscode/launch.json` runs `npm
   - One submission at a time.
   - `cedtGrader.debugRequests` → "CEDT Grader: Requests" channel: method, path, status, cache hit/miss/dedup; numbered HTTP lines; never tokens.
 - **Settings scope:** `baseUrl` and `username` are read from user settings only, so a workspace cannot redirect credentials.
-- **Webview isolation:** all network calls stay in the extension host; the webview has CSP `default-src 'none'`. Insert grader text with `textContent` / attributes only, never `innerHTML`.
+- **Webview isolation:** all network calls stay in the extension host; webviews have CSP `default-src 'none'`. Insert grader text with `textContent` / attributes only, never `innerHTML`.
+  - Single exception: the statement viewer inserts HTML produced *in the host* by markdown-it with `html: false` (raw HTML escaped) or by escaping plain text.
+  - The statement CSP adds `worker-src blob:` (pdf.js worker fetched from `media/dist/pdfjs` and started from a blob URL), `connect-src` for the extension's own resources, and `'unsafe-inline'` styles (pdf.js sets inline styles). `isEvalSupported: false`.
+- **Messages appear once:** connection problems go to the banner only (sections show "may be out of date", no inline error, no toast). Other errors are inline; a toast is shown only when the sidebar is hidden. A language mismatch is one hint + a disabled Submit with a tooltip.
+- **Offline:** no retry loops. Polling stops after 2 consecutive network errors and resumes on Retry or the next successful request (`pendingPoll`). Submit failures say whether anything was sent (`describeSubmitFailure`).
 - **Dependencies:** keep them minimal: `cheerio/slim`, `tough-cookie`, Node fetch, esbuild.
 
 ## Exams / contests (section 2b; kept deliberately small)
@@ -106,10 +114,12 @@ Press F5 to start an Extension Development Host (`.vscode/launch.json` runs `npm
 ## UI
 
 The sidebar (`cedtGrader` Activity Bar container, view `cedtGrader.panel`) is the primary interface.
-- **Account:** login form with remember checkbox and Keychain tip.
+- **Banner** (top): connection problems with Retry / Log in.
+- **Account:** login form with the remember checkbox.
 - **Current problem:**
   - file name;
-  - searchable picker (name or id);
+  - searchable picker (name or id), book icon → statement viewer;
+  - wrong-language hint ("This problem doesn't accept C++. Wrong problem?" + Change);
   - counted-score card (counted, best, latest, attempts, penalty, "your best still counts");
   - language dropdown;
   - Submit button.

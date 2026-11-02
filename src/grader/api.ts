@@ -1,4 +1,4 @@
-import { AuthError, GraderError, LanguageNotAllowedError, NetworkError, ServerBusyError, SessionExpiredError, SubmitRejectedError } from './errors';
+import { AuthError, GraderError, LanguageNotAllowedError, networkErrorFrom, ServerBusyError, SessionExpiredError, SubmitRejectedError } from './errors';
 import type { FetchLike, Logger } from './http';
 import type { Redactor } from './redact';
 
@@ -142,6 +142,26 @@ export class ApiClient {
     return this.handle<T>(res);
   }
 
+  /**
+   * Binary GET (statement PDF). 403 / 404 are returned as statuses, not thrown.
+   * Retries 429 / 5xx like `get`.
+   */
+  async getBytes(path: string): Promise<{ status: 200; bytes: Uint8Array } | { status: 403 | 404; error: string | null }> {
+    for (let attempt = 0; ; attempt++) {
+      const res = await this.raw('GET', path, undefined, true, undefined, true);
+      if (res.ok) return { status: 200, bytes: new Uint8Array(await res.arrayBuffer()) };
+      if (res.status === 403 || res.status === 404) {
+        const body = (await this.json(res)) as { error?: string } | null;
+        return { status: res.status, error: body?.error ?? null };
+      }
+      if (res.status === 401) throw new SessionExpiredError('Your grader login has expired.', true);
+      if (res.status !== 429 && res.status < 500) throw new GraderError(`The grader refused the request (HTTP ${res.status}).`);
+      await res.body?.cancel().catch(() => {});
+      if (attempt >= GET_RETRIES) throw new ServerBusyError(`The grader returned an error (HTTP ${res.status}).`, res.status);
+      await this.sleep(2000 * 2 ** attempt);
+    }
+  }
+
   /** Create a submission; maps 403/422 to readable errors. */
   async createSubmission(problemId: number, languageId: number, source: string, filename: string): Promise<ApiCreatedSubmission> {
     const res = await this.raw('POST', `/api/v1/problems/${problemId}/submissions`, { language_id: languageId, source, filename }, true);
@@ -172,7 +192,7 @@ export class ApiClient {
     try {
       return JSON.parse(text);
     } catch {
-      if (res.status >= 500) throw new NetworkError(`The grader returned an error (HTTP ${res.status}).`);
+      if (res.status >= 500) throw new ServerBusyError(`The grader returned an error (HTTP ${res.status}).`, res.status);
       return null;
     }
   }
@@ -195,13 +215,12 @@ export class ApiClient {
       });
     } catch (err) {
       if (signal?.aborted) throw err;
-      const msg = err instanceof Error ? err.message : String(err);
-      throw new NetworkError(this.redactor.redact(`Could not reach the grader (${new URL(this.baseUrl).host}): ${msg}`));
+      throw networkErrorFrom(err, new URL(this.baseUrl).host);
     }
     this.log(`${method} ${path} → ${res.status}`);
     if (res.status >= 500 && !passErrors) {
       await res.body?.cancel().catch(() => {});
-      throw new NetworkError(`The grader returned an error (HTTP ${res.status}) for ${path}.`);
+      throw new ServerBusyError(`The grader returned an error (HTTP ${res.status}).`, res.status);
     }
     return res;
   }

@@ -66,6 +66,8 @@ const MIN_POLL_MS = 3_000;
 const DEFAULT_POLL_MS = 5_000;
 const DEFAULT_POLL_TIMEOUT_MS = 3 * 60_000;
 const MAX_BACKOFF_MS = 60_000;
+/** Consecutive network failures tolerated while polling; then polling stops (no retry loop while offline). */
+const MAX_POLL_NETWORK_FAILURES = 2;
 const GRADED = new Set(['done', 'compilation_error', 'grader_error']);
 
 const defaultSleep = (ms: number, signal?: AbortSignal) =>
@@ -267,6 +269,24 @@ export class GraderClient {
     }
   }
 
+  /** `GET /api/v1/problems/{id}/files/pdf`: 403 = PDF hidden for this problem, 404 = none. */
+  async getStatementPdf(id: number): Promise<{ status: 200; bytes: Uint8Array } | { status: 403 | 404; error: string | null }> {
+    assertId(id);
+    return this.authed(() => this.api.getBytes(`/api/v1/problems/${id}/files/pdf`));
+  }
+
+  /** `GET /api/v1/problems/{id}/description` → null on 403 / 404. */
+  async getDescription(id: number): Promise<{ markdown: boolean; description: string } | null> {
+    assertId(id);
+    try {
+      const d = await this.authed(() => this.api.get<{ markdown: boolean; description: string | null }>(`/api/v1/problems/${id}/description`));
+      return d.description ? { markdown: !!d.markdown, description: d.description } : null;
+    } catch (err) {
+      if (err instanceof GraderError && !(err instanceof NetworkError) && !(err instanceof SessionExpiredError) && !(err instanceof AuthError)) return null;
+      throw err;
+    }
+  }
+
   async getProblem(id: number): Promise<ProblemDetail> {
     assertId(id);
     const p = await this.authed(() => this.api.get<ApiProblem>(`/api/v1/problems/${id}`));
@@ -302,23 +322,28 @@ export class GraderClient {
     return toDetail(await this.authed(() => this.api.get<ApiSubmission>(`/api/v1/submissions/${id}`, signal)));
   }
 
-  /** Poll one submission until graded. Waits max(3 s, interval); ×2 back-off on network errors; 3 min cap. */
+  /**
+   * Poll one submission until graded. Waits max(3 s, interval); ×2 back-off on
+   * up to 2 consecutive network errors, then gives up (the caller resumes later); 3 min cap.
+   */
   async pollSubmission(id: number, opts: PollOptions = {}): Promise<SubmissionDetail> {
     const interval = Math.max(MIN_POLL_MS, opts.intervalMs ?? DEFAULT_POLL_MS);
     const timeout = opts.timeoutMs ?? DEFAULT_POLL_TIMEOUT_MS;
     const start = this.now().getTime();
     let backoff = interval;
+    let failures = 0;
     let last: SubmissionDetail | null = null;
     for (;;) {
       let wait = interval;
       try {
         const s = await this.getSubmission(id, opts.signal);
         last = s;
+        failures = 0;
         opts.onUpdate?.(s);
         if (s.state === 'graded') return s;
         backoff = interval;
       } catch (err) {
-        if (!(err instanceof NetworkError)) throw err;
+        if (!(err instanceof NetworkError) || ++failures > MAX_POLL_NETWORK_FAILURES) throw err;
         backoff = Math.min(backoff * 2, MAX_BACKOFF_MS);
         wait = backoff;
       }

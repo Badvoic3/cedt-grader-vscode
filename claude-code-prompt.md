@@ -78,6 +78,28 @@ Request discipline (tested):
 - 401: one silent re-login. 429 / 5xx: GETs retried with back-off (2 s, 4 s, or Retry-After). Offline / still failing: show cached data with a "may be out of date" note.
 - `cedtGrader.debugRequests` (off by default) logs method, path, status and cache hit/miss/dedup to the "CEDT Grader: Requests" output channel, never tokens.
 
+## 1e. Statement viewer, messages and connection errors
+
+Statement viewer (read-only):
+- `GET /api/v1/problems/{id}/files/pdf` (confirmed in `problems_controller.rb#file`: 403 = PDF hidden for this problem, 404 = none). Fallback: `GET /api/v1/problems/{id}/description` (`{markdown, description}`; Markdown rendered with raw HTML disabled, other descriptions shown as escaped text).
+- Shown in a WebviewPanel editor tab "Statement: <problem>" with bundled `pdfjs-dist` (no CDN; strict CSP; worker loaded from the extension's media folder via a blob URL; `isEvalSupported: false`). Zoom in/out, fit width, page navigation, text selection, search (Cmd/Ctrl+F, Enter / Shift+Enter).
+- Opened from the book icon next to the problem picker (and in the problem list); "Open in Browser" and Refresh are in the viewer toolbar.
+- Cached per problem in the extension's globalStorage (keyed by server host + problem id), refetched only on the viewer's Refresh. Reopening sends no request. Never written into the workspace.
+- `cedtGrader.statementBeside` (default true) opens it beside the code.
+
+Messages:
+- Each message appears once. When the file's language isn't accepted by the mapped problem, Submit is disabled (tooltip with the reason) and one hint says "This problem doesn't accept C++. Wrong problem?" with a Change button.
+- Errors already shown in the panel are not repeated as notifications while the panel is visible.
+- The login form has only the "Remember password on this computer" checkbox (no extra tip).
+
+Connection errors:
+- A banner at the top of the sidebar with a clear message and Retry (or Log in): no internet / server unreachable, server error (5xx), session expired and re-login failed, too many login attempts / requests (429), timeout.
+- Cached data stays visible under the banner, marked "may be out of date". The banner hides automatically when the next request succeeds.
+- While offline nothing retries in a loop: polling gives up after 2 consecutive network errors; retries happen on Retry or the next user action.
+- Submit failing before reaching the server says nothing was submitted (timeouts / 5xx say it may or may not have been received). Failing after (while polling) says the submission was sent and its result loads when the connection is back (automatically on the next successful request, or Retry).
+- The status bar item shows a warning icon while in the error state.
+- Tests for each error type → message.
+
 ## 2. Hard rules
 
 - **Never** hard-code, log, print or commit credentials, cookies or CSRF tokens. Store the password in VS Code `context.secrets`; the username can be a setting.
@@ -127,7 +149,7 @@ Instead of relying on the command palette, build a sidebar GUI like the CPH and 
   1. **Account:** login form (username + password) when logged out; username and a Log out button when logged in. The password goes straight to `context.secrets` and is never kept in webview state or logged.
      - "Remember password on this computer" checkbox (default on). On: password in `context.secrets` (macOS Keychain). Off: only the token, in memory.
      - When the token expires (401), log in again silently with the stored password; show the login form only if that fails. Never retry a failed login automatically.
-     - Normal password input (`autocomplete="current-password"`) so password managers can fill it, and pasting works. Hint under the field: "Tip: copy it from the Passwords app once; it will be remembered securely in your Keychain."
+     - Normal password input (`autocomplete="current-password"`) so password managers can fill it, and pasting works.
      - "Log out" removes both the token and the stored password.
   2. **Current problem:** shows the active editor's file, the mapped problem (with a searchable picker from `/main/list`), a language dropdown filled from that problem's allowed languages, and a big Submit button.
   3. **Result:** live status while grading, then score, a colored verdict strip (one tile per test, tooltip with the label), compiler message if compilation failed, link to the submission, and Resubmit.

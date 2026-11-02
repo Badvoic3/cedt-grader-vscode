@@ -120,8 +120,11 @@ export interface ViewState {
     loading: boolean;
     items: LanguageView[];
     selectedId: number | null;
-    error: string | null;
+    /** The mapped problem accepts none of the file's languages (probably the wrong problem). */
+    mismatch: { wanted: string; allowed: string[] } | null;
   };
+  /** Connection banner at the top of the sidebar (null = no problem). */
+  connection: { kind: string; title: string; message: string; action: 'retry' | 'login' } | null;
   submit: {
     enabled: boolean;
     busy: boolean;
@@ -174,6 +177,7 @@ export type FromWebview =
   | { type: 'openSubmissionSource'; submissionId: number }
   | { type: 'compareSubmission'; submissionId: number }
   | { type: 'refreshHistory' }
+  | { type: 'retry' }
   | { type: 'showCompilerMessage' }
   | { type: 'openSettings' };
 

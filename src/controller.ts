@@ -1,10 +1,15 @@
 import * as vscode from 'vscode';
 import { readConfig, type GraderConfig } from './config';
 import { DataService } from './data/dataService';
+import { StatementStore } from './data/statementStore';
+import { StatementPanels } from './ui/statementPanel';
 import {
   AuthError,
   chooseLanguage,
+  classifyConnectionError,
+  type ConnectionProblem,
   countedScore,
+  describeSubmitFailure,
   type Credentials,
   describeImprovement,
   GraderClient,
@@ -12,12 +17,12 @@ import {
   type Language,
   LanguageNotAllowedError,
   languageForPath,
+  matchLanguages,
   NetworkError,
   parseGraderComment,
   PollTimeoutError,
   type Problem,
   resultWord,
-  SessionExpiredError,
   type StoredToken,
   type SubmissionDetail,
   summarize,
@@ -68,6 +73,12 @@ export class GraderController implements vscode.Disposable {
   private pollAbort: AbortController | null = null;
   private refreshSeq = 0;
   private changingUsername = false;
+  /** Connection banner (null = all good) and what its Retry button re-runs. */
+  private connection: ConnectionProblem | null = null;
+  private retryAction: (() => Promise<unknown>) | null = null;
+  /** A submission that was sent but whose result could not be fetched (connection lost). */
+  private pendingPoll: { key: string; problem: Problem; submissionId: number; countedBefore: number | null } | null = null;
+  readonly statements: StatementPanels;
 
   constructor(private readonly ctx: vscode.ExtensionContext) {
     this.output = vscode.window.createOutputChannel('CEDT Grader');
@@ -80,13 +91,27 @@ export class GraderController implements vscode.Disposable {
       describe: (e) => this.describe(e),
     });
     this.data.onChange = () => this.emit();
-    this.data.onError = (e) => void this.handleSessionError(e);
+    this.data.onError = (e, key) => this.reportError(e, () => this.reloadKey(key));
+    this.data.onSuccess = () => this.connectionOk();
+    this.statements = new StatementPanels(
+      ctx.extensionUri,
+      new StatementStore(ctx.globalStorageUri.fsPath, () => this.client, (l) => this.requestLog(l)),
+      {
+        beside: () => this.cfg.statementBeside,
+        openInBrowser: (id) => void this.openStatementInBrowser(id),
+        onError: (e) => {
+          this.reportError(e, null);
+          return classifyConnectionError(e)?.message ?? this.describe(e);
+        },
+      },
+    );
     // A late (deferred) list load: re-resolve the open file (local only: mapping file and CPH .prob).
     this.data.onProblemsLoaded = () => {
       if (this.fileUri) void this.setActiveFile(this.fileUri);
     };
     this.disposables.push(
       this.output,
+      this.statements,
       vscode.window.onDidChangeActiveTextEditor((e) => {
         if (e && e.document.uri.scheme === 'file') void this.setActiveFile(e.document.uri);
       }),
@@ -248,6 +273,73 @@ export class GraderController implements vscode.Disposable {
     return fresh ? { ...fresh, source: this.problem.source } : this.problem;
   }
 
+  // ----------------------------------------------------------- connection
+
+  /**
+   * Show a connection problem in the banner (once; no toast, no retry loop).
+   * Session problems switch the panel to the login form.
+   */
+  private reportError(err: unknown, retry: (() => Promise<unknown>) | null): void {
+    const problem = classifyConnectionError(err);
+    if (!problem) return;
+    this.connection = problem;
+    this.retryAction = retry;
+    if (problem.kind === 'session') {
+      this.accountStatus = 'logged-out';
+      this.accountError = null; // the banner says it; don't repeat it in the form
+      if (err instanceof AuthError && err.reason === 'wrong-password') {
+        void this.ctx.secrets.delete(this.secretKey('password'));
+        this.hasSavedPassword = false;
+      }
+    }
+    this.emit();
+  }
+
+  /** A request succeeded: hide the banner, and resume a result that could not be fetched. */
+  private connectionOk(): void {
+    if (this.connection && this.connection.kind !== 'session') {
+      this.connection = null;
+      this.retryAction = null;
+      this.emit();
+    }
+    if (this.pendingPoll && !this.busy) void this.resumePoll();
+  }
+
+  /** The banner's button. */
+  async retry(): Promise<void> {
+    const c = this.connection;
+    if (c?.action === 'login') {
+      this.connection = null;
+      this.emit();
+      await vscode.commands.executeCommand('cedtGrader.panel.focus');
+      return;
+    }
+    const action = this.retryAction;
+    this.connection = null;
+    this.retryAction = null;
+    this.emit();
+    if (this.pendingPoll) await this.resumePoll();
+    else if (action) await action();
+    else if (this.problem) await this.data.loadHistory(this.problem.id, true);
+    else await this.data.loadProblems(true);
+  }
+
+  private reloadKey(key: string): Promise<unknown> {
+    const [kind, id] = key.split(':');
+    if (kind === 'history') return this.data.loadHistory(Number(id), true);
+    if (kind === 'detail') return this.data.loadDetail(Number(id));
+    return this.data.loadProblems(true);
+  }
+
+  /** The file's language is not accepted by the mapped problem (e.g. a problem picked by mistake). */
+  private languageMismatch(problem: Problem): { wanted: string; allowed: string[] } | null {
+    if (!this.fileUri || !this.languages.length) return null;
+    const wanted = languageForPath(this.fileUri.fsPath);
+    const allowed = this.allowedLanguages(problem);
+    if (!wanted || !allowed.length || matchLanguages(wanted, allowed).length) return null;
+    return { wanted, allowed: allowed.map((l) => l.name) };
+  }
+
   // ---------------------------------------------------------------- state
 
   private problemView(p: Problem): ProblemView {
@@ -261,14 +353,16 @@ export class GraderController implements vscode.Disposable {
     const problem = this.currentProblem();
     const languagesLoading = this.data.cache.peek('languages') === undefined && loggedIn && !!problem && this.data.isVisible();
 
+    const mismatch = problem ? this.languageMismatch(problem) : null;
     let reason: string | null = null;
     if (this.busy) reason = null;
     else if (!file) reason = 'Open a source file to submit it.';
     else if (!loggedIn && !this.hasSavedPassword) reason = 'Log in first.';
     else if (!problem) reason = 'Choose the grader problem for this file.';
+    else if (mismatch) reason = `This problem doesn't accept ${mismatch.wanted}.`;
     else if (this.languagesError) reason = this.languagesError;
 
-    const enabled = !this.busy && !!file && !!problem && (loggedIn || this.hasSavedPassword);
+    const enabled = !this.busy && !!file && !!problem && (loggedIn || this.hasSavedPassword) && !mismatch;
     const pState = this.data.state('problems');
     const list = this.data.problemList();
 
@@ -289,8 +383,9 @@ export class GraderController implements vscode.Disposable {
         loading: languagesLoading,
         items: problem ? this.allowedLanguages(problem).map((l) => ({ id: l.id, name: l.name })) : [],
         selectedId: this.selectedLanguageId,
-        error: this.languagesError,
+        mismatch,
       },
+      connection: this.connection,
       submit: { enabled, busy: this.busy, reason, label: 'Submit to Grader' },
       result: file ? (this.results.get(file.fsPath) ?? null) : null,
       gradingElsewhere:
@@ -427,12 +522,20 @@ export class GraderController implements vscode.Disposable {
     try {
       await this.client.login(creds);
       this.accountStatus = 'logged-in';
+      this.connection = null;
+      this.retryAction = null;
       this.log(`Logged in to ${this.cfg.baseUrl}.`);
       this.data.clear();
       await this.data.loadProblems(true);
       await this.ensureLanguages();
       return true;
     } catch (err) {
+      const conn = classifyConnectionError(err);
+      if (conn && conn.kind !== 'session') {
+        this.accountStatus = 'logged-out';
+        this.reportError(err, () => this.doLogin(creds));
+        return false;
+      }
       await this.onAuthFailure(err);
       return false;
     }
@@ -458,6 +561,9 @@ export class GraderController implements vscode.Disposable {
     }
     this.hasSavedPassword = false;
     this.accountError = null;
+    this.connection = null;
+    this.retryAction = null;
+    this.pendingPoll = null;
     this.resetSessionState();
     this.emit();
   }
@@ -474,14 +580,6 @@ export class GraderController implements vscode.Disposable {
     return this.login();
   }
 
-  /** Errors that mean "logged out" switch the panel back to the login form. */
-  private async handleSessionError(err: unknown): Promise<boolean> {
-    if (err instanceof SessionExpiredError || (err instanceof AuthError && err.reason !== 'unknown')) {
-      await this.onAuthFailure(err);
-      return true;
-    }
-    return false;
-  }
 
   private async ensureLanguages(): Promise<void> {
     if (this.data.cache.peek('languages') || !(this.client.isLoggedIn || this.hasSavedPassword) || !this.data.isVisible()) return;
@@ -489,7 +587,8 @@ export class GraderController implements vscode.Disposable {
       await this.data.languages();
       this.applyLanguageChoice();
     } catch (err) {
-      if (!(await this.handleSessionError(err))) this.languagesError = this.describe(err);
+      if (classifyConnectionError(err)) this.reportError(err, () => this.ensureLanguages());
+      else this.languagesError = this.describe(err);
     }
     this.emit();
   }
@@ -537,8 +636,7 @@ export class GraderController implements vscode.Disposable {
     } else {
       const c = chooseLanguage(this.fileUri.fsPath, allowed);
       this.selectedLanguageId = c.kind === 'match' ? c.language.id : null;
-      this.languagesError =
-        c.kind === 'not-allowed' ? `${c.wanted} is not allowed for this problem (allowed: ${c.allowed.map((l) => l.name).join(', ')}).` : null;
+      this.languagesError = null; // a mismatch is reported once, by languageMismatch()
     }
   }
 
@@ -678,9 +776,11 @@ export class GraderController implements vscode.Disposable {
     this.busy = true;
     this.gradingFile = key;
     this.emit();
+    let sentId: number | null = null;
+    let countedBefore: number | null = null;
     try {
       // Everything needed comes from the cache: no extra request before submitting.
-      const countedBefore = countedScore(problem.bestScore, problem.list?.cost ?? 0, problem.list?.rawSum ?? false);
+      countedBefore = countedScore(problem.bestScore, problem.list?.cost ?? 0, problem.list?.rawSum ?? false);
       await this.data.languages();
       const allowed = this.allowedLanguages(problem);
 
@@ -724,6 +824,8 @@ export class GraderController implements vscode.Disposable {
 
       this.setResult(key, newResult(problem, 'submitting', 'Submitting…'));
       const sub = await this.client.submit(problem.id, languageId!, doc.getText(), fileName);
+      sentId = sub.id;
+      this.connectionOk();
       this.updateResult(key, {
         phase: 'grading',
         submissionId: sub.id,
@@ -732,28 +834,64 @@ export class GraderController implements vscode.Disposable {
         message: 'Waiting to be graded…',
       });
       // Poll only this submission until final.
-      const final = await this.poll(key, problem, sub.id);
-      if (final) {
-        this.data.recordDetail(final);
-        // Then refresh this problem's history and the problem list, once.
-        await this.data.afterSubmit(problem.id);
-        const updated = this.currentProblem();
-        const after = updated ? countedScore(updated.bestScore, updated.list?.cost ?? 0, updated.list?.rawSum ?? false) : null;
-        this.updateResult(key, { improvement: describeImprovement(countedBefore, after, final.points) });
-      }
+      await this.pollAndFinish(key, problem, sub.id, countedBefore);
     } catch (err) {
-      const msg = this.describe(err);
+      // Connection problems: say whether anything was submitted; the banner shows the cause.
+      const connectionMsg = describeSubmitFailure(err, sentId);
+      const msg = connectionMsg ?? this.describe(err);
+      if (connectionMsg) {
+        if (sentId !== null) this.pendingPoll = { key, problem, submissionId: sentId, countedBefore };
+        this.reportError(err, null);
+      }
       const r = this.results.get(key);
       if (r && r.problemId === problem.id && (r.phase === 'submitting' || r.phase === 'grading')) {
-        this.updateResult(key, { phase: 'error', message: msg });
+        this.updateResult(key, { phase: sentId !== null && connectionMsg ? 'timeout' : 'error', message: msg });
       } else {
         this.setResult(key, newResult(problem, 'error', msg));
       }
-      if (!(await this.handleSessionError(err))) void this.showError(err, msg);
+      if (!connectionMsg) void this.showError(err, msg);
     } finally {
       this.busy = false;
       this.gradingFile = null;
       this.pollAbort = null;
+      this.emit();
+    }
+  }
+
+  /** Poll one submission, then refresh history + list once and report the counted-score change. */
+  private async pollAndFinish(key: string, problem: Problem, submissionId: number, countedBefore: number | null): Promise<void> {
+    const final = await this.poll(key, problem, submissionId);
+    if (!final) return;
+    this.pendingPoll = null;
+    this.connectionOk();
+    this.data.recordDetail(final);
+    await this.data.afterSubmit(problem.id);
+    const updated = this.currentProblem();
+    const after = updated ? countedScore(updated.bestScore, updated.list?.cost ?? 0, updated.list?.rawSum ?? false) : null;
+    this.updateResult(key, { improvement: describeImprovement(countedBefore, after, final.points) });
+  }
+
+  /** Continue a submission whose result could not be fetched (Retry, or connection back). */
+  private async resumePoll(): Promise<void> {
+    const p = this.pendingPoll;
+    if (!p || this.busy) return;
+    this.pendingPoll = null;
+    this.busy = true;
+    this.gradingFile = p.key;
+    this.updateResult(p.key, { phase: 'grading', message: 'Connection back. Loading the result…' });
+    try {
+      await this.pollAndFinish(p.key, p.problem, p.submissionId, p.countedBefore);
+    } catch (err) {
+      if (classifyConnectionError(err)) {
+        this.pendingPoll = p;
+        this.reportError(err, null);
+        this.updateResult(p.key, { phase: 'timeout', message: describeSubmitFailure(err, p.submissionId) });
+      } else {
+        this.updateResult(p.key, { phase: 'error', message: this.describe(err) });
+      }
+    } finally {
+      this.busy = false;
+      this.gradingFile = null;
       this.emit();
     }
   }
@@ -847,13 +985,27 @@ export class GraderController implements vscode.Disposable {
 
   // ---------------------------------------------------------------- browser
 
+  /** Open the read-only statement tab (cached PDF / description; no request when cached). */
   async openStatement(problemId?: number): Promise<void> {
     const id = problemId ?? this.problem?.id;
     if (!id) {
       void vscode.window.showInformationMessage('Choose a problem first.');
       return;
     }
-    await vscode.env.openExternal(vscode.Uri.parse(this.url(`/problems/${id}/download/statement`)));
+    if (!(this.client.isLoggedIn || this.hasSavedPassword)) {
+      await this.openStatementInBrowser(id);
+      return;
+    }
+    const p = this.problemById(id);
+    await this.statements.open(id, p?.name ?? `#${id}`);
+  }
+
+  async openStatementInBrowser(problemId: number): Promise<void> {
+    await vscode.env.openExternal(vscode.Uri.parse(this.url(`/problems/${problemId}/download/statement`)));
+  }
+
+  private problemById(id: number): Problem | undefined {
+    return this.problems.find((p) => p.id === id) ?? (this.problem?.id === id ? this.problem : undefined);
   }
 
   async openProblemInBrowser(problemId?: number): Promise<void> {
@@ -875,8 +1027,10 @@ export class GraderController implements vscode.Disposable {
     return String(err);
   }
 
+  /** Toast only when the sidebar is hidden (otherwise the panel already shows the message). */
   private async showError(err: unknown, msg: string): Promise<void> {
     this.log(`Error: ${msg}`);
+    if (this.data.isVisible()) return;
     const actions: string[] = err instanceof NetworkError ? ['Show Log'] : [];
     const pick = await vscode.window.showErrorMessage(msg, ...actions);
     if (pick === 'Show Log') this.output.show();

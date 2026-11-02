@@ -20,6 +20,13 @@ export class GraderStatusBar implements vscode.Disposable {
       this.item.show();
       return;
     }
+    if (s.connection) {
+      this.item.text = `$(warning) Grader: ${s.connection.title}`;
+      this.item.tooltip = `${s.connection.message} Click to open the panel.`;
+      this.item.backgroundColor = new vscode.ThemeColor('statusBarItem.warningBackground');
+      this.item.show();
+      return;
+    }
     if (!s.file?.supported) {
       this.item.hide();
       return;
