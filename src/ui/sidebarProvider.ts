@@ -30,9 +30,13 @@ export class SidebarProvider implements vscode.WebviewViewProvider, vscode.Dispo
       }),
       this.controller.onState((state) => this.post({ type: 'state', state })),
     ];
+    // Nothing is fetched while the panel is hidden; pending loads run when it is shown.
+    this.controller.setPanelVisible(view.visible);
+    subs.push(view.onDidChangeVisibility(() => this.controller.setPanelVisible(view.visible)));
     view.onDidDispose(() => {
       subs.forEach((d) => d.dispose());
       this.view = undefined;
+      this.controller.setPanelVisible(false);
     });
   }
 
@@ -81,6 +85,18 @@ export class SidebarProvider implements vscode.WebviewViewProvider, vscode.Dispo
         return;
       case 'openProblemInBrowser':
         if (Number.isInteger(m.problemId)) await c.openProblemInBrowser(m.problemId);
+        return;
+      case 'toggleSubmission':
+        if (Number.isInteger(m.submissionId)) await c.toggleSubmission(m.submissionId);
+        return;
+      case 'openSubmissionSource':
+        if (Number.isInteger(m.submissionId)) await c.openSubmissionSource(m.submissionId);
+        return;
+      case 'compareSubmission':
+        if (Number.isInteger(m.submissionId)) await c.compareSubmission(m.submissionId);
+        return;
+      case 'refreshHistory':
+        await c.refreshHistory();
         return;
       case 'openSubmission':
         if (Number.isInteger(m.submissionId)) await c.openSubmission(m.submissionId);

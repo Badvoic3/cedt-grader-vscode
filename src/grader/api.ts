@@ -1,4 +1,4 @@
-import { AuthError, GraderError, LanguageNotAllowedError, NetworkError, SessionExpiredError, SubmitRejectedError } from './errors';
+import { AuthError, GraderError, LanguageNotAllowedError, NetworkError, ServerBusyError, SessionExpiredError, SubmitRejectedError } from './errors';
 import type { FetchLike, Logger } from './http';
 import type { Redactor } from './redact';
 
@@ -81,6 +81,11 @@ export interface ApiCreatedSubmission {
 }
 
 const TIMEOUT_MS = 30_000;
+/** GET retries on 429 / 5xx: waits 2 s, then 4 s (or the server's Retry-After, capped at 30 s). */
+const GET_RETRIES = 2;
+
+export type Sleep = (ms: number, signal?: AbortSignal) => Promise<void>;
+const realSleep: Sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 export class ApiClient {
   private token: string | null = null;
@@ -90,6 +95,7 @@ export class ApiClient {
     private readonly fetchImpl: FetchLike,
     private readonly log: Logger,
     private readonly redactor: Redactor,
+    private readonly sleep: Sleep = realSleep,
   ) {}
 
   setToken(token: string | null): void {
@@ -114,9 +120,21 @@ export class ApiClient {
     return body as ApiLoginResponse;
   }
 
+  /** Idempotent GET: retried with back-off on 429 / 5xx (never for POSTs or login). */
   async get<T>(path: string, signal?: AbortSignal): Promise<T> {
-    const res = await this.raw('GET', path, undefined, true, signal);
-    return this.handle<T>(res);
+    for (let attempt = 0; ; attempt++) {
+      const res = await this.raw('GET', path, undefined, true, signal, true);
+      if (res.status !== 429 && res.status < 500) return this.handle<T>(res);
+      await res.body?.cancel().catch(() => {});
+      if (attempt >= GET_RETRIES) {
+        throw new ServerBusyError(
+          res.status === 429 ? 'The grader is rate-limiting requests. Try again in a minute.' : `The grader returned an error (HTTP ${res.status}).`,
+          res.status,
+        );
+      }
+      const retryAfter = Number(res.headers.get('retry-after'));
+      await this.sleep(Math.min(30_000, retryAfter > 0 ? retryAfter * 1000 : 2000 * 2 ** attempt), signal);
+    }
   }
 
   async post<T>(path: string, body: unknown): Promise<T> {
@@ -159,7 +177,7 @@ export class ApiClient {
     }
   }
 
-  private async raw(method: 'GET' | 'POST', path: string, body: unknown, auth: boolean, signal?: AbortSignal): Promise<Response> {
+  private async raw(method: 'GET' | 'POST', path: string, body: unknown, auth: boolean, signal?: AbortSignal, passErrors = false): Promise<Response> {
     const headers: Record<string, string> = { Accept: 'application/json' };
     if (body !== undefined) headers['Content-Type'] = 'application/json';
     if (auth) {
@@ -181,7 +199,7 @@ export class ApiClient {
       throw new NetworkError(this.redactor.redact(`Could not reach the grader (${new URL(this.baseUrl).host}): ${msg}`));
     }
     this.log(`${method} ${path} → ${res.status}`);
-    if (res.status >= 500) {
+    if (res.status >= 500 && !passErrors) {
       await res.body?.cancel().catch(() => {});
       throw new NetworkError(`The grader returned an error (HTTP ${res.status}) for ${path}.`);
     }

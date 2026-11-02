@@ -5,7 +5,7 @@
  * textContent / attributes only, never innerHTML. The webview has no network
  * access (CSP default-src 'none'); all actions are postMessage'd to the host.
  */
-import type { FromWebview, ProblemView, ScoreView, ToWebview, VerdictView, ViewState } from '../src/shared/messages';
+import type { FromWebview, HistoryEntry, ProblemView, ScoreView, SubmissionDetailView, ToWebview, VerdictView, ViewState } from '../src/shared/messages';
 
 interface VsCodeApi {
   postMessage(m: FromWebview): void;
@@ -79,13 +79,31 @@ function scorePill(s: ScoreView): HTMLElement {
   return el('span', { class: `pill ${scoreClass(s.counted, s.rawSum)}`, title }, fmt(s.counted));
 }
 
-function when(iso: string | null): string {
+/** Relative time ("3 min ago", "2 days ago"). */
+function relative(iso: string | null): string {
+  if (!iso) return '';
+  const t = Date.parse(iso);
+  if (Number.isNaN(t)) return iso;
+  const s = Math.max(0, Math.round((Date.now() - t) / 1000));
+  if (s < 60) return 'just now';
+  const m = Math.round(s / 60);
+  if (m < 60) return `${m} min ago`;
+  const h = Math.round(m / 60);
+  if (h < 24) return `${h} h ago`;
+  const d = Math.round(h / 24);
+  if (d < 45) return `${d} day${d === 1 ? '' : 's'} ago`;
+  return new Date(t).toLocaleDateString([], { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+/** Exact local time for tooltips. */
+function exact(iso: string | null): string {
   if (!iso) return '';
   const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return iso;
-  const sameDay = d.toDateString() === new Date().toDateString();
-  return sameDay ? d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : d.toLocaleDateString([], { day: 'numeric', month: 'short' });
+  return Number.isNaN(d.getTime()) ? iso : d.toLocaleString();
 }
+
+const seconds = (ms: number | null) => (ms === null ? '–' : `${(ms / 1000).toFixed(ms < 10_000 ? 3 : 2)} s`);
+const megabytes = (kb: number | null) => (kb === null ? '–' : `${(kb / 1024).toFixed(2)} MB`);
 
 // -------------------------------------------------------------- skeleton
 
@@ -144,7 +162,7 @@ const problemFilter = el('input', { type: 'search', placeholder: 'Filter by name
 const sAccount = section('account', 'Account');
 const sCurrent = section('current', 'Current problem');
 const sResult = section('result', 'Result');
-const sHistory = section('history', 'History');
+const sHistory = section('history', 'History', [iconButton('refresh', 'Reload submission history', () => send({ type: 'refreshHistory' }))]);
 const sProblems = section('problems', 'Problems', [iconButton('refresh', 'Reload problem list', () => send({ type: 'refreshProblems' }))]);
 app.append(sAccount.details, sCurrent.details, sResult.details, sHistory.details, sProblems.details);
 
@@ -388,6 +406,77 @@ function renderResult(s: ViewState): void {
   }
 }
 
+function miniStrip(verdicts: VerdictView[]): HTMLElement {
+  const strip = el('span', { class: 'mini-strip', 'aria-hidden': 'true' });
+  for (const v of verdicts.slice(0, 40)) strip.append(el('span', { class: `mini v-${v.kind in VERDICT_LETTER ? v.kind : 'unknown'}`, title: v.label }));
+  if (verdicts.length > 40) strip.append(el('span', { class: 'muted small' }, `+${verdicts.length - 40}`));
+  return strip;
+}
+
+function detailBox(d: SubmissionDetailView): HTMLElement {
+  const box = el('div', { class: 'detail' });
+  box.append(
+    el('div', { class: 'score-facts small' },
+      el('span', {}, 'Max time ', el('strong', {}, seconds(d.maxRuntimeMs))),
+      el('span', {}, 'Peak memory ', el('strong', {}, megabytes(d.peakMemoryKb))),
+      d.sourceFilename ? el('span', { class: 'mono' }, d.sourceFilename) : null,
+    ),
+  );
+  if (d.evaluations.length) {
+    const table = el('table', { class: 'evals' },
+      el('thead', {}, el('tr', {}, el('th', {}, '#'), el('th', {}, 'Result'), el('th', {}, 'Score'), el('th', {}, 'Time'), el('th', {}, 'Memory'))),
+    );
+    const body = el('tbody');
+    for (const e of d.evaluations) {
+      body.append(
+        el('tr', {},
+          el('td', { class: 'num' }, String(e.index)),
+          el('td', {}, el('span', { class: `mini v-${e.kind in VERDICT_LETTER ? e.kind : 'unknown'}`, 'aria-hidden': 'true' }), ' ', e.label.replace(/^Test \d+: /, '')),
+          el('td', { class: 'num' }, e.score === null ? '–' : fmt(e.score)),
+          el('td', { class: 'num' }, seconds(e.timeMs)),
+          el('td', { class: 'num' }, megabytes(e.memoryKb)),
+        ),
+      );
+    }
+    table.append(body);
+    box.append(el('div', { class: 'evals-wrap' }, table));
+  }
+  if (d.compilerMessage) box.append(el('details', { class: 'compiler' }, el('summary', {}, 'Compiler message'), el('pre', {}, d.compilerMessage)));
+  box.append(
+    el('div', { class: 'row gap' },
+      button([icon('go-to-file'), ' Open this version'], () => send({ type: 'openSubmissionSource', submissionId: d.submissionId }), { disabled: !d.hasSource, title: d.hasSource ? 'Open the submitted source in a new untitled editor' : 'Source not available' }),
+      button([icon('diff'), ' Compare with current file'], () => send({ type: 'compareSubmission', submissionId: d.submissionId }), { disabled: !d.hasSource }),
+      el('button', { class: 'link', type: 'button', onclick: () => send({ type: 'openSubmission', submissionId: d.submissionId }) }, 'Website', icon('link-external')),
+    ),
+  );
+  return box;
+}
+
+function historyRow(h: HistoryEntry, s: ViewState): HTMLElement {
+  const ex = s.history.expanded;
+  const open = ex?.submissionId === h.submissionId;
+  const row = el('div', { class: `history-item${open ? ' open' : ''}${h.counted ? ' counted' : ''}` });
+  row.append(
+    el('button', { class: 'history-row', type: 'button', 'aria-expanded': String(open), title: `Submission #${h.submissionId} · ${exact(h.submittedAt)}`, onclick: () => send({ type: 'toggleSubmission', submissionId: h.submissionId }) },
+      icon(open ? 'chevron-down' : 'chevron-right'),
+      el('span', { class: 'mono muted' }, h.number !== null ? `${h.number}.` : `#${h.submissionId}`),
+      el('span', { class: `pill ${h.compileError ? 'score-zero' : scoreClass(h.points)}` }, h.compileError ? 'CE' : fmt(h.points)),
+      h.counted ? el('span', { class: 'badge counted', title: 'This submission holds your counted (best) score' }, icon('star-full'), 'counted') : null,
+      el('span', { class: 'grow ellipsis' }, h.verdicts.length ? miniStrip(h.verdicts) : el('span', { class: 'muted small' }, h.compileError ? 'compile error' : (h.comment ?? h.status.replace(/_/g, ' ')))),
+      el('span', { class: 'muted small nowrap', title: exact(h.submittedAt) }, relative(h.submittedAt)),
+    ),
+  );
+  if (open) {
+    row.append(
+      el('div', { class: 'row small muted pad-left' }, h.language ?? '', h.language ? ' · ' : '', exact(h.submittedAt), ` · #${h.submissionId}`),
+    );
+    if (ex!.detail) row.append(detailBox(ex!.detail));
+    else if (ex!.loading) row.append(el('p', { class: 'muted small pad-left' }, icon('loading', 'codicon-modifier-spin'), ' Loading details…'));
+    else if (ex!.error) row.append(el('div', { class: 'error pad-left' }, icon('error'), ' ', ex!.error));
+  }
+  return row;
+}
+
 function renderHistory(s: ViewState): void {
   const b = sHistory.body;
   b.replaceChildren();
@@ -396,23 +485,16 @@ function renderHistory(s: ViewState): void {
     return;
   }
   const H = s.history;
+  if (H.stale) b.append(el('p', { class: 'hint' }, icon('warning'), ' May be out of date (could not reach the grader).'));
   if (!H.items.length) {
-    b.append(el('p', { class: 'muted' }, H.loading ? 'Loading…' : 'No submissions for this problem yet.'));
-    return;
+    b.append(el('p', { class: 'muted' }, H.loading ? 'Loading…' : H.error ? '' : 'No submissions for this problem yet.'));
+  } else {
+    const list = el('div', { class: 'history' });
+    for (const h of H.items) list.append(historyRow(h, s));
+    b.append(list, el('p', { class: 'muted small' }, `${H.items.length} submission${H.items.length === 1 ? '' : 's'}`));
   }
-  const list = el('div', { class: 'history' });
-  for (const h of H.items) {
-    list.append(
-      el('button', { class: 'history-row', type: 'button', title: `Open submission #${h.submissionId}`, onclick: () => send({ type: 'openSubmission', submissionId: h.submissionId }) },
-        el('span', { class: 'mono muted' }, h.number !== null ? `${h.number}.` : `#${h.submissionId}`),
-        el('span', { class: `pill ${h.compileError ? 'score-zero' : scoreClass(h.points)}` }, h.compileError ? 'CE' : fmt(h.points)),
-        el('span', { class: 'mono grow ellipsis small' }, h.compileError ? '' : (h.comment ?? h.status)),
-        el('span', { class: 'muted small' }, when(h.submittedAt)),
-      ),
-    );
-  }
-  b.append(list);
-  if (H.loading) b.append(el('p', { class: 'muted small' }, icon('loading', 'codicon-modifier-spin'), ' Refreshing…'));
+  if (H.loading && H.items.length) b.append(el('p', { class: 'muted small' }, icon('loading', 'codicon-modifier-spin'), ' Refreshing…'));
+  if (H.error) b.append(el('div', { class: 'error' }, icon('error'), ' ', H.error));
 }
 
 function problemRow(p: ProblemView, s: ViewState, where: 'picker' | 'list'): HTMLElement {
@@ -456,6 +538,7 @@ function renderProblems(s: ViewState): void {
   b.append(list);
   b.append(el('p', { class: 'muted small' }, hits.length > 150 ? `Showing 150 of ${hits.length}. Refine the filter.` : `${hits.length} of ${P.items.length} problems · scores shown are counted scores`));
   if (P.penaltyNote) b.append(el('p', { class: 'hint' }, icon('info'), ' ', P.penaltyNote));
+  if (P.stale) b.append(el('p', { class: 'hint' }, icon('warning'), ' May be out of date (could not reach the grader).'));
   if (P.loading) b.append(el('p', { class: 'muted small' }, icon('loading', 'codicon-modifier-spin'), ' Refreshing…'));
   if (P.error) b.append(el('div', { class: 'error' }, icon('error'), ' ', P.error));
 }

@@ -12,7 +12,7 @@ import type {
   ProblemDetail,
   StoredToken,
   SubmissionBrief,
-  SubmissionResult,
+  SubmissionDetail,
 } from './types';
 import { parseGraderComment } from './verdicts';
 import { WebSession } from './web';
@@ -54,7 +54,12 @@ export interface PollOptions {
   intervalMs?: number;
   timeoutMs?: number;
   signal?: AbortSignal;
-  onUpdate?: (s: SubmissionResult) => void;
+  onUpdate?: (s: SubmissionDetail) => void;
+}
+
+/** Final states: the submission will not change any more (safe to cache forever). */
+export function isFinalStatus(status: string): boolean {
+  return GRADED.has(status);
 }
 
 const MIN_POLL_MS = 3_000;
@@ -100,10 +105,10 @@ export class GraderClient {
   constructor(private readonly opts: GraderClientOptions = {}) {
     this.baseUrl = (opts.baseUrl ?? DEFAULT_BASE_URL).replace(/\/+$/, '');
     const log = opts.log ?? (() => {});
-    this.api = new ApiClient(this.baseUrl, opts.fetch ?? ((i, init) => fetch(i, init)), log, this.redactor);
-    this.web = new WebSession(this.baseUrl, opts.fetch, log, this.redactor);
     this.now = opts.now ?? (() => new Date());
     this.sleep = opts.sleep ?? defaultSleep;
+    this.api = new ApiClient(this.baseUrl, opts.fetch ?? ((i, init) => fetch(i, init)), log, this.redactor, this.sleep);
+    this.web = new WebSession(this.baseUrl, opts.fetch, log, this.redactor);
   }
 
   url(path: string): string {
@@ -211,9 +216,17 @@ export class GraderClient {
     return p.permittedLanguageIds === null ? all : all.filter((l) => p.permittedLanguageIds!.includes(l.id));
   }
 
-  /** `GET /api/v1/problems`, merged with `/main/list` penalties when the web session works. */
-  async listProblems(): Promise<ProblemList> {
+  /**
+   * `GET /api/v1/problems`, merged with `/main/list` penalties when the web session works.
+   * With `penalties: false` only the API is called and `previous` list data is kept
+   * (used right after a submit: penalties don't change by submitting).
+   */
+  async listProblems(opts: { penalties?: boolean; previous?: Problem[] } = {}): Promise<ProblemList> {
     const api = await this.authed(() => this.api.get<ApiProblem[]>('/api/v1/problems'));
+    if (opts.penalties === false) {
+      const prev = new Map((opts.previous ?? []).map((p) => [p.id, p.list]));
+      return { problems: api.map((p) => toProblem(p, prev.get(p.id) ?? null)), listStatus: 'loaded' };
+    }
     let listStatus: ProblemList['listStatus'] = 'loaded';
     let scores: Map<number, ListScoreInfo> | null = null;
     try {
@@ -272,18 +285,19 @@ export class GraderClient {
     return { id: r.id, number: r.number ?? null };
   }
 
-  async getSubmission(id: number, signal?: AbortSignal): Promise<SubmissionResult> {
+  /** `GET /api/v1/submissions/{id}`: status, points, compiler message, source, evaluations. */
+  async getSubmission(id: number, signal?: AbortSignal): Promise<SubmissionDetail> {
     assertId(id);
-    return toResult(await this.authed(() => this.api.get<ApiSubmission>(`/api/v1/submissions/${id}`, signal)));
+    return toDetail(await this.authed(() => this.api.get<ApiSubmission>(`/api/v1/submissions/${id}`, signal)));
   }
 
   /** Poll one submission until graded. Waits max(3 s, interval); ×2 back-off on network errors; 3 min cap. */
-  async pollSubmission(id: number, opts: PollOptions = {}): Promise<SubmissionResult> {
+  async pollSubmission(id: number, opts: PollOptions = {}): Promise<SubmissionDetail> {
     const interval = Math.max(MIN_POLL_MS, opts.intervalMs ?? DEFAULT_POLL_MS);
     const timeout = opts.timeoutMs ?? DEFAULT_POLL_TIMEOUT_MS;
     const start = this.now().getTime();
     let backoff = interval;
-    let last: SubmissionResult | null = null;
+    let last: SubmissionDetail | null = null;
     for (;;) {
       let wait = interval;
       try {
@@ -323,9 +337,20 @@ function toProblem(p: ApiProblem, list: ListScoreInfo | null): Problem {
   };
 }
 
-function toResult(s: ApiSubmission): SubmissionResult {
+function toDetail(s: ApiSubmission): SubmissionDetail {
   const compileError = s.status === 'compilation_error' || /compil(?:ation|e) error/i.test(s.grader_comment ?? '');
   return {
+    source: s.source ?? null,
+    sourceFilename: s.source_filename ?? null,
+    maxRuntimeMs: s.max_runtime ?? null,
+    peakMemoryKb: s.peak_memory ?? null,
+    evaluations: (s.evaluations ?? []).map((e) => ({
+      testcaseId: e.testcase_id,
+      result: e.result ?? null,
+      score: e.score ?? null,
+      timeMs: e.time ?? null,
+      memoryKb: e.memory ?? null,
+    })),
     id: s.id,
     number: s.number ?? null,
     problemId: s.problem_id,
