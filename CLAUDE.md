@@ -100,12 +100,22 @@ Every icon-only button (`iconButton()` in `webview/main.ts`, `btn()` in `webview
 - Our imported tests: `id = 7e15 + grader testcase id` (marker that survives CPH re-saves); backup `<file>.prob.bak`; own tests first and never removed; duplicates by input+output skipped; line endings `\n`.
 - Never modify CPH itself; only write `.prob` files in this exact format.
 
+## Problem links: auto-detect, duplicates, unavailable problems
+
+- Auto-detect (sparkle button): `resolveProblem` without the saved link; asks before replacing a manual link.
+- Duplicates: `linkedFiles` (reverse lookup) → "N files are linked" notice, jump / "Keep only this file"; submit asks when another linked file is newer (mtime; dirty = now). `MappingStore.cleanupDuplicates()` (startup and on saving `.cedt-grader.json`) removes legacy+new duplicate keys and duplicate/same-path JSON entries (`countDuplicateEntries`), then tells the user.
+- Unavailable: `resolveProblem` returns `unavailable` for a saved link missing from the loaded list; `ProblemUnavailableError` (ApiClient, 404/403 on `/api/v1/problems/{id}…`, incl. submit) marks it at runtime (`unavailableIds`, cleared when the problem is back in the list). Submit disabled, history kept (stale), statement opens from cache with a "may be out of date" note.
+
 ## Problem list and verdicts (as on the website)
 
 - Status (`problemStatus`): solved = submitted and best ≥ 100; inprogress = submitted and best < 100; untried = none. Filters All / Unsolved / In progress / Solved, persisted per workspace (`cedtGrader.problemFilter`).
 - Topics: `/main/list` `.topic-badge` pills (`Tag.where(kind: 'topic')`, `parseTopicTags`); the API `tags` (names only) is the fallback.
 - Verdicts (`src/grader/verdicts.ts`): codes in `RESULT_CODE` order `? P - s T M x E !`; strip only if it matches the website's `VERDICT_STRING_RE`; groups `[...]` = box with `groupLabel()` (website text); otherwise plain `[text]`. Legend popover "Reading the results".
 - Header: `titleParts()` drops a repeated `name:` prefix from `full_name`; match source as a text line under the selector.
+- Sorting (`webview/filters.ts` `sortProblems`): default / name A–Z, Z–A (numeric) / latest submission / best score ↑↓ / recently opened (`cedtGrader.recentlyOpened` in workspaceState); stored in the filter (`sort`).
+- Verdict strip layout: `.strip > * { flex: 0 0 auto }` + `.tile-group { max-width: 100% }` keeps groups whole; History rows show "passed/total" inline and the full mini strip (all tiles, wrapping, groups) on its own line. Checked visually in headless Chrome at 260/420 px with 12/40/120 tests.
+- Account: `client.user.fullName` (login response or `GET /api/v1/me`, once per session after a token restore).
+- CPH tip (`cphTip` in ViewState): not installed + problem with test cases; "Not now" = this session, "Don't show again" = `cedtGrader.cphTipDismissed`.
 
 ## Counted score (src/grader/score.ts)
 
@@ -172,6 +182,7 @@ The sidebar (`cedtGrader` Activity Bar container, view `cedtGrader.panel`) is th
 
 Statement viewer (`webview/statement.ts`, `webview/zoom.ts`): pinch (Ctrl+wheel) zooms around the cursor via `PDFViewer.updateScale({origin})` with `preventDefault`; Cmd/Ctrl + / - / 0; page/zoom/scroll kept in webview state (serializer, restart) and globalState (`cedtGrader.statementView`, reopen); `retainContextWhenHidden`; `registerWebviewPanelSerializer('cedtGrader.statement')` reopens tabs after restart from the disk cache (no request).
 
-Phase 5 (not started): cache management (`cedtGrader.cacheMaxMB`, LRU, daily cleanup, "Clear Cached Data" incl. stale mappings) — see spec.
+Phase 5 (not started): install guide + walkthrough + troubleshooting, cache management (`cedtGrader.cacheMaxMB`, LRU, daily cleanup, "Clear Cached Data" incl. stale mappings) — see spec.
+Phase 6 (not started): Thai translation (`cedtGrader.displayLanguage`, vscode.l10n, package.nls.th.json), plain-language strings in one place, more customization — see spec.
 
 Commands remain for keybindings: `cedtGrader.login`, `logout`, `submit`, `chooseProblem`, `clearMapping`, `loadTestcases`, `showLastResult`, `openStatement`, `refreshProblems`, `refreshHistory`, `showRequestLog`, `focus`.

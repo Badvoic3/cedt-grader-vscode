@@ -276,6 +276,13 @@ export class GraderClient {
     }
   }
 
+  /** `GET /api/v1/me` (users_controller.rb#me): `full_name`, `login`, … */
+  async me(): Promise<GraderUser> {
+    const m = await this.authed(() => this.api.get<{ id: number; login: string; full_name: string | null }>('/api/v1/me'));
+    this.user = { id: m.id, login: m.login, fullName: m.full_name ?? '' };
+    return this.user;
+  }
+
   /** `GET /api/v1/problems/{id}/testcases`; null when not allowed (403) or not found. */
   async listTestcases(problemId: number): Promise<TestcaseInfo[] | null> {
     assertId(problemId);

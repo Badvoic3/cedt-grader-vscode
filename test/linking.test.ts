@@ -51,11 +51,10 @@ describe('matching order', () => {
     expect(r).toMatchObject({ kind: 'match', source: 'saved', problem: { id: 1759 } });
   });
 
-  it('stale mapping (problem gone) is ignored and reported', () => {
+  it('saved link whose problem is missing from the list → unavailable (kept, not replaced)', () => {
     const r = m({ savedProblemId: 999, filePath: '/w/00_Intro_11.cpp' });
-    expect(r).toMatchObject({ kind: 'match', source: 'filename', problem: { id: 1360 } });
-    const r2 = m({ savedProblemId: 999, filePath: '/w/unrelated_zzz.cpp' });
-    expect(r2).toMatchObject({ kind: 'none', staleMappingId: 999 });
+    expect(r).toMatchObject({ kind: 'unavailable', problemId: 999 });
+    expect((r as { suggestions: Problem[] }).suggestions.map((p) => p.id)).toContain(1360);
   });
 
   it('saved mapping is kept while the problem list is not loaded yet', () => {

@@ -4,6 +4,7 @@ import {
   GraderClient,
   LanguageNotAllowedError,
   PollTimeoutError,
+  ProblemUnavailableError,
   SessionExpiredError,
   type StoredToken,
   SubmitRejectedError,
@@ -181,7 +182,10 @@ describe('submit and poll', () => {
     await client.login(creds);
     server.submitError = { status: 422, body: { error: "Language 'python' is not permitted", permitted_languages: [{ id: 2, name: 'cpp' }] } };
     await expect(client.submit(201, 6, 'x', 'a.py')).rejects.toBeInstanceOf(LanguageNotAllowedError);
+    // 403 on submit = the problem is closed to you: shown as "no longer available".
     server.submitError = { status: 403, body: { error: 'You are not allowed to submit to this problem' } };
+    await expect(client.submit(201, 2, 'x', 'a.cpp')).rejects.toBeInstanceOf(ProblemUnavailableError);
+    server.submitError = { status: 422, body: { errors: ['code too long'] } };
     await expect(client.submit(201, 2, 'x', 'a.cpp')).rejects.toBeInstanceOf(SubmitRejectedError);
   });
 

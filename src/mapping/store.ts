@@ -5,6 +5,7 @@ import {
   MAPPING_FILE_NAME,
   type MappingEntry,
   type MappingFileData,
+  countDuplicateEntries,
   normalizeRel,
   parseMappingFile,
   reverseIndex,
@@ -161,6 +162,46 @@ export class MappingStore {
     const { staleSince: _drop, ...entry } = from.entry;
     await this.set(vscode.Uri.file(from.fsPath), undefined);
     await this.set(to, entry);
+  }
+
+  /**
+   * Remove duplicate links: a file stored under both the old (absolute path)
+   * and the new key, or duplicate entries in `.cedt-grader.json`. Returns how
+   * many duplicates were removed (the caller tells the user).
+   */
+  async cleanupDuplicates(): Promise<number> {
+    let removed = 0;
+    for (const memento of [this.ctx.workspaceState, this.ctx.globalState]) {
+      const legacy = this.legacy(memento);
+      const current = memento.get<Record<string, StateEntry>>(STATE_KEY, {});
+      const currentPaths = new Set(Object.values(current).map((e) => e.fsPath));
+      const keep: Record<string, MappingEntry> = {};
+      for (const [fsPath, e] of Object.entries(legacy)) {
+        if (currentPaths.has(fsPath)) removed++;
+        else keep[fsPath] = e;
+      }
+      if (Object.keys(keep).length !== Object.keys(legacy).length) await memento.update(LEGACY_KEY, keep);
+    }
+    for (const folder of vscode.workspace.workspaceFolders ?? []) {
+      const uri = vscode.Uri.joinPath(folder.uri, MAPPING_FILE_NAME);
+      let text: string;
+      try {
+        text = new TextDecoder().decode(await vscode.workspace.fs.readFile(uri));
+      } catch {
+        continue;
+      }
+      const dups = countDuplicateEntries(text);
+      if (!dups) continue;
+      const data = parseMappingFile(text); // last entry per (normalized) path wins, like JSON.parse
+      try {
+        await vscode.workspace.fs.writeFile(uri, new TextEncoder().encode(serializeMappingFile(data)));
+        this.cache.set(folder.uri.toString(), data);
+        removed += dups;
+      } catch {
+        /* read-only */
+      }
+    }
+    return removed;
   }
 
   private legacy(memento: vscode.Memento): Record<string, MappingEntry> {

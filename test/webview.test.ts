@@ -35,10 +35,12 @@ const score = (counted: number | null, extra: Partial<ScoreView> = {}): ScoreVie
 
 const base: ViewState = {
   baseUrl: 'https://cedt-grader.nattee.net',
-  account: { status: 'logged-out', username: '', hasSavedPassword: false, rememberPassword: true, error: null },
+  account: { status: 'logged-out', username: '', fullName: null, hasSavedPassword: false, rememberPassword: true, error: null },
   file: null,
   problem: null,
   matching: { suggestions: [], ambiguous: null, note: null },
+  linkedFiles: [],
+  cphTip: false,
   testcases: { busy: false },
   cph: { installed: true },
   languages: { loading: false, items: [], selectedId: null, mismatch: null },
@@ -52,9 +54,9 @@ const base: ViewState = {
 
 const loggedIn: ViewState = {
   ...base,
-  account: { status: 'logged-in', username: 'student', hasSavedPassword: true, rememberPassword: true, error: null },
+  account: { status: 'logged-in', username: 'student', fullName: null, hasSavedPassword: true, rememberPassword: true, error: null },
   file: { path: 'grader/00 11 intro.cpp', name: '00 11 intro.cpp', languageGuess: 'C++', supported: true },
-  problem: { id: 1360, name: '00_Intro_11', fullName: '<img src=x onerror=alert(1)>', score: score(70, { latest: 40, attempts: 3, latestBelowCounted: true, penaltyLabel: '-10 AI assist' }), source: 'saved', sourceLabel: 'saved', hasFile: true, hasTestcase: true, status: 'solved', tags: ['ComProg'] },
+  problem: { id: 1360, name: '00_Intro_11', fullName: '<img src=x onerror=alert(1)>', score: score(70, { latest: 40, attempts: 3, latestBelowCounted: true, penaltyLabel: '-10 AI assist' }), source: 'saved', sourceLabel: 'saved', unavailable: false, hasFile: true, hasTestcase: true, status: 'solved', tags: ['ComProg'], lastSubmissionTime: null, lastOpened: null },
   languages: { loading: false, items: [{ id: 1, name: 'C' }, { id: 2, name: 'C++' }], selectedId: 2, mismatch: null },
   submit: { enabled: true, busy: false, reason: null, label: 'Submit to Grader' },
   result: {
@@ -76,7 +78,7 @@ const loggedIn: ViewState = {
       { submissionId: 2460900, number: 2, points: 0, status: 'compilation_error', comment: 'Compilation error', submittedAt: '2026-11-02T12:30:00+07:00', language: 'C++', compileError: true, counted: false, verdicts: [] },
     ],
   },
-  problems: { loading: false, loaded: true, items: [{ id: 1360, name: '00_Intro_11', fullName: 'Hello', score: score(100), hasFile: true, hasTestcase: true, status: 'solved', tags: ['ComProg'] }, { id: 1271, name: '01_Expr_11', fullName: 'An Expression', score: score(null), hasFile: false, hasTestcase: false, status: 'untried', tags: [] }], error: null, penaltyNote: null, stale: false, filter: { status: 'all', topic: null }, topics: [] },
+  problems: { loading: false, loaded: true, items: [{ id: 1360, name: '00_Intro_11', fullName: 'Hello', score: score(100), hasFile: true, hasTestcase: true, status: 'solved', tags: ['ComProg'], lastSubmissionTime: '2026-11-01T10:00:00Z', lastOpened: 5 }, { id: 1271, name: '01_Expr_11', fullName: 'An Expression', score: score(null), hasFile: false, hasTestcase: false, status: 'untried', tags: [], lastSubmissionTime: null, lastOpened: null }], error: null, penaltyNote: null, stale: false, filter: { status: 'all', topic: null }, topics: [] },
 };
 
 describe.runIf(existsSync(resolve(__dirname, '../esbuild.mjs')))('sidebar webview', () => {
@@ -183,7 +185,7 @@ describe.runIf(existsSync(resolve(__dirname, '../esbuild.mjs')))('sidebar webvie
     const rows = doc.querySelectorAll<HTMLButtonElement>('#sec-history .history-row');
     expect(rows[0].querySelector('.badge.counted')).not.toBeNull();
     expect(rows[1].querySelector('.badge.counted')).toBeNull();
-    expect(rows[0].querySelectorAll('.mini')).toHaveLength(2);
+    expect(doc.querySelectorAll('#sec-history .history-item')[0].querySelectorAll('.mini-strip .mini')).toHaveLength(2);
     expect(rows[1].textContent).toContain('CE');
     expect(rows[0].getAttribute('data-tip')).toContain('Submission #2460977');
     rows[0].click();
@@ -283,8 +285,8 @@ describe.runIf(existsSync(resolve(__dirname, '../esbuild.mjs')))('sidebar webvie
 
   it('Phase 3: suggested match is labelled, no test-case button, picker lists suggestions first', () => {
     const { doc, sent, post } = boot();
-    const sug = { id: 1271, name: '01_Expr_11', fullName: 'An Expression', score: score(null), hasFile: false, hasTestcase: true, status: 'untried' as const, tags: [] };
-    post({ ...loggedIn, problem: { ...sug, source: 'suggested', sourceLabel: 'Suggested — click to confirm' }, matching: { suggestions: [sug], ambiguous: null, note: null } });
+    const sug = { id: 1271, name: '01_Expr_11', fullName: 'An Expression', score: score(null), hasFile: false, hasTestcase: true, status: 'untried' as const, tags: [], lastSubmissionTime: null, lastOpened: null };
+    post({ ...loggedIn, problem: { ...sug, source: 'suggested', sourceLabel: 'Suggested — click to confirm', unavailable: false }, matching: { suggestions: [sug], ambiguous: null, note: null } });
     expect(doc.querySelector('#sec-current .source-line.suggested')!.textContent).toContain('Suggested');
     expect(doc.querySelector('#sec-current')!.textContent).toContain('Suggested from the file name');
     const confirm = [...doc.querySelectorAll<HTMLButtonElement>('#sec-current button')].find((b) => b.textContent === 'Confirm')!;
@@ -297,7 +299,7 @@ describe.runIf(existsSync(resolve(__dirname, '../esbuild.mjs')))('sidebar webvie
 
   it('Phase 3: ambiguous match shows the note and the candidates', () => {
     const { doc, post } = boot();
-    const a = { id: 1, name: 'dup', fullName: 'Dup A', score: score(null), hasFile: false, hasTestcase: false, status: 'untried' as const, tags: [] };
+    const a = { id: 1, name: 'dup', fullName: 'Dup A', score: score(null), hasFile: false, hasTestcase: false, status: 'untried' as const, tags: [], lastSubmissionTime: null, lastOpened: null };
     const b = { ...a, id: 2, fullName: 'Dup B' };
     post({ ...loggedIn, problem: null, matching: { suggestions: [], ambiguous: [a, b], note: 'Several problems match this file name. Choose one.' } });
     expect(doc.querySelector('#sec-current')!.textContent).toContain('Several problems match this file name');
@@ -324,7 +326,7 @@ describe.runIf(existsSync(resolve(__dirname, '../esbuild.mjs')))('sidebar webvie
       loggedIn,
       { ...loggedIn, connection: { kind: 'offline', title: 'No internet connection', message: 'x', action: 'retry' } },
       { ...loggedIn, languages: { ...loggedIn.languages, items: [{ id: 8, name: 'Digital' }], mismatch: { wanted: 'C++', allowed: ['Digital'] } }, submit: { ...loggedIn.submit, enabled: false, reason: "This problem doesn't accept C++." } },
-      { ...loggedIn, problem: { ...loggedIn.problem!, source: 'suggested', sourceLabel: 'Suggested — click to confirm' } },
+      { ...loggedIn, problem: { ...loggedIn.problem!, source: 'suggested', sourceLabel: 'Suggested — click to confirm', unavailable: false } },
       { ...loggedIn, result: { ...loggedIn.result!, phase: 'error', message: 'x' }, submit: { ...loggedIn.submit, enabled: false, reason: 'Log in first.' } },
       { ...loggedIn, result: { ...loggedIn.result!, compileError: true, verdicts: [], compilerMessage: 'err' } },
       { ...loggedIn, testcases: { busy: true } },
@@ -412,6 +414,105 @@ describe.runIf(existsSync(resolve(__dirname, '../esbuild.mjs')))('sidebar webvie
     expect(doc.querySelector('#sec-problems [aria-label="Copy problem name"]')).toBe(copy);
     post({ ...loggedIn, result: { ...loggedIn.result!, message: 'x' } }); // only Result changed
     expect(doc.querySelector('#sec-problems [aria-label="Copy problem name"]')).toBe(copy);
+  });
+
+  it('verdicts with 12, 40 and 120 tests (+ groups): every tile shown, groups intact, history strips never cut', () => {
+    const codes = 'PPPPPPPPP-TPPPPxPPPsPPMPPPPPPP-PPPP!PPPPE';
+    const kinds: Record<string, string> = { P: 'correct', '-': 'wrong', T: 'time_limit', x: 'crash', s: 'partial', M: 'memory_limit', '!': 'grader_error', E: 'unknown_error' };
+    for (const n of [12, 40, 120]) {
+      const verdicts = Array.from({ length: n }, (_, i) => {
+        const c = codes[i % codes.length];
+        return { index: i + 1, ok: c === 'P', kind: kinds[c], label: `Test ${i + 1} of ${n}: x`, ...(i >= 3 && i < 8 ? { group: 1 } : i >= 8 && i < 11 ? { group: 2 } : {}) };
+      });
+      const { doc, post } = boot();
+      post({
+        ...loggedIn,
+        result: { ...loggedIn.result!, verdicts },
+        history: { ...loggedIn.history, items: [{ ...loggedIn.history.items[0], verdicts }] },
+      });
+      expect(doc.querySelectorAll('#sec-result .strip .tile')).toHaveLength(n);
+      const groups = doc.querySelectorAll('#sec-result .strip > .tile-group');
+      expect(groups).toHaveLength(2); // one element per group: never split
+      expect(groups[0].querySelectorAll('.tile')).toHaveLength(5);
+      expect(groups[1].querySelectorAll('.tile')).toHaveLength(3);
+      expect(doc.querySelector('#sec-result .strip > .tile:nth-child(1)')!.getAttribute('data-tip')).toBe(`Test 1 of ${n}: x`);
+      const mini = doc.querySelector('#sec-history .mini-strip')!;
+      expect(mini.querySelectorAll('.mini')).toHaveLength(n); // no cut-off at 40
+      expect(mini.querySelectorAll('.mini-group')).toHaveLength(2);
+      expect(mini.textContent).not.toMatch(/\+\d/);
+      expect(doc.querySelector('#sec-history .history-row')!.textContent).toContain(`/${n}`);
+    }
+  });
+
+  it('problem no longer available: notice with Change problem / Remove link, Submit disabled, history kept', () => {
+    const { doc, sent, post } = boot();
+    post({
+      ...loggedIn,
+      problem: { ...loggedIn.problem!, unavailable: true },
+      submit: { enabled: false, busy: false, reason: 'This problem is no longer available on the grader.', label: 'Submit to Grader' },
+      history: { ...loggedIn.history, stale: true },
+    });
+    const cur = doc.querySelector('#sec-current')!;
+    expect(cur.textContent).toContain('This problem is no longer available on the grader.');
+    expect(doc.querySelector<HTMLButtonElement>('#submit-btn')!.disabled).toBe(true);
+    [...cur.querySelectorAll<HTMLButtonElement>('button')].find((b) => b.textContent === 'Remove link')!.click();
+    expect(sent.at(-1)).toEqual({ type: 'unmapProblem' });
+    [...cur.querySelectorAll<HTMLButtonElement>('button')].find((b) => b.textContent === 'Change problem')!.click();
+    expect(doc.activeElement).toBe(doc.querySelector('.picker-search'));
+    expect(doc.querySelector('#sec-history')!.textContent).toContain('May be out of date');
+    expect(doc.querySelectorAll('#sec-history .history-row').length).toBeGreaterThan(0);
+  });
+
+  it('duplicate links notice, jump to a file, keep only this one', () => {
+    const { doc, sent, post } = boot();
+    post({ ...loggedIn, linkedFiles: [{ path: 'a/sol.cpp', current: true }, { path: 'b/sol_v2.cpp', current: false }] });
+    const n = doc.querySelector('#sec-current .notice.linked')!;
+    expect(n.textContent).toContain('2 files are linked to this problem');
+    [...n.querySelectorAll<HTMLButtonElement>('button')].find((b) => b.textContent === 'Show')!.click();
+    const rows = doc.querySelectorAll<HTMLButtonElement>('#sec-current .notice.linked .history-row');
+    expect(rows).toHaveLength(2);
+    expect(rows[0].disabled).toBe(true); // this file
+    rows[1].click();
+    expect(sent.at(-1)).toEqual({ type: 'openLinkedFile', index: 1 });
+    [...doc.querySelectorAll<HTMLButtonElement>('#sec-current .notice.linked button')].find((b) => b.textContent === 'Keep only this file')!.click();
+    expect(sent.at(-1)).toEqual({ type: 'keepOnlyThisFile' });
+  });
+
+  it('account shows the full name (Thai) with the login ID below', () => {
+    const { doc, post } = boot();
+    post({ ...loggedIn, account: { ...loggedIn.account, username: '6730000021', fullName: 'สมชาย ใจดี' } });
+    const acc = doc.querySelector('#sec-account .account-name')!;
+    expect(acc.querySelector('strong')!.textContent).toBe('สมชาย ใจดี');
+    expect(acc.textContent).toContain('6730000021');
+  });
+
+  it('CPH tip: Install / Not now / Don\'t show again', () => {
+    const { doc, sent, post } = boot();
+    post({ ...loggedIn, cph: { installed: false }, cphTip: true });
+    const tip = doc.querySelector('#sec-current .notice.tip')!;
+    expect(tip.textContent).toContain('Install the Competitive Programming Helper (CPH) extension');
+    const b = (t: string) => [...tip.querySelectorAll<HTMLButtonElement>('button')].find((x) => x.textContent === t)!;
+    b('Install').click();
+    expect(sent.at(-1)).toEqual({ type: 'cphTip', action: 'install' });
+    b('Not now').click();
+    expect(sent.at(-1)).toEqual({ type: 'cphTip', action: 'later' });
+    b("Don't show again").click();
+    expect(sent.at(-1)).toEqual({ type: 'cphTip', action: 'never' });
+  });
+
+  it('open on website (problem and each submission), auto-detect, sort menu', () => {
+    const { dom, doc, sent, post } = boot();
+    post(loggedIn);
+    doc.querySelector<HTMLButtonElement>('#sec-current [aria-label="Open on the grader website"]')!.click();
+    expect(sent.at(-1)).toEqual({ type: 'openProblemInBrowser', problemId: 1360 });
+    doc.querySelector<HTMLButtonElement>('#sec-history [aria-label="Open on the grader website"]')!.click();
+    expect(sent.at(-1)).toEqual({ type: 'openSubmission', submissionId: 2460977 });
+    doc.querySelector<HTMLButtonElement>('#sec-current [aria-label="Auto-detect the problem for this file again"]')!.click();
+    expect(sent.at(-1)).toEqual({ type: 'autoDetect' });
+    const sel = doc.querySelector<HTMLSelectElement>('#sec-problems select.sort')!;
+    sel.value = 'score-desc';
+    sel.dispatchEvent(new dom.window.Event('change'));
+    expect(sent.at(-1)).toEqual({ type: 'setFilter', filter: { status: 'all', topic: null, sort: 'score-desc' } });
   });
 
   it('filter narrows the problem list and is remembered (UI state only)', () => {

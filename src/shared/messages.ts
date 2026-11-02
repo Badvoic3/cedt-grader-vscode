@@ -40,12 +40,20 @@ export interface ProblemView {
   /** As on the website: solved (best ≥ 100) / inprogress / untried. */
   status: 'solved' | 'inprogress' | 'untried';
   tags: string[];
+  /** ISO time of the latest submission (sorting). */
+  lastSubmissionTime: string | null;
+  /** When a file for this problem was last opened (ms; "Recently opened" sorting). */
+  lastOpened: number | null;
 }
+
+export type ProblemSort = 'default' | 'name-asc' | 'name-desc' | 'latest' | 'score-asc' | 'score-desc' | 'recent';
 
 export interface ProblemFilter {
   status: 'all' | 'unsolved' | 'inprogress' | 'solved';
   /** Topic tag name, or null for all topics. */
   topic: string | null;
+  /** List order (default = grader order). */
+  sort?: ProblemSort;
 }
 
 export type MatchSourceView = 'saved' | 'cph' | 'filename' | 'suggested';
@@ -118,6 +126,8 @@ export interface ViewState {
   account: {
     status: 'logged-out' | 'logging-in' | 'logged-in';
     username: string;
+    /** From the grader (`full_name`), e.g. a Thai name. */
+    fullName: string | null;
     hasSavedPassword: boolean;
     /** Default for the "Remember password on this computer" checkbox. */
     rememberPassword: boolean;
@@ -130,7 +140,11 @@ export interface ViewState {
     languageGuess: string | null;
     supported: boolean;
   } | null;
-  problem: (ProblemView & { source: MatchSourceView; sourceLabel: string }) | null;
+  problem: (ProblemView & { source: MatchSourceView; sourceLabel: string; unavailable: boolean }) | null;
+  /** All files linked to the current problem when there are several (duplicate notice). */
+  linkedFiles: { path: string; current: boolean }[];
+  /** Show the dismissible "install CPH" tip. */
+  cphTip: boolean;
   /** How the active file was (or wasn't) matched. */
   matching: {
     /** Closest candidates, shown first in the picker (never saved automatically). */
@@ -216,6 +230,10 @@ export type FromWebview =
   | { type: 'loadTestcases' }
   | { type: 'confirmProblem'; problemId: number }
   | { type: 'setFilter'; filter: ProblemFilter }
+  | { type: 'autoDetect' }
+  | { type: 'openLinkedFile'; index: number }
+  | { type: 'keepOnlyThisFile' }
+  | { type: 'cphTip'; action: 'install' | 'later' | 'never' }
   | { type: 'showCompilerMessage' }
   | { type: 'openSettings' };
 

@@ -156,7 +156,7 @@ Contests on this grader are only used for exams, and this is an unofficial homew
 1. **Problem cache:** the problem list (`/api/v1/problems` + `/main/list` penalties) is fetched once per session and on Refresh; cached in memory and in workspace state with a timestamp (shown immediately after a restart, still refetched once per session). Never fetched on keystrokes or editor switches. `has_testcase` comes from it.
 2. **Name normalization:** file names (without extension) and problem names: zero-width characters (U+200B/C/D, U+FEFF) removed, trimmed, lowercased; spaces, `-`, `_` and `.` are the same separator, repeats collapse.
 3. **Matching order** for the active file:
-   1. a mapping I saved for this file (always wins; ignored, with a note, when its problem no longer exists);
+   1. a mapping I saved for this file (always wins; when its problem no longer exists it is shown as unavailable, see item 13);
    2. the CPH `.prob` of this source (format confirmed from agrawal-d/cph `src/types.ts` + `src/parser.ts`): a grader URL or problem name in it;
    3. exact normalized match between file name and problem name;
    4. otherwise the closest few candidates, shown first in the picker, the best one pre-selected as "suggested", never saved automatically.
@@ -188,6 +188,14 @@ Contests on this grader are only used for exams, and this is an unofficial homew
     - Outside VS Code (Finder, terminal, git): when a file without a mapping is opened, saved mappings whose file is missing (checked with `fs.stat`, only for same-name candidates) and whose file name matches are offered: "This looks like <old path>, linked to <problem>. Keep the link?" (Keep / Not this one; several → pick or skip). Never applied silently; no workspace scanning. "Not this one" is remembered.
     - Deleted files (`workspace.onDidDeleteFiles`): the mapping is marked stale (not removed), so a moved file can reconnect; stale mappings are removed after 30 days (checked at most once a day on startup) or with "Clear Cached Data" (Phase 5).
     - CPH names its `.prob` after the full source path and does not handle renames (no rename/delete listeners in its source). After a rename inside VS Code the extension offers once: "Move CPH test cases to the new file too?" → copies the `.prob` to the name CPH expects for the new path (srcPath, and url when it held the old path, updated), keeps the old one as `.bak`, never overwrites an existing `.prob`.
+11. **Auto-detect button** next to the problem selector: re-runs matching for the active file (file name, CPH data, suggestions) and shows the result. If a manual link exists, ask before replacing it.
+12. **Duplicate warnings:**
+    - Two or more files linked to the same problem: a gentle notice in the panel ("2 files are linked to this problem") with a list to jump to each and "Keep only this file" (unlinks the others; files untouched). Not an error (drafts are normal). Before submitting, if another linked file for the same problem was modified more recently, ask "Submit this file? <other file> was changed more recently."
+    - The same file linked twice (old absolute-path key + new key) or duplicate / same-path entries in `.cedt-grader.json`: cleaned up automatically (startup and when the file is saved) with a short message.
+13. **Problem no longer available** (missing from `GET /api/v1/problems`, or 404/403 from a problem endpoint, including submit):
+    - The link is kept and marked "This problem is no longer available on the grader" with Change problem / Remove link.
+    - Submit disabled with that reason. Cached history and the cached statement stay viewable, labeled as possibly out of date.
+    - Never a crash or a blank panel. Tests for 404, 403 and missing-from-list.
 - Tests: normalization, the full matching order, ambiguous matches, stale mappings, `.prob` parsing (sanitized fixture), import never deleting existing cases, truncated cases skipped, backup created, 403 handled, clean-name copy, new file without overwrite, reverse lookup, single file / folder rename, reconnect prompt (one / several candidates), deleted → stale → expired after 30 days, CPH `.prob` moved with backup.
 - **CHECKPOINT:** F5 test list (file named like a problem, a file with a CPH .prob, a file with no match, changing the mapping, loading test cases, renames/moves).
 
@@ -231,6 +239,12 @@ Instead of relying on the command palette, build a sidebar GUI like the CPH and 
   - It stays inside the sidebar, uses event delegation on the document, and re-anchors after re-renders. `aria-label` is kept.
   - Cause of missing tooltips: every state push re-rendered all sections and replaced the element under the cursor. Sections now re-render only when their own data changed.
   - Tests: the tooltip component and the icon-button check (data-tip == aria-label, no native title).
+- Sorting in the problem list: Default (grader order), Name A–Z / Z–A (numeric-aware), Latest submission (newest first), Best score (low to high / high to low), Recently opened. Remembered per workspace; works with search, status and topic filters.
+- "Open on the grader website" buttons: for the current problem (its page on the grader) and on each submission in History (`/submissions/{id}`).
+- Verdict strips with many tests: the History row strip used to be a single non-wrapping line cut at 40 tiles and clipped by the row (with more than ~10 tests most results vanished). Now every tile is shown, strips wrap at any sidebar width, a group is never split or shrunk (it moves to the next line as one box and only wraps inside when wider than the strip), and 100+ tests work. Tests with 12, 40 and 120 tests and groups.
+- Account section: full name from `GET /api/v1/me` (`full_name`, confirmed in `users_controller.rb#me`; the login response carries the same) with the login ID smaller below; Thai names display correctly.
+- CPH tip (when CPH is not installed and the problem has test cases): a small dismissible tip "Want to run test cases inside VS Code? Install the Competitive Programming Helper (CPH) extension." with Install / Not now / Don't show again. Never more than once per session. (The Load test cases flow offers it too.)
+- Light cleanup of the panel, only where it clearly helps: consistent spacing, alignment and button sizes; one icon-button style; a "…" menu only for rows with more than 4 icons. Don't remove features, move main buttons, or add clicks to common actions (submit, change problem, view result). **Propose the layout changes first and wait for approval.**
 - Statement viewer fixes:
   - Pinch zoom: trackpad pinch arrives as `wheel` events with `ctrlKey = true`; zoom the pdf.js view smoothly around the cursor (`preventDefault` so VS Code's own zoom doesn't react). Also Cmd/Ctrl + / - / 0 (reset = fit width), and the toolbar buttons.
   - No PDF refetch when the panel is hidden and shown (retainContextWhenHidden), the tab is closed and reopened (disk cache), or VS Code restarts (panel serializer + disk cache). Verified with the debug request log.
@@ -243,6 +257,10 @@ Instead of relying on the command palette, build a sidebar GUI like the CPH and 
 - `README.md` for students: install from `.vsix`, log in, map a file, submit; a note on using it together with CPH; a privacy note (password stays in the OS keychain via VS Code SecretStorage).
 - `npx @vscode/vsce package` produces a `.vsix`. Add `CHANGELOG.md` and an MIT `LICENSE`.
 - Write a `CLAUDE.md` for this repo summarising the protocol table above, the hard rules, and the build/test commands, so future sessions have context.
+- Clear install guide:
+  - README "Install" for students who have never installed an extension from a file: get the .vsix; Extensions → "…" → "Install from VSIX…", choose the file, reload if asked; or `code --install-extension cedt-grader-x.y.z.vsix`. Then: open the CEDT Grader icon in the left bar, log in, open a solution file, check the problem, submit. Plus "Optional: install CPH", "Updating to a new version", "Uninstalling".
+  - A VS Code Getting Started walkthrough (`contributes.walkthroughs`) with the same steps, opened once after first install.
+  - Troubleshooting: can't log in, wrong problem detected, language not allowed, no internet, where my password is stored.
 - Cache management for everything the extension stores in globalStorage / workspace state (statement PDFs, test cases, submission details, history, problem list):
   - Size limit (setting `cedtGrader.cacheMaxMB`, default 100): when exceeded, delete the least recently used files first.
   - Auto-cleanup on startup (at most once a day): remove cached items not used for 30 days and leftover temp files / backups older than 30 days.
@@ -250,6 +268,24 @@ Instead of relying on the command palette, build a sidebar GUI like the CPH and 
   - Never delete anything in the workspace except the extension's own `.bak` files, and only when selected.
   - Tests: LRU eviction, daily cleanup, selective clear.
 - **CHECKPOINT:** list what I should test manually in the F5 Extension Development Host (log in, submit a correct solution, submit a compile error, submit a wrong answer, log out) and wait for my results.
+
+### Phase 6: Language and customization
+
+1. **Thai translation, English by default**
+   - Setting `cedtGrader.displayLanguage`: "English" (default), "ไทย (Thai)", "Follow VS Code". Changing it updates the panel without restarting.
+   - Translate everything the user sees: sidebar, viewers, error banner, notifications, dialogs, quick picks, tooltips, status bar, walkthrough, command titles and settings descriptions (`vscode.l10n` and `package.nls.json` / `package.nls.th.json`; webviews get their strings from the extension).
+   - Grader content (problem names, compiler messages) stays untranslated.
+   - Natural, polite Thai a student would use; keep technical words students know in English where that's normal ("Submit", "test case", "compile error"). Mark uncertain strings for review.
+   - Test that every key exists in both languages.
+2. **Plain language everywhere:** review all user-facing text (English first) and rewrite technical messages into simple, friendly sentences that say what happened and what to do next (e.g. "Couldn't reach the grader. Check your internet, then press Retry." instead of "Network error: fetch failed"). All strings in one place, easy to review and translate.
+3. **More customization** (settings with defaults that keep today's behavior):
+   - Panel: which sections are shown and their order; compact mode.
+   - Problem list: default sort and filters.
+   - Submit: confirm before submit, auto-open the result, save the file before submitting.
+   - Verdicts: tiles or plain text (the website has the same choice).
+   - Statement: beside the code or in the same column.
+   - New files: default language and file name pattern (e.g. `{name}.{ext}`).
+   - A gear button in the panel header opening the settings filtered to `cedtGrader`.
 
 ## 4. Done means
 - `npm test` passes, `npm run build` passes, `.vsix` builds.

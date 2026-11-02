@@ -113,6 +113,18 @@ export class SidebarProvider implements vscode.WebviewViewProvider, vscode.Dispo
       case 'setFilter':
         if (m.filter && typeof m.filter === 'object') await c.setProblemFilter(m.filter);
         return;
+      case 'autoDetect':
+        await c.autoDetect();
+        return;
+      case 'openLinkedFile':
+        if (Number.isInteger(m.index)) await c.openLinkedFile(m.index);
+        return;
+      case 'keepOnlyThisFile':
+        await c.keepOnlyThisFile();
+        return;
+      case 'cphTip':
+        if (m.action === 'install' || m.action === 'later' || m.action === 'never') await c.cphTip(m.action);
+        return;
       case 'confirmProblem':
         if (Number.isInteger(m.problemId)) await c.mapCurrentFile(m.problemId);
         return;
