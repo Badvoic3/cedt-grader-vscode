@@ -4,6 +4,7 @@ import { GraderController, SUBMISSION_SCHEME } from './controller';
 import { SidebarProvider } from './ui/sidebarProvider';
 import { StatementPanels } from './ui/statementPanel';
 import { GraderStatusBar } from './ui/statusBar';
+import { WALKTHROUGH_CONTEXT, WALKTHROUGH_ID, walkthroughContext } from './shared/walkthrough';
 
 /**
  * Entry point. The sidebar (SidebarProvider) is the primary UI; the commands
@@ -16,6 +17,7 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
   const controller = new GraderController(ctx);
   const sidebar = new SidebarProvider(ctx.extensionUri, controller);
   const statusBar = new GraderStatusBar();
+  const walkthroughState: Record<string, boolean> = {};
 
   const reveal = async (target?: 'login' | 'problem-search' | 'submit') => {
     await vscode.commands.executeCommand(`${SidebarProvider.viewId}.focus`);
@@ -28,6 +30,19 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
     statusBar,
     vscode.window.registerWebviewViewProvider(SidebarProvider.viewId, sidebar),
     controller.onState((s) => statusBar.update(s)),
+    // Getting Started walkthrough: steps complete through these context keys (set only when they change).
+    // VS Code opens the walkthrough once after the extension is installed (workbench.welcomePage.walkthroughs.openOnInstall).
+    controller.onState((s) => {
+      const next = walkthroughContext(s, walkthroughState[WALKTHROUGH_CONTEXT.submitted] === true);
+      for (const [key, value] of Object.entries(next)) {
+        if (walkthroughState[key] === value) continue;
+        walkthroughState[key] = value;
+        void vscode.commands.executeCommand('setContext', key, value);
+      }
+    }),
+    vscode.commands.registerCommand('cedtGrader.openWalkthrough', () =>
+      vscode.commands.executeCommand('workbench.action.openWalkthrough', `${ctx.extension.id}#${WALKTHROUGH_ID}`, false),
+    ),
 
     vscode.commands.registerCommand('cedtGrader.focus', () => reveal()),
     vscode.commands.registerCommand('cedtGrader.login', async () => {

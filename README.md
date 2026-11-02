@@ -15,7 +15,7 @@ The extension comes as one file, `cedt-grader-submit-<version>.vsix`. You don't 
    - Pick the `.vsix` file. If VS Code asks to reload or restart extensions, click it.
 
    *Or, from a terminal:* `code --install-extension cedt-grader-submit-0.6.0.vsix`. On macOS, if `code` isn't found, run **Shell Command: Install 'code' command in PATH** from the Command Palette (<kbd>Cmd</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd>) first.
-3. **Check that it worked.** A **CEDT Grader** icon (a page with a check mark) appears in the left bar, and the **Get started with CEDT Grader** page opens once.
+3. **Check that it worked.** A **CEDT Grader** icon (a page with a check mark) appears in the left bar, and the **Get started with CEDT Grader** page opens once (open it again any time with **CEDT Grader: Get Started** or from the **⋯** menu at the top of the panel).
 
 ### First steps
 
@@ -66,7 +66,7 @@ Renaming or moving a linked file in VS Code keeps the link. If you move files in
 **Also available:**
 - The status bar item (`☁ Submit to Grader`, the score after grading) opens the panel.
 - The ☁ button in the editor title bar (C, C++, Python, Java files) submits the current file.
-- Every action is a command (`CEDT Grader: …` in the Command Palette), so you can bind keyboard shortcuts: Log In, Log Out, Submit Current File, Choose Problem for This File, Clear Problem for This File, Rename File to Match the Problem, Load Test Cases, Show Last Result, Open Problem Statement, Reload Problem List, Reload Submission History, Show Panel, Open Settings, Show Request Log, Clear Cached Data….
+- Every action is a command (`CEDT Grader: …` in the Command Palette), so you can bind keyboard shortcuts: Log In, Log Out, Submit Current File, Choose Problem for This File, Clear Problem for This File, Rename File to Match the Problem, Load Test Cases, Show Last Result, Open Problem Statement, Reload Problem List, Reload Submission History, Show Panel, Open Settings, Show Request Log, Clear Cached Data…, Get Started.
 
 ## Problem statements
 

@@ -1,6 +1,7 @@
 **
 !dist/extension.js
 !media/icon.svg
+!media/walkthrough/**
 !media/dist/**
 media/dist/*.map
 !package.json

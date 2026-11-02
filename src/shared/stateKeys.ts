@@ -43,6 +43,4 @@ export const KEYS = {
   rememberPassword: 'cedtGrader.rememberPassword',
   /** `.prob.bak` files this extension created in the workspace (deleted only from "Clear Cached Data"). */
   backups: 'cedtGrader.backups',
-  /** The Getting Started walkthrough was opened once. */
-  walkthroughShown: 'cedtGrader.walkthroughShown',
 } as const;
