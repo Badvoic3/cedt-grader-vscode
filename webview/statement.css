@@ -46,3 +46,22 @@ input.search { width: 12em; }
 body:not(.mode-pdf) .pdf-only, body:not(.mode-pdf) #viewerContainer { display: none; }
 body:not(.mode-html) .text-view { display: none; }
 @media (max-width: 560px) { .toolbar .title { display: none; } input.search { width: 7em; } }
+
+/* ---------------------------------------------------------------- tooltip */
+
+.tooltip {
+  position: fixed;
+  z-index: 1000;
+  padding: 3px 7px;
+  border-radius: 3px;
+  font-size: 12px;
+  line-height: 1.35;
+  pointer-events: none;
+  white-space: normal;
+  word-break: break-word;
+  color: var(--vscode-editorHoverWidget-foreground, var(--vscode-foreground));
+  background: var(--vscode-editorHoverWidget-background, var(--vscode-editorWidget-background));
+  border: 1px solid var(--vscode-editorHoverWidget-border, var(--vscode-widget-border, var(--vscode-contrastBorder, transparent)));
+  box-shadow: 0 2px 8px var(--vscode-widget-shadow, rgba(0, 0, 0, 0.3));
+}
+.tooltip[hidden] { display: none; }

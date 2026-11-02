@@ -137,6 +137,7 @@ export function placeholder(id: number, name = ''): Problem {
     hasTestcase: false,
     hasAttachment: false,
     permittedLanguageIds: null,
+    tags: [],
     list: null,
   };
 }

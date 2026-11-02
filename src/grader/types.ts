@@ -40,8 +40,26 @@ export interface Problem {
   hasAttachment: boolean;
   /** Allowed language ids; null = all languages. */
   permittedLanguageIds: number[] | null;
+  /** Public tag names (API `tags`). */
+  tags: string[];
   /** From the HTML problem list, when it could be loaded. */
   list: ListScoreInfo | null;
+}
+
+/** A "topic" tag the website shows as a filter pill (`Tag.where(kind: 'topic')`). */
+export interface TopicTag {
+  name: string;
+  description: string | null;
+}
+
+/** Status as on the website's problem list (`main/_problem.html.haml`). */
+export type ProblemStatus = 'solved' | 'inprogress' | 'untried';
+
+/** solved = submitted and best >= 100; inprogress = submitted and best < 100; untried = no submission. */
+export function problemStatus(p: Pick<Problem, 'submissionCount' | 'bestScore' | 'lastSubmissionId'>): ProblemStatus {
+  const submitted = p.submissionCount > 0 || p.lastSubmissionId !== null;
+  if (!submitted) return 'untried';
+  return (p.bestScore ?? 0) >= 100 ? 'solved' : 'inprogress';
 }
 
 export interface ProblemDetail extends Problem {

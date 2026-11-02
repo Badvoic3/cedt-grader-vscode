@@ -10,6 +10,8 @@ export interface GraderConfig {
   debugRequests: boolean;
   /** Open problem statements beside the code (ViewColumn.Beside). */
   statementBeside: boolean;
+  /** Language for new files when the active file's language isn't permitted (default C++). */
+  defaultLanguage: string;
 }
 
 /**
@@ -38,5 +40,6 @@ export function readConfig(): GraderConfig {
     confirmBeforeSubmit: c.get<boolean>('confirmBeforeSubmit', true),
     debugRequests: c.get<boolean>('debugRequests', false) === true,
     statementBeside: c.get<boolean>('statementBeside', true) !== false,
+    defaultLanguage: String(c.get<string>('defaultLanguage', 'C++') || 'C++'),
   };
 }

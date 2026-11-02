@@ -417,9 +417,61 @@ input::placeholder { color: var(--vscode-input-placeholderForeground); }
 @media (hover: none) { .row-actions { opacity: 1; } }
 .picker-group { padding: 4px 4px 2px; text-transform: uppercase; font-size: 10px; letter-spacing: 0.04em; }
 
-/* how the problem was chosen: subtle icon, except "suggested" */
-.source-icon { display: inline-flex; flex: none; color: var(--muted); }
-.source-icon .codicon { font-size: 13px; }
-.source-icon.source-suggested { color: var(--warn); }
-.row.suggested { color: var(--warn); }
-.row.suggested .btn { padding: 1px 8px; }
+
+/* ---------------------------------------------------------------- tooltip */
+
+.tooltip {
+  position: fixed;
+  z-index: 1000;
+  padding: 3px 7px;
+  border-radius: 3px;
+  font-size: 12px;
+  line-height: 1.35;
+  pointer-events: none;
+  white-space: normal;
+  word-break: break-word;
+  color: var(--vscode-editorHoverWidget-foreground, var(--vscode-foreground));
+  background: var(--vscode-editorHoverWidget-background, var(--vscode-editorWidget-background));
+  border: 1px solid var(--vscode-editorHoverWidget-border, var(--vscode-widget-border, var(--vscode-contrastBorder, transparent)));
+  box-shadow: 0 2px 8px var(--vscode-widget-shadow, rgba(0, 0, 0, 0.3));
+}
+.tooltip[hidden] { display: none; }
+
+/* ------------------------------------------------------------ list filters */
+
+.segmented { display: flex; border: 1px solid var(--vscode-input-border, var(--border)); border-radius: var(--radius); overflow: hidden; }
+.segmented .seg {
+  flex: 1 1 0; min-width: 0; padding: 2px 4px; border: none; border-left: 1px solid var(--vscode-input-border, var(--border));
+  color: inherit; background: transparent; font: inherit; font-size: 0.9em; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.segmented .seg:first-child { border-left: none; }
+.segmented .seg:hover { background: var(--vscode-list-hoverBackground); }
+.segmented .seg.active { color: var(--vscode-button-foreground); background: var(--vscode-button-background); }
+.topics { display: flex; flex-wrap: wrap; gap: 4px; }
+.topic {
+  padding: 0 8px; border-radius: 10px; border: 1px solid var(--vscode-input-border, var(--border));
+  color: inherit; background: transparent; font: inherit; font-size: 0.85em; cursor: pointer;
+}
+.topic:hover { background: var(--vscode-list-hoverBackground); }
+.topic.active { color: var(--vscode-button-foreground); background: var(--vscode-button-background); border-color: transparent; }
+.segmented .seg:focus-visible, .topic:focus-visible { outline: 1px solid var(--vscode-focusBorder); outline-offset: -1px; }
+
+/* ---------------------------------------------------------- problem header */
+
+.combo-text { display: flex; flex-direction: column; min-width: 0; }
+.source-line { gap: 4px; }
+.source-line .codicon { font-size: 12px; }
+.source-line.suggested { color: var(--warn); }
+.source-line.suggested .btn { padding: 1px 8px; }
+.score-pill { font-weight: 600; }
+
+/* ------------------------------------------------------------------ legend */
+
+.strip-row { align-items: flex-start; }
+.legend {
+  display: flex; flex-direction: column; gap: 3px; padding: 6px 8px;
+  border: 1px solid var(--border); border-radius: var(--radius);
+  background: var(--vscode-editorHoverWidget-background, var(--vscode-editorWidget-background));
+}
+.legend .row { gap: 6px; }
+.comment { font-family: var(--vscode-editor-font-family); word-break: break-all; }

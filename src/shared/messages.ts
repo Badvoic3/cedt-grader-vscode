@@ -37,6 +37,15 @@ export interface ProblemView {
   /** At least one file is mapped to this problem (enables "go to file"). */
   hasFile: boolean;
   hasTestcase: boolean;
+  /** As on the website: solved (best ≥ 100) / inprogress / untried. */
+  status: 'solved' | 'inprogress' | 'untried';
+  tags: string[];
+}
+
+export interface ProblemFilter {
+  status: 'all' | 'unsolved' | 'inprogress' | 'solved';
+  /** Topic tag name, or null for all topics. */
+  topic: string | null;
 }
 
 export type MatchSourceView = 'saved' | 'cph' | 'filename' | 'suggested';
@@ -168,6 +177,10 @@ export interface ViewState {
     stale: boolean;
     items: ProblemView[];
     error: string | null;
+    /** Persisted per workspace. */
+    filter: ProblemFilter;
+    /** Topic pills (the website's topic tags, or all tags when unknown). */
+    topics: { name: string; description: string | null }[];
     /** Note when hint/AI penalties could not be read from /main/list. */
     penaltyNote: string | null;
   };
@@ -202,6 +215,7 @@ export type FromWebview =
   | { type: 'findFile'; problemId: number }
   | { type: 'loadTestcases' }
   | { type: 'confirmProblem'; problemId: number }
+  | { type: 'setFilter'; filter: ProblemFilter }
   | { type: 'showCompilerMessage' }
   | { type: 'openSettings' };
 

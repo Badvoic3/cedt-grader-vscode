@@ -7,6 +7,7 @@ import { pdfjsLib } from './pdfjs-global';
 import { EventBus, PDFFindController, PDFLinkService, PDFViewer } from 'pdfjs-dist/web/pdf_viewer.mjs';
 import type { FromStatement, StatementViewState, ToStatement } from '../src/ui/statementPanel';
 import { buildToolbar, el } from './statementToolbar';
+import { installTooltips } from './tooltip';
 import { clampScale, handleZoomWheel, zoomKey } from './zoom';
 
 interface Persisted extends StatementViewState {
@@ -38,6 +39,7 @@ const container = el('div', { id: 'viewerContainer', tabindex: '0' }, el('div', 
 const textView = el('div', { class: 'text-view' });
 const status = el('div', { class: 'status', role: 'status' });
 app.append(toolbar, status, container, textView);
+installTooltips(document);
 
 // -------------------------------------------------------------------- pdf
 

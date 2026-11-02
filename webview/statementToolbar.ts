@@ -9,9 +9,9 @@ export function el<K extends keyof HTMLElementTagNameMap>(tag: K, attrs: Record<
 
 const icon = (n: string) => el('span', { class: `codicon codicon-${n}`, 'aria-hidden': 'true' });
 
-/** Icon-only toolbar button: tooltip and the same aria-label. */
+/** Icon-only toolbar button: tooltip (custom component, `data-tip`) and the same aria-label. */
 export function btn(name: string, label: string, onclick: () => void): HTMLButtonElement {
-  const b = el('button', { class: 'tb', type: 'button', title: label, 'aria-label': label }, icon(name));
+  const b = el('button', { class: 'tb', type: 'button', 'data-tip': label, 'aria-label': label }, icon(name));
   b.addEventListener('click', onclick);
   return b;
 }
@@ -29,10 +29,10 @@ export interface ToolbarHandlers {
 }
 
 export function buildToolbar(h: ToolbarHandlers) {
-  const pageInput = el('input', { class: 'page', type: 'number', min: '1', value: '1', 'aria-label': 'Page number', title: 'Page number' });
+  const pageInput = el('input', { class: 'page', type: 'number', min: '1', value: '1', 'aria-label': 'Page number', 'data-tip': 'Page number' });
   const pageCount = el('span', { class: 'muted' }, '/ –');
-  const zoomLabel = el('span', { class: 'muted zoom', title: 'Zoom level' }, '');
-  const search = el('input', { class: 'search', type: 'search', placeholder: 'Find in statement', 'aria-label': 'Find in statement', title: 'Find in statement (Cmd/Ctrl+F)' });
+  const zoomLabel = el('span', { class: 'muted zoom', 'data-tip': 'Zoom level' }, '');
+  const search = el('input', { class: 'search', type: 'search', placeholder: 'Find in statement', 'aria-label': 'Find in statement', 'data-tip': 'Find in statement (Cmd/Ctrl+F)' });
   const matches = el('span', { class: 'muted matches' }, '');
   const titleEl = el('span', { class: 'title' }, '');
   const pdfTools = el('div', { class: 'group pdf-only' },

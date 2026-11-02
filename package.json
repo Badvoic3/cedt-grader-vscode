@@ -226,6 +226,11 @@
           "type": "boolean",
           "default": true,
           "description": "Open problem statements in an editor tab beside your code."
+        },
+        "cedtGrader.defaultLanguage": {
+          "type": "string",
+          "default": "C++",
+          "description": "Language for \"New file for this problem\" when the active file's language isn't allowed and no language was used before (e.g. C++, Python, Java). Archive and other non-source languages are never chosen automatically."
         }
       }
     }

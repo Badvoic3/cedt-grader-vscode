@@ -76,7 +76,7 @@ describe('Save as files (CPH absent)', () => {
 describe('everything else works without CPH', () => {
   const P = (id: number, name: string): Problem => ({
     id, name, fullName: name, bestScore: null, lastScore: null, lastResult: null, lastSubmissionId: null, lastSubmissionTime: null,
-    submissionCount: 0, hasTestcase: false, hasAttachment: false, permittedLanguageIds: null, list: null,
+    submissionCount: 0, hasTestcase: false, hasAttachment: false, permittedLanguageIds: null, tags: [], list: null,
   });
 
   it('linking: no .prob files → reading costs nothing and matching uses the file name', async () => {

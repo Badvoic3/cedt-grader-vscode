@@ -25,7 +25,7 @@ Notes:
 - `userId` must be discovered after login (it appears in `get_latest_submission_status/{userId}/...` URLs in page HTML, or find it from the Rails views). Do not hard-code it.
 - Supported languages in the web editor: C, C++, Python, Java, Rust, Go, PHP, Haskell, Ruby, Pascal, PostgreSQL, Digital. Always use the per-problem `language_id` list; map file extensions to language names (`.cpp/.cc/.cxx` → C++, `.c` → C, `.py` → Python, `.java` → Java, `.rs` → Rust, `.go` → Go, `.php` → PHP, `.hs` → Haskell, `.rb` → Ruby, `.pas` → Pascal, `.sql` → PostgreSQL), and ask with a quick-pick if ambiguous.
 - The Testcases page only works for some problems (others redirect to `/main/list`). Treat it as optional.
-- Unknown verdict tile classes (timeout, crash, etc.) must not break parsing: show the raw `title` text.
+- Verdict strips follow the website exactly (see Phase 4 "Verdict strip"); anything that isn't a valid strip is shown as plain text.
 
 ## 1b. JSON API (primary path)
 
@@ -173,8 +173,16 @@ Contests on this grader are only used for exams, and this is an unofficial homew
    - CPH only re-reads a `.prob` when the active editor changes and has no reload command; the success message says so and offers "Reload in CPH" (briefly shows a read-only placeholder tab and returns to the file). CPH itself is never modified.
    - Success message: loaded, skipped (truncated), already present. Errors use the connection banner.
 7. **Copy problem name:** copy icon next to the problem name (panel, picker, problem list) copies the clean name (zero-width characters removed), so a file named with it is auto-matched exactly.
-8. **New file for this problem:** creates `<clean name>.<ext>` (ext of the problem's first allowed language) in the active file's folder (or workspace root), opens it and saves the mapping. If it exists: Open Existing / Overwrite / Cancel; never overwritten silently.
-9. **Jump to file:** "go to file" for problems with a mapped file (reverse lookup of saved mappings only, no workspace scan; one `fs.stat` per file when used; missing → offer to remove the stale mapping; several → quick pick). Without a mapping: "Find file by name" runs one `workspace.findFiles` for the clean name (excluding node_modules, .git, .cph, build folders; max 20) only when clicked.
+8. **New file for this problem:** creates `<clean name>.<ext>` in the active file's folder (or workspace root), opens it and saves the mapping. If it exists: Open Existing / Overwrite / Cancel; never overwritten silently.
+   - Extension order: the active file's language if permitted; else the last language used for new files if permitted; else `cedtGrader.defaultLanguage` (default C++) if permitted; else a quick pick of the permitted languages.
+   - Archive / binary / non-source languages (Archive, Digital, Viva Exam, Text, or anything with a binary extension) are never picked automatically; they are only offered in the quick pick. (cafe-grader marks Archive `binary: true`; the API doesn't expose the flag, so names/extensions are listed.)
+   - Tests for each step of that order.
+9. **Jump to file:** "go to file" for problems with a mapped file (reverse lookup of saved mappings only, no workspace scan; one `fs.stat` per file when used; missing → offer to remove the stale mapping; several → quick pick).
+   - Without a mapping: "Find file by name" runs one `workspace.findFiles`, only when clicked.
+   - It includes only source files whose extension belongs to a language permitted for that problem (from the languages list, plus that language's other extensions such as .cc/.cxx), with a case-insensitive match on the clean problem name.
+   - It excludes the `files.exclude` and `search.exclude` settings, simple patterns from the workspace `.gitignore`, `node_modules`, `.git`, `bin/`, `build/`, `out/`, `dist/`, `target/`, `*.dSYM/`, `.cph/`, and binary extensions (.bin, .o, .out, .exe, .zip, …).
+   - Exactly one result: open it and offer to link it. Several: a quick pick of relative paths, most likely first (same folder as the active file, then most recently modified).
+   - Tests with a fixture tree containing .cpp, .bin and a .dSYM folder.
 10. **Moved / renamed files (failsafe):**
     - Inside VS Code: `workspace.onDidRenameFiles` updates saved mappings and `.cedt-grader.json` for renamed files and folders (a folder rename moves every file inside it); how the problem was chosen is kept; per-file results and chosen language follow the file.
     - Outside VS Code (Finder, terminal, git): when a file without a mapping is opened, saved mappings whose file is missing (checked with `fs.stat`, only for same-name candidates) and whose file name matches are offered: "This looks like <old path>, linked to <problem>. Keep the link?" (Keep / Not this one; several → pick or skip). Never applied silently; no workspace scanning. "Not this one" is remembered.
@@ -204,6 +212,25 @@ Instead of relying on the command palette, build a sidebar GUI like the CPH and 
 - Keep the commands too (so keyboard shortcuts still work), but the GUI is the primary way to use the extension. Keep the status bar item as a shortcut that reveals the panel.
 - Plain TypeScript + HTML/CSS for the webview (no framework), bundled with esbuild into `media/`.
 - Notifications stay human readable (wrong password, session expired, language not allowed for this problem, network error).
+- Problem list filters (like the website, `app/views/main/list.html.haml`, `main/_problem.html.haml`):
+  - Status filter (segmented, persisted per workspace): solved = has a submission and best ≥ 100; inprogress = has a submission and best < 100; untried = no submission. All / Unsolved (untried or inprogress) / In progress / Solved.
+  - Topic filter: pill buttons. The website shows only `@primary_tags = Tag.where(kind: 'topic')`; the API's `tags` has no kind, so the topic pills (with descriptions) are read from the `/main/list` page we already fetch (`.topic-badge`); when that page is unavailable, all tags in use are shown. Click again to clear. Persisted.
+  - Filters combine with the text search; "127 of 292 problems". No "Random" button.
+- Verdict strip, exactly as the website (`app/helpers/grader_comment_helper.rb`, `app/models/evaluation.rb`, `app/javascript/verdict_strip.js`):
+  - Codes `? P - s T M x E !` (Judging, Correct, Wrong Answer, Partially Correct, Time Limit Exceed, Memory Limit Exceed, Program Crashed, UNKNOWN ERROR, GRADER ERROR); one tile per test, in order; tile tooltip "Test 5 of 12: Time Limit Exceed".
+  - `[...]` groups drawn as a box; box tooltip "Group 2 of 3: 2/3 passed. Tests in a box are scored together — the box earns the lowest score inside it." (passed = P tiles).
+  - Only strings matching the website pattern `^(?:[codes]+|\[[codes]+\])+$` become tiles; anything else (nested/unbalanced brackets, unknown letters, free text such as "No testcase") is shown as plain monospace `[text]`.
+  - A "?" legend popover ("Reading the results"), like the website's.
+  - Tests for every code, groups and the plain-text fallback.
+- Problem header:
+  - The match source is a small text line with its icon under the problem selector ("Chosen by you", "Matched by file name", "Matched from CPH data"; "Suggested from the file name" in warning color with Confirm).
+  - The name isn't repeated: when `full_name` starts with the name followed by ":" ("104_68_1_exam2_P1: Scholarship"), show "104_68_1_exam2_P1 #1643" with "Scholarship" as subtitle (also in the lists).
+  - The score pill in problem rows has a tooltip ("Counted score: 70 / 100 (your best submission…) · 3 attempts" or "Not attempted yet") and the same colors as scores elsewhere.
+- Tooltips: one custom tooltip component in all webviews instead of native `title` tooltips.
+  - It shows on hover after ~300 ms and on keyboard focus, and hides on mouse leave, blur, Escape, scroll or click.
+  - It stays inside the sidebar, uses event delegation on the document, and re-anchors after re-renders. `aria-label` is kept.
+  - Cause of missing tooltips: every state push re-rendered all sections and replaced the element under the cursor. Sections now re-render only when their own data changed.
+  - Tests: the tooltip component and the icon-button check (data-tip == aria-label, no native title).
 - Statement viewer fixes:
   - Pinch zoom: trackpad pinch arrives as `wheel` events with `ctrlKey = true`; zoom the pdf.js view smoothly around the cursor (`preventDefault` so VS Code's own zoom doesn't react). Also Cmd/Ctrl + / - / 0 (reset = fit width), and the toolbar buttons.
   - No PDF refetch when the panel is hidden and shown (retainContextWhenHidden), the tab is closed and reopened (disk cache), or VS Code restarts (panel serializer + disk cache). Verified with the debug request log.

@@ -40,12 +40,17 @@ Press F5 to start an Extension Development Host (`.vscode/launch.json` runs `npm
 - `src/ui/statusBar.ts`: status bar shortcut that reveals the panel (warning icon while the connection banner is up).
 - `src/ui/statementPanel.ts` + `webview/statement.ts`: "Statement: <problem>" editor tabs (bundled pdf.js 4.10 viewer: zoom, fit width, pages, text selection, search; description fallback rendered with markdown-it `html: false`).
 - `webview/main.ts`, `webview/style.css`: plain DOM sidebar, bundled to `media/dist/` (git-ignored).
+  - Sections re-render only when their slice of `ViewState` changed (`sectionKeys`); `forceRender()` after local UI changes.
+  - `webview/tooltip.ts`: the one custom tooltip (`data-tip`; `el()` maps `title` → `data-tip`). Never use native `title`.
+  - `webview/filters.ts`: problem list status/topic/text filter (website rules).
 - `src/mapping/` (Phase 3, linking):
   - `match.ts`: `cleanName`, `normalizeName`, `resolveProblem` (saved → CPH → exact file name → suggestions; ambiguous → ask), `fileNameFor`.
   - `store.ts`: workspaceState keyed by `<folder name>/<relative path>` (+ legacy fsPath keys read) and `.cedt-grader.json`; reverse lookup (problem → files), rename, mark deleted (stale), expire, reconnect.
   - `mappingFile.ts`: `.cedt-grader.json` parsing (`staleSince` kept), `reverseIndex`.
   - `mappingOps.ts`: pure move logic (`planRename`, `reconnectCandidates`, `affectedByDelete`, `expired`) and `moveCphProblem`.
   - `cph.ts` / `cphImport.ts`: CPH `.prob` read / import (format below). `newFile.ts`: create without overwriting.
+  - `newFileLanguage.ts`: extension order for "New file" (active file → last used → `cedtGrader.defaultLanguage` → quick pick; never archive/binary automatically).
+  - `findByName.ts`: "Find file by name" include/exclude globs, filtering (permitted source extensions, excluded folders, binaries) and ranking.
 - `src/cphIntegration.ts`: optional CPH detection, test-case target choice, "Save as files" writer.
 - `test/fixtures/`: `*.synthetic.*` files are hand-built from the cafe-grader views and controllers. The others are real data captured by the probe and sanitized.
 
@@ -84,7 +89,7 @@ Press F5 to start an Extension Development Host (`.vscode/launch.json` runs `npm
 
 ## Accessibility
 
-Every icon-only button (`iconButton()` in `webview/main.ts`, `btn()` in `webview/statementToolbar.ts`) has `title` and an identical `aria-label`; disabled buttons explain why in the tooltip (`iconButton(..., { disabledReason })`, `button(..., { title })`). `test/webview.test.ts` ("accessibility") and `test/statementToolbar.test.ts` fail otherwise.
+Every icon-only button (`iconButton()` in `webview/main.ts`, `btn()` in `webview/statementToolbar.ts`) has a tooltip (`data-tip`, shown by `webview/tooltip.ts`) and an identical `aria-label`; disabled buttons explain why in the tooltip (`iconButton(..., { disabledReason })`, `button(..., { title })`). `test/webview.test.ts` ("accessibility") and `test/statementToolbar.test.ts` fail otherwise.
 
 ## CPH `.prob` (confirmed in agrawal-d/cph @ ef8c7a7: `src/types.ts`, `src/parser.ts`, `src/webview/editorChange.ts`)
 
@@ -94,6 +99,13 @@ Every icon-only button (`iconButton()` in `webview/main.ts`, `btn()` in `webview
 - CPH has no rename/delete handling; a renamed source orphans its `.prob` (we offer to move it).
 - Our imported tests: `id = 7e15 + grader testcase id` (marker that survives CPH re-saves); backup `<file>.prob.bak`; own tests first and never removed; duplicates by input+output skipped; line endings `\n`.
 - Never modify CPH itself; only write `.prob` files in this exact format.
+
+## Problem list and verdicts (as on the website)
+
+- Status (`problemStatus`): solved = submitted and best ≥ 100; inprogress = submitted and best < 100; untried = none. Filters All / Unsolved / In progress / Solved, persisted per workspace (`cedtGrader.problemFilter`).
+- Topics: `/main/list` `.topic-badge` pills (`Tag.where(kind: 'topic')`, `parseTopicTags`); the API `tags` (names only) is the fallback.
+- Verdicts (`src/grader/verdicts.ts`): codes in `RESULT_CODE` order `? P - s T M x E !`; strip only if it matches the website's `VERDICT_STRING_RE`; groups `[...]` = box with `groupLabel()` (website text); otherwise plain `[text]`. Legend popover "Reading the results".
+- Header: `titleParts()` drops a repeated `name:` prefix from `full_name`; match source as a text line under the selector.
 
 ## Counted score (src/grader/score.ts)
 

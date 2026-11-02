@@ -2,7 +2,7 @@ import { ApiClient, type ApiLanguage, type ApiProblem, type ApiSubmission, type 
 import { isContestPage } from './contest';
 import { AuthError, GraderError, NetworkError, PollTimeoutError, SessionExpiredError } from './errors';
 import type { FetchLike, Logger } from './http';
-import { parseListScores } from './parsers';
+import { parseListScores, parseTopicTags } from './parsers';
 import { Redactor } from './redact';
 import type {
   GraderUser,
@@ -14,6 +14,7 @@ import type {
   SubmissionBrief,
   SubmissionDetail,
   TestcaseInfo,
+  TopicTag,
 } from './types';
 import { parseGraderComment } from './verdicts';
 import { WebSession } from './web';
@@ -47,6 +48,8 @@ export interface GraderClientOptions {
 
 export interface ProblemList {
   problems: Problem[];
+  /** Topic tags shown as filter pills on the website; null when the list page was unavailable (use all tags). */
+  topics: TopicTag[] | null;
   /** Penalty data from `/main/list`: 'loaded', or why it is missing. */
   listStatus: 'loaded' | 'no-web-session' | 'failed';
 }
@@ -226,21 +229,24 @@ export class GraderClient {
    * With `penalties: false` only the API is called and `previous` list data is kept
    * (used right after a submit: penalties don't change by submitting).
    */
-  async listProblems(opts: { penalties?: boolean; previous?: Problem[] } = {}): Promise<ProblemList> {
+  async listProblems(opts: { penalties?: boolean; previous?: Problem[]; previousTopics?: TopicTag[] | null } = {}): Promise<ProblemList> {
     const api = await this.authed(() => this.api.get<ApiProblem[]>('/api/v1/problems'));
     if (opts.penalties === false) {
       const prev = new Map((opts.previous ?? []).map((p) => [p.id, p.list]));
-      return { problems: api.map((p) => toProblem(p, prev.get(p.id) ?? null)), listStatus: 'loaded' };
+      return { problems: api.map((p) => toProblem(p, prev.get(p.id) ?? null)), listStatus: 'loaded', topics: opts.previousTopics ?? null };
     }
     let listStatus: ProblemList['listStatus'] = 'loaded';
     let scores: Map<number, ListScoreInfo> | null = null;
+    let topics: TopicTag[] | null = null;
     try {
-      scores = parseListScores(await this.fetchListPage());
+      const html = await this.fetchListPage();
+      scores = parseListScores(html);
+      topics = parseTopicTags(html);
     } catch (err) {
       listStatus = err instanceof SessionExpiredError ? 'no-web-session' : 'failed';
       this.opts.log?.(`Problem list page unavailable: ${err instanceof Error ? err.message : err}`);
     }
-    return { problems: api.map((p) => toProblem(p, scores?.get(p.id) ?? null)), listStatus };
+    return { problems: api.map((p) => toProblem(p, scores?.get(p.id) ?? null)), listStatus, topics };
   }
 
   private setListHtml(html: string): string {
@@ -401,6 +407,7 @@ function toProblem(p: ApiProblem, list: ListScoreInfo | null): Problem {
     hasTestcase: !!p.has_testcase,
     hasAttachment: !!p.has_attachment,
     permittedLanguageIds: p.permitted_languages ? p.permitted_languages.map((l) => l.id) : null,
+    tags: (p.tags ?? []).map((t) => clean(t)).filter(Boolean),
     list,
   };
 }
