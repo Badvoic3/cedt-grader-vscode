@@ -33,7 +33,7 @@ npm test             # vitest: grader layer (fake API + web server), cache/reque
 npm run build        # tsc --noEmit + esbuild (dist/extension.js, media/dist/webview.js|css, statement viewer, codicons, pdf.js)
 npm run typecheck    # tsc --noEmit only (there is no separate linter; strict TS with noUnused* is the lint)
 npm run watch        # esbuild watch
-npm run package      # production build + vsce package → cedt-grader-submit-<version>.vsix
+npm run package      # vsce package (its vscode:prepublish runs the production build, which empties dist/ + media/dist/ first: no source maps) → cedt-grader-submit-<version>.vsix
 npx tsx scripts/probe.ts [--list] [--problem <ID>] [--fixtures] [--submit file]   # read-only unless --submit; needs .env
 ```
 
@@ -305,16 +305,20 @@ No course- or problem-specific names in code (problem names come from the server
 - The controller (vscode-dependent) has no unit tests; its rules are kept in pure, tested helpers (`problemFiles.ts`, `suggestionGate.ts`, `match.ts`, `mappingOps.ts`, `paths.ts`) and the webview is tested in jsdom.
 - English only; texts are already in `src/shared/strings.ts`, ready for Phase 6.
 
-## Open questions (decide before or during Phase 5)
+## Release decisions (Phase 5)
+
+- LICENSE: MIT, © 2026 Nutthanun Kongsorn. `repository`: https://github.com/badvoic3/cedt-grader-vscode. Icon: `media/icon.png` (128 px, rendered from `media/icon.svg`; the Activity Bar uses the SVG).
+- No source maps in the `.vsix`. No ESLint: strict `tsc` (noUnused*) is the lint.
+- **Git history: rewrite right before the first push** (not done yet; the user decides when). Commits carry the author's real name and personal email → `git filter-repo` with a mailmap to a GitHub noreply address, and set `git config user.email` to it. The deleted fixture `test/fixtures/submission_edit.html` (715fd8b → removed in 89746cd) is sanitized (CSRF tokens `***`, user id 12345, empty `int main`), so removing it is optional.
+
+## Open questions
 
 - Exam time window in the counted score: keep as a limitation (recommended; the API has no contest data) or implement via contest pages?
 - Verdict codes: stay in `src/grader/verdicts.ts` (they mirror the server) or move to `src/shared/constants.ts`?
-- Git history: commits carry the author's real name and personal email; one deleted fixture (`test/fixtures/submission_edit.html`, 715fd8b → removed in 89746cd) holds an empty `int main(){return 0;}` submission. Rewrite (e.g. `git filter-repo` mailmap / path removal) before publishing? Not done without the user's OK.
-- Release metadata: LICENSE copyright holder, `repository` URL in `package.json`, keep source maps in the `.vsix` (~2 MB)?, add ESLint or keep strict `tsc` as the lint?
 
 ## Not done yet
 
-- Phase 5 (cache management, README install guide / troubleshooting, walkthrough done): packaging polish — see spec.
+- Phase 5: built (v0.6.0); waiting for the CHECKPOINT (manual F5 / .vsix tests by the user).
 - Phase 6: Thai translation (`cedtGrader.displayLanguage`, vscode.l10n, package.nls.th.json), plain-language review, more customization — see spec.
 
 Commands (kept for keybindings; the panel is the primary interface): `cedtGrader.login`, `logout`, `submit`, `chooseProblem`, `clearMapping`, `loadTestcases`, `showLastResult`, `openStatement`, `refreshProblems`, `refreshHistory`, `showRequestLog`, `clearCache`, `openWalkthrough`, `openSettings`, `renameFileToProblem`, `focus`.

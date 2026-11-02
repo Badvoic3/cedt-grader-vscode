@@ -1,9 +1,10 @@
 **
 !dist/extension.js
 !media/icon.svg
+!media/icon.png
 !media/walkthrough/**
 !media/dist/**
-media/dist/*.map
+# No source maps: the production build (vscode:prepublish) empties dist/ and media/dist/ first.
 !package.json
 !README.md
 !CHANGELOG.md

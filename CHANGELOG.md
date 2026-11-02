@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.6.0 — Phase 5 (quality and packaging)
 
 ### Cache and storage
 - Downloaded statements and test cases have a size limit (setting `cedtGrader.cacheMaxMB`, default 100 MB); the least recently used files are deleted first.
@@ -11,6 +11,10 @@
 ### Getting started
 - A **Get started with CEDT Grader** walkthrough (opened once by VS Code after installing; again with **CEDT Grader: Get Started** or the panel's ⋯ menu): open the panel, log in, open a solution file, check the problem, submit, optional CPH. Steps tick themselves off as you do them.
 - README: step-by-step install from a `.vsix`, first steps, updating, uninstalling, troubleshooting, cache and storage.
+
+### Packaging
+- MIT `LICENSE`, extension icon, repository link.
+- `npm run package` builds the `.vsix` once, without warnings and without source maps (the production build starts from empty output folders).
 
 ## 0.5.0 — pre-Phase 5 checkpoint
 
