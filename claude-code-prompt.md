@@ -72,17 +72,32 @@ Submitting from the extension sends no check-ins, so during an exam the student 
 - Commands: `CEDT Grader: Log In`, `CEDT Grader: Log Out`, `CEDT Grader: Submit Current File`, `CEDT Grader: Choose Problem for This File`, `CEDT Grader: Show Last Result`, `CEDT Grader: Open Problem Statement`.
 - Settings: `cedtGrader.baseUrl`, `cedtGrader.username`, `cedtGrader.pollIntervalSeconds` (min 3, default 5), `cedtGrader.confirmBeforeSubmit` (default true), `cedtGrader.allowContestSubmissions` (default false).
 - The submit command runs the contest check from section 2b first, every time.
+- The commands stay (so keyboard shortcuts and the command palette keep working), but the **sidebar GUI from Phase 4 is the primary interface**. Build the skeleton with the sidebar in mind: commands and the webview call the same controller.
 
 ### Phase 3: Problem mapping and CPH integration
 - First inspect how CPH stores problems: look at its source (https://github.com/agrawal-d/cph) and any `.cph/*.prob` files in my workspace. Do not assume the format; confirm it.
 - Mapping order for the active file: (1) our own mapping stored in workspace state / a `.cedt-grader.json` file, (2) a problem URL or name in the CPH `.prob` file if it matches the grader, (3) a quick-pick of problems from `/main/list` (searchable by name), saved for next time.
 - Optional: when the Testcases page exists for a problem, offer a command to import its sample cases into the CPH `.prob` file so CPH can run them locally. Only write to `.prob` files in the documented format and back up the original first.
 
-### Phase 4: UX
-- Status bar item: `$(cloud-upload) Submit to Grader` while a mapped file is active; shows a spinner while grading, then the score (e.g. `70/100`).
-- Editor title button (play-style icon) next to CPH's, for C/C++/Python/Java files.
-- Results webview panel: problem name, submission id with a link to `/submissions/{id}`, score, a colored verdict strip (one tile per test, tooltip with the label), compiler message when compilation fails, and a "Resubmit" button. Use VS Code theme CSS variables.
-- Notifications: progress notification while polling; error messages that are human readable (wrong password, session expired, language not allowed for this problem, network error).
+### Phase 4: Sidebar GUI (primary interface)
+Instead of relying on the command palette, build a sidebar GUI like the CPH and Claude extensions.
+
+- Add an Activity Bar view container "CEDT Grader" with its own icon (SVG, monochrome so it follows the theme) containing one webview view, using a `WebviewViewProvider`.
+- The webview is the main interface. Sections:
+  1. **Account:** login form (username + password) when logged out; username and a Log out button when logged in. The password goes straight to `context.secrets` and is never kept in webview state or logged.
+  2. **Current problem:** shows the active editor's file, the mapped problem (with a searchable picker from `/main/list`), a language dropdown filled from that problem's allowed languages, a "contest" badge, and a big Submit button. Submit is disabled with an explanation when the contest check blocks it (section 2b).
+  3. **Result:** live status while grading, then score, a colored verdict strip (one tile per test, tooltip with the label), compiler message if compilation failed, link to the submission, and Resubmit.
+  4. **History:** the last few submissions for this problem.
+  5. **Problems:** a searchable list of problems with best score; clicking one maps it to the current file or opens its statement.
+- Communication only through `postMessage` with typed messages in a shared types file. All network calls stay in the extension host, never in the webview.
+- Follow the active editor: when the user switches files, the panel updates.
+- Use VS Code theme CSS variables and `@vscode/codicons`; it must look right in light, dark and high-contrast themes and at narrow sidebar widths.
+- Security: strict Content-Security-Policy with a nonce, `localResourceRoots` limited to the extension's `media` folder, escape all HTML from the grader before showing it.
+- Keep the commands too (so keyboard shortcuts still work), but the GUI is the primary way to use the extension. Keep the status bar item as a shortcut that reveals the panel.
+- Plain TypeScript + HTML/CSS for the webview (no framework), bundled with esbuild into `media/`.
+- Notifications stay human readable (wrong password, session expired, language not allowed for this problem, network error).
+- Update `CLAUDE.md` and the README with the new UI.
+- Plan first and show a sketch of the panel layout, then build it. **CHECKPOINT:** explain how to test it with F5.
 
 ### Phase 5: Quality and packaging
 - Tests: parsers (fixtures), `GraderClient` with mocked fetch (login, expired session re-login, submit, poll timeout), extension-to-language mapping.
