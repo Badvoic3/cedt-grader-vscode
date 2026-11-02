@@ -141,6 +141,8 @@ export interface ViewState {
     /** Language guessed from the extension, e.g. `C++`. */
     languageGuess: string | null;
     supported: boolean;
+    /** Proposed name when the file name doesn't match its problem ("Rename file to match the problem"); null otherwise. */
+    renameTo: string | null;
   } | null;
   problem: (ProblemView & { source: MatchSourceView; sourceLabel: string; unavailable: boolean }) | null;
   /** All files linked to the current problem when there are several (duplicate notice). */
@@ -246,6 +248,7 @@ export type FromWebview =
   | { type: 'openLinkedFile'; index: number }
   | { type: 'keepOnlyThisFile' }
   | { type: 'dismissLinkedNotice' }
+  | { type: 'renameFileToProblem' }
   | { type: 'cphTip'; action: 'install' | 'later' | 'never' }
   | { type: 'showCompilerMessage' }
   | { type: 'openSettings' };

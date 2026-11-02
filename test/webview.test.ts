@@ -58,7 +58,7 @@ const base: ViewState = {
 const loggedIn: ViewState = {
   ...base,
   account: { status: 'logged-in', username: 'student', fullName: null, hasSavedPassword: true, rememberPassword: true, error: null },
-  file: { path: 'grader/00 11 intro.cpp', name: '00 11 intro.cpp', languageGuess: 'C++', supported: true },
+  file: { path: 'grader/00 11 intro.cpp', name: '00 11 intro.cpp', languageGuess: 'C++', supported: true, renameTo: null },
   problem: { id: 1360, name: '00_Intro_11', fullName: '<img src=x onerror=alert(1)>', score: score(70, { latest: 40, attempts: 3, latestBelowCounted: true, penaltyLabel: '-10 AI assist' }), source: 'saved', sourceLabel: 'saved', unavailable: false, hasFile: true, hasTestcase: true, status: 'solved', tags: ['ComProg'], lastSubmissionTime: null, lastOpened: null },
   languages: { loading: false, items: [{ id: 1, name: 'C' }, { id: 2, name: 'C++' }], selectedId: 2, mismatch: null },
   submit: { enabled: true, busy: false, reason: null, label: 'Submit to Grader' },
@@ -194,7 +194,7 @@ describe.runIf(existsSync(resolve(__dirname, '../esbuild.mjs')))('sidebar webvie
     const { doc, post } = boot();
     post(loggedIn);
     expect(doc.querySelector('#sec-result .score')).not.toBeNull();
-    post({ ...loggedIn, file: { path: 'b.cpp', name: 'b.cpp', languageGuess: 'C++', supported: true }, result: null, gradingElsewhere: '00_Intro_11' });
+    post({ ...loggedIn, file: { path: 'b.cpp', name: 'b.cpp', languageGuess: 'C++', supported: true, renameTo: null }, result: null, gradingElsewhere: '00_Intro_11' });
     expect(doc.querySelector('#sec-result .score')).toBeNull();
     expect(doc.querySelector('#sec-result')!.textContent).toContain('No submission yet');
     expect(doc.querySelector('#sec-current')!.textContent).toContain('Grading 00_Intro_11 for another file');
@@ -684,6 +684,18 @@ describe.runIf(existsSync(resolve(__dirname, '../esbuild.mjs')))('sidebar webvie
     expect(doc.querySelector('#sec-result .score')!.textContent).toBe('70'); // the result's raw points, no "/ 100"
     expect(doc.querySelector('#sec-history .history-row .pill')!.getAttribute('data-tip')).toMatch(/^70\. .*raw-sum/);
     expect(doc.querySelector('#sec-problems .score-pill')!.getAttribute('data-tip')).toMatch(/raw-sum scoring/);
+  });
+
+  it('"Rename file to match the problem" only when the name does not match', () => {
+    const { doc, sent, post } = boot();
+    post(loggedIn); // renameTo: null → hidden
+    expect(doc.querySelector('#sec-current')!.textContent).not.toContain('Rename file to match the problem');
+    post({ ...loggedIn, file: { ...loggedIn.file!, name: 'sol.cpp', renameTo: '00_Intro_11.cpp' } });
+    const link = [...doc.querySelectorAll<HTMLButtonElement>('#sec-current button')].find((b) => b.textContent === 'Rename file to match the problem')!;
+    expect(link.dataset.tip).toBe('Rename sol.cpp to 00_Intro_11.cpp (you can edit the name first)');
+    link.click();
+    expect(sent.at(-1)).toEqual({ type: 'renameFileToProblem' });
+    expect(rightClick(doc, header(doc))).toContain('Rename file to match the problem');
   });
 
   it('inline prompt (no modal): text, detail and plain buttons answer by id', () => {

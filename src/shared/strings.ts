@@ -166,6 +166,18 @@ export const S = {
     severalMatch: (cph: boolean) => `Several problems match this ${cph ? "file's CPH data" : 'file name'}. Choose one.`,
   },
 
+  rename: {
+    title: 'Rename file to match the problem',
+    prompt: (current: string) => `New name for ${current} (links, open editors and CPH tests follow; Undo works)`,
+    existsSuggest: (name: string, free: string) => `${name} already exists here. Try ${free}.`,
+    invalid: {
+      empty: 'Type a file name.',
+      separator: 'Just a file name, without folders.',
+      reserved: 'File names can’t contain : * ? " < > |',
+    } as Record<string, string>,
+    failed: (name: string) => `Couldn't rename the file to ${name}.`,
+  },
+
   errors: {
     checkConnection: (msg: string) => `${msg} Check your internet connection.`,
     unexpected: (msg: string) => `Unexpected error: ${msg}`,
@@ -305,6 +317,8 @@ export const W = {
   filesAreLinkedToThis: (n: string | number) => `${n} files are linked to this problem`,
   hideTheList: "Hide the list",
   dismiss: 'Dismiss',
+  renameToProblem: 'Rename file to match the problem',
+  renameToProblemTip: (from: string, to: string) => `Rename ${from} to ${to} (you can edit the name first)`,
   dismissNoticeTip: 'Hide this notice until the files for this problem change',
   showTheFiles: "Show the files",
   hide: "Hide",
