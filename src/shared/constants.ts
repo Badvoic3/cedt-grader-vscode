@@ -121,6 +121,8 @@ export const ATTACHMENT = {
   maxTotalBytes: 50 * 1024 * 1024,
   /** Submit-file question: inline buttons up to this many files, a quick pick above. */
   maxInlineChoices: 6,
+  /** Folder mode: C/C++ files larger than this are not read for submit / run file detection. */
+  maxRoleFileBytes: 512 * 1024,
 } as const;
 
 /** Links of deleted files are kept (stale) this many days, so a moved file can reconnect. */

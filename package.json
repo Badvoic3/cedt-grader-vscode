@@ -175,6 +175,12 @@
         "icon": "$(cloud-download)"
       },
       {
+        "command": "cedtGrader.runTests",
+        "title": "%command.runTests.title%",
+        "category": "%command.category%",
+        "icon": "$(play)"
+      },
+      {
         "command": "cedtGrader.toggleFolderMode",
         "title": "%command.toggleFolderMode.title%",
         "category": "%command.category%",

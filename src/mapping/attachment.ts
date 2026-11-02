@@ -39,10 +39,20 @@ export interface ZipPlan {
   topFolder: string | null;
 }
 
-/** macOS metadata that zips made in Finder carry along. */
+/** macOS metadata that zips made in Finder carry along, and shipped build output (`main.o`; a PDF is kept). */
 function isJunk(segs: string[]): boolean {
   const last = segs[segs.length - 1];
-  return segs[0] === '__MACOSX' || last === '.DS_Store' || last.startsWith('._');
+  const ext = extname(last).slice(1).toLowerCase();
+  return segs[0] === '__MACOSX' || last === '.DS_Store' || last.startsWith('._') || (ext !== 'pdf' && BINARY_EXTS.has(ext));
+}
+
+/** A compiled program without an extension (ELF, Mach-O, PE): shipped build output, never extracted. */
+export function isExecutable(data: Uint8Array): boolean {
+  const b = (i: number) => data[i] ?? -1;
+  if (b(0) === 0x7f && b(1) === 0x45 && b(2) === 0x4c && b(3) === 0x46) return true; // ELF
+  if (b(0) === 0x4d && b(1) === 0x5a) return true; // MZ (Windows)
+  const magic = ((b(0) << 24) | (b(1) << 16) | (b(2) << 8) | b(3)) >>> 0;
+  return [0xfeedface, 0xfeedfacf, 0xcefaedfe, 0xcffaedfe, 0xcafebabe].includes(magic); // Mach-O / universal
 }
 
 /** A safe relative path for a zip entry, or why not. Directory entries (trailing "/") give ''. */
@@ -83,13 +93,15 @@ export function planZip(bytes: Uint8Array, limits: { maxEntries: number; maxTota
     throw new AttachmentError(S.attachment.unreadable(e instanceof Error ? e.message : String(e)));
   }
   let total = 0;
-  const files = order.map((name) => {
-    const data = unzipped[name];
-    if (!data) throw new AttachmentError(S.attachment.unreadable(name));
-    total += data.length;
-    if (total > limits.maxTotalBytes) throw new AttachmentError(S.attachment.tooBig(Math.round(limits.maxTotalBytes / 1048576)));
-    return { rel: entryPath(name), data };
-  });
+  const files = order
+    .map((name) => {
+      const data = unzipped[name];
+      if (!data) throw new AttachmentError(S.attachment.unreadable(name));
+      total += data.length;
+      if (total > limits.maxTotalBytes) throw new AttachmentError(S.attachment.tooBig(Math.round(limits.maxTotalBytes / 1048576)));
+      return { rel: entryPath(name), data };
+    })
+    .filter((f) => extname(f.rel) || !isExecutable(f.data));
   if (!files.length) throw new AttachmentError(S.attachment.empty);
   // One shared top-level folder ("student/main.cpp", "student/student.h") is removed.
   const tops = new Set(files.map((f) => (f.rel.includes('/') ? f.rel.split('/')[0] : '')));

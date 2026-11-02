@@ -150,8 +150,11 @@ export class SidebarProvider implements vscode.WebviewViewProvider, vscode.Dispo
       case 'toggleFolderMode':
         await c.toggleFolderMode();
         return;
-      case 'setSubmitFile':
-        if (typeof m.file === 'string') await c.setSubmitFile(m.file);
+      case 'setFolderRole':
+        if ((m.role === 'submit' || m.role === 'run') && typeof m.file === 'string') await c.setFolderRole(m.role, m.file);
+        return;
+      case 'runTests':
+        await c.runTests();
         return;
       case 'dismissLinkedNotice':
         await c.dismissLinkedNotice();

@@ -49,6 +49,7 @@ const base: ViewState = {
   folder: null,
   folderMode: null,
   attachment: { busy: null },
+  runTests: null,
   cph: { installed: true },
   languages: { loading: false, items: [], selectedId: null, mismatch: null },
   connection: null,
@@ -394,7 +395,8 @@ describe.runIf(existsSync(resolve(__dirname, '../esbuild.mjs')))('sidebar webvie
       { ...loggedIn, testcases: { busy: true } },
       // Attachment + folder mode: download icon (also busy), folder toggle (also disabled), submit-file select.
       withAttachment({ folderMode: { on: false, disabledReason: 'This file is at the top of the workspace folder.' }, attachment: { busy: 1360 } }),
-      withAttachment({ folder: { path: 'pkg/', submitFile: null, candidates: ['main.cpp', 'student.h'] }, folderMode: { on: true, disabledReason: null } }),
+      withAttachment({ folder: { path: 'pkg/', submitFile: 'student.h', submitWhy: 'the included file named student.*', submitChosen: false, runFile: 'main.cpp', runWhy: 'the only file with main()', runChosen: false, candidates: ['main.cpp', 'student.h', 'vector.h'], runCandidates: ['main.cpp'] }, folderMode: { on: true, disabledReason: null }, runTests: { disabledReason: 'load the test cases first' } }),
+      withAttachment({ folder: { ...({ path: 'pkg/', submitFile: 'student.h', submitWhy: 'the included file named student.*', submitChosen: false, runFile: 'main.cpp', runWhy: 'the only file with main()', runChosen: false, candidates: ['main.cpp', 'student.h', 'vector.h'], runCandidates: ['main.cpp'] }), submitFile: null, submitWhy: null, runFile: null, runWhy: null }, folderMode: { on: true, disabledReason: null }, runTests: { disabledReason: null } }),
       {
         ...loggedIn,
         history: {
@@ -454,19 +456,36 @@ describe.runIf(existsSync(resolve(__dirname, '../esbuild.mjs')))('sidebar webvie
     expect(off.disabled).toBe(true);
     expect(off.dataset.tip).toContain('top of the workspace folder');
     // In folder mode.
-    post(withAttachment({ folder: { path: 'pkg/', submitFile: null, candidates: ['main.cpp', 'student.h'] }, folderMode: { on: true, disabledReason: null } }));
+    post(withAttachment({ folder: { path: 'pkg/', submitFile: 'student.h', submitWhy: 'the included file named student.*', submitChosen: false, runFile: 'main.cpp', runWhy: 'the only file with main()', runChosen: false, candidates: ['main.cpp', 'student.h', 'vector.h'], runCandidates: ['main.cpp'] }, folderMode: { on: true, disabledReason: null }, runTests: { disabledReason: null } }));
     const cur = doc.querySelector('#sec-current')!;
     expect(cur.querySelector('.source-line.source-folder')!.textContent).toBe('Folder linked by you: pkg/');
     expect(header(doc).querySelector('[aria-label="Link only this file"]')).not.toBeNull();
     expect(header(doc).querySelector('[aria-label^="Unlink this folder"]')).not.toBeNull();
     expect(rightClick(doc, header(doc))).toEqual(expect.arrayContaining(['Link only this file', 'Unlink this folder']));
     doc.dispatchEvent(new (doc.defaultView as unknown as typeof globalThis).KeyboardEvent('keydown', { key: 'Escape' }));
+    // Submits / Runs: detected files first ("Automatic: …", why in the tooltip); picking one is remembered.
     const pick = cur.querySelector<HTMLSelectElement>('#submit-file')!;
-    expect([...pick.options].map((o) => o.textContent)).toEqual(['Asked on the first submit', 'main.cpp', 'student.h']);
+    expect([...pick.options].map((o) => o.textContent)).toEqual(['Automatic: student.h', 'main.cpp', 'student.h', 'vector.h']);
+    expect(pick.dataset.tip).toContain('the included file named student.*');
+    const runs = cur.querySelector<HTMLSelectElement>('#run-file')!;
+    expect([...runs.options].map((o) => o.textContent)).toEqual(['Automatic: main.cpp', 'main.cpp']);
     expect(cur.textContent).toContain('only this file is sent');
-    pick.value = 'student.h';
-    pick.dispatchEvent(new (doc.defaultView as unknown as typeof globalThis).Event('change'));
-    expect(sent.at(-1)).toEqual({ type: 'setSubmitFile', file: 'student.h' });
+    const W = doc.defaultView as unknown as typeof globalThis;
+    pick.value = 'vector.h';
+    pick.dispatchEvent(new W.Event('change'));
+    expect(sent.at(-1)).toEqual({ type: 'setFolderRole', role: 'submit', file: 'vector.h' });
+    pick.value = '';
+    pick.dispatchEvent(new W.Event('change'));
+    expect(sent.at(-1)).toEqual({ type: 'setFolderRole', role: 'submit', file: '' }); // back to automatic
+    // Run tests (CPH installed): runs the driver; disabled until test cases are loaded.
+    [...cur.querySelectorAll<HTMLButtonElement>('button')].find((b) => b.textContent?.includes('Run tests'))!.click();
+    expect(sent.at(-1)).toEqual({ type: 'runTests' });
+    post(withAttachment({ folder: { path: 'pkg/', submitFile: 'student.h', submitWhy: 'the included file named student.*', submitChosen: false, runFile: 'main.cpp', runWhy: 'the only file with main()', runChosen: false, candidates: ['main.cpp', 'student.h', 'vector.h'], runCandidates: ['main.cpp'] }, folderMode: { on: true, disabledReason: null }, runTests: { disabledReason: 'load the test cases first' } }));
+    const run = [...cur.querySelectorAll<HTMLButtonElement>('button')].find((b) => b.textContent?.includes('Run tests'))!;
+    expect(run.disabled).toBe(true);
+    expect(run.dataset.tip).toContain('load the test cases first');
+    post({ ...withAttachment(), runTests: null });
+    expect([...cur.querySelectorAll('button')].some((b) => b.textContent?.includes('Run tests'))).toBe(false); // no CPH: no button
     // Matched by the folder's name (no folder link): "Don't match this folder".
     post({ ...withAttachment(), problem: { ...withAttachment().problem!, source: 'folder', sourceLabel: 'Matched by folder name' } });
     expect(cur.querySelector('.source-line.source-folder')!.textContent).toBe('Matched by folder name');

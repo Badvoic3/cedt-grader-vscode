@@ -115,12 +115,13 @@ export class MappingStore {
     return hit ? { entry: hit.entry, folder: hit.fsPath } : undefined;
   }
 
-  /** Folder mode: remember (or forget) the file Submit sends, relative to the folder. */
-  async setSubmitFile(folder: vscode.Uri, baseUrl: string, submitFile: string | undefined): Promise<void> {
+  /** Folder mode: remember (or forget → detect again) the file Submit sends / the file CPH runs, relative to the folder. */
+  async setFolderRole(folder: vscode.Uri, baseUrl: string, role: 'submitFile' | 'runFile', rel: string | undefined): Promise<void> {
     const e = await this.get(folder, baseUrl);
     if (!e?.folder) return;
-    const { submitFile: _old, ...rest } = e;
-    await this.set(folder, submitFile ? { ...rest, submitFile } : rest);
+    const rest = { ...e };
+    delete rest[role];
+    await this.set(folder, rel ? { ...rest, [role]: rel } : rest);
   }
 
   async setUnlinked(uri: vscode.Uri, on: boolean): Promise<void> {
@@ -239,13 +240,18 @@ export class MappingStore {
       await this.set(vscode.Uri.file(m.from), undefined);
       await this.set(vscode.Uri.file(m.to), m.entry);
     }
-    // Folder mode: the submit file follows a rename inside its folder (moved out → asked again).
+    // Folder mode: the chosen submit / run file follows a rename inside its folder (moved out → detected again).
     for (const e of await this.allEntries()) {
       if (!e.entry.folder) continue;
-      const next = submitFileAfterMove(e.fsPath, e.entry.submitFile, oldUri.fsPath, newUri.fsPath);
-      if (next === null) continue;
-      const { submitFile: _old, ...rest } = e.entry;
-      await this.set(vscode.Uri.file(e.fsPath), next ? { ...rest, submitFile: next } : rest);
+      let entry = e.entry;
+      for (const role of ['submitFile', 'runFile'] as const) {
+        const next = submitFileAfterMove(e.fsPath, entry[role], oldUri.fsPath, newUri.fsPath);
+        if (next === null) continue;
+        entry = { ...entry };
+        delete entry[role];
+        if (next) entry[role] = next;
+      }
+      if (entry !== e.entry) await this.set(vscode.Uri.file(e.fsPath), entry);
     }
     // "Not linked" follows the file too.
     for (const memento of [this.ctx.workspaceState, this.ctx.globalState]) {
@@ -265,10 +271,13 @@ export class MappingStore {
     const all = await this.allEntries();
     const hit = affectedByDelete(all, uri.fsPath);
     for (const e of hit) await this.set(vscode.Uri.file(e.fsPath), { ...e.entry, staleSince: now.toISOString() });
-    // Folder mode: a deleted submit file is asked for again on the next submit.
+    // Folder mode: a deleted submit / run file is detected (or asked) again.
     for (const e of all) {
-      if (!e.entry.folder || e.entry.staleSince || !submitFileDeleted(e.fsPath, e.entry.submitFile, uri.fsPath)) continue;
-      const { submitFile: _old, ...rest } = e.entry;
+      if (!e.entry.folder || e.entry.staleSince) continue;
+      const gone = (['submitFile', 'runFile'] as const).filter((r) => submitFileDeleted(e.fsPath, e.entry[r], uri.fsPath));
+      if (!gone.length) continue;
+      const rest = { ...e.entry };
+      for (const r of gone) delete rest[r];
       await this.set(vscode.Uri.file(e.fsPath), rest);
     }
     return hit.length;

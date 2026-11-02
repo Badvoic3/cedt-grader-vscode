@@ -553,18 +553,14 @@ function renderCurrent(s: ViewState): void {
     if (L.selectedId === null && L.items.length) select.append(el('option', { value: '', selected: true, disabled: true }, W.chooseLanguage));
     for (const l of L.items) select.append(el('option', { value: l.id, selected: l.id === L.selectedId }, l.name));
     b.append(el('div', { class: 'field' }, el('label', { class: 'field-label', for: 'lang' }, W.language), select));
-    // Folder mode: which file of the folder Submit sends (the grader takes one file).
+    // Folder mode: which file Submit sends (the grader takes one file) and which program the tests run.
     if (s.folder) {
       const F = s.folder;
-      const pick = el('select', {
-        id: 'submit-file',
-        disabled: !F.candidates.length,
-        title: W.submitFileTip,
-        onchange: (e: Event) => send({ type: 'setSubmitFile', file: (e.target as HTMLSelectElement).value }),
-      });
-      if (F.submitFile === null) pick.append(el('option', { value: '', selected: true, disabled: true }, W.submitFileAsk));
-      for (const f of F.candidates) pick.append(el('option', { value: f, selected: f === F.submitFile }, f));
-      b.append(el('div', { class: 'field' }, el('label', { class: 'field-label', for: 'submit-file' }, W.submits), pick, el('p', { class: 'small muted' }, W.submitFileTip)));
+      b.append(
+        rolePicker('submit-file', W.submits, 'submit', F.submitFile, F.submitChosen, F.submitWhy, F.candidates, W.submitFileAsk, W.submitFileTip),
+        rolePicker('run-file', W.runs, 'run', F.runFile, F.runChosen, F.runWhy, F.runCandidates, W.runFileAsk, W.runFileTip),
+        el('p', { class: 'small muted' }, W.submitFileTip),
+      );
     }
     if (p.hasTestcase) {
       b.append(
@@ -581,6 +577,10 @@ function renderCurrent(s: ViewState): void {
           },
         ),
       );
+    }
+    // Run tests (CPH installed only): the run file in folder mode, else this file.
+    if (s.runTests) {
+      b.append(button([icon('play'), ' ', W.runTests], () => send({ type: 'runTests' }), { disabled: !!s.runTests.disabledReason, title: s.runTests.disabledReason ? `${W.runTestsTip} (${s.runTests.disabledReason})` : W.runTestsTip }));
     }
   }
 
@@ -1021,6 +1021,24 @@ function sourceLine(source: string, problemId: number, name: string): HTMLElemen
   return el('div', { class: `row source-line source-${source} small muted` }, icon(SOURCE_ICON[source] ?? 'info'), el('span', {}, SOURCE_TEXT[source] ?? source));
 }
 
+/**
+ * Folder mode: one role's dropdown ("Submits" / "Runs"). The first option is
+ * "Automatic: <detected file>" (or "asked when needed"); picking a file is
+ * remembered for the folder; picking Automatic again forgets the choice.
+ */
+function rolePicker(id: string, label: string, role: 'submit' | 'run', file: string | null, chosen: boolean, why: string | null, files: string[], askText: string, tip: string): HTMLElement {
+  const detected = chosen ? null : file;
+  const pick = el('select', {
+    id,
+    disabled: !files.length,
+    title: why && !chosen ? `${tip}. ${W.whyTip(why)}` : tip,
+    onchange: (e: Event) => send({ type: 'setFolderRole', role, file: (e.target as HTMLSelectElement).value }),
+  });
+  pick.append(el('option', { value: '', selected: !chosen }, detected ? W.automatic(detected) : askText));
+  for (const f of files) pick.append(el('option', { value: f, selected: chosen && f === file }, f));
+  return el('div', { class: 'field' }, el('label', { class: 'field-label', for: id }, label), pick);
+}
+
 /** Folder mode: "Folder linked by you: pkg/" (instead of the match line). */
 function folderLine(f: NonNullable<ViewState['folder']>): HTMLElement {
   return el('div', { class: 'row source-line source-folder small muted' }, icon('folder'), el('span', { class: 'ellipsis', title: f.path }, W.folderLinked(f.path)));
@@ -1156,7 +1174,7 @@ function sectionKeys(s: ViewState): Record<string, string> {
     banner: j([s.connection, s.problems.loaded, s.history.items.length > 0]),
     prompt: j([s.prompt]),
     account: j([s.account, s.baseUrl, showLoginForm]),
-    current: j([s.notLinked, s.linkedNotice, s.linkedFiles, s.file, s.problem, s.languages, s.submit, s.matching, s.testcases, s.cph, s.gradingElsewhere, s.folder, s.folderMode, s.attachment, pickerOpen, pickerOpen ? s.problems : s.problems.loaded]),
+    current: j([s.notLinked, s.linkedNotice, s.linkedFiles, s.file, s.problem, s.languages, s.submit, s.matching, s.testcases, s.cph, s.gradingElsewhere, s.folder, s.folderMode, s.attachment, s.runTests, pickerOpen, pickerOpen ? s.problems : s.problems.loaded]),
     result: j([s.result, s.submit.enabled, s.submit.reason, legendOpen === 'result', s.problem?.score.rawSum]),
     history: j([pid, s.history, legendOpen === 'history', s.problem?.score.rawSum]),
     problems: j([{ ...s.problems, items: s.problems.items.length }, ui.filter, s.attachment]),

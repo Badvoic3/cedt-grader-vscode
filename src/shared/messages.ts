@@ -161,7 +161,24 @@ export interface ViewState {
    * `submitFile` only (null: asked on the first submit); `candidates` are the
    * folder's source files.
    */
-  folder: { path: string; submitFile: string | null; candidates: string[] } | null;
+  folder: {
+    path: string;
+    submitFile: string | null;
+    /** Why this submit file ("named in main.cpp", "student.*", "stub comment", "your choice"…); null when not known. */
+    submitWhy: string | null;
+    /** The user picked it (else detected): the dropdown's "Automatic" option is not selected. */
+    submitChosen: boolean;
+    /** The program CPH runs and test cases belong to (the driver with main()). */
+    runFile: string | null;
+    runWhy: string | null;
+    runChosen: boolean;
+    /** The folder's source files (submit choices). */
+    candidates: string[];
+    /** C/C++ sources (run choices). */
+    runCandidates: string[];
+  } | null;
+  /** "Run tests" (CPH installed only; null hides it); disabled with a reason while the run file has no tests. */
+  runTests: { disabledReason: string | null } | null;
   /** "Link the whole folder" / "Link only this file" (null: no problem or file); `disabledReason` when it can't be switched on. */
   folderMode: { on: boolean; disabledReason: string | null } | null;
   /** Attachment download in progress (problem id). */
@@ -267,7 +284,8 @@ export type FromWebview =
   | { type: 'renameFileToProblem' }
   | { type: 'downloadAttachment'; problemId: number }
   | { type: 'toggleFolderMode' }
-  | { type: 'setSubmitFile'; file: string }
+  | { type: 'setFolderRole'; role: 'submit' | 'run'; file: string }
+  | { type: 'runTests' }
   | { type: 'cphTip'; action: 'install' | 'later' | 'never' }
   | { type: 'showCompilerMessage' }
   | { type: 'openSettings' }
