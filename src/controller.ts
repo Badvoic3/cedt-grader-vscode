@@ -44,10 +44,10 @@ import { MappingStore } from './mapping/store';
 import { linkedNotice, mergeProblemFiles, type ProblemFile, ProblemFileSearch } from './mapping/problemFiles';
 import { pathKey } from './mapping/paths';
 import { LIMITS, TIMING, WEB_PATHS } from './shared/constants';
+import { HOW_LINKED, S } from './shared/strings';
 import type { HistoryEntry, ProblemFilter, ProblemView, ResultView, SubmissionDetailView, ViewState } from './shared/messages';
 
-export const EXAM_WARNING =
-  'This problem looks like part of an exam/contest. Submitting from VS Code may not be allowed. Check with your instructor.';
+export const EXAM_WARNING = S.exam.warning;
 
 /** URI scheme serving the source of a past submission (for the diff view). */
 export const SUBMISSION_SCHEME = 'cedt-grader-submission';
@@ -309,7 +309,7 @@ export class GraderController implements vscode.Disposable {
   showRequestLog(): void {
     if (!this.cfg.debugRequests) {
       void vscode.window
-        .showInformationMessage('Request logging is off. Turn on the setting "CEDT Grader: Debug Requests".', 'Open Setting')
+        .showInformationMessage(S.requestLogOff, S.common.openSetting)
         .then((p) => p && vscode.commands.executeCommand('workbench.action.openSettings', 'cedtGrader.debugRequests'));
       return;
     }
@@ -535,7 +535,7 @@ export class GraderController implements vscode.Disposable {
         mismatch,
       },
       connection: this.connection,
-      submit: { enabled, busy: this.busy, reason, label: 'Submit to Grader' },
+      submit: { enabled, busy: this.busy, reason, label: S.submitLabel },
       result: file ? (this.results.get(file.fsPath) ?? null) : null,
       gradingElsewhere:
         this.busy && this.gradingFile !== null && this.gradingFile !== file?.fsPath
@@ -994,10 +994,10 @@ export class GraderController implements vscode.Disposable {
   private async offerRemoveStale(gone: vscode.Uri[]): Promise<void> {
     if (!gone.length) return;
     const pick = await this.askInline(
-      `${gone.length === 1 ? vscode.workspace.asRelativePath(gone[0]) : `${gone.length} linked files`} no longer exist${gone.length === 1 ? 's' : ''}.`,
+      S.files.noLongerExists(gone.length === 1 ? vscode.workspace.asRelativePath(gone[0]) : S.files.nLinkedFiles(gone.length), gone.length > 1),
       [
-        { id: 'remove', label: 'Remove the stale link', primary: true },
-        { id: 'keep', label: 'Keep' },
+        { id: 'remove', label: S.files.removeStale, primary: true },
+        { id: 'keep', label: S.common.keep },
       ],
     );
     if (pick !== 'remove') return;
@@ -1007,14 +1007,14 @@ export class GraderController implements vscode.Disposable {
   }
 
   private async pickAndOpen(found: { uri: vscode.Uri; t: number; how: ProblemFile['how'] }[], name: string): Promise<void> {
-    const how = { chosen: 'chosen by you', filename: 'matched by file name', cph: 'matched from CPH data' } as const;
+    const how = HOW_LINKED;
     const target =
       found.length === 1
         ? found[0].uri
         : (
             await vscode.window.showQuickPick(
-              found.map((f) => ({ label: vscode.workspace.asRelativePath(f.uri), description: how[f.how], detail: `edited ${new Date(f.t).toLocaleString()}`, uri: f.uri })),
-              { placeHolder: `Files for ${name}` },
+              found.map((f) => ({ label: vscode.workspace.asRelativePath(f.uri), description: how[f.how], detail: S.common.edited(new Date(f.t).toLocaleString()), uri: f.uri })),
+              { placeHolder: S.files.filesFor(name) },
             )
           )?.uri;
     if (target) await vscode.window.showTextDocument(target);
@@ -1078,13 +1078,11 @@ export class GraderController implements vscode.Disposable {
     const withCph = [];
     for (const m of moved) if (await exists(cphProbPathFor(m.from, save))) withCph.push(m);
     if (!withCph.length) return;
-    const yes = 'Move Test Cases';
+    const yes = S.moved.moveCph;
     const pick = await vscode.window.showInformationMessage(
-      withCph.length === 1
-        ? `Move CPH test cases to the new file too? (${vscode.workspace.asRelativePath(withCph[0].to)})`
-        : `Move CPH test cases of ${withCph.length} renamed files too?`,
+      S.moved.moveCphQuestion(withCph.length === 1 ? vscode.workspace.asRelativePath(withCph[0].to) : null, withCph.length),
       yes,
-      'No',
+      S.common.no,
     );
     if (pick !== yes) return;
     let done = 0;
@@ -1095,9 +1093,7 @@ export class GraderController implements vscode.Disposable {
       else if (r.status === 'target-exists') skipped++;
     }
     void vscode.window.showInformationMessage(
-      `Moved CPH test cases for ${done} file${done === 1 ? '' : 's'} (old files kept as .bak)` +
-        (skipped ? `; ${skipped} skipped because the new file already has CPH tests.` : '.') +
-        ' CPH shows them when you switch to the file.',
+      S.moved.movedCph(done, skipped),
     );
   }
 
@@ -1115,16 +1111,16 @@ export class GraderController implements vscode.Disposable {
       `${vscode.workspace.asRelativePath(c.fsPath)}, linked to ${this.problemById(c.entry.problemId)?.name ?? c.entry.name ?? `#${c.entry.problemId}`}`;
     let chosen: LocatedEntry | undefined;
     if (candidates.length === 1) {
-      const pick = await this.askInline(`This looks like ${describeEntry(candidates[0])}. Keep the link?`, [
-        { id: 'keep', label: 'Keep', primary: true },
-        { id: 'no', label: 'Not this one' },
+      const pick = await this.askInline(S.moved.looksLike(describeEntry(candidates[0])), [
+        { id: 'keep', label: S.common.keep, primary: true },
+        { id: 'no', label: S.moved.notThisOne },
       ]);
       if (pick === 'keep') chosen = candidates[0];
       else if (pick === 'no') await this.dismissReconnect(candidates, uri);
     } else if (candidates.length <= 3) {
-      const pick = await this.askInline(`${uri.path.split('/').pop()} may be a moved file. Keep which link?`, [
+      const pick = await this.askInline(S.moved.whichLink(uri.path.split('/').pop() ?? ''), [
         ...candidates.map((c, i) => ({ id: String(i), label: `${vscode.workspace.asRelativePath(c.fsPath)} → ${this.problemById(c.entry.problemId)?.name ?? c.entry.name}` })),
-        { id: 'skip', label: 'None of these' },
+        { id: 'skip', label: S.moved.noneOfThese },
       ]);
       if (pick === 'skip') await this.dismissReconnect(candidates, uri);
       else if (pick !== undefined) chosen = candidates[Number(pick)];
@@ -1132,9 +1128,9 @@ export class GraderController implements vscode.Disposable {
       const pick = await vscode.window.showQuickPick(
         [
           ...candidates.map((c) => ({ label: vscode.workspace.asRelativePath(c.fsPath), description: this.problemById(c.entry.problemId)?.name ?? c.entry.name, c })),
-          { label: 'Skip', description: 'none of these', c: undefined },
+          { label: S.moved.skip, description: S.moved.noneOfThese.toLowerCase(), c: undefined },
         ],
-        { placeHolder: `${uri.path.split('/').pop()} may be a moved file. Keep which link?` },
+        { placeHolder: S.moved.whichLink(uri.path.split('/').pop() ?? '') },
       );
       if (pick?.c) chosen = pick.c;
       else if (pick) await this.dismissReconnect(candidates, uri);
@@ -1196,7 +1192,7 @@ export class GraderController implements vscode.Disposable {
 
   async mapCurrentFile(problemId: number): Promise<void> {
     if (!this.fileUri) {
-      void vscode.window.showInformationMessage('Open a source file first, then choose its problem.');
+      void vscode.window.showInformationMessage(S.files.openSourceFirst);
       return;
     }
     const p = this.problems.find((x) => x.id === problemId);
@@ -1241,12 +1237,12 @@ export class GraderController implements vscode.Disposable {
     if (gone.length) return;
     const fileName = this.fileUri?.path.split('/').pop();
     const choices = [
-      ...(this.fileUri ? [{ label: `$(link) Link to ${fileName}`, id: 'link' }] : []),
-      { label: '$(new-file) Create a new file', id: 'new' },
-      { label: '$(search) Find a file by name', id: 'find' },
-      { label: '$(book) Open statement', id: 'statement' },
+      ...(this.fileUri ? [{ label: S.files.linkTo(fileName ?? ''), id: 'link' }] : []),
+      { label: S.files.createNew, id: 'new' },
+      { label: S.files.findByName, id: 'find' },
+      { label: S.files.openStatement, id: 'statement' },
     ];
-    const pick = await vscode.window.showQuickPick(choices, { placeHolder: `${p.name}: no file is linked yet` });
+    const pick = await vscode.window.showQuickPick(choices, { placeHolder: S.files.noLinkedFile(p.name) });
     if (pick?.id === 'link') await this.mapCurrentFile(problemId);
     else if (pick?.id === 'new') await this.newFileForProblem(problemId);
     else if (pick?.id === 'find') await this.findFileByName(problemId);
@@ -1256,7 +1252,7 @@ export class GraderController implements vscode.Disposable {
   /** Remove duplicate link entries (and tell the user). */
   private async cleanupDuplicateLinks(): Promise<void> {
     const n = await this.mapping.cleanupDuplicates();
-    if (n) void vscode.window.showInformationMessage(`Cleaned up ${n} duplicate file link${n === 1 ? '' : 's'} (.cedt-grader.json).`);
+    if (n) void vscode.window.showInformationMessage(S.files.cleanedDuplicates(n));
   }
 
   /** Re-run matching for the active file, ignoring the saved link; ask before replacing a manual link. */
@@ -1272,11 +1268,11 @@ export class GraderController implements vscode.Disposable {
     }
     const cph = await readCphProblem(uri.fsPath, this.cphSaveLocation());
     const m = resolveProblem({ savedProblemId: null, cph, filePath: uri.fsPath, problems: this.data.problemList()!.problems, baseUrl: this.cfg.baseUrl });
-    const how: Record<string, string> = { cph: 'from CPH data', filename: 'from the file name' };
+    const how = S.autoDetect.how;
     if (entry && m.kind === 'match' && m.problem.id !== entry.problemId) {
-      const pick = await this.askInline(`Auto-detect found ${m.problem.name} (${how[m.source] ?? 'suggested'}).`, [
-        { id: 'switch', label: 'Switch to it', primary: true },
-        { id: 'keep', label: 'Keep current' },
+      const pick = await this.askInline(S.autoDetect.found(m.problem.name, how[m.source] ?? how.suggested), [
+        { id: 'switch', label: S.autoDetect.switch, primary: true },
+        { id: 'keep', label: S.autoDetect.keepCurrent },
       ]);
       if (pick !== 'switch') return;
       await this.mapping.set(uri, undefined);
@@ -1284,18 +1280,18 @@ export class GraderController implements vscode.Disposable {
       return;
     }
     if (entry && m.kind === 'match') {
-      void this.askInline(`Auto-detect agrees: ${m.problem.name} (${how[m.source] ?? ''}).`, [{ id: 'ok', label: 'OK' }]);
+      void this.askInline(S.autoDetect.agrees(m.problem.name, how[m.source] ?? ''), [{ id: 'ok', label: S.common.ok }]);
       return;
     }
     if (entry) {
       void this.askInline(
-        m.kind === 'ambiguous' ? `Auto-detect found ${m.candidates.length} equally good matches; your choice is kept.` : 'Auto-detect found no exact match; your choice is kept.',
-        [{ id: 'ok', label: 'OK' }],
+        m.kind === 'ambiguous' ? S.autoDetect.ambiguousKept(m.candidates.length) : S.autoDetect.noneKept,
+        [{ id: 'ok', label: S.common.ok }],
       );
       return;
     }
     await this.setActiveFile(uri);
-    if (m.kind === 'none' && !m.suggestions.length) void this.askInline('Auto-detect found no matching problem. Choose one from the list.', [{ id: 'ok', label: 'OK' }]);
+    if (m.kind === 'none' && !m.suggestions.length) void this.askInline(S.autoDetect.none, [{ id: 'ok', label: S.common.ok }]);
   }
 
   /** The notice's list as shown (current file first). */
@@ -1343,12 +1339,12 @@ export class GraderController implements vscode.Disposable {
     const others = this.linkedFiles.filter((f) => pathKey(f.fsPath) !== pathKey(file.fsPath));
     if (!others.length) return;
     const pick = await this.askInline(
-      `Unlink ${others.length === 1 ? vscode.workspace.asRelativePath(others[0].fsPath) : `${others.length} other files`} from ${problem.name}?`,
+      S.files.unlinkOthers(others.length === 1 ? vscode.workspace.asRelativePath(others[0].fsPath) : S.files.nOtherFiles(others.length), problem.name),
       [
-        { id: 'unlink', label: 'Unlink', primary: true },
-        { id: 'cancel', label: 'Cancel' },
+        { id: 'unlink', label: S.files.unlink, primary: true },
+        { id: 'cancel', label: S.common.cancel },
       ],
-      { detail: 'Only the links are removed; the files themselves are not deleted.' },
+      { detail: S.files.linksOnly },
     );
     if (pick !== 'unlink') return;
     for (const f of others) await this.detachFile(f);
@@ -1364,7 +1360,7 @@ export class GraderController implements vscode.Disposable {
     if (!p) return;
     const name = cleanName(p.name);
     await vscode.env.clipboard.writeText(name);
-    void vscode.window.setStatusBarMessage(`$(check) Copied "${name}"`, 2500);
+    void vscode.window.setStatusBarMessage(S.files.copied(name), 2500);
   }
 
   /** Create `<clean name>.<ext>` next to the active file (or in the workspace root), open it and map it. */
@@ -1374,13 +1370,13 @@ export class GraderController implements vscode.Disposable {
     const folder =
       (this.fileUri ? vscode.Uri.joinPath(this.fileUri, '..') : undefined) ?? vscode.workspace.workspaceFolders?.[0]?.uri;
     if (!folder) {
-      void vscode.window.showInformationMessage('Open a folder first.');
+      void vscode.window.showInformationMessage(S.files.openFolderFirst);
       return;
     }
     await this.data.languages().catch(() => undefined);
     const permitted = this.allowedLanguages(p);
     if (!permitted.length) {
-      void vscode.window.showInformationMessage('Languages could not be loaded yet. Try again in a moment.');
+      void vscode.window.showInformationMessage(S.files.languagesNotLoaded);
       return;
     }
     // Active file's language → last used for new files → cedtGrader.defaultLanguage → ask. Never archive/binary automatically.
@@ -1393,14 +1389,14 @@ export class GraderController implements vscode.Disposable {
     const language =
       choice.kind === 'auto'
         ? choice.language
-        : (await vscode.window.showQuickPick(choice.options.map((l) => ({ label: l.name, description: l.ext ? `.${l.ext}` : undefined, l })), { placeHolder: `Language for the new ${p.name} file` }))?.l;
+        : (await vscode.window.showQuickPick(choice.options.map((l) => ({ label: l.name, description: l.ext ? `.${l.ext}` : undefined, l })), { placeHolder: S.files.newFileLanguage(p.name) }))?.l;
     if (!language) return;
     await this.ctx.globalState.update(NEWFILE_LANG_KEY, language.id);
     const target = vscode.Uri.joinPath(folder, fileNameFor(p.name, language.ext && language.ext !== 'null' ? language.ext : 'txt'));
     const created = await createFileNoOverwrite(target.fsPath, async () => {
-      const open = 'Open Existing';
-      const overwrite = 'Overwrite';
-      const pick = await vscode.window.showWarningMessage(`${vscode.workspace.asRelativePath(target)} already exists.`, { modal: true }, open, overwrite);
+      const open = S.files.openExisting;
+      const overwrite = S.files.overwrite;
+      const pick = await vscode.window.showWarningMessage(S.files.alreadyExists(vscode.workspace.asRelativePath(target)), { modal: true }, open, overwrite);
       return pick === overwrite ? 'overwrite' : pick === open ? 'open' : 'cancel';
     });
     if (created === 'cancel') return;
@@ -1427,12 +1423,12 @@ export class GraderController implements vscode.Disposable {
     await this.data.languages().catch(() => undefined);
     const exts = this.sourceExtsFor(p);
     if (!exts.length) {
-      void vscode.window.showInformationMessage(`No source-file language is allowed for ${p.name}.`);
+      void vscode.window.showInformationMessage(S.files.noSourceLanguage(p.name));
       return;
     }
     const kept = await this.searchFilesNamed(problemId, false);
     if (!kept.length) {
-      void vscode.window.showInformationMessage(`No source file named "${cleanName(p.name)}" (${[...exts].map((e) => `.${e}`).join(', ')}) in the workspace.`);
+      void vscode.window.showInformationMessage(S.files.noFileNamed(cleanName(p.name), [...exts].map((e) => `.${e}`).join(', ')));
       return;
     }
     const mtimes = new Map<string, number>();
@@ -1445,19 +1441,19 @@ export class GraderController implements vscode.Disposable {
         await vscode.window.showQuickPick(
           ranked.map((f) => ({
             label: vscode.workspace.asRelativePath(f),
-            description: activeDir && vscode.Uri.joinPath(vscode.Uri.file(f), '..').fsPath === activeDir ? 'same folder' : undefined,
-            detail: `modified ${new Date(mtimes.get(f) ?? 0).toLocaleString()}`,
+            description: activeDir && vscode.Uri.joinPath(vscode.Uri.file(f), '..').fsPath === activeDir ? S.files.sameFolder : undefined,
+            detail: S.common.modified(new Date(mtimes.get(f) ?? 0).toLocaleString()),
             f,
           })),
-          { placeHolder: `Files named ${cleanName(p.name)}` },
+          { placeHolder: S.files.filesNamed(cleanName(p.name)) },
         )
       )?.f;
     }
     if (!target) return;
     const uri = vscode.Uri.file(target);
     await vscode.window.showTextDocument(uri);
-    const link = 'Link';
-    const pick = await vscode.window.showInformationMessage(`Link ${vscode.workspace.asRelativePath(uri)} to ${p.name} (#${p.id})?`, link, 'Not Now');
+    const link = S.files.link;
+    const pick = await vscode.window.showInformationMessage(S.files.linkFileTo(vscode.workspace.asRelativePath(uri), p.name, p.id), link, S.common.notNow);
     if (pick === link) {
       await this.mapping.set(uri, { problemId: p.id, name: p.name, baseUrl: this.cfg.baseUrl });
       await this.setActiveFile(uri);
@@ -1476,7 +1472,7 @@ export class GraderController implements vscode.Disposable {
     const file = this.fileUri;
     if (!problem || !file || this.testcasesBusy) return;
     if (!problem.hasTestcase) {
-      void vscode.window.showInformationMessage(`${problem.name} has no test cases you can download.`);
+      void vscode.window.showInformationMessage(S.testcases.none(problem.name));
       return;
     }
     if (!(await this.ensureLoggedIn())) return;
@@ -1501,24 +1497,22 @@ export class GraderController implements vscode.Disposable {
       );
       this.connectionOk();
       if (res.status === 'not-available') {
-        void vscode.window.showInformationMessage(`The grader does not let you download the test cases of ${problem.name}.`);
+        void vscode.window.showInformationMessage(S.testcases.notAllowed(problem.name));
         return;
       }
       const { set } = res;
       const total = set.cases.length + set.truncated.length;
-      const tooLarge = set.truncated.length
-        ? `; ${set.truncated.length} ${set.truncated.length === 1 ? 'was' : 'were'} too large to download`
-        : '';
-      const refetch = 'Download Again';
+      const tooLarge = set.truncated.length ? S.testcases.tooLarge(set.truncated.length) : '';
+      const refetch = S.testcases.downloadAgain;
 
       const target = chooseTestcaseTarget(this.cph.installed, this.ctx.workspaceState.get<'files'>(TESTCASE_TARGET_KEY));
       if (target !== 'cph') {
         if (target === 'ask') {
-          const files = 'Save as Files';
-          const install = 'Install CPH';
+          const files = S.testcases.saveAsFiles;
+          const install = S.common.installCph;
           const pick = await vscode.window.showInformationMessage(
-            `Downloaded ${set.cases.length} test case${set.cases.length === 1 ? '' : 's'}. Where should they go?`,
-            { detail: 'Save them as .in / .out files next to your source, or install CPH to run them inside VS Code.' },
+            S.testcases.whereTo(set.cases.length),
+            { detail: S.testcases.whereToDetail },
             files,
             install,
           );
@@ -1531,21 +1525,21 @@ export class GraderController implements vscode.Disposable {
         }
         const folder = testsFolderFor(dirname(file.fsPath), problem.name);
         if (!(await exists(folder))) {
-          const create = 'Create Folder';
+          const create = S.testcases.createFolder;
           const ok = await vscode.window.showInformationMessage(
-            `Create ${vscode.workspace.asRelativePath(folder)}/ for ${set.cases.length} test case${set.cases.length === 1 ? '' : 's'}?`,
+            S.testcases.createFolderQ(vscode.workspace.asRelativePath(folder), set.cases.length),
             create,
           );
           if (ok !== create) return;
         }
         const r = await saveTestcasesAsFiles(folder, set.cases);
-        const extra = [r.unchanged ? `${r.unchanged} unchanged` : '', r.keptExisting ? `${r.keptExisting} existing files kept (not overwritten)` : '']
+        const extra = [r.unchanged ? S.testcases.unchanged(r.unchanged) : '', r.keptExisting ? S.testcases.keptExisting(r.keptExisting) : '']
           .filter(Boolean)
           .join(', ');
-        const open = 'Show Folder';
-        const install = 'Install CPH';
+        const open = S.testcases.showFolder;
+        const install = S.common.installCph;
         const pick = await vscode.window.showInformationMessage(
-          `Saved ${r.written} of ${total} test case${total === 1 ? '' : 's'} to ${vscode.workspace.asRelativePath(folder)}/${tooLarge}${extra ? ` (${extra})` : ''}. Install CPH to run these tests in VS Code.`,
+          S.testcases.savedFiles(r.written, total, vscode.workspace.asRelativePath(folder), tooLarge, extra),
           open,
           install,
           ...(res.fromCache ? [refetch] : []),
@@ -1563,13 +1557,13 @@ export class GraderController implements vscode.Disposable {
         problemUrl: this.url(WEB_PATHS.problem(problem.id)),
         cases: set.cases,
       });
-      const parts = [`Saved to CPH: loaded ${set.cases.length} of ${total} test case${total === 1 ? '' : 's'}${tooLarge}`];
-      if (result.alreadyPresent) parts.push(`${result.alreadyPresent} already present`);
-      if (result.updated) parts.push(`${result.updated} updated`);
-      if (result.added) parts.push(`${result.added} added`);
-      const reload = 'Reload in CPH';
+      const parts = [S.testcases.savedCph(set.cases.length, total, tooLarge)];
+      if (result.alreadyPresent) parts.push(S.testcases.alreadyPresent(result.alreadyPresent));
+      if (result.updated) parts.push(S.testcases.updated(result.updated));
+      if (result.added) parts.push(S.testcases.added(result.added));
+      const reload = S.testcases.reloadCph;
       const pick = await vscode.window.showInformationMessage(
-        `${parts.join('; ')}.${result.backupPath ? ' Previous CPH file backed up (.bak).' : ''} CPH reloads tests when you switch to the file; don't run tests in CPH before that.`,
+        S.testcases.cphDone(parts.join('; '), !!result.backupPath),
         reload,
         ...(res.fromCache ? [refetch] : []),
       );
@@ -1577,7 +1571,7 @@ export class GraderController implements vscode.Disposable {
       if (pick === refetch) await this.loadTestcases(true);
     } catch (err) {
       if (classifyConnectionError(err)) this.reportError(err, () => this.loadTestcases(refresh));
-      else void vscode.window.showErrorMessage(`Could not load test cases: ${this.describe(err)}`);
+      else void vscode.window.showErrorMessage(S.testcases.failed(this.describe(err)));
     } finally {
       this.testcasesBusy = false;
       this.emit();
@@ -1598,7 +1592,7 @@ export class GraderController implements vscode.Disposable {
   /** Command-palette flow: searchable QuickPick of the cached problem list. */
   async chooseProblemQuickPick(): Promise<void> {
     if (!this.fileUri) {
-      void vscode.window.showInformationMessage('Open a source file first.');
+      void vscode.window.showInformationMessage(S.files.openSourceFirstShort);
       return;
     }
     if (!this.data.problemList()) {
@@ -1612,11 +1606,11 @@ export class GraderController implements vscode.Disposable {
         return {
           label: p.name,
           description: p.fullName !== p.name ? p.fullName : undefined,
-          detail: `#${p.id}${s.counted !== null ? ` · counted ${s.counted}` : ''}`,
+          detail: `#${p.id}${s.counted !== null ? S.files.counted(s.counted) : ''}`,
           id: p.id,
         };
       }),
-      { placeHolder: `Grader problem for ${this.fileUri.path.split('/').pop()}`, matchOnDescription: true, matchOnDetail: true },
+      { placeHolder: S.files.problemFor(this.fileUri.path.split('/').pop() ?? ''), matchOnDescription: true, matchOnDetail: true },
     );
     if (pick) await this.mapCurrentFile(pick.id);
   }
@@ -1632,7 +1626,7 @@ export class GraderController implements vscode.Disposable {
 
   private async detailWithSource(id: number): Promise<SubmissionDetail | undefined> {
     const d = this.data.detail(id) ?? (await this.data.loadDetail(id));
-    if (d && d.source === null) void vscode.window.showInformationMessage('The grader does not return the source of this submission.');
+    if (d && d.source === null) void vscode.window.showInformationMessage(S.submit.noSource);
     return d?.source !== null ? d : undefined;
   }
 
@@ -1665,14 +1659,14 @@ export class GraderController implements vscode.Disposable {
 
   async submit(): Promise<void> {
     if (this.busy) {
-      void vscode.window.showInformationMessage('A submission is already being graded.');
+      void vscode.window.showInformationMessage(S.submit.alreadyGrading);
       return;
     }
     const fileUri = this.fileUri;
     const editor = vscode.window.visibleTextEditors.find((e) => e.document.uri.toString() === fileUri?.toString());
     const doc = editor?.document ?? (fileUri ? await vscode.workspace.openTextDocument(fileUri) : undefined);
     if (!doc || !fileUri) {
-      void vscode.window.showInformationMessage('Open a source file to submit it.');
+      void vscode.window.showInformationMessage(S.submit.openToSubmit);
       return;
     }
     if (!(await this.ensureLoggedIn())) return;
@@ -1695,8 +1689,8 @@ export class GraderController implements vscode.Disposable {
       // Exam hint (section 2b), from the problem list page we already fetched. Never remembered.
       let warned = false;
       if (this.client.contestPage) {
-        const open = 'Open in Browser';
-        const anyway = 'Submit Anyway';
+        const open = S.exam.openInBrowser;
+        const anyway = S.exam.submitAnyway;
         const pick = await vscode.window.showWarningMessage(EXAM_WARNING, { modal: true }, open, anyway);
         if (pick === open) await this.openProblemInBrowser(problem.id);
         if (pick !== anyway) return;
@@ -1707,11 +1701,11 @@ export class GraderController implements vscode.Disposable {
       if (languageId === null || !allowed.some((l) => l.id === languageId)) {
         const c = chooseLanguage(fileUri.fsPath, allowed, this.languages);
         if (c.kind === 'match') languageId = c.language.id;
-        else if (c.kind === 'not-allowed') throw new LanguageNotAllowedError(`${c.wanted} is not allowed for this problem.`);
+        else if (c.kind === 'not-allowed') throw new LanguageNotAllowedError(S.submit.notAllowed(c.wanted));
         else {
           const options = c.kind === 'ambiguous' ? c.candidates : c.allowed;
           const pick = await vscode.window.showQuickPick(options.map((l) => ({ label: l.name, id: l.id })), {
-            placeHolder: 'Language for this submission',
+            placeHolder: S.submit.languageFor,
           });
           if (!pick) return;
           languageId = pick.id;
@@ -1721,7 +1715,7 @@ export class GraderController implements vscode.Disposable {
       const language = allowed.find((l) => l.id === languageId);
 
       if (this.unavailableIds.has(problem.id)) {
-        throw new ProblemUnavailableError('This problem is no longer available on the grader.', 404);
+        throw new ProblemUnavailableError(S.submit.unavailable, 404);
       }
 
       // Another file linked to the same problem changed more recently? Ask (drafts are normal).
@@ -1735,12 +1729,12 @@ export class GraderController implements vscode.Disposable {
         }
         if (newest) {
           const pick = await this.askInline(
-            `Submit this file? ${vscode.workspace.asRelativePath(newest.uri)} was changed more recently.`,
+            S.submit.newerOther(vscode.workspace.asRelativePath(newest.uri)),
             [
-              { id: 'go', label: 'Submit this file', primary: true },
-              { id: 'open', label: 'Open the other file' },
+              { id: 'go', label: S.submit.submitThis, primary: true },
+              { id: 'open', label: S.submit.openOther },
             ],
-            { tone: 'warn', detail: `Both files are linked to ${problem.name} (#${problem.id}).` },
+            { tone: 'warn', detail: S.submit.bothLinked(problem.name, problem.id) },
           );
           if (pick === 'open') await vscode.window.showTextDocument(newest.uri);
           if (pick !== 'go') return;
@@ -1751,10 +1745,9 @@ export class GraderController implements vscode.Disposable {
       if (problem.source === 'suggested') {
         const full = problem.fullName.trim();
         const subtitle = full && full !== problem.name ? (full.startsWith(`${problem.name}:`) ? full.slice(problem.name.length + 1).trim() : full) : '';
-        const sub = subtitle ? ` (${subtitle})` : '';
-        const pick = await this.askInline(`Submit to ${problem.name}${sub}?`, [
-          { id: 'submit', label: 'Submit', primary: true },
-          { id: 'choose', label: 'Choose another problem' },
+        const pick = await this.askInline(S.submit.suggestedQ(problem.name, subtitle), [
+          { id: 'submit', label: S.submit.submit, primary: true },
+          { id: 'choose', label: S.submit.chooseAnother },
         ]);
         if (pick === 'choose') await this.focusProblemPicker();
         if (pick !== 'submit') return;
@@ -1765,12 +1758,12 @@ export class GraderController implements vscode.Disposable {
 
       if (this.cfg.confirmBeforeSubmit && !warned) {
         const pick = await this.askInline(
-          `Submit ${fileName} to ${problem.name} (#${problem.id})${language ? ` as ${language.name}` : ''}?`,
+          S.submit.confirmQ(fileName, problem.name, problem.id, language?.name ?? null),
           [
-            { id: 'submit', label: 'Submit', primary: true },
-            { id: 'cancel', label: 'Cancel' },
+            { id: 'submit', label: S.submit.submit, primary: true },
+            { id: 'cancel', label: S.common.cancel },
           ],
-          { detail: 'You can turn this question off in Settings ("CEDT Grader: Confirm Before Submit").' },
+          { detail: S.submit.confirmOff },
         );
         if (pick !== 'submit') return;
       }
@@ -1778,7 +1771,7 @@ export class GraderController implements vscode.Disposable {
       // Busy from here on (questions above don't lock the panel).
       this.busy = true;
       this.gradingFile = key;
-      this.setResult(key, newResult(problem, 'submitting', 'Submitting…'));
+      this.setResult(key, newResult(problem, 'submitting', S.submit.submitting));
       const sub = await this.client.submit(problem.id, languageId!, doc.getText(), fileName);
       sentId = sub.id;
       this.connectionOk();
@@ -1787,7 +1780,7 @@ export class GraderController implements vscode.Disposable {
         submissionId: sub.id,
         number: sub.number,
         submissionUrl: this.url(`/submissions/${sub.id}`),
-        message: 'Waiting to be graded…',
+        message: S.submit.waiting,
       });
       // Poll only this submission until final.
       await this.pollAndFinish(key, problem, sub.id, countedBefore);
@@ -1837,7 +1830,7 @@ export class GraderController implements vscode.Disposable {
     this.pendingPoll = null;
     this.busy = true;
     this.gradingFile = p.key;
-    this.updateResult(p.key, { phase: 'grading', message: 'Connection back. Loading the result…' });
+    this.updateResult(p.key, { phase: 'grading', message: S.submit.connectionBack });
     try {
       await this.pollAndFinish(p.key, p.problem, p.submissionId, p.countedBefore);
     } catch (err) {
@@ -1886,7 +1879,7 @@ export class GraderController implements vscode.Disposable {
           });
         } catch (err) {
           if (abort.signal.aborted) {
-            this.updateResult(key, { phase: 'timeout', message: 'Stopped waiting. Use "Show Last Result" to check again.' });
+            this.updateResult(key, { phase: 'timeout', message: S.submit.stoppedWaiting });
             return null;
           }
           if (err instanceof PollTimeoutError) {
@@ -1931,7 +1924,7 @@ export class GraderController implements vscode.Disposable {
     if (!d) return;
     this.setResult(key, newResult(problem, 'grading', null));
     this.applySubmission(key, d);
-    if (d.state !== 'graded') this.updateResult(key, { phase: 'timeout', message: 'Still being graded. Check again in a moment.' });
+    if (d.state !== 'graded') this.updateResult(key, { phase: 'timeout', message: S.submit.stillGrading });
   }
 
   async showCompilerMessage(): Promise<void> {
@@ -1948,7 +1941,7 @@ export class GraderController implements vscode.Disposable {
   async openStatement(problemId?: number): Promise<void> {
     const id = problemId ?? this.problem?.id;
     if (!id) {
-      void vscode.window.showInformationMessage('Choose a problem first.');
+      void vscode.window.showInformationMessage(S.submit.chooseFirst);
       return;
     }
     // A cached statement opens even when logged out (no request); otherwise the viewer explains.
@@ -1979,9 +1972,9 @@ export class GraderController implements vscode.Disposable {
   // ----------------------------------------------------------------- errors
 
   describe(err: unknown): string {
-    if (err instanceof NetworkError) return `${err.message} Check your internet connection.`;
+    if (err instanceof NetworkError) return S.errors.checkConnection(err.message);
     if (err instanceof GraderError) return err.message;
-    if (err instanceof Error) return `Unexpected error: ${err.message}`;
+    if (err instanceof Error) return S.errors.unexpected(err.message);
     return String(err);
   }
 
@@ -1989,9 +1982,9 @@ export class GraderController implements vscode.Disposable {
   private async showError(err: unknown, msg: string): Promise<void> {
     this.log(`Error: ${msg}`);
     if (this.data.isVisible()) return;
-    const actions: string[] = err instanceof NetworkError ? ['Show Log'] : [];
+    const actions: string[] = err instanceof NetworkError ? [S.common.showLog] : [];
     const pick = await vscode.window.showErrorMessage(msg, ...actions);
-    if (pick === 'Show Log') this.output.show();
+    if (pick === S.common.showLog) this.output.show();
   }
 }
 
