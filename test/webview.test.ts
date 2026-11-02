@@ -85,10 +85,18 @@ const loggedIn: ViewState = {
 };
 
 /** Open the "…" menu with this aria-label and click the item with this text. */
-function menuPick(doc: Document, menuLabel: string, item: string): void {
-  doc.querySelector<HTMLButtonElement>(`[aria-label="${menuLabel}"]`)!.click();
-  [...doc.querySelectorAll<HTMLButtonElement>('.menu .menu-item')].find((b) => b.textContent === item)!.click();
+/** Right-click `target` and return the context-menu item labels (full labels, from aria-label). */
+function rightClick(doc: Document, target: Element): string[] {
+  const W = doc.defaultView as unknown as typeof globalThis;
+  target.dispatchEvent(new W.MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 30, clientY: 40 }));
+  return [...doc.querySelectorAll('.context-menu .menu-item')].map((b) => b.getAttribute('aria-label') ?? '');
 }
+function menuPick(doc: Document, target: Element, item: string): void {
+  rightClick(doc, target);
+  [...doc.querySelectorAll<HTMLButtonElement>('.context-menu .menu-item')].find((b) => b.getAttribute('aria-label') === item)!.click();
+}
+const row = (doc: Document, i: number) => doc.querySelectorAll('#sec-problems .problem-row')[i];
+const header = (doc: Document) => doc.querySelector('#sec-current .problem-field .field-label')!;
 
 describe.runIf(existsSync(resolve(__dirname, '../esbuild.mjs')))('sidebar webview', () => {
   it('starts with "ready" and shows the login form when logged out', () => {
@@ -154,8 +162,8 @@ describe.runIf(existsSync(resolve(__dirname, '../esbuild.mjs')))('sidebar webvie
     // Row click opens the linked file (or offers choices); it never links by itself.
     doc.querySelectorAll<HTMLButtonElement>('#sec-problems .problem-main')[1].click();
     expect(sent.at(-1)).toEqual({ type: 'problemRowClick', problemId: 1271 });
-    // Linking is an explicit action in the row menu.
-    menuPick(doc, 'More actions for 01_Expr_11', 'Link to 00 11 intro.cpp');
+    // Linking is an explicit action in the row's right-click menu.
+    menuPick(doc, row(doc, 1), 'Link to 00 11 intro.cpp');
     expect(sent.at(-1)).toEqual({ type: 'mapProblem', problemId: 1271 });
     const sel = doc.querySelector<HTMLSelectElement>('#lang')!;
     sel.value = '1';
@@ -282,24 +290,35 @@ describe.runIf(existsSync(resolve(__dirname, '../esbuild.mjs')))('sidebar webvie
     const cur = doc.querySelector('#sec-current')!;
     expect(cur.querySelector('.source-line.source-saved')!.textContent).toBe('Chosen by you');
     expect(cur.querySelector('.combo .source-icon')).toBeNull(); // not inside the dropdown any more
-    expect(cur.querySelector('[aria-label="Open statement"]')).not.toBeNull(); // the only visible header action
+    // All header icons visible again, in the original order.
+    expect([...header(doc).querySelectorAll('button')].map((b) => b.getAttribute('aria-label'))).toEqual([
+      'Open statement', 'Copy problem name', 'Open on the grader website', 'Auto-detect the problem for this file again', 'Unlink this file',
+    ]);
     expect([...cur.querySelectorAll('button')].some((b) => b.textContent === 'Change')).toBe(false); // removed: same as the dropdown
-    menuPick(doc, 'More actions for this problem', 'Copy problem name');
+    expect(cur.querySelector('[aria-label^="More actions"]')).toBeNull(); // no "…" menu
+    header(doc).querySelector<HTMLButtonElement>('[aria-label="Copy problem name"]')!.click();
     expect(sent.at(-1)).toEqual({ type: 'copyName', problemId: 1360 });
+    // Right-click on the header: the same actions.
+    expect(rightClick(doc, header(doc))).toEqual(['Open statement', 'Copy problem name', 'Open on the grader website', 'Auto-detect the problem for this file again', 'Unlink this file']);
+    doc.dispatchEvent(new (doc.defaultView as unknown as typeof globalThis).KeyboardEvent('keydown', { key: 'Escape' }));
+    expect(doc.querySelector('.context-menu')).toBeNull();
     [...cur.querySelectorAll<HTMLButtonElement>('button')].find((b) => b.textContent?.includes('Load test cases'))!.click();
     expect(sent.at(-1)).toEqual({ type: 'loadTestcases' });
     doc.querySelector<HTMLButtonElement>('#sec-current .combo')!.click();
     expect(doc.activeElement).toBe(doc.querySelector('.picker-search'));
-    const items = (menu: string) => {
-      doc.querySelector<HTMLButtonElement>(`[aria-label="${menu}"]`)!.click();
-      const t = [...doc.querySelectorAll('.menu .menu-item')].map((b) => b.textContent);
-      doc.dispatchEvent(new (doc.defaultView as unknown as typeof globalThis).KeyboardEvent('keydown', { key: 'Escape' }));
-      return t;
-    };
-    expect(items('More actions for 00_Intro_11')).toContain('Go to linked file'); // has a mapped file
-    expect(items('More actions for 01_Expr_11')).toContain('Find file by name'); // no mapped file
-    menuPick(doc, 'More actions for 01_Expr_11', 'New file for this problem');
+    // Row icons as before the "…" menu (same icons, order, tooltips).
+    const icons = (r: Element) => [...r.querySelectorAll('.row-actions button')].map((b) => b.getAttribute('aria-label'));
+    expect(icons(row(doc, 0))).toEqual(['Copy problem name', 'Go to linked file', 'New file for this problem', 'Open statement']); // has a mapped file
+    expect(icons(row(doc, 1))).toEqual(['Copy problem name', 'Find file by name', 'New file for this problem', 'Open statement']);
+    row(doc, 1).querySelector<HTMLButtonElement>('[aria-label="New file for this problem"]')!.click();
     expect(sent.at(-1)).toEqual({ type: 'newFile', problemId: 1271 });
+    // Right-click: the same actions plus linking the open file and the website.
+    expect(rightClick(doc, row(doc, 1))).toEqual([
+      'Link to 00 11 intro.cpp', 'Copy problem name', 'Find file by name', 'New file for this problem', 'Open statement', 'Open on the grader website',
+    ]);
+    menuPick(doc, row(doc, 1), 'Open on the grader website');
+    expect(sent.at(-1)).toEqual({ type: 'openProblemInBrowser', problemId: 1271 });
+    expect(doc.querySelector('.context-menu')).toBeNull(); // closes after choosing
     // Row tooltip: just the names.
     const main = doc.querySelectorAll<HTMLElement>('#sec-problems .problem-main')[1];
     expect(main.dataset.tipTitle).toBe('01_Expr_11 #1271');
@@ -531,12 +550,11 @@ describe.runIf(existsSync(resolve(__dirname, '../esbuild.mjs')))('sidebar webvie
   it('open on website (problem and each submission), auto-detect, sort menu', () => {
     const { dom, doc, sent, post } = boot();
     post(loggedIn);
-    menuPick(doc, 'More actions for this problem', 'Open on the grader website');
+    header(doc).querySelector<HTMLButtonElement>('[aria-label="Open on the grader website"]')!.click();
     expect(sent.at(-1)).toEqual({ type: 'openProblemInBrowser', problemId: 1360 });
-    expect(doc.querySelector('.menu')).toBeNull(); // closes after choosing
     doc.querySelector<HTMLButtonElement>('#sec-history [aria-label="Open on the grader website"]')!.click();
     expect(sent.at(-1)).toEqual({ type: 'openSubmission', submissionId: 2460977 });
-    menuPick(doc, 'More actions for this problem', 'Auto-detect the problem');
+    menuPick(doc, header(doc), 'Auto-detect the problem for this file again');
     expect(sent.at(-1)).toEqual({ type: 'autoDetect' });
     const sel = doc.querySelector<HTMLSelectElement>('#sec-problems select.sort')!;
     sel.value = 'score-desc';
@@ -602,11 +620,40 @@ describe.runIf(existsSync(resolve(__dirname, '../esbuild.mjs')))('sidebar webvie
     expect(doc.activeElement).toBe(doc.querySelector('.picker-search'));
   });
 
-  it('"…" menu has "Unlink this file" for any linked file (not for suggestions)', () => {
+  it('"Unlink this file" icon for any linked file (not for suggestions)', () => {
     const { doc, sent, post } = boot();
     post({ ...loggedIn, problem: { ...loggedIn.problem!, source: 'filename', sourceLabel: 'Matched by file name' } });
-    menuPick(doc, 'More actions for this problem', 'Unlink this file');
+    header(doc).querySelector<HTMLButtonElement>('[aria-label="Unlink this file"]')!.click();
     expect(sent.at(-1)).toEqual({ type: 'unmapProblem' });
+    post({ ...loggedIn, problem: { ...loggedIn.problem!, source: 'suggested', sourceLabel: 'Suggested — click to confirm' } });
+    expect(header(doc).querySelector('[aria-label="Unlink this file"]')).toBeNull();
+  });
+
+  it('right-click menu: long labels cut in the middle (full label in tooltip and aria-label); text fields keep the normal menu', () => {
+    const { dom, doc, post } = boot();
+    Object.defineProperty(dom.window, 'innerWidth', { value: 260, configurable: true });
+    const name = 'da68_f2_zero_one_subset_sum.cpp';
+    post({ ...loggedIn, file: { ...loggedIn.file!, name } });
+    rightClick(doc, row(doc, 1));
+    const item = [...doc.querySelectorAll<HTMLElement>('.context-menu .menu-item')][0];
+    const shown = item.querySelector('.menu-label')!.textContent!;
+    expect(shown).toContain('…');
+    expect(shown.startsWith('Link to ')).toBe(true);
+    expect(shown.endsWith('.cpp')).toBe(true); // the end stays readable
+    expect(item.getAttribute('aria-label')).toBe(`Link to ${name}`);
+    expect(item.dataset.tip).toContain(`Link to ${name}`);
+    // keyboard: arrows move, Escape closes
+    const W = dom.window as unknown as typeof globalThis;
+    doc.dispatchEvent(new W.KeyboardEvent('keydown', { key: 'ArrowDown' }));
+    expect(doc.activeElement?.getAttribute('aria-label')).toBe('Copy problem name');
+    doc.dispatchEvent(new W.KeyboardEvent('keydown', { key: 'Escape' }));
+    expect(doc.querySelector('.context-menu')).toBeNull();
+    // search box: native menu (not prevented)
+    doc.querySelector<HTMLButtonElement>('#sec-current .combo')!.click();
+    const ev = new W.MouseEvent('contextmenu', { bubbles: true, cancelable: true });
+    doc.querySelector('.picker-search')!.dispatchEvent(ev);
+    expect(ev.defaultPrevented).toBe(false);
+    expect(doc.querySelector('.context-menu')).toBeNull();
   });
 
   it('History tile tooltips (collapsed strip and expanded details) through the custom tooltip', async () => {

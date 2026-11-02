@@ -419,7 +419,7 @@ input::placeholder { color: var(--vscode-input-placeholderForeground); }
 /* ------------------------------------------------------------- linking */
 
 .row-actions { display: inline-flex; flex: none; opacity: 0; transition: opacity 0.1s; }
-.problem-row:hover .row-actions, .problem-row:focus-within .row-actions, .problem-row.mapped .row-actions { opacity: 1; }
+.problem-row:hover .row-actions, .problem-row:focus-within .row-actions { opacity: 1; }
 @media (hover: none) { .row-actions { opacity: 1; } }
 .picker-group { padding: 4px 4px 2px; text-transform: uppercase; font-size: 10px; letter-spacing: 0.04em; }
 
@@ -428,7 +428,7 @@ input::placeholder { color: var(--vscode-input-placeholderForeground); }
 
 .tooltip {
   position: fixed;
-  z-index: 1000;
+  z-index: 1002;
   padding: 3px 7px;
   border-radius: 3px;
   font-size: 12px;
@@ -503,16 +503,16 @@ select.sort { width: auto; flex: 0 1 auto; max-width: 48%; }
 
 /* ------------------------------------------------- panel cleanup (item 9) */
 
-/* "…" menus */
-.menu-wrap { position: relative; display: inline-flex; }
+/* right-click menu */
 .menu {
-  position: absolute; top: 100%; right: 0; z-index: 50; min-width: 190px; max-width: 260px; margin-top: 2px; padding: 4px 0;
+  position: fixed; z-index: 1001; min-width: 180px; max-width: calc(100vw - 8px); padding: 4px 0;
   display: flex; flex-direction: column;
   color: var(--vscode-menu-foreground, var(--vscode-foreground));
   background: var(--vscode-menu-background, var(--vscode-editorWidget-background));
   border: 1px solid var(--vscode-menu-border, var(--vscode-widget-border, var(--border)));
   border-radius: 4px; box-shadow: 0 2px 8px var(--vscode-widget-shadow, rgba(0, 0, 0, 0.3));
 }
+.menu-label { overflow: hidden; text-overflow: ellipsis; }
 .menu-item {
   display: flex; align-items: center; gap: 8px; width: 100%; padding: 3px 10px; border: none;
   color: inherit; background: transparent; font: inherit; text-align: left; cursor: pointer; white-space: nowrap;
