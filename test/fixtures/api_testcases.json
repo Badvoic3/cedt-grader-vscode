@@ -1,0 +1,52 @@
+[
+  {
+    "id": 21186,
+    "num": 1,
+    "group": 1,
+    "group_name": "1",
+    "weight": 1,
+    "access": "preview",
+    "input_bytes": 1919,
+    "sol_bytes": 11
+  },
+  {
+    "id": 21187,
+    "num": 2,
+    "group": 2,
+    "group_name": "2",
+    "weight": 1,
+    "access": "preview",
+    "input_bytes": 1745,
+    "sol_bytes": 11
+  },
+  {
+    "id": 21188,
+    "num": 3,
+    "group": 3,
+    "group_name": "3",
+    "weight": 1,
+    "access": "preview",
+    "input_bytes": 1803,
+    "sol_bytes": 11
+  },
+  {
+    "id": 21189,
+    "num": 4,
+    "group": 4,
+    "group_name": "4",
+    "weight": 1,
+    "access": "preview",
+    "input_bytes": 1426,
+    "sol_bytes": 11
+  },
+  {
+    "id": 21190,
+    "num": 5,
+    "group": 5,
+    "group_name": "5",
+    "weight": 1,
+    "access": "preview",
+    "input_bytes": 1426,
+    "sol_bytes": 11
+  }
+]

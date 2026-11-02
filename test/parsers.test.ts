@@ -58,6 +58,15 @@ describe('sanitizers', () => {
     expect(out).toContain('>settings<');
   });
 
+  it('sanitizeHtml removes a non-ASCII (Thai) name even though the serializer entity-encodes it', () => {
+    const html = `<html><head></head><body><a href="/main/logout"><span class="mi">exit_to_app</span> สมชาย ใจดี</a>
+      <p title="สมชาย">สวัสดี สมชาย ใจดี</p></body></html>`;
+    const out = sanitizeHtml(html);
+    expect(out).not.toMatch(/สมชาย|ใจดี/);
+    expect(out).not.toMatch(/&#xe2a;&#xe21;/i); // encoded "สม"
+    expect(out).toContain('Student Name');
+  });
+
   it('sanitizeJson scrubs user fields and source code', () => {
     const out = sanitizeJson(
       { id: 9, user_id: 4242, login: '6730123421', full_name: 'Somchai Jaidee', source: 'int main(){}', token: 'abc', note: 'by 6730123421' },

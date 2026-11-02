@@ -10,6 +10,11 @@ export interface SanitizeOptions {
 
 const FAKE_USER_ID = '12345';
 
+/** The `&#x..;` form the serializer uses for non-ASCII characters. */
+function encodeEntities(s: string): string {
+  return s.replace(/[^\x00-\x7f]/g, (c) => `&#x${c.codePointAt(0)!.toString(16)};`);
+}
+
 /**
  * Strip secrets and personal data from a grader HTML page before saving it
  * as a test fixture: CSRF tokens, the user's login/full name, the numeric
@@ -38,11 +43,27 @@ export function sanitizeHtml(html: string, opts: SanitizeOptions = {}): string {
     if ($(a).attr('data-user-id') !== undefined) $(a).attr('data-user-id', FAKE_USER_ID);
   });
 
+  // Replace personal strings inside the parsed DOM (text nodes and attributes)
+  // *before* serializing: the serializer may entity-encode non-ASCII text
+  // (e.g. a Thai name becomes `&#xe13;...`), which plain string replacement
+  // on the output would miss.
+  const names = [...personal].sort((a, b) => b.length - a.length);
+  const scrub = (v: string) => names.reduce((acc, n) => acc.split(n).join('Student Name'), v);
+  $('*').each((_, node) => {
+    const elNode = node as unknown as { attribs?: Record<string, string> };
+    for (const [k, v] of Object.entries(elNode.attribs ?? {})) elNode.attribs![k] = scrub(v);
+    $(node)
+      .contents()
+      .each((_, c) => {
+        const t = c as unknown as { type: string; data?: string };
+        if ((t.type === 'text' || t.type === 'comment' || t.type === 'script') && t.data) t.data = scrub(t.data);
+      });
+  });
+
   let out = $.html();
   out = redactPatterns(out);
-
-  for (const p of [...personal].sort((a, b) => b.length - a.length)) {
-    out = out.split(p).join('Student Name');
+  for (const p of names) {
+    out = out.split(p).join('Student Name').split(encodeEntities(p)).join('Student Name');
   }
   if (opts.userId != null) {
     const uid = String(opts.userId);
