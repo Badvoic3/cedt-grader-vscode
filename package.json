@@ -130,6 +130,18 @@
         "title": "Open Settings",
         "category": "CEDT Grader",
         "icon": "$(gear)"
+      },
+      {
+        "command": "cedtGrader.showRequestLog",
+        "title": "Show Request Log",
+        "category": "CEDT Grader",
+        "icon": "$(output)"
+      },
+      {
+        "command": "cedtGrader.refreshHistory",
+        "title": "Reload Submission History",
+        "category": "CEDT Grader",
+        "icon": "$(refresh)"
       }
     ],
     "menus": {
@@ -188,6 +200,11 @@
           "type": "boolean",
           "default": true,
           "description": "Ask for confirmation before each submission."
+        },
+        "cedtGrader.debugRequests": {
+          "type": "boolean",
+          "default": false,
+          "markdownDescription": "Log every grader request (method, path, status) and cache hit/miss to the **CEDT Grader: Requests** output channel, to check request counts. Never logs passwords or tokens."
         }
       }
     }

@@ -86,6 +86,27 @@ export interface SubmissionResult {
   language: string | null;
 }
 
+export interface EvaluationResult {
+  testcaseId: number;
+  /** cafe-grader result kind: correct, wrong, partial, time_limit, ... */
+  result: string | null;
+  score: number | null;
+  /** Milliseconds (the website shows time / 1000 s). */
+  timeMs: number | null;
+  /** Kilobytes (the website shows memory / 1024 MB). */
+  memoryKb: number | null;
+}
+
+/** `GET /api/v1/submissions/{id}` in full. */
+export interface SubmissionDetail extends SubmissionResult {
+  /** Only for your own submissions. */
+  source: string | null;
+  sourceFilename: string | null;
+  maxRuntimeMs: number | null;
+  peakMemoryKb: number | null;
+  evaluations: EvaluationResult[];
+}
+
 export interface SubmissionBrief {
   id: number;
   number: number | null;

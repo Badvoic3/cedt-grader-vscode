@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { readConfig, type GraderConfig } from './config';
+import { DataService } from './data/dataService';
 import {
   AuthError,
   chooseLanguage,
@@ -12,38 +13,44 @@ import {
   LanguageNotAllowedError,
   languageForPath,
   NetworkError,
+  parseGraderComment,
   PollTimeoutError,
   type Problem,
+  resultWord,
   SessionExpiredError,
   type StoredToken,
-  type SubmissionBrief,
-  type SubmissionResult,
+  type SubmissionDetail,
   summarize,
 } from './grader';
 import { matchCphProblem, readCphProblem } from './mapping/cph';
 import { MappingStore } from './mapping/store';
-import type { HistoryEntry, ProblemView, ResultView, ViewState } from './shared/messages';
+import type { HistoryEntry, ProblemView, ResultView, SubmissionDetailView, ViewState } from './shared/messages';
 
 export const EXAM_WARNING =
   'This problem looks like part of an exam/contest. Submitting from VS Code may not be allowed. Check with your instructor.';
 
-const HISTORY_TTL_MS = 2 * 60_000;
+/** URI scheme serving the source of a past submission (for the diff view). */
+export const SUBMISSION_SCHEME = 'cedt-grader-submission';
+
 const LANGUAGE_KEY = 'cedtGrader.languageByFile';
 const REMEMBER_KEY = 'cedtGrader.rememberPassword';
 
 type Listener = (s: ViewState) => void;
 
 /**
- * Single owner of the grader session and all UI state. The sidebar webview,
- * the commands and the status bar all go through this class.
+ * Single owner of the grader session and all UI state. All grader data goes
+ * through `DataService` (the shared cache layer).
  */
 export class GraderController implements vscode.Disposable {
   private cfg: GraderConfig = readConfig();
   private client: GraderClient;
+  readonly data: DataService;
   private readonly mapping: MappingStore;
   private readonly listeners = new Set<Listener>();
   private readonly disposables: vscode.Disposable[] = [];
   private readonly output: vscode.OutputChannel;
+  private debugChannel: vscode.OutputChannel | null = null;
+  private requestCount = 0;
 
   private accountStatus: ViewState['account']['status'] = 'logged-out';
   private accountError: string | null = null;
@@ -51,17 +58,9 @@ export class GraderController implements vscode.Disposable {
 
   private fileUri: vscode.Uri | null = null;
   private problem: (Problem & { source: 'mapping' | 'cph' }) | null = null;
-  private problems: Problem[] = [];
-  private problemsAt = 0;
-  private problemsLoading = false;
-  private problemsError: string | null = null;
-  private penaltyNote: string | null = null;
-  private languages: Language[] = [];
-  private languagesLoading = false;
   private languagesError: string | null = null;
   private selectedLanguageId: number | null = null;
-  private history = new Map<number, { at: number; items: SubmissionBrief[] }>();
-  private historyLoading = false;
+  private expandedSubmission: number | null = null;
   /** Latest result per source file (fsPath): the panel only shows the active file's result. */
   private results = new Map<string, ResultView>();
   private gradingFile: string | null = null;
@@ -74,6 +73,18 @@ export class GraderController implements vscode.Disposable {
     this.output = vscode.window.createOutputChannel('CEDT Grader');
     this.mapping = new MappingStore(ctx);
     this.client = this.makeClient();
+    this.data = new DataService({
+      client: () => this.client,
+      canFetch: () => this.client.isLoggedIn || this.hasSavedPassword,
+      log: (l) => this.requestLog(l),
+      describe: (e) => this.describe(e),
+    });
+    this.data.onChange = () => this.emit();
+    this.data.onError = (e) => void this.handleSessionError(e);
+    // A late (deferred) list load: re-resolve the open file (local only: mapping file and CPH .prob).
+    this.data.onProblemsLoaded = () => {
+      if (this.fileUri) void this.setActiveFile(this.fileUri);
+    };
     this.disposables.push(
       this.output,
       vscode.window.onDidChangeActiveTextEditor((e) => {
@@ -94,7 +105,10 @@ export class GraderController implements vscode.Disposable {
   /** Restores a stored API token (no network). Never logs in on its own. */
   async init(): Promise<void> {
     this.hasSavedPassword = !!(await this.getPassword());
-    if (await this.client.restore()) this.accountStatus = 'logged-in';
+    if (await this.client.restore()) {
+      this.accountStatus = 'logged-in';
+      void this.data.loadProblems(); // deferred until the panel is visible
+    }
     const ed = vscode.window.activeTextEditor;
     if (ed && ed.document.uri.scheme === 'file') await this.setActiveFile(ed.document.uri);
     else this.emit();
@@ -102,6 +116,7 @@ export class GraderController implements vscode.Disposable {
 
   dispose(): void {
     this.pollAbort?.abort();
+    this.debugChannel?.dispose();
     for (const d of this.disposables) d.dispose();
   }
 
@@ -109,6 +124,12 @@ export class GraderController implements vscode.Disposable {
     this.listeners.add(l);
     l(this.state());
     return new vscode.Disposable(() => this.listeners.delete(l));
+  }
+
+  /** The sidebar was shown or hidden. */
+  setPanelVisible(v: boolean): void {
+    this.data.setVisible(v);
+    if (v) void this.ensureLanguages();
   }
 
   // ------------------------------------------------------------ plumbing
@@ -135,8 +156,29 @@ export class GraderController implements vscode.Disposable {
           else await this.ctx.secrets.delete(this.secretKey('token'));
         },
       },
-      log: (line) => this.output.appendLine(line),
+      log: (line) => this.requestLog(line),
     });
+  }
+
+  /** `cedtGrader.debugRequests`: method, path, status and cache hit/miss only. Never tokens. */
+  private requestLog(line: string): void {
+    if (!this.cfg.debugRequests) return;
+    if (!this.debugChannel) this.debugChannel = vscode.window.createOutputChannel('CEDT Grader: Requests');
+    const isHttp = /^(GET|POST) /.test(line);
+    if (isHttp) this.requestCount++;
+    const t = new Date().toISOString().slice(11, 23);
+    this.debugChannel.appendLine(`${t} ${isHttp ? `#${this.requestCount} ` : '   '}${line}`);
+  }
+
+  showRequestLog(): void {
+    if (!this.cfg.debugRequests) {
+      void vscode.window
+        .showInformationMessage('Request logging is off. Turn on the setting "CEDT Grader: Debug Requests".', 'Open Setting')
+        .then((p) => p && vscode.commands.executeCommand('workbench.action.openSettings', 'cedtGrader.debugRequests'));
+      return;
+    }
+    if (!this.debugChannel) this.debugChannel = vscode.window.createOutputChannel('CEDT Grader: Requests');
+    this.debugChannel.show(true);
   }
 
   private get rememberPassword(): boolean {
@@ -164,12 +206,9 @@ export class GraderController implements vscode.Disposable {
 
   private resetSessionState(): void {
     this.accountStatus = 'logged-out';
-    this.problems = [];
-    this.problemsAt = 0;
-    this.languages = [];
-    this.history.clear();
     this.results.clear();
-    this.penaltyNote = null;
+    this.expandedSubmission = null;
+    this.data.clear();
   }
 
   private secretKey(kind: 'password' | 'token', username = this.cfg.username): string {
@@ -194,6 +233,21 @@ export class GraderController implements vscode.Disposable {
     return this.client.url(path);
   }
 
+  private get problems(): Problem[] {
+    return this.data.problemList()?.problems ?? [];
+  }
+
+  private get languages(): Language[] {
+    return this.data.cache.peek<Language[]>('languages')?.value ?? [];
+  }
+
+  /** The current problem with the freshest cached data. */
+  private currentProblem(): (Problem & { source: 'mapping' | 'cph' }) | null {
+    if (!this.problem) return null;
+    const fresh = this.problems.find((p) => p.id === this.problem!.id);
+    return fresh ? { ...fresh, source: this.problem.source } : this.problem;
+  }
+
   // ---------------------------------------------------------------- state
 
   private problemView(p: Problem): ProblemView {
@@ -204,19 +258,20 @@ export class GraderController implements vscode.Disposable {
     const file = this.fileUri;
     const lang = file ? languageForPath(file.fsPath) : null;
     const loggedIn = this.accountStatus === 'logged-in';
+    const problem = this.currentProblem();
+    const languagesLoading = this.data.cache.peek('languages') === undefined && loggedIn && !!problem && this.data.isVisible();
 
     let reason: string | null = null;
     if (this.busy) reason = null;
     else if (!file) reason = 'Open a source file to submit it.';
     else if (!loggedIn && !this.hasSavedPassword) reason = 'Log in first.';
-    else if (!this.problem) reason = 'Choose the grader problem for this file.';
-    else if (this.languagesLoading) reason = 'Loading languages…';
+    else if (!problem) reason = 'Choose the grader problem for this file.';
     else if (this.languagesError) reason = this.languagesError;
 
-    const enabled =
-      !this.busy && !!file && !!this.problem && (loggedIn || this.hasSavedPassword) && !this.languagesLoading;
+    const enabled = !this.busy && !!file && !!problem && (loggedIn || this.hasSavedPassword);
+    const pState = this.data.state('problems');
+    const list = this.data.problemList();
 
-    const hist = this.problem ? this.history.get(this.problem.id) : undefined;
     return {
       baseUrl: this.cfg.baseUrl,
       account: {
@@ -229,10 +284,10 @@ export class GraderController implements vscode.Disposable {
       file: file
         ? { path: vscode.workspace.asRelativePath(file, false), name: file.path.split('/').pop() ?? '', languageGuess: lang, supported: lang !== null }
         : null,
-      problem: this.problem ? { ...this.problemView(this.problem), source: this.problem.source } : null,
+      problem: problem ? { ...this.problemView(problem), source: problem.source } : null,
       languages: {
-        loading: this.languagesLoading,
-        items: this.problem ? this.allowedLanguages(this.problem).map((l) => ({ id: l.id, name: l.name })) : [],
+        loading: languagesLoading,
+        items: problem ? this.allowedLanguages(problem).map((l) => ({ id: l.id, name: l.name })) : [],
         selectedId: this.selectedLanguageId,
         error: this.languagesError,
       },
@@ -242,27 +297,79 @@ export class GraderController implements vscode.Disposable {
         this.busy && this.gradingFile !== null && this.gradingFile !== file?.fsPath
           ? (this.results.get(this.gradingFile)?.problemName ?? 'another file')
           : null,
-      history: {
-        loading: this.historyLoading,
-        items: (hist?.items ?? []).slice(0, 10).map(
-          (h): HistoryEntry => ({
-            submissionId: h.id,
-            number: h.number,
-            points: h.points,
-            status: h.status,
-            comment: h.comment,
-            submittedAt: h.submittedAt,
-            compileError: h.status === 'compilation_error',
-          }),
-        ),
-      },
+      history: problem ? this.historyView(problem) : { loading: false, stale: false, error: null, items: [], expanded: null },
       problems: {
-        loading: this.problemsLoading,
-        loaded: this.problemsAt > 0,
+        loading: pState.loading,
+        loaded: list !== undefined,
+        stale: pState.stale,
         items: this.problems.map((p) => this.problemView(p)),
-        error: this.problemsError,
-        penaltyNote: this.penaltyNote,
+        error: pState.error,
+        penaltyNote:
+          !list || list.listStatus === 'loaded'
+            ? null
+            : list.listStatus === 'no-web-session'
+              ? 'Hint/AI penalties not loaded (password not remembered). Scores shown are best scores.'
+              : 'Could not read hint/AI penalties from the problem list. Scores shown are best scores.',
       },
+    };
+  }
+
+  private historyView(problem: Problem): ViewState['history'] {
+    const st = this.data.historyState(problem.id);
+    const items = this.data.history(problem.id) ?? [];
+    const pretty = new Map(this.languages.map((l) => [l.code, l.name]));
+    // The counted (best) submission: highest points; on a tie the earliest one (list is newest first).
+    let countedId: number | null = null;
+    let best = -Infinity;
+    for (let i = items.length - 1; i >= 0; i--) {
+      const pts = items[i].points;
+      if (pts !== null && pts > best) {
+        best = pts;
+        countedId = items[i].id;
+      }
+    }
+    const entries: HistoryEntry[] = items.map((h) => ({
+      submissionId: h.id,
+      number: h.number,
+      points: h.points,
+      status: h.status,
+      comment: h.comment,
+      submittedAt: h.submittedAt,
+      language: h.language ? (pretty.get(h.language) ?? h.language) : null,
+      compileError: h.status === 'compilation_error',
+      counted: h.id === countedId && best > 0,
+      verdicts: h.status === 'compilation_error' ? [] : parseGraderComment(h.comment),
+    }));
+    let expanded: ViewState['history']['expanded'] = null;
+    if (this.expandedSubmission !== null && items.some((h) => h.id === this.expandedSubmission)) {
+      const id = this.expandedSubmission;
+      const d = this.data.detail(id);
+      const ds = this.data.state(`detail:${id}`);
+      expanded = { submissionId: id, loading: ds.loading, error: ds.error, detail: d ? this.detailView(d) : null };
+    }
+    return { loading: st.loading, stale: st.stale, error: st.error, items: entries, expanded };
+  }
+
+  private detailView(d: SubmissionDetail): SubmissionDetailView {
+    const evals = [...d.evaluations].sort((a, b) => a.testcaseId - b.testcaseId);
+    const msg = d.compilerMessage?.trim() ? d.compilerMessage : null;
+    return {
+      submissionId: d.id,
+      url: this.url(`/submissions/${d.id}`),
+      status: d.status,
+      compilerMessage: msg,
+      maxRuntimeMs: d.maxRuntimeMs,
+      peakMemoryKb: d.peakMemoryKb,
+      hasSource: d.source !== null,
+      sourceFilename: d.sourceFilename,
+      evaluations: evals.map((e, i) => ({
+        index: i + 1,
+        kind: e.result ?? 'unknown',
+        label: `Test ${i + 1}: ${resultWord(e.result)}`,
+        score: e.score,
+        timeMs: e.timeMs,
+        memoryKb: e.memoryKb,
+      })),
     };
   }
 
@@ -321,7 +428,9 @@ export class GraderController implements vscode.Disposable {
       await this.client.login(creds);
       this.accountStatus = 'logged-in';
       this.log(`Logged in to ${this.cfg.baseUrl}.`);
-      await this.refreshProblems(true);
+      this.data.clear();
+      await this.data.loadProblems(true);
+      await this.ensureLanguages();
       return true;
     } catch (err) {
       await this.onAuthFailure(err);
@@ -374,8 +483,23 @@ export class GraderController implements vscode.Disposable {
     return false;
   }
 
+  private async ensureLanguages(): Promise<void> {
+    if (this.data.cache.peek('languages') || !(this.client.isLoggedIn || this.hasSavedPassword) || !this.data.isVisible()) return;
+    try {
+      await this.data.languages();
+      this.applyLanguageChoice();
+    } catch (err) {
+      if (!(await this.handleSessionError(err))) this.languagesError = this.describe(err);
+    }
+    this.emit();
+  }
+
   // ----------------------------------------------------------- active file
 
+  /**
+   * Show the file right away from cached data. Network work (history) is
+   * debounced inside DataService and only happens if the cache is missing or stale.
+   */
   async setActiveFile(uri: vscode.Uri): Promise<void> {
     const seq = ++this.refreshSeq;
     const changed = this.fileUri?.toString() !== uri.toString();
@@ -383,6 +507,7 @@ export class GraderController implements vscode.Disposable {
     if (changed) {
       this.selectedLanguageId = this.ctx.workspaceState.get<Record<string, number>>(LANGUAGE_KEY, {})[uri.fsPath] ?? null;
       this.languagesError = null;
+      this.expandedSubmission = null;
     }
 
     let problem: (Problem & { source: 'mapping' | 'cph' }) | null = null;
@@ -398,32 +523,15 @@ export class GraderController implements vscode.Disposable {
     }
     if (seq !== this.refreshSeq) return;
     this.problem = problem;
+    this.applyLanguageChoice();
     this.emit();
-    if (problem) {
-      await this.loadLanguages();
-      this.applyLanguageChoice();
-      void this.loadHistory(problem.id, false);
-    }
-  }
-
-  /** All languages once per session (`GET /api/v1/languages`). */
-  private async loadLanguages(): Promise<void> {
-    if (this.languages.length || !this.client.isLoggedIn) return;
-    this.languagesLoading = true;
-    this.emit();
-    try {
-      this.languages = await this.client.languages();
-    } catch (err) {
-      if (!(await this.handleSessionError(err))) this.languagesError = this.describe(err);
-    } finally {
-      this.languagesLoading = false;
-      this.emit();
-    }
+    this.data.focusProblem(problem?.id ?? null);
   }
 
   private applyLanguageChoice(): void {
-    if (!this.problem || !this.fileUri || !this.languages.length) return;
-    const allowed = this.allowedLanguages(this.problem);
+    const problem = this.currentProblem();
+    if (!problem || !this.fileUri || !this.languages.length) return;
+    const allowed = this.allowedLanguages(problem);
     if (allowed.some((l) => l.id === this.selectedLanguageId)) {
       this.languagesError = null;
     } else {
@@ -431,22 +539,6 @@ export class GraderController implements vscode.Disposable {
       this.selectedLanguageId = c.kind === 'match' ? c.language.id : null;
       this.languagesError =
         c.kind === 'not-allowed' ? `${c.wanted} is not allowed for this problem (allowed: ${c.allowed.map((l) => l.name).join(', ')}).` : null;
-    }
-    this.emit();
-  }
-
-  private async loadHistory(problemId: number, force: boolean): Promise<void> {
-    const cached = this.history.get(problemId);
-    if (!this.client.isLoggedIn || (!force && cached && Date.now() - cached.at < HISTORY_TTL_MS)) return;
-    this.historyLoading = true;
-    this.emit();
-    try {
-      this.history.set(problemId, { at: Date.now(), items: await this.client.listSubmissions(problemId) });
-    } catch (err) {
-      if (!(await this.handleSessionError(err))) this.log(`History unavailable: ${this.describe(err)}`);
-    } finally {
-      this.historyLoading = false;
-      this.emit();
     }
   }
 
@@ -463,35 +555,18 @@ export class GraderController implements vscode.Disposable {
 
   // -------------------------------------------------------------- problems
 
-  /** `GET /api/v1/problems` (+ `/main/list` penalties). Only on login and on Refresh. */
+  /** Problem list: cached for the session; `force` = the Refresh button. */
   async refreshProblems(force = true): Promise<void> {
-    if (!force && this.problemsAt) return;
+    if (!force && this.data.problemList()) return;
     if (!(await this.ensureLoggedIn())) return;
-    this.problemsLoading = true;
-    this.problemsError = null;
-    this.emit();
-    try {
-      const { problems, listStatus } = await this.client.listProblems();
-      this.problems = problems;
-      this.problemsAt = Date.now();
-      this.penaltyNote =
-        listStatus === 'loaded'
-          ? null
-          : listStatus === 'no-web-session'
-            ? 'Hint/AI penalties not loaded (password not remembered). Scores shown are best scores.'
-            : 'Could not read hint/AI penalties from the problem list. Scores shown are best scores.';
-      if (this.problem) {
-        const p = problems.find((x) => x.id === this.problem!.id);
-        if (p) this.problem = { ...p, source: this.problem.source };
-      }
-      await this.loadLanguages();
-    } catch (err) {
-      if (!(await this.handleSessionError(err))) this.problemsError = this.describe(err);
-    } finally {
-      this.problemsLoading = false;
-      this.emit();
-    }
-    if (this.fileUri) await this.setActiveFile(this.fileUri);
+    await this.data.loadProblems(force);
+    await this.ensureLanguages();
+  }
+
+  async refreshHistory(): Promise<void> {
+    const p = this.problem;
+    if (!p || !(await this.ensureLoggedIn())) return;
+    await this.data.loadHistory(p.id, true);
   }
 
   async mapCurrentFile(problemId: number): Promise<void> {
@@ -511,13 +586,16 @@ export class GraderController implements vscode.Disposable {
     await this.setActiveFile(this.fileUri);
   }
 
-  /** Command-palette flow: searchable QuickPick of the problem list. */
+  /** Command-palette flow: searchable QuickPick of the cached problem list. */
   async chooseProblemQuickPick(): Promise<void> {
     if (!this.fileUri) {
       void vscode.window.showInformationMessage('Open a source file first.');
       return;
     }
-    await this.refreshProblems(false);
+    if (!this.data.problemList()) {
+      await vscode.commands.executeCommand('cedtGrader.panel.focus');
+      await this.refreshProblems(false);
+    }
     if (!this.problems.length) return;
     const pick = await vscode.window.showQuickPick(
       this.problems.map((p) => {
@@ -532,6 +610,46 @@ export class GraderController implements vscode.Disposable {
       { placeHolder: `Grader problem for ${this.fileUri.path.split('/').pop()}`, matchOnDescription: true, matchOnDetail: true },
     );
     if (pick) await this.mapCurrentFile(pick.id);
+  }
+
+  // ---------------------------------------------------------------- history
+
+  /** Expand / collapse a history entry; details are fetched on demand (cached once final). */
+  async toggleSubmission(id: number): Promise<void> {
+    this.expandedSubmission = this.expandedSubmission === id ? null : id;
+    this.emit();
+    if (this.expandedSubmission === id) await this.data.loadDetail(id);
+  }
+
+  private async detailWithSource(id: number): Promise<SubmissionDetail | undefined> {
+    const d = this.data.detail(id) ?? (await this.data.loadDetail(id));
+    if (d && d.source === null) void vscode.window.showInformationMessage('The grader does not return the source of this submission.');
+    return d?.source !== null ? d : undefined;
+  }
+
+  /** Open a past submission's source in a new untitled editor (never touches the user's file). */
+  async openSubmissionSource(id: number): Promise<void> {
+    const d = await this.detailWithSource(id);
+    if (!d) return;
+    const doc = await vscode.workspace.openTextDocument({ content: d.source ?? '', language: vscodeLanguageId(d.sourceFilename ?? this.fileUri?.path ?? '') });
+    await vscode.window.showTextDocument(doc, { preview: false });
+  }
+
+  /** Diff a past submission (read-only virtual document) against the current file. */
+  async compareSubmission(id: number): Promise<void> {
+    if (!this.fileUri) return;
+    const d = await this.detailWithSource(id);
+    if (!d) return;
+    const name = d.sourceFilename || 'submission';
+    const left = vscode.Uri.from({ scheme: SUBMISSION_SCHEME, path: `/${d.id}/${name}` });
+    const label = `${d.number !== null ? `Attempt ${d.number}` : `#${d.id}`} ↔ ${this.fileUri.path.split('/').pop()}`;
+    await vscode.commands.executeCommand('vscode.diff', left, this.fileUri, label);
+  }
+
+  /** Content for `cedt-grader-submission:/<id>/<file>` URIs (cache only, no request). */
+  submissionSource(uri: vscode.Uri): string {
+    const id = Number(uri.path.split('/')[1]);
+    return this.data.detail(id)?.source ?? '';
   }
 
   // ---------------------------------------------------------------- submit
@@ -553,7 +671,7 @@ export class GraderController implements vscode.Disposable {
       await this.chooseProblemQuickPick();
       if (!this.problem) return;
     }
-    const problem = this.problem;
+    const problem = this.currentProblem()!;
     const key = fileUri.fsPath;
     const fileName = fileUri.path.split('/').pop() ?? '';
 
@@ -561,12 +679,10 @@ export class GraderController implements vscode.Disposable {
     this.gradingFile = key;
     this.emit();
     try {
-      // Fresh problem info: counted score before, permitted languages.
-      const before = await this.client.getProblem(problem.id);
-      const listInfo = this.problems.find((p) => p.id === problem.id)?.list ?? null;
-      const countedBefore = countedScore(before.bestScore, listInfo?.cost ?? 0, listInfo?.rawSum ?? false);
-      await this.loadLanguages();
-      const allowed = this.allowedLanguages(before);
+      // Everything needed comes from the cache: no extra request before submitting.
+      const countedBefore = countedScore(problem.bestScore, problem.list?.cost ?? 0, problem.list?.rawSum ?? false);
+      await this.data.languages();
+      const allowed = this.allowedLanguages(problem);
 
       // Exam hint (section 2b), from the problem list page we already fetched. Never remembered.
       let warned = false;
@@ -615,8 +731,16 @@ export class GraderController implements vscode.Disposable {
         submissionUrl: this.url(`/submissions/${sub.id}`),
         message: 'Waiting to be graded…',
       });
+      // Poll only this submission until final.
       const final = await this.poll(key, problem, sub.id);
-      if (final) await this.afterGraded(key, problem, final, countedBefore);
+      if (final) {
+        this.data.recordDetail(final);
+        // Then refresh this problem's history and the problem list, once.
+        await this.data.afterSubmit(problem.id);
+        const updated = this.currentProblem();
+        const after = updated ? countedScore(updated.bestScore, updated.list?.cost ?? 0, updated.list?.rawSum ?? false) : null;
+        this.updateResult(key, { improvement: describeImprovement(countedBefore, after, final.points) });
+      }
     } catch (err) {
       const msg = this.describe(err);
       const r = this.results.get(key);
@@ -647,7 +771,7 @@ export class GraderController implements vscode.Disposable {
   }
 
   /** Poll the API until graded. Returns null when stopped or timed out (result updated accordingly). */
-  private async poll(key: string, problem: Problem, submissionId: number): Promise<SubmissionResult | null> {
+  private async poll(key: string, problem: Problem, submissionId: number): Promise<SubmissionDetail | null> {
     const abort = new AbortController();
     this.pollAbort = abort;
     return vscode.window.withProgress(
@@ -678,7 +802,7 @@ export class GraderController implements vscode.Disposable {
     );
   }
 
-  private applySubmission(key: string, s: SubmissionResult): void {
+  private applySubmission(key: string, s: SubmissionDetail): void {
     const graded = s.state === 'graded';
     this.updateResult(key, {
       phase: graded ? 'done' : 'grading',
@@ -694,45 +818,23 @@ export class GraderController implements vscode.Disposable {
     });
   }
 
-  /** Refresh this problem's scores and history, then say whether the counted score changed. */
-  private async afterGraded(key: string, problem: Problem, s: SubmissionResult, countedBefore: number | null): Promise<void> {
-    this.applySubmission(key, s);
-    try {
-      const fresh = await this.client.getProblem(problem.id);
-      const list = this.problems.find((p) => p.id === problem.id)?.list ?? null;
-      const updated: Problem = { ...fresh, list };
-      this.problems = this.problems.map((p) => (p.id === problem.id ? updated : p));
-      if (this.problem?.id === problem.id) this.problem = { ...updated, source: this.problem.source };
-      const after = countedScore(updated.bestScore, list?.cost ?? 0, list?.rawSum ?? false);
-      this.updateResult(key, { improvement: describeImprovement(countedBefore, after, s.points) });
-    } catch (err) {
-      this.log(`Could not refresh scores: ${this.describe(err)}`);
-    }
-    await this.loadHistory(problem.id, true);
-  }
-
-  /** Fetch the latest submission of the current file's problem once (no polling loop). */
+  /** Latest submission of the current file's problem, from history (refreshes history if stale). */
   async showLastResult(): Promise<void> {
     await vscode.commands.executeCommand('cedtGrader.panel.focus');
-    const problem = this.problem;
+    const problem = this.currentProblem();
     const key = this.fileUri?.fsPath;
     if (!problem || !key || this.busy) return;
     if (!(await this.ensureLoggedIn())) return;
-    try {
-      const p = await this.client.getProblem(problem.id);
-      const lastId = p.submissionIds[0] ?? p.lastSubmissionId;
-      if (!lastId) {
-        this.setResult(key, newResult(problem, 'done', 'No submissions yet.'));
-        return;
-      }
-      const s = await this.client.getSubmission(lastId);
-      this.setResult(key, newResult(problem, 'grading', null));
-      this.applySubmission(key, s);
-      if (s.state !== 'graded') this.updateResult(key, { phase: 'timeout', message: 'Still being graded. Check again in a moment.' });
-      await this.loadHistory(problem.id, true);
-    } catch (err) {
-      if (!(await this.handleSessionError(err))) void this.showError(err, this.describe(err));
+    const items = (await this.data.loadHistory(problem.id)) ?? [];
+    if (!items.length) {
+      this.setResult(key, newResult(problem, 'done', 'No submissions yet.'));
+      return;
     }
+    const d = await this.data.loadDetail(items[0].id);
+    if (!d) return;
+    this.setResult(key, newResult(problem, 'grading', null));
+    this.applySubmission(key, d);
+    if (d.state !== 'graded') this.updateResult(key, { phase: 'timeout', message: 'Still being graded. Check again in a moment.' });
   }
 
   async showCompilerMessage(): Promise<void> {
@@ -781,6 +883,16 @@ export class GraderController implements vscode.Disposable {
   }
 }
 
+/** VS Code language id for a file name, so "Open this version" gets syntax highlighting. */
+function vscodeLanguageId(filename: string): string {
+  const ext = /\.([^./]+)$/.exec(filename.toLowerCase())?.[1] ?? '';
+  const map: Record<string, string> = {
+    cpp: 'cpp', cc: 'cpp', cxx: 'cpp', c: 'c', py: 'python', java: 'java', rs: 'rust', go: 'go', php: 'php',
+    hs: 'haskell', rb: 'ruby', pas: 'pascal', sql: 'sql', dig: 'xml',
+  };
+  return map[ext] ?? 'plaintext';
+}
+
 function placeholderProblem(id: number, name: string): Problem {
   return {
     id,
@@ -816,3 +928,4 @@ function newResult(problem: Problem, phase: ResultView['phase'], message: string
     message,
   };
 }
+

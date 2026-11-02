@@ -19,6 +19,8 @@ export class FakeGrader {
   private nextToken = 1;
   throttled = false;
   networkFailures = 0;
+  /** HTTP statuses (429 / 5xx) returned, in order, for the next authenticated API GETs. */
+  httpErrors: number[] = [];
   /** Status sequence served by GET /api/v1/submissions/:id (last repeats). */
   statusSequence: string[] = ['done'];
   statusIndex = 0;
@@ -72,6 +74,10 @@ export class FakeGrader {
     const auth = headers['Authorization']?.split(' ').pop();
     if (!auth) return this.json(401, { error: 'Missing authorization token' });
     if (!this.validTokens.has(auth)) return this.json(401, { error: 'Token has expired' });
+    if (method === 'GET' && this.httpErrors.length) {
+      const status = this.httpErrors.shift()!;
+      return this.json(status, { error: status === 429 ? 'Too many requests' : 'Internal Server Error' });
+    }
 
     if (method === 'GET' && p === '/api/v1/problems') return this.json(200, this.problems);
     if (method === 'GET' && p === '/api/v1/languages') return this.json(200, this.languages);

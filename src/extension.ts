@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { GraderController } from './controller';
+import { GraderController, SUBMISSION_SCHEME } from './controller';
 import { SidebarProvider } from './ui/sidebarProvider';
 import { GraderStatusBar } from './ui/statusBar';
 
@@ -47,6 +47,12 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
     vscode.commands.registerCommand('cedtGrader.showLastResult', () => controller.showLastResult()),
     vscode.commands.registerCommand('cedtGrader.openStatement', () => controller.openStatement()),
     vscode.commands.registerCommand('cedtGrader.refreshProblems', () => controller.refreshProblems(true)),
+    vscode.commands.registerCommand('cedtGrader.refreshHistory', () => controller.refreshHistory()),
+    vscode.commands.registerCommand('cedtGrader.showRequestLog', () => controller.showRequestLog()),
+    // Read-only documents with the source of past submissions (for "Compare with current file").
+    vscode.workspace.registerTextDocumentContentProvider(SUBMISSION_SCHEME, {
+      provideTextDocumentContent: (uri) => controller.submissionSource(uri),
+    }),
     vscode.commands.registerCommand('cedtGrader.openSettings', () =>
       vscode.commands.executeCommand('workbench.action.openSettings', 'cedtGrader'),
     ),

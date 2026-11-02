@@ -31,6 +31,16 @@ export class LanguageNotAllowedError extends GraderError {}
 
 export class NetworkError extends GraderError {}
 
+/** HTTP 429 or 5xx after the retries were used up. Treated like being offline (cached data is shown). */
+export class ServerBusyError extends NetworkError {
+  constructor(
+    message: string,
+    readonly status: number,
+  ) {
+    super(message);
+  }
+}
+
 /** Server answered with a flash alert after a submit (problem not available, source missing, ...). */
 export class SubmitRejectedError extends GraderError {}
 

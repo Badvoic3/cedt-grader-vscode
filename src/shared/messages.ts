@@ -68,7 +68,34 @@ export interface HistoryEntry {
   status: string;
   comment: string | null;
   submittedAt: string | null;
+  /** Display name, e.g. `C++`. */
+  language: string | null;
   compileError: boolean;
+  /** This submission holds the counted (best) score. */
+  counted: boolean;
+  verdicts: VerdictView[];
+}
+
+export interface EvaluationView {
+  index: number;
+  kind: string;
+  label: string;
+  score: number | null;
+  timeMs: number | null;
+  memoryKb: number | null;
+}
+
+/** Loaded on demand when a history entry is expanded. */
+export interface SubmissionDetailView {
+  submissionId: number;
+  url: string;
+  status: string;
+  compilerMessage: string | null;
+  maxRuntimeMs: number | null;
+  peakMemoryKb: number | null;
+  hasSource: boolean;
+  sourceFilename: string | null;
+  evaluations: EvaluationView[];
 }
 
 export interface ViewState {
@@ -106,10 +133,18 @@ export interface ViewState {
   result: ResultView | null;
   /** Problem name of a submission being graded for another file, if any. */
   gradingElsewhere: string | null;
-  history: { loading: boolean; items: HistoryEntry[] };
+  history: {
+    loading: boolean;
+    /** Cached data shown because a refresh failed (offline / rate limited). */
+    stale: boolean;
+    error: string | null;
+    items: HistoryEntry[];
+    expanded: { submissionId: number; loading: boolean; error: string | null; detail: SubmissionDetailView | null } | null;
+  };
   problems: {
     loading: boolean;
     loaded: boolean;
+    stale: boolean;
     items: ProblemView[];
     error: string | null;
     /** Note when hint/AI penalties could not be read from /main/list. */
@@ -135,6 +170,10 @@ export type FromWebview =
   | { type: 'openStatement'; problemId: number }
   | { type: 'openProblemInBrowser'; problemId: number }
   | { type: 'openSubmission'; submissionId: number }
+  | { type: 'toggleSubmission'; submissionId: number }
+  | { type: 'openSubmissionSource'; submissionId: number }
+  | { type: 'compareSubmission'; submissionId: number }
+  | { type: 'refreshHistory' }
   | { type: 'showCompilerMessage' }
   | { type: 'openSettings' };
 

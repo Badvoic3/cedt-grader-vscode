@@ -18,7 +18,7 @@ Click the **CEDT Grader** icon in the Activity Bar. The sidebar has five section
 | **Account** | Log in with your grader username and password. Keep **Remember password on this computer** on to stay logged in (stored in the macOS Keychain / OS keychain). **Log out** forgets both the login and the password. |
 | **Current problem** | Follows the file you are editing. Pick its grader problem from the searchable list (name or id), see your **counted score**, choose a language (only languages this problem allows are shown), then press **Submit to Grader**. |
 | **Result** | Shows live status while grading, then the points, a coloured tile per test (hover a tile for its verdict), the compiler message if compilation failed, whether your counted score improved, a link to the submission, and **Resubmit**. |
-| **History** | Shows your last submissions for this problem (from the grader). Click one to open it on the website. |
+| **History** | Every submission for this problem (website ones too), with time, language, score and verdicts; the one that counts is marked. Click one for per-test results, runtime, memory and the compiler message, to **open that version** in a new editor, or to **compare it with your current file**. |
 | **Problems** | Lists all your problems with their counted score, with a filter box. Click a problem to use it for the current file. Click ↗ to open its statement. |
 
 Typical flow: open `sol.cpp` → pick the problem once (it is remembered) → **Submit** → confirm. That's two clicks for every later submission.
@@ -48,6 +48,7 @@ The Passwords app can't fill VS Code directly. Copy your password from the Passw
 | `cedtGrader.username` | | Filled in when you log in from the panel. |
 | `cedtGrader.pollIntervalSeconds` | `5` | How often to check while grading (minimum 3). Polling only runs after a submission and stops after 3 minutes. |
 | `cedtGrader.confirmBeforeSubmit` | `true` | Ask before each submission. |
+| `cedtGrader.debugRequests` | `false` | Log each grader request and cache hit/miss to *Output → CEDT Grader: Requests* (no passwords or tokens). |
 
 ## Exams
 

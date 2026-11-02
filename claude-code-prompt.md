@@ -55,6 +55,29 @@ From `MainController#prepare_list_information`, `app/views/main/_problem.html.ha
 - The API has no hint/AI cost data, so it is read from `/main/list` (green bar = adjusted score, red bar = penalty, "Full score reduced by N", "Hint: n, AI Assist: n") and labelled "from problem list".
 - Display: "Counted score" (big), best, latest, attempts, and the penalty ("-10 AI assist"). If the latest is lower, say so ("Latest: 40 — your best 70 still counts"). After each submission, say whether it improved the counted score. The problem list shows the counted score per problem. The README notes that the instructor's final grading may differ.
 
+## 1d. Submission history and request usage
+
+History uses only the API (no `/submissions` HTML), confirmed in `app/controllers/api/v1/submissions_controller.rb`:
+- `GET /api/v1/problems/{id}/submissions`: all my regular submissions for the problem, newest first (`id, number, language, submitted_at, points, status, grader_comment`), website submissions included.
+- `GET /api/v1/submissions/{id}`: full detail (`source` for own submissions, `source_filename, compiler_message, max_runtime` (ms), `peak_memory` (KB), `points, grader_comment, evaluations[{testcase_id, result, score, time (ms), memory (KB)}]`).
+
+UI (sidebar "History" for the active file's problem):
+- Every submission: number, time (relative, exact on hover), language, score, verdict strip from `grader_comment`; the one holding the counted (best) score is marked.
+- Clicking one expands details loaded on demand: compiler message, per-test results, runtime, memory, link to `/submissions/{id}`.
+- Actions: "Open this version" (new untitled editor, never overwrites the file) and "Compare with current file" (VS Code diff). A Refresh button for the history.
+
+Request discipline (tested):
+- One shared cache layer in the extension host (`src/data/`).
+  - Problem list: cached for the session, refreshed on demand or after a submit.
+  - History per problem: fresh for 5 minutes.
+  - Submission details: cached forever once final (graded / compile error), never while in progress.
+- Switching files: debounce 400 ms, then show cached data; fetch only if the problem's history is missing or stale. Switching back and forth while the cache is fresh makes no requests.
+- Deduplicate in-flight requests (same key → same promise).
+- After a submit: poll only that submission until final, then refresh that problem's history and the problem list once (API only).
+- No background polling, no prefetching of other problems. Nothing is fetched while the panel is hidden; pending loads run when it becomes visible.
+- 401: one silent re-login. 429 / 5xx: GETs retried with back-off (2 s, 4 s, or Retry-After). Offline / still failing: show cached data with a "may be out of date" note.
+- `cedtGrader.debugRequests` (off by default) logs method, path, status and cache hit/miss/dedup to the "CEDT Grader: Requests" output channel, never tokens.
+
 ## 2. Hard rules
 
 - **Never** hard-code, log, print or commit credentials, cookies or CSRF tokens. Store the password in VS Code `context.secrets`; the username can be a setting.
@@ -108,7 +131,7 @@ Instead of relying on the command palette, build a sidebar GUI like the CPH and 
      - "Log out" removes both the token and the stored password.
   2. **Current problem:** shows the active editor's file, the mapped problem (with a searchable picker from `/main/list`), a language dropdown filled from that problem's allowed languages, and a big Submit button.
   3. **Result:** live status while grading, then score, a colored verdict strip (one tile per test, tooltip with the label), compiler message if compilation failed, link to the submission, and Resubmit.
-  4. **History:** the last few submissions for this problem.
+  4. **History:** every submission for this problem, expandable (see section 1d).
   5. **Problems:** a searchable list of problems with best score; clicking one maps it to the current file or opens its statement.
 - Communication only through `postMessage` with typed messages in a shared types file. All network calls stay in the extension host, never in the webview.
 - Follow the active editor: when the user switches files, the panel updates.

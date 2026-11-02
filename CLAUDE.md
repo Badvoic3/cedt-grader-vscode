@@ -28,7 +28,10 @@ Press F5 to start an Extension Development Host (`.vscode/launch.json` runs `npm
   - `contest.ts`: `isContestPage`.
   - `sanitize.ts`: HTML/JSON fixture scrubbing.
   - `redact.ts`: strips secrets from logs.
-- `src/controller.ts`: single owner of session and UI state (results per file, history, languages, scores). Commands, sidebar and status bar all go through it.
+- `src/data/`: the one shared cache layer (no `vscode` import; request counts are unit tested).
+  - `cache.ts`: `RequestCache` (session / TTL / final-only entries, in-flight de-duplication).
+  - `dataService.ts`: `DataService` (problems, languages, history, details; debounce, visibility, after-submit refresh, stale-on-error).
+- `src/controller.ts`: session, mapping and UI state (results per file, expanded history entry). All grader data goes through `DataService`. Commands, sidebar and status bar all go through the controller.
 - `src/shared/messages.ts`: typed `ViewState` / `ToWebview` / `FromWebview`.
 - `src/ui/sidebarProvider.ts`: `WebviewViewProvider`; CSP with nonce, `localResourceRoots: [media]`.
 - `src/ui/statusBar.ts`: status bar shortcut that reveals the panel.
@@ -48,7 +51,8 @@ Press F5 to start an Extension Development Host (`.vscode/launch.json` runs `npm
 | Languages | `GET /api/v1/languages` | `id, name` (internal), `pretty_name`, `ext`. |
 | Submit | `POST /api/v1/problems/{id}/submissions` `{language_id, source, filename}` | 201 `{id, number, status}`. 422 + `permitted_languages` = language not allowed. |
 | Poll | `GET /api/v1/submissions/{id}` | `status`: `done`/`compilation_error`/`grader_error` are final. Also `points`, `grader_comment` (`PP-T[Px]`), `compiler_message`. |
-| History | `GET /api/v1/problems/{id}/submissions` | |
+| History | `GET /api/v1/problems/{id}/submissions` | All regular submissions, newest first, incl. website ones. |
+| Detail | `GET /api/v1/submissions/{id}` | `source` (own only), `source_filename`, `max_runtime` ms, `peak_memory` KB, `evaluations[{testcase_id, result, score, time ms, memory KB}]`. |
 | Test cases | `GET /api/v1/problems/{id}/testcases`, `/api/v1/testcases/{id}/input`, `/sol` | Phase 3 import. |
 
 **HTML (only what the API lacks)**, via a cookie session opened at login:
@@ -78,12 +82,17 @@ Press F5 to start an Extension Development Host (`.vscode/launch.json` runs `npm
   - On a 401, re-login silently once with the stored password, then show the login form.
   - A wrong stored password is deleted.
 - **Probe credentials:** the probe reads `GRADER_USER` / `GRADER_PASS` from `.env` (git-ignored). Never ask the user to paste a password into chat.
-- **Be gentle with the server:**
-  - Problems and the `/main/list` page: on login and on Refresh only.
+- **Request discipline** (spec section 1d, tests in `test/dataService.test.ts`):
+  - Everything goes through `DataService`; never call `GraderClient` for data from UI code.
+  - Problem list (+ `/main/list` page): cached for the session; on login, Refresh, and once after a submit (API only).
   - Languages: once per session.
-  - History: per problem, cached 2 min, refreshed after a submission.
-  - Polling: only after a submission, every `max(3 s, pollIntervalSeconds)`, stop at 3 min, ×2 back-off on network errors.
+  - History: per problem, fresh 5 min. Details: cached forever once final, never while pending.
+  - File switches: debounced 400 ms, fetch only missing/stale history; no requests while fresh.
+  - In-flight dedup by key. Nothing while the panel is hidden; no background polling or prefetching.
+  - Polling: only the just-submitted submission, every `max(3 s, pollIntervalSeconds)`, stop at 3 min, ×2 back-off on network errors.
+  - GETs retry 429/5xx with back-off (2 s, 4 s / Retry-After); failures show cached data as "may be out of date".
   - One submission at a time.
+  - `cedtGrader.debugRequests` → "CEDT Grader: Requests" channel: method, path, status, cache hit/miss/dedup; numbered HTTP lines; never tokens.
 - **Settings scope:** `baseUrl` and `username` are read from user settings only, so a workspace cannot redirect credentials.
 - **Webview isolation:** all network calls stay in the extension host; the webview has CSP `default-src 'none'`. Insert grader text with `textContent` / attributes only, never `innerHTML`.
 - **Dependencies:** keep them minimal: `cheerio/slim`, `tough-cookie`, Node fetch, esbuild.
@@ -105,7 +114,7 @@ The sidebar (`cedtGrader` Activity Bar container, view `cedtGrader.panel`) is th
   - language dropdown;
   - Submit button.
 - **Result** (active file only): live status, points, verdict tiles, compiler message, improvement line, Resubmit.
-- **History** (server).
+- **History** (API): every submission with relative/exact time, language, score, mini verdict strip, counted marker; expand for details (per test, runtime, memory, compiler message) and "Open this version" / "Compare with current file" (`cedt-grader-submission:` read-only documents, served from the cache).
 - **Problems:** counted score per problem.
 
-Commands remain for keybindings: `cedtGrader.login`, `logout`, `submit`, `chooseProblem`, `showLastResult`, `openStatement`, `refreshProblems`, `focus`.
+Commands remain for keybindings: `cedtGrader.login`, `logout`, `submit`, `chooseProblem`, `showLastResult`, `openStatement`, `refreshProblems`, `refreshHistory`, `showRequestLog`, `focus`.

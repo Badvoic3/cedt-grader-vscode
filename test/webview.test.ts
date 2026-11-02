@@ -42,8 +42,8 @@ const base: ViewState = {
   submit: { enabled: false, busy: false, reason: 'Open a source file to submit it.', label: 'Submit to Grader' },
   result: null,
   gradingElsewhere: null,
-  history: { loading: false, items: [] },
-  problems: { loading: false, loaded: false, items: [], error: null, penaltyNote: null },
+  history: { loading: false, stale: false, error: null, items: [], expanded: null },
+  problems: { loading: false, loaded: false, stale: false, items: [], error: null, penaltyNote: null },
 };
 
 const loggedIn: ViewState = {
@@ -64,8 +64,15 @@ const loggedIn: ViewState = {
     ],
     compileError: false, compilerMessage: null, improvement: 'Counted score improved: 40 → 70.', message: null,
   },
-  history: { loading: false, items: [{ submissionId: 2460977, number: 3, points: 70, status: 'done', comment: 'PP-T', submittedAt: '2026-11-02T12:43:48+07:00', compileError: false }] },
-  problems: { loading: false, loaded: true, items: [{ id: 1360, name: '00_Intro_11', fullName: 'Hello', score: score(100) }, { id: 1271, name: '01_Expr_11', fullName: 'An Expression', score: score(null) }], error: null, penaltyNote: null },
+  history: {
+    loading: false, stale: false, error: null, expanded: null,
+    items: [
+      { submissionId: 2460977, number: 3, points: 70, status: 'done', comment: 'PP-T', submittedAt: '2026-11-02T12:43:48+07:00', language: 'C++', compileError: false, counted: true,
+        verdicts: [{ index: 1, ok: true, kind: 'correct', label: 'Test 1 of 2: Correct' }, { index: 2, ok: false, kind: 'wrong', label: 'Test 2 of 2: Wrong Answer' }] },
+      { submissionId: 2460900, number: 2, points: 0, status: 'compilation_error', comment: 'Compilation error', submittedAt: '2026-11-02T12:30:00+07:00', language: 'C++', compileError: true, counted: false, verdicts: [] },
+    ],
+  },
+  problems: { loading: false, loaded: true, items: [{ id: 1360, name: '00_Intro_11', fullName: 'Hello', score: score(100) }, { id: 1271, name: '01_Expr_11', fullName: 'An Expression', score: score(null) }], error: null, penaltyNote: null, stale: false },
 };
 
 describe.runIf(existsSync(resolve(__dirname, '../esbuild.mjs')))('sidebar webview', () => {
@@ -120,7 +127,7 @@ describe.runIf(existsSync(resolve(__dirname, '../esbuild.mjs')))('sidebar webvie
     expect(doc.querySelector('#sec-current')!.textContent).toContain('Latest: 40 — your best 70 still counts.');
     expect(doc.querySelector('#sec-current .penalty')!.textContent).toBe('-10 AI assist');
     expect(doc.querySelector('#sec-result')!.textContent).toContain('Counted score improved: 40 → 70.');
-    expect(doc.querySelectorAll('.history-row')).toHaveLength(1);
+    expect(doc.querySelectorAll('.history-row')).toHaveLength(2);
     expect(doc.querySelectorAll('#sec-problems .problem-row')).toHaveLength(2);
   });
 
@@ -164,6 +171,51 @@ describe.runIf(existsSync(resolve(__dirname, '../esbuild.mjs')))('sidebar webvie
     expect(doc.querySelector('#sec-result .score')).toBeNull();
     expect(doc.querySelector('#sec-result')!.textContent).toContain('No submission yet');
     expect(doc.querySelector('#sec-current')!.textContent).toContain('Grading 00_Intro_11 for another file');
+  });
+
+  it('history: counted marker, mini strip, expand sends toggle, details and actions', () => {
+    const { doc, sent, post } = boot();
+    post(loggedIn);
+    const rows = doc.querySelectorAll<HTMLButtonElement>('#sec-history .history-row');
+    expect(rows[0].querySelector('.badge.counted')).not.toBeNull();
+    expect(rows[1].querySelector('.badge.counted')).toBeNull();
+    expect(rows[0].querySelectorAll('.mini')).toHaveLength(2);
+    expect(rows[1].textContent).toContain('CE');
+    expect(rows[0].getAttribute('title')).toContain('Submission #2460977');
+    rows[0].click();
+    expect(sent.at(-1)).toEqual({ type: 'toggleSubmission', submissionId: 2460977 });
+
+    post({
+      ...loggedIn,
+      history: {
+        ...loggedIn.history,
+        expanded: {
+          submissionId: 2460977, loading: false, error: null,
+          detail: {
+            submissionId: 2460977, url: 'https://x/submissions/2460977', status: 'done', compilerMessage: null, maxRuntimeMs: 2461, peakMemoryKb: 134016,
+            hasSource: true, sourceFilename: 'sol.cpp',
+            evaluations: [{ index: 1, kind: 'correct', label: 'Test 1: Correct', score: 1, timeMs: 2395, memoryKb: 127952 }],
+          },
+        },
+      },
+    });
+    const detail = doc.querySelector('#sec-history .detail')!;
+    expect(detail.textContent).toContain('2.461 s');
+    expect(detail.textContent).toContain('130.88 MB');
+    expect(detail.querySelectorAll('.evals tbody tr')).toHaveLength(1);
+    const [openBtn, compareBtn] = [...detail.querySelectorAll<HTMLButtonElement>('button.btn')];
+    openBtn.click();
+    expect(sent.at(-1)).toEqual({ type: 'openSubmissionSource', submissionId: 2460977 });
+    compareBtn.click();
+    expect(sent.at(-1)).toEqual({ type: 'compareSubmission', submissionId: 2460977 });
+    doc.querySelector<HTMLButtonElement>('#sec-history summary .icon-btn')!.click();
+    expect(sent.at(-1)).toEqual({ type: 'refreshHistory' });
+  });
+
+  it('history: "may be out of date" note when stale', () => {
+    const { doc, post } = boot();
+    post({ ...loggedIn, history: { ...loggedIn.history, stale: true } });
+    expect(doc.querySelector('#sec-history')!.textContent).toContain('May be out of date');
   });
 
   it('filter narrows the problem list and is remembered (UI state only)', () => {

@@ -51,3 +51,10 @@ export function parseGraderComment(comment: string | null | undefined): Verdict[
     return v;
   });
 }
+
+const WORDS: Readonly<Record<string, string>> = Object.fromEntries(Object.values(CODES).map((c) => [c.kind, c.word]));
+
+/** Word for an evaluation `result` kind (`correct` → `Correct`), or the raw kind. */
+export function resultWord(kind: string | null | undefined): string {
+  return (kind && WORDS[kind]) || kind || 'Unknown';
+}
