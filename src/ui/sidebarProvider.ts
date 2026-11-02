@@ -1,3 +1,4 @@
+import { TIMING } from '../shared/constants';
 import { randomBytes } from 'node:crypto';
 import * as vscode from 'vscode';
 import type { GraderController } from '../controller';
@@ -30,7 +31,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider, vscode.Dispo
       }),
       this.controller.onState((state) => this.post({ type: 'state', state })),
     ];
-    this.controller.focusTarget = (t) => setTimeout(() => this.focus(t), 150);
+    this.controller.focusTarget = (t) => setTimeout(() => this.focus(t), TIMING.focusDelayMs);
     // Nothing is fetched while the panel is hidden; pending loads run when it is shown.
     this.controller.setPanelVisible(view.visible);
     subs.push(view.onDidChangeVisibility(() => this.controller.setPanelVisible(view.visible)));

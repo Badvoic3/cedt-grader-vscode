@@ -9,7 +9,7 @@ import { HOW_LINKED, W, W_SOURCE } from '../src/shared/strings';
 import { groupLabel, VERDICT_LEGEND } from '../src/grader/verdicts';
 import { menuLabelMax, middleEllipsis } from './text';
 import { VirtualList } from './virtualList';
-import { SERVER_SCORE_CAP } from '../src/shared/constants';
+import { PANEL, SERVER_SCORE_CAP } from '../src/shared/constants';
 import { filterProblems, matches, SORTS, sortProblems } from './filters';
 import { installTooltips } from './tooltip';
 import type { FromWebview, HistoryEntry, ProblemFilter, ProblemView, ScoreView, SubmissionDetailView, ToWebview, VerdictView, ViewState } from '../src/shared/messages';
@@ -955,12 +955,12 @@ const problemList = new VirtualList<ProblemView>(document, {
   kind: (p) => (titleParts(p).subtitle ? 'two-line' : 'one-line'),
   render: (p) => problemRow(p, state!, 'list'),
   fallbackHeight: (k) => (k === 'two-line' ? 38 : 24),
-  maxHeight: 420,
+  maxHeight: PANEL.listMaxHeightPx,
   className: 'problem-list',
   onScroll: (top) => {
     ui.listScroll = top;
     clearTimeout(listSaveTimer);
-    listSaveTimer = setTimeout(saveUi, 150);
+    listSaveTimer = setTimeout(saveUi, PANEL.scrollSaveMs);
   },
 });
 let listRestored = false;
@@ -1143,7 +1143,7 @@ window.addEventListener('message', (ev: MessageEvent<ToWebview>) => {
     const pid = state.problem?.id ?? null;
     // The active problem changed because the user opened a file themselves: show its row
     // with a minimal scroll. Never after a click in the list (the list stays where it is).
-    if (pid !== null && pid !== prevPid && Date.now() - lastRowClickAt > 3000) problemList.revealNearest(String(pid));
+    if (pid !== null && pid !== prevPid && Date.now() - lastRowClickAt > PANEL.rowClickWindowMs) problemList.revealNearest(String(pid));
   } else if (m.type === 'focus') {
     if (m.target === 'login') {
       showLoginForm = true;

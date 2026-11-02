@@ -39,7 +39,7 @@ export function affectedByDelete(entries: LocatedEntry[], deletedPath: string, c
 
 /** Stale mappings older than `days` (to remove). */
 export function expired(entries: LocatedEntry[], now: Date, days = STALE_DAYS): LocatedEntry[] {
-  const limit = now.getTime() - days * 86_400_000;
+  const limit = now.getTime() - days * 86_400_000; // days → ms
   return entries.filter((e) => e.entry.staleSince && Date.parse(e.entry.staleSince) < limit);
 }
 

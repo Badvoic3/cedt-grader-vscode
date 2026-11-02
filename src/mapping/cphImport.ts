@@ -1,6 +1,6 @@
 import { copyFile, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
-import { cphProbPath, type CphProblem, type CphTest } from './cph';
+import { cphProbPath, type CphProblem } from './cph';
 
 /**
  * Writes grader test cases into CPH's `.prob` file in CPH's own format
@@ -39,7 +39,6 @@ export function normalizeEol(s: string): string {
   return s.replace(/\r\n?/g, '\n');
 }
 
-export const isGraderTest = (t: CphTest) => t.id >= GRADER_ID_BASE;
 
 export async function importIntoCph(opts: {
   srcPath: string;
@@ -70,7 +69,7 @@ export async function importIntoCph(opts: {
     name: opts.problemName,
     url: opts.problemUrl,
     interactive: false,
-    memoryLimit: 1024,
+    memoryLimit: 1024, // CPH's own defaults for a new problem (src/parser.ts)
     timeLimit: 3000,
     group: 'local',
     tests: [],

@@ -2,17 +2,47 @@
 
 An unofficial homework tool: a standalone VS Code extension that submits the active file to a **cafe-grader-web** server (default `https://cedt-grader.nattee.net`) and shows the verdict and the *counted* score in a sidebar. CPH (`DivyanshuAgrawal.competitive-programming-helper`) is **optional**: everything works without it; when installed we stay compatible (`src/cphIntegration.ts`). The full spec is in `claude-code-prompt.md`.
 
+## Architecture
+
+```
+ VS Code extension host (Node)                                   webviews (sandboxed, CSP default-src 'none')
+ ┌──────────────────────────────────────────────────────────┐    ┌───────────────────────────────────────┐
+ │ extension.ts  commands, serializer, content provider     │    │ sidebar  webview/main.ts               │
+ │ controller.ts GraderController: session, active file,    │◄──►│  sections re-render per ViewState slice│
+ │   matching, results, inline questions, submit + poll     │msgs│  virtualized problem list, tooltips    │
+ │ ui/ sidebarProvider · statementPanel · statusBar         │    │ statement viewer  webview/statement.ts │
+ │ data/ DataService + RequestCache (all grader data),      │    │  bundled pdf.js, zoom, search          │
+ │   StatementStore / TestcaseStore (globalStorage)         │    └───────────────────────────────────────┘
+ │ mapping/ matching, links (.cedt-grader.json +            │      typed messages: src/shared/messages.ts
+ │   workspaceState), files for a problem, CPH .prob        │      texts: src/shared/strings.ts
+ │ grader/ GraderClient → ApiClient (JSON API, JWT)         │      tunables: src/shared/constants.ts
+ │                      → WebSession (cookie, /main/list)   │
+ └──────────────────────────────────────────────────────────┘
+```
+
+- **Extension host** owns every network call, all secrets and all state. Webviews only render `ViewState` and post `FromWebview` messages.
+- **GraderClient** (`src/grader/client.ts`) is the only way to talk to the server: the JSON API is primary; the cookie web session is used only for `/main/list` (penalties, raw-sum, topic tags, exam hint).
+- **DataService** (`src/data/dataService.ts`) is the only cache between UI and client (request discipline below); the controller never calls the client for data directly.
+- **Matching** (`src/mapping/match.ts`): saved link → CPH `.prob` → exact file name → confident suggestion; links live in `.cedt-grader.json` + workspaceState (`src/mapping/store.ts`).
+- `src/grader`, `src/data` and the pure `src/mapping` helpers have no `vscode` import, so they are unit tested directly.
+
 ## Commands
 
 ```bash
-npm test            # vitest: grader layer (fake API + web server), scores, verdicts, mapping/CPH, jsdom webview
-npm run build       # tsc --noEmit + esbuild (dist/extension.js, media/dist/webview.js|css, codicons)
-npm run watch       # esbuild watch
-npm run package     # production build + vsce package
+npm test             # vitest: grader layer (fake API + web server), cache/request counts, scores, verdicts, matching/links/CPH, jsdom webviews
+npm run build        # tsc --noEmit + esbuild (dist/extension.js, media/dist/webview.js|css, statement viewer, codicons, pdf.js)
+npm run typecheck    # tsc --noEmit only (there is no separate linter; strict TS with noUnused* is the lint)
+npm run watch        # esbuild watch
+npm run package      # production build + vsce package → cedt-grader-submit-<version>.vsix
 npx tsx scripts/probe.ts [--list] [--problem <ID>] [--fixtures] [--submit file]   # read-only unless --submit; needs .env
 ```
 
-Press F5 to start an Extension Development Host (`.vscode/launch.json` runs `npm: build` first).
+## Debugging
+
+- F5 starts an Extension Development Host (`.vscode/launch.json` runs `npm: build` first).
+- Setting `cedtGrader.debugRequests` → output channel "CEDT Grader: Requests": every HTTP request (method, path, status, numbered), cache hit / miss / dedup, file searches (`FILE SEARCH`), never tokens. Command "CEDT Grader: Show Request Log".
+- Other errors (e.g. activation) go to the "CEDT Grader" output channel, never to the console.
+- The probe (`scripts/probe.ts`) checks the live protocol with `GRADER_USER` / `GRADER_PASS` from `.env` and can save sanitized fixtures (`--fixtures`); review them before committing.
 
 ## Layout
 
@@ -72,9 +102,9 @@ Press F5 to start an Extension Development Host (`.vscode/launch.json` runs `npm
 | Poll | `GET /api/v1/submissions/{id}` | `status`: `done`/`compilation_error`/`grader_error` are final. Also `points`, `grader_comment` (`PP-T[Px]`), `compiler_message`. |
 | History | `GET /api/v1/problems/{id}/submissions` | All regular submissions, newest first, incl. website ones. |
 | Detail | `GET /api/v1/submissions/{id}` | `source` (own only), `source_filename`, `max_runtime` ms, `peak_memory` KB, `evaluations[{testcase_id, result, score, time ms, memory KB}]`. |
-| Test cases | `GET /api/v1/problems/{id}/testcases`, `/api/v1/testcases/{id}/input`, `/sol` | Phase 3 import. |
 | Test cases | `GET /api/v1/problems/{id}/testcases` (403 = not allowed), `GET /api/v1/testcases/{id}/input`, `/sol` | text/plain; student `preview` access truncates large files: `X-Testcase-Truncated: true`, `X-Testcase-Byte-Size`. Never import a truncated case. |
 | Statement | `GET /api/v1/problems/{id}/files/pdf` | 403 = PDF hidden, 404 = none → fallback `GET /api/v1/problems/{id}/description` `{markdown, description}`. |
+| Me | `GET /api/v1/me` | `full_name` for the Account section, once per session after a token restore. |
 
 **HTML (only what the API lacks)**, via a cookie session opened at login:
 - `GET /` (CSRF) → `POST /login/login` → `GET /main/list`. This page provides:
@@ -109,8 +139,8 @@ Every icon-only button (`iconButton()` in `webview/main.ts`, `btn()` in `webview
 - Suggestions (`scoreCandidates` / `decideSuggestion` in `src/mapping/match.ts`, thresholds `MATCH` in `src/shared/constants.ts`): score = name similarity + `folderTagBonus` when a parent folder is named like a problem tag. Exact name → "Matched by file name". Top score ≥ `suggestMinScore` and ahead by ≥ `suggestMinMargin` → "Suggested" (muted "Suggested from the file name · Use this" line stays visible). Close scores → "Several problems could match this file. Choose one." Below the threshold → "Not linked to a problem", candidates only in the picker.
 - A suggestion is treated like a link for everything read-only (score card, history, results, statement, details, files for this problem, duplicate notice, ✓ in the list), loading only that one problem. Write actions ask once inline (`confirmSuggestion` in `src/mapping/suggestionGate.ts`): Submit ("Submit to <name> (<full name>)?") and Load test cases ("Load the test cases of …?"), [yes] / [Choose another problem]; yes saves the link. New file / linking other files: unchanged. Dropdown, "Use this" and Auto-detect confirm as before.
 - Auto-detect (sparkle button): `resolveProblem` without the saved link; asks before replacing a manual link.
-- Files for a problem: `GraderController.filesForProblem()` is the only source for the duplicate notice, row click / go to file, and the before-submit "changed more recently" check. It merges saved links, auto-matches recorded when a file was open (file name / CPH; never over a manual link or "not linked"; dropped on delete or a rename to a non-matching name) and a cached `workspace.findFiles` for the clean problem name (allowed extensions, "Find file by name" exclusions; runs only while the panel shows the problem; invalidated by file create/delete/rename, 1 s debounce; logged as `FILE SEARCH` in the request log).
-- Notice: same name in different folders → "Another file with the same name also matches this problem: <path>"; otherwise "N files are linked to this problem". Each file shows how it's linked with Open and Unlink (chosen) / "Don't match this file" (name or CPH match → "not linked"); "Unlink the other files". Submit asks (inline, once) when another file for the problem is newer (mtime; dirty = now). `MappingStore.cleanupDuplicates()` (startup and on saving `.cedt-grader.json`) removes legacy+new duplicate keys and duplicate/same-path JSON entries (`countDuplicateEntries`), then tells the user.
+- Files for a problem: `GraderController.filesForProblem()` is the only source for the duplicate notice, row click / go to file, and the before-submit "changed more recently" check. It merges saved links, auto-matches recorded when a file was open (file name / CPH / confident suggestion; never over a manual link or "not linked"; dropped on delete or a rename to a non-matching name) and a cached `workspace.findFiles` for the clean problem name (allowed extensions, "Find file by name" exclusions; runs only while the panel shows the problem; invalidated by file create/delete/rename, 1 s debounce; logged as `FILE SEARCH` in the request log).
+- Notice: same name in different folders → "Another file with the same name also matches this problem." (the files are listed below it); otherwise "N files are linked to this problem". Stable order everywhere (notice, go-to-file pick, submit check): workspace-relative path, natural, case-insensitive (`comparePaths`); the active file is only marked ("this file"), rows never move. Each file shows how it's linked with Open and Unlink (chosen) / "Don't match this file" (name or CPH match → "not linked"); "Unlink the other files". Submit asks (inline, once) when another file for the problem is newer (mtime; dirty = now). `MappingStore.cleanupDuplicates()` (startup and on saving `.cedt-grader.json`) removes legacy+new duplicate keys and duplicate/same-path JSON entries (`countDuplicateEntries`), then tells the user.
 - Unavailable: `resolveProblem` returns `unavailable` for a saved link missing from the loaded list; `ProblemUnavailableError` (ApiClient, 404/403 on `/api/v1/problems/{id}…`, incl. submit) marks it at runtime (`unavailableIds`, cleared when the problem is back in the list). Submit disabled, history kept (stale), statement opens from cache with a "may be out of date" note.
 
 ## Problem list and verdicts (as on the website)
@@ -161,7 +191,7 @@ Every icon-only button (`iconButton()` in `webview/main.ts`, `btn()` in `webview
   - The statement CSP adds `worker-src blob:` (pdf.js worker fetched from `media/dist/pdfjs` and started from a blob URL), `connect-src` for the extension's own resources, and `'unsafe-inline'` styles (pdf.js sets inline styles). `isEvalSupported: false`.
 - **Messages appear once:** connection problems go to the banner only (sections show "may be out of date", no inline error, no toast). Other errors are inline; a toast is shown only when the sidebar is hidden. A language mismatch is one hint + a disabled Submit with a tooltip.
 - **Offline:** no retry loops. Polling stops after 2 consecutive network errors and resumes on Retry or the next successful request (`pendingPoll`). Submit failures say whether anything was sent (`describeSubmitFailure`).
-- **Dependencies:** keep them minimal: `cheerio/slim`, `tough-cookie`, Node fetch, esbuild.
+- **Dependencies:** keep them minimal. Runtime: `cheerio/slim`, `tough-cookie`, `markdown-it`, Node fetch. Bundled at build time: `pdfjs-dist`, `@vscode/codicons`. Dev: esbuild, TypeScript, vitest, jsdom, tsx, vsce.
 
 ## Exams / contests (section 2b; kept deliberately small)
 
@@ -182,7 +212,7 @@ The sidebar (`cedtGrader` Activity Bar container, view `cedtGrader.panel`) is th
   - match line under the selector ("Chosen by you" / "Matched by file name" / "Matched from CPH data"; a suggestion is a muted "Suggested from the file name · Use this"; choosing from the dropdown confirms too); notes for ambiguous / stale mappings;
   - "Not linked to a problem" (Choose problem / Auto-detect) after "Unlink this file": the file is stored as explicitly unlinked (`cedtGrader.unlinked`), so auto-detection leaves it alone until the user chooses or auto-detects;
   - "files for this problem" notice (see Problem links);
-  - "Load test cases" (only when `has_testcase` and the file is mapped, not just suggested; CPH or files);
+  - "Load test cases" (when `has_testcase`; for a suggestion it asks once first; CPH or files);
   - counted-score card (counted, best, latest, attempts, penalty, "your best still counts");
   - language dropdown;
   - Submit button.
@@ -199,8 +229,9 @@ Statement viewer (`webview/statement.ts`, `webview/zoom.ts`): pinch (Ctrl+wheel)
 | What | Where |
 |---|---|
 | Default grader URL, website paths | `src/shared/constants.ts` (`DEFAULT_BASE_URL` — also `package.json` default; `WEB_PATHS`) |
-| Timings: poll interval/timeout/back-off, GET retries, debounce, history TTL, request timeout, file-event debounce | `src/shared/constants.ts` `TIMING` (poll interval also setting `cedtGrader.pollIntervalSeconds`) |
-| Limits (file search sizes, remembered auto-matches), stale-link days | `src/shared/constants.ts` `LIMITS`, `STALE_LINK_DAYS` |
+| Timings: poll interval/timeout/back-off, GET retries, debounce, history TTL, request timeout, file-event debounce, token fallback, daily cleanup | `src/shared/constants.ts` `TIMING` (poll interval also setting `cedtGrader.pollIntervalSeconds`) |
+| Webview timings and sizes (tooltip delay, list height, scroll save, row-click window, statement state save) | `src/shared/constants.ts` `PANEL` |
+| Limits (file search sizes, remembered auto-matches, recently opened), stale-link days | `src/shared/constants.ts` `LIMITS`, `STALE_LINK_DAYS` |
 | Suggestion confidence (threshold, tie margin, folder/tag bonus, picker cut-off) | `src/shared/constants.ts` `MATCH` |
 | Penalty cap / "solved" threshold (server literal 100) | `SERVER_SCORE_CAP` in `src/shared/constants.ts`; "out of" uses the problem's `full_score` |
 | Languages / extensions | from the server (`GET /api/v1/languages` `ext`); fallback table + aliases in `src/grader/languages.ts`; non-source (never auto-picked) in `src/mapping/newFileLanguage.ts`; binary extensions in `src/mapping/findByName.ts` |
@@ -213,7 +244,19 @@ Statement viewer (`webview/statement.ts`, `webview/zoom.ts`): pinch (Ctrl+wheel)
 
 No course- or problem-specific names in code (problem names come from the server; `test/scalability.test.ts` checks).
 
-Phase 5 (not started): install guide + walkthrough + troubleshooting, cache management (`cedtGrader.cacheMaxMB`, LRU, daily cleanup, "Clear Cached Data" incl. stale mappings) — see spec.
-Phase 6 (not started): Thai translation (`cedtGrader.displayLanguage`, vscode.l10n, package.nls.th.json), plain-language strings in one place, more customization — see spec.
+## Known limitations
 
-Commands remain for keybindings: `cedtGrader.login`, `logout`, `submit`, `chooseProblem`, `clearMapping`, `loadTestcases`, `showLastResult`, `openStatement`, `refreshProblems`, `refreshHistory`, `showRequestLog`, `focus`.
+- Contest-window filtering of the counted score is not applied (the API doesn't apply it either); exams only get the warning in section 2b.
+- Hint / AI penalties need the `/main/list` HTML page; without a web session (password not remembered and the session gone) the panel shows best scores and says so.
+- The API has no "binary language" flag: non-source languages (Archive, Digital, Viva, Text) are recognised by name / extension (`src/mapping/newFileLanguage.ts`).
+- The problem picker dropdown shows at most 50 matches ("N more. Refine the search."); the Problems list itself has no limit.
+- The controller (vscode-dependent) has no unit tests; its rules are kept in pure, tested helpers (`problemFiles.ts`, `suggestionGate.ts`, `match.ts`, `mappingOps.ts`, `paths.ts`) and the webview is tested in jsdom.
+- No cache size limit / "Clear Cached Data" yet (Phase 5).
+- English only; texts are already in `src/shared/strings.ts`, ready for Phase 6.
+
+## Not done yet
+
+- Phase 5: install guide, walkthrough, troubleshooting, cache management (`cedtGrader.cacheMaxMB`, LRU, daily cleanup, "Clear Cached Data" incl. stale mappings), packaging polish — see spec.
+- Phase 6: Thai translation (`cedtGrader.displayLanguage`, vscode.l10n, package.nls.th.json), plain-language review, more customization — see spec.
+
+Commands (kept for keybindings; the panel is the primary interface): `cedtGrader.login`, `logout`, `submit`, `chooseProblem`, `clearMapping`, `loadTestcases`, `showLastResult`, `openStatement`, `refreshProblems`, `refreshHistory`, `showRequestLog`, `openSettings`, `focus`.

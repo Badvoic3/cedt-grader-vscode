@@ -35,10 +35,6 @@ export function pathKey(p: string, caseInsensitive = CASE_INSENSITIVE_FS): strin
   return caseInsensitive ? n.toLowerCase() : n;
 }
 
-export function samePath(a: string, b: string, caseInsensitive = CASE_INSENSITIVE_FS): boolean {
-  return pathKey(a, caseInsensitive) === pathKey(b, caseInsensitive);
-}
-
 /**
  * New path for `p` when `oldPath` (a file, or a folder containing it) moved
  * to `newPath`; null if unaffected. Compared with `pathKey`, so NFD/NFC and

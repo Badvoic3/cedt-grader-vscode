@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { countDuplicateEntries, lookup, parseMappingFile, reverseIndex, serializeMappingFile } from '../src/mapping/mappingFile';
 import { reconnectCandidates } from '../src/mapping/mappingOps';
-import { normalizeRelPath, pathKey, remapPath, samePath } from '../src/mapping/paths';
+import { normalizeRelPath, pathKey, remapPath } from '../src/mapping/paths';
+
+const samePath = (a: string, b: string, ci: boolean) => pathKey(a, ci) === pathKey(b, ci);
 
 const THAI_NFC = 'โจทย์ข้อ1.cpp'.normalize('NFC');
 const THAI_NFD = 'โจทย์ข้อ1.cpp'.normalize('NFD');

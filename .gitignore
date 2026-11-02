@@ -12,3 +12,8 @@ coverage/
 .DS_Store
 *.bak-*
 media/dist/
+
+# local test data from running the extension in this repo
+.cph/
+.cedt-grader.json
+*.prob.bak

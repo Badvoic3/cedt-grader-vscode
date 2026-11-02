@@ -1,30 +1,28 @@
 # Build "CEDT Grader Submit": a VS Code extension for cedt-grader.nattee.net
 
-You are working in an empty git repo. Build a VS Code extension (TypeScript) that lets students submit the active source file to the CEDT Grader and see the verdict inside VS Code. It is a standalone grader extension. **Competitive Programming Helper (CPH)** (`DivyanshuAgrawal.competitive-programming-helper`) is optional: everything works without it, and when it is installed the extension stays compatible with it (see "CPH is optional" below).
+**Status (v0.5.0):** Phases 1–4 are done (see each phase for what changed from the original plan). Phase 5 and Phase 6 are next. `CLAUDE.md` describes the current code; this file is the spec.
 
-Work in the phases below. Use plan mode first, show me the plan, then build phase by phase. Commit after each phase with a clear message. Stop and ask me at every **CHECKPOINT**.
+A VS Code extension (TypeScript) that lets students submit the active source file to the CEDT Grader and see the verdict inside VS Code. It is a standalone grader extension. **Competitive Programming Helper (CPH)** (`DivyanshuAgrawal.competitive-programming-helper`) is optional: everything works without it, and when it is installed the extension stays compatible with it (see "CPH is optional" below).
+
+Work in the phases below. Plan first, show me the plan, then build phase by phase. Commit after each phase with a clear message. Stop and ask me at every **CHECKPOINT**.
 
 ---
 
 ## 1. Facts about the grader (already inspected; treat as the spec)
 
-The site runs **cafe-grader-web** (rev 4.7.3cu), an open-source Ruby on Rails app: https://github.com/nattee/cafe-grader-web. The table below is the HTML-form protocol (Rails CSRF tokens and a session cookie). The server also has a JSON API (section 1b), which is now the primary path. When something below is unclear, read the Rails routes, controllers and views in that repo instead of guessing.
+The site runs **cafe-grader-web** (rev 4.7.3cu), an open-source Ruby on Rails app: https://github.com/nattee/cafe-grader-web. The JSON API (section 1b) is the primary path. HTML (Rails CSRF tokens and a session cookie) is used only for what the API lacks. When something is unclear, read the Rails routes, controllers and views in that repo instead of guessing.
+
+HTML requests still used (cookie web session opened at login):
 
 | Step | Request | Details |
 |---|---|---|
-| CSRF token | `GET /` | `<meta name="csrf-token" content="...">` or hidden input `authenticity_token`. Keep all cookies (a `uuid` cookie is set before login). |
-| Login | `POST /login/login` | `application/x-www-form-urlencoded`: `authenticity_token`, `login`, `password`, `commit=Login`. Success = session cookie + redirect to the problem list. Plain username/password, no SSO. |
-| Problem list | `GET /main/list` | HTML table, one row per problem. Links include `/problems/{id}/download/statement`, `/submissions/prob/{id}`, `/submissions/direct_edit_problem/{id}`, `/testcases/show_problem/{id}`. Rows show problem name, best score, latest submission id. |
-| Submit page | `GET /submissions/direct_edit_problem/{problemId}` (and `/submissions/{id}/edit`) | Contains the submit form. Read the allowed languages from `<select name="language_id">` here; they differ per problem (e.g. `2 = C++`). |
-| Submit | `POST /main/submit` | `multipart/form-data`: `authenticity_token`, `submission[problem_id]`, `language_id`, `editor_text` (the source code as text), optionally `file` (file upload), `commit`. Use a fresh CSRF token from the submit page. |
-| Poll result | `GET /submissions/get_latest_submission_status/{userId}/{problemId}` | Returns a `<turbo-stream action="update" target="latest_status">` HTML fragment containing: submission id (`/submissions/{id}`), number of tries, time, score (e.g. `70.0`), and a `.verdict-strip` with `data-comment="PPPPPPPPP----PP-PPP-"` plus one `.verdict-tile` per test with classes like `verdict-correct` / `verdict-wrong` and a title like `Test 10 of 20: Wrong Answer`. |
-| Compiler msg | `POST /submissions/{id}/compiler_msg` | Turbo request (needs CSRF header `X-CSRF-Token` and `Accept: text/vnd.turbo-stream.html`). |
-| Per-test detail | `POST /submissions/{id}/evaluations` | Same as above. |
+| CSRF token | `GET /` | `<meta name="csrf-token" content="...">` or hidden input `authenticity_token`. Keep all cookies (a `uuid` cookie is set before login). A POST with a bad token silently runs logged out (Rails null session). |
+| Login | `POST /login/login` | `application/x-www-form-urlencoded`: `authenticity_token`, `login`, `password`, `commit=Login`. Success = session cookie + redirect to the problem list. The `accept_agree` checkbox is never ticked automatically. |
+| Problem list | `GET /main/list` | Per-problem hint / AI-assist penalty and raw-sum mode (score column), topic pills (`.topic-badge`), and the page header for the exam hint (section 2b). |
 
 Notes:
-- `userId` must be discovered after login (it appears in `get_latest_submission_status/{userId}/...` URLs in page HTML, or find it from the Rails views). Do not hard-code it.
-- Supported languages in the web editor: C, C++, Python, Java, Rust, Go, PHP, Haskell, Ruby, Pascal, PostgreSQL, Digital. Always use the per-problem `language_id` list; map file extensions to language names (`.cpp/.cc/.cxx` → C++, `.c` → C, `.py` → Python, `.java` → Java, `.rs` → Rust, `.go` → Go, `.php` → PHP, `.hs` → Haskell, `.rb` → Ruby, `.pas` → Pascal, `.sql` → PostgreSQL), and ask with a quick-pick if ambiguous.
-- The Testcases page only works for some problems (others redirect to `/main/list`). Treat it as optional.
+- Submitting, polling, history, details, test cases and statements all use the JSON API; the HTML submit page, `get_latest_submission_status`, compiler-message and evaluation Turbo requests are no longer used.
+- Languages and extensions come from `GET /api/v1/languages` (`ext`); a built-in table (`.cpp/.cc/.cxx` → C++, `.c` → C, `.py` → Python, …) is only the fallback when the server list is unavailable or doesn't list an extension. Allowed languages per problem come from `permitted_languages`.
 - Verdict strips follow the website exactly (see Phase 4 "Verdict strip"); anything that isn't a valid strip is shown as plain text.
 
 ## 1b. JSON API (primary path)
@@ -42,6 +40,8 @@ The live server has cafe-grader's `/api/v1` (JWT). Confirmed from `config/routes
 | Poll | `GET /api/v1/submissions/{id}` | `status` (`submitted`, `evaluating`, `compilation_success` → pending; `done`, `compilation_error`, `grader_error` → graded), `points`, `grader_comment`, `compiler_message`, `evaluations`. |
 | History | `GET /api/v1/problems/{id}/submissions` | Regular submissions, newest first. |
 | Test cases | `GET /api/v1/problems/{id}/testcases`, `GET /api/v1/testcases/{id}/input`, `/sol` | Only when the user may view them (Phase 3 import). |
+| Statement | `GET /api/v1/problems/{id}/files/pdf`, `GET /api/v1/problems/{id}/description` | Section 1e. |
+| Me | `GET /api/v1/me` | `full_name` for the Account section. |
 
 HTML is still used for: `/main/list` (hint/AI-assist penalties, raw-sum mode, and the `isContestPage` exam hint), through a cookie web session opened at login.
 
@@ -51,7 +51,7 @@ From `MainController#prepare_list_information`, `app/views/main/_problem.html.ha
 - Counted score = max points over all *regular* submissions (not the latest; test drives and repaired copies are excluded).
 - With hints or AI assists: counted = max(0, min(best, 100 − hint_cost − ai_assist_cost)) (cost capped at 100).
 - Problems whose live dataset is in "raw sum" mode show the raw best score without this cap.
-- In contest mode only submissions inside the contest window count (the API's `best_score` does not apply this filter).
+- In contest mode only submissions inside the contest window count (the API's `best_score` does not apply this filter). **Known limitation:** the extension doesn't apply it either; exams only get the warning in section 2b.
 - The API has no hint/AI cost data, so it is read from `/main/list` (green bar = adjusted score, red bar = penalty, "Full score reduced by N", "Hint: n, AI Assist: n") and labelled "from problem list".
 - Display: "Counted score" (big), best, latest, attempts, and the penalty ("-10 AI assist"). If the latest is lower, say so ("Latest: 40 — your best 70 still counts"). After each submission, say whether it improved the counted score. The problem list shows the counted score per problem. The README notes that the instructor's final grading may differ.
 
@@ -111,17 +111,17 @@ CPH is optional (still compatible):
 - CPH is never declared as a dependency or in an extension pack.
 - Tests: all features with CPH absent (getExtension → undefined), test-case import to files, CPH-present path unchanged.
 
-How the problem was chosen: a small icon next to the problem name with a tooltip: "Chosen by you", "Matched by file name", "Matched from CPH data" (only when CPH data was actually used), "Suggested — click to confirm". Only "Suggested" stands out (warning color and a Confirm button); the others are subtle.
+How the problem was chosen: a small text line with its icon under the problem selector: "Chosen by you", "Matched by file name", "Matched from CPH data" (only when CPH data was actually used). A suggestion is a muted "Suggested from the file name · Use this" line (see Phase 3 items 3 and 5).
 
-Tooltips and accessibility: every icon-only button (sidebar, problem picker, history, results, statement viewer, error banner) has a tooltip (`title`) and the same `aria-label` (e.g. "Copy problem name", "Open statement", "Go to linked file", "Refresh history", "Remove link", "Open in browser", "Compare with current file"). Disabled buttons explain why in the tooltip. A test fails if any icon button lacks them.
+Tooltips and accessibility: every icon-only button (sidebar, problem picker, history, results, statement viewer, error banner) has a tooltip and the same `aria-label` (e.g. "Copy problem name", "Open statement", "Go to linked file", "Refresh history", "Unlink this file", "Open in browser", "Compare with current file"). Tooltips use the one custom tooltip component (Phase 4), never native `title`. Disabled buttons explain why in the tooltip. A test fails if any icon button lacks them.
 
 ## 2. Hard rules
 
 - **Never** hard-code, log, print or commit credentials, cookies or CSRF tokens. Store the password in VS Code `context.secrets`; the username can be a setting.
 - For the standalone test script, read credentials from environment variables `GRADER_USER` / `GRADER_PASS` (via a `.env` file). Add `.env` to `.gitignore` before creating it. **Do not ask me to paste my password into the chat**; I will fill `.env` myself.
-- Be gentle with the server: poll every 5 seconds (the site's own default), only after a submission, stop when a score appears or after 3 minutes, and back off on errors. No parallel submissions, no bulk scraping.
+- Be gentle with the server: poll only the just-submitted submission, every 5 seconds (the site's own default; never below 3), stop when it is final or after 3 minutes, and back off on errors. No parallel submissions, no bulk scraping, no background polling (request discipline in section 1d).
 - Base URL is a setting (`cedtGrader.baseUrl`, default `https://cedt-grader.nattee.net`) so it works with other cafe-grader servers.
-- Handle session expiry: if a request redirects to the login page, log in again once and retry.
+- Handle session expiry: on a 401 (API) or a redirect to the login page (web session), log in again once with the stored password and retry; never retry a failed login (the server throttles them).
 - Follow the short **Exams / contests** section below.
 - Prefer Node 18+ built-in `fetch`; use `tough-cookie` (or a small manual cookie jar) for cookies, `cheerio` for HTML parsing. Keep dependencies minimal and bundle with `esbuild`.
 
@@ -136,22 +136,22 @@ Contests on this grader are only used for exams, and this is an unofficial homew
 
 ## 3. Phases
 
-### Phase 1: Protocol proof (standalone script)
-- Create `scripts/probe.ts` (run with `npx tsx`) and a `src/grader/` module with a `GraderClient` class: `login()`, `listProblems()`, `getLanguages(problemId)`, `submit(problemId, languageId, source)`, `pollLatest(problemId)`, `getCompilerMessage(submissionId)`.
-- Parse everything with cheerio into typed objects (`Problem`, `Language`, `SubmissionStatus { id, score, tries, verdicts: {index, ok, label}[] }`).
-- Save sample HTML responses I fetch into `test/fixtures/` (strip CSRF tokens, cookies, names and student IDs before saving).
-- Add `isContestPage(html)` (see section 2b); the probe prints its result.
-- Unit-test every parser against the fixtures with `vitest`.
-- **CHECKPOINT:** tell me the exact command to run the probe against the real site with a problem ID I choose, then wait for my output before Phase 2.
+### Phase 1: Protocol proof (standalone script) — DONE
+- `scripts/probe.ts` (`npx tsx`, credentials from `.env`) and `src/grader/` with `GraderClient`; fixtures saved sanitized (`--fixtures`: CSRF tokens, cookies, names, student IDs, user id and submission source removed); `isContestPage(html)`; parsers unit-tested with vitest.
+- Changed from the original plan: the HTML submit/poll protocol was replaced by the JSON API (section 1b) after the probe confirmed `/api/v1`; the full contest detector was cut down to the exam hint (section 2b).
 
-### Phase 2: Extension skeleton
+### Phase 2: Extension skeleton — DONE
 - Scaffold a TypeScript extension (equivalent of `yo code`, but hand-written is fine) with `package.json` contributions, `esbuild` bundling, launch config for F5 debugging.
 - Commands: `CEDT Grader: Log In`, `CEDT Grader: Log Out`, `CEDT Grader: Submit Current File`, `CEDT Grader: Choose Problem for This File`, `CEDT Grader: Show Last Result`, `CEDT Grader: Open Problem Statement`.
 - Settings: `cedtGrader.baseUrl`, `cedtGrader.username`, `cedtGrader.pollIntervalSeconds` (min 3, default 5), `cedtGrader.confirmBeforeSubmit` (default true).
 - The submit command runs the `isContestPage` warning from section 2b before submitting.
-- The commands stay (so keyboard shortcuts and the command palette keep working), but the **sidebar GUI from Phase 4 is the primary interface**. Build the skeleton with the sidebar in mind: commands and the webview call the same controller.
+- The commands stay (so keyboard shortcuts and the command palette keep working), but the **sidebar GUI from Phase 4 is the primary interface**. Commands and the webview call the same controller.
+- Added later: `cedtGrader.debugRequests`, `statementBeside`, `defaultLanguage`; commands Show Request Log, Reload Submission History, Clear Problem for This File, Load Test Cases, Open Settings, Show Panel.
 
-### Phase 3: Problem linking and CPH integration
+### Phase 3: Problem linking and CPH integration — DONE
+
+Changed from the original plan (later requests win): test cases come from the API instead of the HTML Testcases page (item 6); CPH became optional (section 1f); the "Change" button and the purple Confirm button were removed (the dropdown and the muted "Use this" line do that); "Keep only this file" became "Unlink the other files"; "most recently edited first" became a stable path order; modal questions became inline panel questions; suggestions now have a confidence threshold and behave like links for read-only features.
+
 
 1. **Problem cache:** the problem list (`/api/v1/problems` + `/main/list` penalties) is fetched once per session and on Refresh; cached in memory and in workspace state with a timestamp (shown immediately after a restart, still refetched once per session). Never fetched on keystrokes or editor switches. `has_testcase` comes from it.
 2. **Name normalization:** file names (without extension) and problem names: zero-width characters (U+200B/C/D, U+FEFF) removed, trimmed, lowercased; spaces, `-`, `_` and `.` are the same separator, repeats collapse.
@@ -162,7 +162,7 @@ Contests on this grader are only used for exams, and this is an unofficial homew
    4. otherwise a suggestion, by match score (name similarity + a bonus when a parent folder is named like a problem tag; constants `MATCH` in the config module): top score at or above the threshold and clearly ahead → "Suggested" (never saved automatically; the muted "Suggested from the file name · Use this" line stays visible); top candidates close in score → "Several problems could match" with a choice; below the threshold → not used ("Not linked to a problem"), candidates only in the picker.
    - If more than one problem matches equally, don't choose; ask.
    - Mappings live in workspace state keyed by the file's path relative to its workspace folder, plus `.cedt-grader.json` in the workspace root.
-4. **Manual control:** searchable picker (name or id); a manual choice is saved and overrides auto-detection. Clear the mapping from the panel ("Remove link") or the command "Clear Problem for This File". An icon next to the problem name shows how it was chosen (section 1f), with a Change button; a suggestion has a Confirm button.
+4. **Manual control:** searchable picker (name or id); a manual choice is saved and overrides auto-detection. Clear the link from the panel ("Unlink this file", item 15) or the command "Clear Problem for This File". A text line under the selector shows how it was chosen (section 1f).
 5. **Suggestions work like links, with safety for writes:** every read-only feature (counted score, best/latest/attempts, history, results, statement, problem details, files for this problem, duplicate notice, ✓ in the list) works for a suggestion, with the same caching and request rules (only the top suggestion is loaded). Write actions ask one light, non-modal question while the match is a suggestion: Submit ("Submit to <name> (<full name>)?" [Submit] [Choose another problem]) and Load test cases (same style); answering yes saves the link, so it is not asked again. New file / linking other files unchanged; the dropdown, "Use this" and Auto-detect confirm as before. The exam warning (section 2b) is not affected by mapping.
 6. **Load test cases** (replaces the earlier optional import; CPH optional, see section 1f):
    - API (confirmed in `problems_controller.rb#testcases`, `testcases_controller.rb`): `GET /api/v1/problems/{id}/testcases` → `[{id, num, group, group_name, weight, access, input_bytes, sol_bytes}]` (403 = not allowed); `GET /api/v1/testcases/{id}/input` and `/sol` → text/plain. For students (`access: "preview"`) large files are cut off and the response has `X-Testcase-Truncated: true` and `X-Testcase-Byte-Size`. A truncated case is never imported; it is skipped and reported ("Loaded 5 of 8 test cases; 3 were too large to download").
@@ -190,7 +190,7 @@ Contests on this grader are only used for exams, and this is an unofficial homew
     - CPH names its `.prob` after the full source path and does not handle renames (no rename/delete listeners in its source). After a rename inside VS Code the extension offers once: "Move CPH test cases to the new file too?" → copies the `.prob` to the name CPH expects for the new path (srcPath, and url when it held the old path, updated), keeps the old one as `.bak`, never overwrites an existing `.prob`.
 11. **Auto-detect button** next to the problem selector: re-runs matching for the active file (file name, CPH data, suggestions) and shows the result. If a manual link exists, ask before replacing it.
 12. **Duplicate warnings:**
-    - Two or more files linked to the same problem: a gentle notice in the panel ("2 files are linked to this problem") with a list to jump to each and "Keep only this file" (unlinks the others; files untouched). Not an error (drafts are normal). Before submitting, if another linked file for the same problem was modified more recently, ask "Submit this file? <other file> was changed more recently."
+    - Two or more files for the same problem (item 17): a gentle notice in the panel with a list to jump to each and "Unlink the other files" (files untouched). Not an error (drafts are normal). Before submitting, if another file for the same problem was modified more recently, ask once (inline) "Submit this file? <other file> was changed more recently."
     - The same file linked twice (old absolute-path key + new key) or duplicate / same-path entries in `.cedt-grader.json`: cleaned up automatically (startup and when the file is saved) with a short message.
 13. **Problem no longer available** (missing from `GET /api/v1/problems`, or 404/403 from a problem endpoint, including submit):
     - The link is kept and marked "This problem is no longer available on the grader" with Change problem / Remove link.
@@ -201,10 +201,12 @@ Contests on this grader are only used for exams, and this is an unofficial homew
 16. **One path normalization** for every link path (mappings, `.cedt-grader.json`, renames, reverse lookup, reconnect): NFC, "./" and ".." resolved, "/" separators, workspace-relative, case-insensitive comparison on macOS/Windows. Duplicate cleanup really rewrites `.cedt-grader.json` and reports only real changes, once.
 17. **Files for this problem** (one function for the duplicate notice, row click / go to file and the before-submit check): saved links + auto-matches remembered when an open file matched by name or CPH data (never over a manual link or "not linked"; dropped on delete or a rename to a non-matching name) + one cached `findFiles` per problem for the clean name (allowed extensions, "Find file by name" exclusions; only while the panel shows the problem; refreshed on file create/delete/rename, debounced; logged as a file search). Wording: "Another file with the same name also matches this problem." / "N files are linked to this problem"; each file with how it's linked, Open, Unlink (chosen) or "Don't match this file" (name match), and "Unlink the other files". Stable order: workspace-relative path, natural, case-insensitive; the active file is marked in place.
 - Tests: normalization, the full matching order, ambiguous matches, stale mappings, `.prob` parsing (sanitized fixture), import never deleting existing cases, truncated cases skipped, backup created, 403 handled, clean-name copy, new file without overwrite, reverse lookup, single file / folder rename, reconnect prompt (one / several candidates), deleted → stale → expired after 30 days, CPH `.prob` moved with backup.
-- **CHECKPOINT:** F5 test list (file named like a problem, a file with a CPH .prob, a file with no match, changing the mapping, loading test cases, renames/moves).
+- Also tested: path normalization (./, NFD/NFC, case), files for a problem (chosen + name-matched, same name in two folders, suggestions, "not linked", renames/deletes, one file search per problem until a file event, stable order), suggestion thresholds / ties / folder-tag bonus, the ask-once gate for writes.
 
-### Phase 4: Sidebar GUI (primary interface)
-Instead of relying on the command palette, build a sidebar GUI like the CPH and Claude extensions.
+### Phase 4: Sidebar GUI (primary interface) — DONE
+A sidebar GUI like the CPH and Claude extensions, instead of relying on the command palette.
+
+Changed from the original plan (later requests win): History shows every submission (not "the last few"); clicking a problem row opens its file(s) instead of linking (linking is explicit: dropdown, right-click "Link to <file>"); the contest badge was dropped (section 2b); the "…" menus were tried and undone (icons visible + right-click menus); the problem list is virtualized with no row limit.
 
 - Add an Activity Bar view container "CEDT Grader" with its own icon (SVG, monochrome so it follows the theme) containing one webview view, using a `WebviewViewProvider`.
 - The webview is the main interface. Sections:
@@ -213,10 +215,10 @@ Instead of relying on the command palette, build a sidebar GUI like the CPH and 
      - When the token expires (401), log in again silently with the stored password; show the login form only if that fails. Never retry a failed login automatically.
      - Normal password input (`autocomplete="current-password"`) so password managers can fill it, and pasting works.
      - "Log out" removes both the token and the stored password.
-  2. **Current problem:** shows the active editor's file, the mapped problem (with a searchable picker from `/main/list`), a language dropdown filled from that problem's allowed languages, and a big Submit button.
+  2. **Current problem:** shows the active editor's file, the linked problem (with a searchable picker from the problem list), a language dropdown filled from that problem's allowed languages, and a big Submit button.
   3. **Result:** live status while grading, then score, a colored verdict strip (one tile per test, tooltip with the label), compiler message if compilation failed, link to the submission, and Resubmit.
   4. **History:** every submission for this problem, expandable (see section 1d).
-  5. **Problems:** a searchable list of problems with best score; clicking one maps it to the current file or opens its statement.
+  5. **Problems:** a searchable, filterable, sortable list of all problems with the counted score; clicking a row opens its file(s) (Phase 3 item 14); row icons: copy name, go to / find file, new file, statement.
 - Communication only through `postMessage` with typed messages in a shared types file. All network calls stay in the extension host, never in the webview.
 - Follow the active editor: when the user switches files, the panel updates.
 - Use VS Code theme CSS variables and `@vscode/codicons`; it must look right in light, dark and high-contrast themes and at narrow sidebar widths.
@@ -235,7 +237,7 @@ Instead of relying on the command palette, build a sidebar GUI like the CPH and 
   - A "?" legend popover ("Reading the results"), like the website's.
   - Tests for every code, groups and the plain-text fallback.
 - Problem header:
-  - The match source is a small text line with its icon under the problem selector ("Chosen by you", "Matched by file name", "Matched from CPH data"; "Suggested from the file name" in warning color with Confirm).
+  - The match source is a small text line with its icon under the problem selector ("Chosen by you", "Matched by file name", "Matched from CPH data"; a suggestion is the muted "Suggested from the file name · Use this").
   - The name isn't repeated: when `full_name` starts with the name followed by ":" ("104_68_1_exam2_P1: Scholarship"), show "104_68_1_exam2_P1 #1643" with "Scholarship" as subtitle (also in the lists).
   - The score pill in problem rows has a tooltip ("Counted score: 70 / 100 (your best submission…) · 3 attempts" or "Not attempted yet") and the same colors as scores elsewhere.
 - Tooltips: one custom tooltip component in all webviews instead of native `title` tooltips.
@@ -248,7 +250,7 @@ Instead of relying on the command palette, build a sidebar GUI like the CPH and 
 - Verdict strips with many tests: the History row strip used to be a single non-wrapping line cut at 40 tiles and clipped by the row (with more than ~10 tests most results vanished). Now every tile is shown, strips wrap at any sidebar width, a group is never split or shrunk (it moves to the next line as one box and only wraps inside when wider than the strip), and 100+ tests work. Tests with 12, 40 and 120 tests and groups.
 - Account section: full name from `GET /api/v1/me` (`full_name`, confirmed in `users_controller.rb#me`; the login response carries the same) with the login ID smaller below; Thai names display correctly.
 - CPH tip (when CPH is not installed and the problem has test cases): a small dismissible tip "Want to run test cases inside VS Code? Install the Competitive Programming Helper (CPH) extension." with Install / Not now / Don't show again. Never more than once per session. (The Load test cases flow offers it too.)
-- Light cleanup of the panel, only where it clearly helps: consistent spacing, alignment and button sizes; one icon-button style; a "…" menu only for rows with more than 4 icons. Don't remove features, move main buttons, or add clicks to common actions (submit, change problem, view result). **Propose the layout changes first and wait for approval.**
+- Light cleanup of the panel (approved): consistent spacing, alignment and button sizes; one icon-button style. Don't remove features, move main buttons, or add clicks to common actions (submit, change problem, view result); propose layout changes first and wait for approval.
 - Statement viewer fixes:
   - Pinch zoom: trackpad pinch arrives as `wheel` events with `ctrlKey = true`; zoom the pdf.js view smoothly around the cursor (`preventDefault` so VS Code's own zoom doesn't react). Also Cmd/Ctrl + / - / 0 (reset = fit width), and the toolbar buttons.
   - No PDF refetch when the panel is hidden and shown (retainContextWhenHidden), the tab is closed and reopened (disk cache), or VS Code restarts (panel serializer + disk cache). Verified with the debug request log.
@@ -258,14 +260,10 @@ Instead of relying on the command palette, build a sidebar GUI like the CPH and 
 - Calmer dialogs: inline panel questions with plain buttons; modals only for irreversible / data-loss actions (overwrite, clear cached data, exam submit).
 - History tile tooltips (strip tiles, group boxes, per-test tiles) use the custom tooltip.
 - Scalability: languages and extensions from `GET /api/v1/languages` (table only as fallback); "out of" from `full_score`, with the server's 100 cap as one named constant; timings, limits and URLs in `src/shared/constants.ts`; user-facing text in `src/shared/strings.ts`; no course-specific names in code; "Where to change things" in `CLAUDE.md`.
-- Update `CLAUDE.md` and the README with the new UI.
-- Plan first and show a sketch of the panel layout, then build it. **CHECKPOINT:** explain how to test it with F5.
 
-### Phase 5: Quality and packaging
-- Tests: parsers (fixtures), `GraderClient` with mocked fetch (login, expired session re-login, submit, poll timeout), extension-to-language mapping.
-- `README.md` for students: install from `.vsix`, log in, map a file, submit; a note on using it together with CPH; a privacy note (password stays in the OS keychain via VS Code SecretStorage).
-- `npx @vscode/vsce package` produces a `.vsix`. Add `CHANGELOG.md` and an MIT `LICENSE`.
-- Write a `CLAUDE.md` for this repo summarising the protocol table above, the hard rules, and the build/test commands, so future sessions have context.
+### Phase 5: Quality and packaging — NEXT
+Already in place (keep current): tests for parsers, `GraderClient` with a fake server (login, expired session re-login, submit, poll timeout, back-off), language mapping, request counts; `README.md` with a privacy note and "Works with CPH"; `CHANGELOG.md` (from v0.5.0); `CLAUDE.md`.
+- `npx @vscode/vsce package` produces a `.vsix` without warnings (repository / license fields, icon, `.vscodeignore` checked). Add an MIT `LICENSE` (confirm the copyright holder with me).
 - Clear install guide:
   - README "Install" for students who have never installed an extension from a file: get the .vsix; Extensions → "…" → "Install from VSIX…", choose the file, reload if asked; or `code --install-extension cedt-grader-x.y.z.vsix`. Then: open the CEDT Grader icon in the left bar, log in, open a solution file, check the problem, submit. Plus "Optional: install CPH", "Updating to a new version", "Uninstalling".
   - A VS Code Getting Started walkthrough (`contributes.walkthroughs`) with the same steps, opened once after first install.
@@ -276,9 +274,11 @@ Instead of relying on the command palette, build a sidebar GUI like the CPH and 
   - Command and a button in the sidebar's settings/overflow menu: "Clear Cached Data", showing the current size, with checkboxes: cached files (PDFs, test cases, submission details) [on], problem list and history [on], file-to-problem mappings incl. stale ones [off], saved login [off]. Confirm before deleting.
   - Never delete anything in the workspace except the extension's own `.bak` files, and only when selected.
   - Tests: LRU eviction, daily cleanup, selective clear.
-- **CHECKPOINT:** list what I should test manually in the F5 Extension Development Host (log in, submit a correct solution, submit a compile error, submit a wrong answer, log out) and wait for my results.
+  - Also clears the extension's own per-workspace state: remembered auto-matches, explicit "not linked" files, recently opened, stale links.
+- Keep `CLAUDE.md`, this file, the README and `CHANGELOG.md` current.
+- **CHECKPOINT:** list what I should test manually in the F5 Extension Development Host (log in, submit a correct solution, submit a compile error, submit a wrong answer, log out, install from the .vsix) and wait for my results.
 
-### Phase 6: Language and customization
+### Phase 6: Language and customization — LATER (after Phase 5)
 
 1. **Thai translation, English by default**
    - Setting `cedtGrader.displayLanguage`: "English" (default), "ไทย (Thai)", "Follow VS Code". Changing it updates the panel without restarting.
@@ -286,7 +286,7 @@ Instead of relying on the command palette, build a sidebar GUI like the CPH and 
    - Grader content (problem names, compiler messages) stays untranslated.
    - Natural, polite Thai a student would use; keep technical words students know in English where that's normal ("Submit", "test case", "compile error"). Mark uncertain strings for review.
    - Test that every key exists in both languages.
-2. **Plain language everywhere:** review all user-facing text (English first) and rewrite technical messages into simple, friendly sentences that say what happened and what to do next (e.g. "Couldn't reach the grader. Check your internet, then press Retry." instead of "Network error: fetch failed"). All strings in one place, easy to review and translate.
+2. **Plain language everywhere:** review all user-facing text (English first) and rewrite technical messages into simple, friendly sentences that say what happened and what to do next (e.g. "Couldn't reach the grader. Check your internet, then press Retry." instead of "Network error: fetch failed"). All strings are already in one place (`src/shared/strings.ts`: `S` host, `W` webviews, `G` grader/connection); the review itself (and replacing the generated key names where they're unclear) is still to do.
 3. **More customization** (settings with defaults that keep today's behavior):
    - Panel: which sections are shown and their order; compact mode.
    - Problem list: default sort and filters.

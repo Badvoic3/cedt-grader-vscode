@@ -532,10 +532,10 @@ describe.runIf(existsSync(resolve(__dirname, '../esbuild.mjs')))('sidebar webvie
 
   it('account shows the full name (Thai) with the login ID below', () => {
     const { doc, post } = boot();
-    post({ ...loggedIn, account: { ...loggedIn.account, username: '6730000021', fullName: 'สมชาย ใจดี' } });
+    post({ ...loggedIn, account: { ...loggedIn.account, username: '1234567890', fullName: 'สมชาย ใจดี' } });
     const acc = doc.querySelector('#sec-account .account-name')!;
     expect(acc.querySelector('strong')!.textContent).toBe('สมชาย ใจดี');
-    expect(acc.textContent).toContain('6730000021');
+    expect(acc.textContent).toContain('1234567890');
   });
 
   it('CPH tip: Install / Not now / Don\'t show again', () => {
