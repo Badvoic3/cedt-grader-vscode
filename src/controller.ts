@@ -45,6 +45,7 @@ import { MappingStore } from './mapping/store';
 import { comparePaths, linkedNotice, mergeProblemFiles, noticeDismissed, noticeSignature, type ProblemFile } from './mapping/problemFiles';
 import { pathKey } from './mapping/paths';
 import { confirmSuggestion } from './mapping/suggestionGate';
+import { freeName, invalidFileName, nameMatchesProblem, renameProposal } from './mapping/renameToProblem';
 import { LIMITS, TIMING, WEB_PATHS } from './shared/constants';
 import { PICK_HOW, S } from './shared/strings';
 import type { HistoryEntry, ProblemFilter, ProblemView, ResultView, SubmissionDetailView, ViewState } from './shared/messages';
@@ -527,7 +528,13 @@ export class GraderController implements vscode.Disposable {
         error: this.accountError,
       },
       file: file
-        ? { path: vscode.workspace.asRelativePath(file, false), name: file.path.split('/').pop() ?? '', languageGuess: lang, supported: lang !== null }
+        ? {
+            path: vscode.workspace.asRelativePath(file, false),
+            name: file.path.split('/').pop() ?? '',
+            languageGuess: lang,
+            supported: lang !== null,
+            renameTo: problem && !problem.name.startsWith('#') && !nameMatchesProblem(file.fsPath, problem.name) ? renameProposal(file.fsPath, problem.name) : null,
+          }
         : null,
       problem: problem ? { ...this.problemView(problem), source: problem.source, sourceLabel: SOURCE_LABEL[problem.source], unavailable } : null,
       // Explicitly unlinked, or no confident match (candidates are only offered in the picker).
@@ -1438,6 +1445,44 @@ export class GraderController implements vscode.Disposable {
     if (f.how === 'chosen') await this.mapping.set(uri, undefined);
     await this.mapping.dropAuto(uri);
     await this.mapping.setUnlinked(uri, true);
+  }
+
+  /**
+   * Rename the active file to "<clean problem name>.<ext>" (editable first).
+   * Goes through WorkspaceEdit.renameFile, so open editors, links, our rename
+   * handling and the CPH prompt follow, and Undo works. Never overwrites.
+   */
+  async renameFileToProblem(): Promise<void> {
+    const file = this.fileUri;
+    const problem = this.currentProblem();
+    if (!file || !problem) return;
+    const dir = vscode.Uri.joinPath(file, '..');
+    const taken = async (name: string) => {
+      const target = vscode.Uri.joinPath(dir, name);
+      return pathKey(target.fsPath) !== pathKey(file.fsPath) && (await exists(target.fsPath));
+    };
+    const proposal = renameProposal(file.fsPath, problem.name);
+    const first = await freeName(proposal, taken); // never overwrite: "<name>_2.<ext>" if taken
+    const stemLen = first.lastIndexOf('.') > 0 ? first.lastIndexOf('.') : first.length;
+    const name = await vscode.window.showInputBox({
+      title: S.rename.title,
+      prompt: first === proposal ? S.rename.prompt(file.path.split('/').pop() ?? '') : S.rename.existsSuggest(proposal, first),
+      value: first,
+      valueSelection: [0, stemLen],
+      validateInput: async (v) => {
+        const bad = invalidFileName(v);
+        if (bad) return S.rename.invalid[bad];
+        if (await taken(v.trim())) return S.rename.existsSuggest(v.trim(), await freeName(v.trim(), taken));
+        return null;
+      },
+    });
+    if (!name) return;
+    const target = vscode.Uri.joinPath(dir, name.trim().normalize('NFC'));
+    if (pathKey(target.fsPath) === pathKey(file.fsPath)) return;
+    const edit = new vscode.WorkspaceEdit();
+    edit.renameFile(file, target, { overwrite: false });
+    const ok = await vscode.workspace.applyEdit(edit);
+    if (!ok) void vscode.window.showWarningMessage(S.rename.failed(name.trim()));
   }
 
   /** Dismiss the "files for this problem" notice until its set of files changes (per workspace). */

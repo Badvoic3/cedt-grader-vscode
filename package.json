@@ -154,6 +154,12 @@
         "icon": "$(close)"
       },
       {
+        "command": "cedtGrader.renameFileToProblem",
+        "title": "Rename File to Match the Problem",
+        "category": "CEDT Grader",
+        "icon": "$(edit)"
+      },
+      {
         "command": "cedtGrader.loadTestcases",
         "title": "Load Test Cases",
         "category": "CEDT Grader",

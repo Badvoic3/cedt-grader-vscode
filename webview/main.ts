@@ -495,6 +495,12 @@ function renderCurrent(s: ViewState): void {
       combo,
       pickerOpen ? (renderPickerList(s), pickerBox) : null,
       p ? sourceLine(p.source, p.id, p.name) : null,
+      p && s.file?.renameTo
+        ? el('div', { class: 'row source-line small muted' },
+            icon('edit'),
+            el('button', { class: 'link small', type: 'button', title: W.renameToProblemTip(s.file.name, s.file.renameTo), onclick: () => send({ type: 'renameFileToProblem' }) }, W.renameToProblem),
+          )
+        : null,
       !p && s.notLinked
         ? el('div', { class: 'notice' },
             el('div', { class: 'row' }, icon('debug-disconnect'), el('span', { class: 'grow' }, W.notLinkedToAProblem)),
@@ -826,6 +832,7 @@ function headerMenuItems(p: ViewState['problem']): MenuItem[] {
         ]
       : []),
     { icon: 'sparkle', label: W.autoDetectTheProblemFor, onclick: () => send({ type: 'autoDetect' }) },
+    ...(p && state?.file?.renameTo ? [{ icon: 'edit', label: W.renameToProblem, tip: W.renameToProblemTip(state.file.name, state.file.renameTo), onclick: () => send({ type: 'renameFileToProblem' }) }] : []),
     ...(p
       ? [{ icon: 'close', label: p.source === 'saved' ? W.unlinkThisFile : W.donTMatchThisFile, tip: W.autoDetectWonTRe, onclick: () => send({ type: 'unmapProblem' }) }]
       : []),
