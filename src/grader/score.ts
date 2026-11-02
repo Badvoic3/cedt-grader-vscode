@@ -83,10 +83,10 @@ export function scoreText(points: number | null, rawSum: boolean): { text: strin
 /** One-line verdict on whether a new submission changed the counted score. */
 export function describeImprovement(before: number | null, after: number | null, points: number | null): string | null {
   if (after === null || points === null) return null;
-  if (before === null) return G.firstCountedScore(fmt(after));
-  if (after > before) return G.countedScoreImproved(fmt(before), fmt(after));
-  if (points < after) return G.thisSubmissionScoredYourBest(fmt(points), fmt(after));
-  return G.countedScoreUnchanged(fmt(after));
+  if (before === null) return G.countedFirst(fmt(after));
+  if (after > before) return G.countedImproved(fmt(before), fmt(after));
+  if (points < after) return G.countedKept(fmt(points), fmt(after));
+  return G.countedUnchanged(fmt(after));
 }
 
 export function fmt(n: number): string {

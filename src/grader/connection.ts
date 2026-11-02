@@ -18,24 +18,24 @@ export interface ConnectionProblem {
  */
 export function classifyConnectionError(err: unknown): ConnectionProblem | null {
   if (err instanceof AuthError && err.reason === 'throttled') {
-    return { kind: 'throttled', title: G.tooManyLoginAttempts, message: G.theGraderIsBlockingLogins, action: 'retry' };
+    return { kind: 'throttled', title: G.loginThrottledTitle, message: G.loginThrottledMsg, action: 'retry' };
   }
   if (err instanceof SessionExpiredError || (err instanceof AuthError && (err.reason === 'wrong-password' || err.reason === 'no-credentials'))) {
-    return { kind: 'session', title: G.sessionExpired, message: G.yourGraderLoginExpiredAnd, action: 'login' };
+    return { kind: 'session', title: G.sessionExpiredTitle, message: G.sessionExpiredMsg, action: 'login' };
   }
   if (err instanceof ServerBusyError && err.status === 429) {
-    return { kind: 'throttled', title: G.tooManyRequests, message: G.theGraderIsRateLimiting, action: 'retry' };
+    return { kind: 'throttled', title: G.rateLimitedTitle, message: G.rateLimitedMsg, action: 'retry' };
   }
   if (err instanceof NetworkError) {
     switch (err.kind) {
       case 'offline':
-        return { kind: 'offline', title: G.noInternetConnection, message: G.checkYourInternetConnectionThen, action: 'retry' };
+        return { kind: 'offline', title: G.offlineTitle, message: G.offlineMsg, action: 'retry' };
       case 'timeout':
-        return { kind: 'timeout', title: G.theGraderIsNotResponding, message: G.theRequestTimedOutThe, action: 'retry' };
+        return { kind: 'timeout', title: G.timeoutTitle, message: G.timeoutMsg, action: 'retry' };
       case 'server':
-        return { kind: 'server', title: G.graderServerError, message: G.theGraderReturnedAServer, action: 'retry' };
+        return { kind: 'server', title: G.serverErrorTitle, message: G.serverErrorMsg, action: 'retry' };
       default:
-        return { kind: 'unreachable', title: G.cannotReachTheGrader, message: G.theGraderServerIsUnreachable, action: 'retry' };
+        return { kind: 'unreachable', title: G.unreachableTitle, message: G.unreachableMsg, action: 'retry' };
     }
   }
   return null;
@@ -49,15 +49,15 @@ export function describeSubmitFailure(err: unknown, sentId: number | null): stri
   const problem = classifyConnectionError(err);
   if (!problem) return null;
   if (sentId !== null) {
-    return G.yourSubmissionWasSentResults(sentId);
+    return G.submitSentResultLater(sentId);
   }
   if (problem.kind === 'timeout') {
-    return G.theGraderDidNotAnswer;
+    return G.submitMaybeReceived;
   }
   if (problem.kind === 'server') {
-    return G.nothingSubmittedServerError;
+    return G.submitNothingServerError;
   }
-  if (problem.kind === 'session') return G.nothingWasSubmittedYourLogin;
-  if (problem.kind === 'throttled') return G.nothingWasSubmittedTheGrader;
-  return G.nothingWasSubmitted(problem.title.toLowerCase());
+  if (problem.kind === 'session') return G.submitNothingLoginExpired;
+  if (problem.kind === 'throttled') return G.submitNothingRateLimited;
+  return G.submitNothing(problem.title.toLowerCase());
 }

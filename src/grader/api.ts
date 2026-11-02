@@ -116,9 +116,9 @@ export class ApiClient {
     this.redactor.add(password);
     const res = await this.raw('POST', '/api/v1/auth/login', { login, password }, false);
     const body = (await this.json(res)) as Partial<ApiLoginResponse> & { error?: string };
-    if (res.status === 401) throw new AuthError(G.wrongUsernameOrPassword, 'wrong-password');
-    if (res.status === 429) throw new AuthError(G.tooManyFailedLoginAttempts, 'throttled');
-    if (res.status === 403) throw new AuthError(body.error ?? G.loginRefusedByTheGrader, 'unknown');
+    if (res.status === 401) throw new AuthError(G.wrongPassword, 'wrong-password');
+    if (res.status === 429) throw new AuthError(G.loginThrottled, 'throttled');
+    if (res.status === 403) throw new AuthError(body.error ?? G.loginRefused, 'unknown');
     if (!res.ok || !body.token) throw new AuthError(body.error ?? G.loginFailedHttp(res.status), 'unknown');
     this.setToken(body.token);
     return body as ApiLoginResponse;
@@ -132,7 +132,7 @@ export class ApiClient {
       await res.body?.cancel().catch(() => {});
       if (attempt >= GET_RETRIES) {
         throw new ServerBusyError(
-          res.status === 429 ? G.rateLimitedTryLater : G.theGraderReturnedAnError(res.status),
+          res.status === 429 ? G.rateLimited : G.httpError(res.status),
           res.status,
         );
       }
@@ -159,9 +159,9 @@ export class ApiClient {
         return { status: res.status, error: body?.error ?? null };
       }
       if (res.status === 401) throw new SessionExpiredError(G.loginExpiredShort, true);
-      if (res.status !== 429 && res.status < 500) throw new GraderError(G.theGraderRefusedTheRequest(res.status));
+      if (res.status !== 429 && res.status < 500) throw new GraderError(G.httpRefused(res.status));
       await res.body?.cancel().catch(() => {});
-      if (attempt >= GET_RETRIES) throw new ServerBusyError(G.theGraderReturnedAnError(res.status), res.status);
+      if (attempt >= GET_RETRIES) throw new ServerBusyError(G.httpError(res.status), res.status);
       await this.sleep(TIMING.retryBaseMs * 2 ** attempt);
     }
   }
@@ -183,7 +183,7 @@ export class ApiClient {
       }
       if (res.status !== 429 && res.status < 500) return this.handle(res, path);
       await res.body?.cancel().catch(() => {});
-      if (attempt >= GET_RETRIES) throw new ServerBusyError(G.theGraderReturnedAnError(res.status), res.status);
+      if (attempt >= GET_RETRIES) throw new ServerBusyError(G.httpError(res.status), res.status);
       await this.sleep(TIMING.retryBaseMs * 2 ** attempt);
     }
   }
@@ -196,11 +196,11 @@ export class ApiClient {
     if (res.status === 401) throw new SessionExpiredError(G.loginExpiredShort, true);
     if (res.status === 422 && body.permitted_languages) {
       throw new LanguageNotAllowedError(
-        G.thatLanguageIsNotAllowed(body.permitted_languages.map((l) => l.name).join(', ')),
+        G.languageNotAllowed(body.permitted_languages.map((l) => l.name).join(', ')),
       );
     }
     const msg = body.error ?? body.errors?.join('; ') ?? `HTTP ${res.status}`;
-    if (res.status === 404 || res.status === 403) throw new ProblemUnavailableError(G.problemUnavailableMsg(msg), res.status);
+    if (res.status === 404 || res.status === 403) throw new ProblemUnavailableError(G.problemUnavailableDetail(msg), res.status);
     throw new SubmitRejectedError(G.submissionRejected(msg));
   }
 
@@ -213,8 +213,8 @@ export class ApiClient {
     if ((res.status === 404 || res.status === 403) && /^\/api\/v1\/problems\/\d+/.test(path)) {
       throw new ProblemUnavailableError(G.problemUnavailable, res.status);
     }
-    if (res.status === 404) throw new GraderError(G.notFoundOnTheGrader(msg));
-    throw new GraderError(G.refusedMsg(msg));
+    if (res.status === 404) throw new GraderError(G.notFound(msg));
+    throw new GraderError(G.refused(msg));
   }
 
   private async json(res: Response): Promise<unknown> {
@@ -223,7 +223,7 @@ export class ApiClient {
     try {
       return JSON.parse(text);
     } catch {
-      if (res.status >= 500) throw new ServerBusyError(G.theGraderReturnedAnError(res.status), res.status);
+      if (res.status >= 500) throw new ServerBusyError(G.httpError(res.status), res.status);
       return null;
     }
   }
@@ -251,7 +251,7 @@ export class ApiClient {
     this.log(`${method} ${path} → ${res.status}`);
     if (res.status >= 500 && !passErrors) {
       await res.body?.cancel().catch(() => {});
-      throw new ServerBusyError(G.theGraderReturnedAnError(res.status), res.status);
+      throw new ServerBusyError(G.httpError(res.status), res.status);
     }
     return res;
   }

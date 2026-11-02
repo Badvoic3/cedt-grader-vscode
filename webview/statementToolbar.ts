@@ -32,14 +32,14 @@ export function buildToolbar(h: ToolbarHandlers) {
   const pageInput = el('input', { class: 'page', type: 'number', min: '1', value: '1', 'aria-label': W.pageNumber, 'data-tip': W.pageNumber });
   const pageCount = el('span', { class: 'muted' }, '/ –');
   const zoomLabel = el('span', { class: 'muted zoom', 'data-tip': W.zoomLevel }, '');
-  const search = el('input', { class: 'search', type: 'search', placeholder: W.findInStatement, 'aria-label': W.findInStatement, 'data-tip': W.findInStatementCmdCtrl });
+  const search = el('input', { class: 'search', type: 'search', placeholder: W.findInStatement, 'aria-label': W.findInStatement, 'data-tip': W.findTip });
   const matches = el('span', { class: 'muted matches' }, '');
   const titleEl = el('span', { class: 'title' }, '');
   const pdfTools = el('div', { class: 'group pdf-only' },
-    btn('zoom-out', W.zoomOutCmdCtrl, h.zoomOut),
+    btn('zoom-out', W.zoomOutTip, h.zoomOut),
     zoomLabel,
-    btn('zoom-in', W.zoomInCmdCtrl, h.zoomIn),
-    btn('screen-full', W.fitWidthCmdCtrl0, h.fitWidth),
+    btn('zoom-in', W.zoomInTip, h.zoomIn),
+    btn('screen-full', W.fitWidthTip, h.fitWidth),
     el('span', { class: 'sep' }),
     btn('chevron-up', W.previousPage, h.prevPage),
     pageInput,
@@ -47,15 +47,15 @@ export function buildToolbar(h: ToolbarHandlers) {
     btn('chevron-down', W.nextPage, h.nextPage),
     el('span', { class: 'sep' }),
     search,
-    btn('arrow-up', W.previousMatchShiftEnter, h.prevMatch),
-    btn('arrow-down', W.nextMatchEnter, h.nextMatch),
+    btn('arrow-up', W.previousMatchTip, h.prevMatch),
+    btn('arrow-down', W.nextMatchTip, h.nextMatch),
     matches,
   );
   const toolbar = el('div', { class: 'toolbar', role: 'toolbar', 'aria-label': W.statement },
     titleEl,
     pdfTools,
     el('span', { class: 'grow' }),
-    btn('refresh', W.refreshDownloadAgain, h.refresh),
+    btn('refresh', W.refreshStatementTip, h.refresh),
     btn('globe', W.openInBrowser, h.openInBrowser),
   );
   return { toolbar, pageInput, pageCount, zoomLabel, search, matches, titleEl };

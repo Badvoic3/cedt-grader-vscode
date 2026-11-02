@@ -46,7 +46,7 @@ describe('countedScore', () => {
 describe('describeImprovement', () => {
   it('improved / unchanged / lower', () => {
     expect(describeImprovement(40, 70, 70)).toBe('Counted score improved: 40 → 70.');
-    expect(describeImprovement(70, 70, 40)).toBe('This submission scored 40; your best 70 still counts.');
+    expect(describeImprovement(70, 70, 40)).toBe('This submission scored 40; your best, 70, still counts.');
     expect(describeImprovement(70, 70, 70)).toBe('Counted score unchanged (70).');
     expect(describeImprovement(null, 30, 30)).toBe('First counted score: 30.');
   });

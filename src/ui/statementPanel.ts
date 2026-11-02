@@ -193,6 +193,6 @@ export function render(base: Base, st: Statement, view: StatementViewState | nul
     ...base,
     type: 'message',
     error: false,
-    text: st.reason === 'hidden' ? G.theStatementIsNotAvailable : G.thisProblemHasNoStatement,
+    text: st.reason === 'hidden' ? G.statementHidden : G.statementMissing,
   };
 }

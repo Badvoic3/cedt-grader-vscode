@@ -217,7 +217,7 @@ window.addEventListener('message', (ev: MessageEvent<ToStatement>) => {
     showPdf(m.data).catch((err) => {
       mode('message');
       status.classList.add('error');
-      status.textContent = W.couldNotDisplayThePdf(err instanceof Error ? err.message : err);
+      status.textContent = W.pdfError(err instanceof Error ? err.message : err);
     });
   } else if (m.type === 'html') {
     mode('html');

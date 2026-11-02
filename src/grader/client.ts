@@ -163,7 +163,7 @@ export class GraderClient {
   private async doLogin(given?: Credentials): Promise<GraderUser> {
     const creds = given ?? (await this.opts.getStoredCredentials?.());
     if (!creds?.username || !creds.password) {
-      throw new AuthError(G.logInToCedtGrader, 'no-credentials');
+      throw new AuthError(G.logInFirst, 'no-credentials');
     }
     this.redactor.add(creds.password);
     const res = await this.api.login(creds.username, creds.password);
@@ -206,7 +206,7 @@ export class GraderClient {
     this.api.setToken(null);
     this.tokenExpiresAt = 0;
     const creds = await this.opts.getStoredCredentials?.();
-    if (!creds) throw new SessionExpiredError(G.yourGraderLoginHasExpired, false);
+    if (!creds) throw new SessionExpiredError(G.loginExpired, false);
     await this.login(creds);
   }
 
@@ -351,7 +351,7 @@ export class GraderClient {
 
   async submit(problemId: number, languageId: number, source: string, filename: string): Promise<{ id: number; number: number | null }> {
     assertId(problemId);
-    if (!source.trim()) throw new GraderError(G.theFileIsEmpty);
+    if (!source.trim()) throw new GraderError(G.fileEmpty);
     const r = await this.authed(() => this.api.createSubmission(problemId, languageId, source, filename));
     return { id: r.id, number: r.number ?? null };
   }
@@ -388,7 +388,7 @@ export class GraderClient {
         wait = backoff;
       }
       if (this.now().getTime() - start + wait > timeout) {
-        throw Object.assign(new PollTimeoutError(G.stillNotGradedAfter3), { last });
+        throw Object.assign(new PollTimeoutError(G.pollTimeout), { last });
       }
       await this.sleep(wait, opts.signal);
     }
