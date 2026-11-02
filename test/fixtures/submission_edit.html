@@ -1,0 +1,600 @@
+<!DOCTYPE html><html><head>
+<title></title>
+<link rel="icon" type="image/svg+xml" href="/assets/icon-9eb6bf2c.svg">
+<link rel="stylesheet" href="/assets/application-1e3ccc7f.css" media="all">
+<link rel="stylesheet" href="/assets/tempus-dominus/tempus-dominus-bf7cdf80.css" media="all">
+<link rel="stylesheet" href="/assets/highlight/felipec.min-4efafeb2.css">
+<link rel="stylesheet" href="/assets/select2/select2.min-9d4c9d45.css" media="all">
+<link rel="stylesheet" href="/assets/select2/select2-bootstrap-5-theme.min-84d0f9bd.css" media="all">
+<link rel="stylesheet" href="/assets/datatables/datatables.min-af829b36.css">
+<meta name="csrf-param" content="authenticity_token">
+<meta name="csrf-token" content="***">
+
+<script type="importmap" data-turbo-track="reload">{
+  "imports": {
+    "application": "/assets/application-22a3007a.js",
+    "datatables": "/assets/datatables/datatables.min-5762938e.js",
+    "vfs-fonts": "/assets/datatables/vfs_fonts-53e983d7.js",
+    "pdfmake": "/assets/datatables/pdfmake.min-ec6eb0f2.js",
+    "select2": "/assets/select2.min-5af8005e.js",
+    "chart": "/assets/chart.umd-93fff58f.js",
+    "tempus-dominus-js": "/assets/tempus-dominus/tempus-dominus-e2871c38.js",
+    "@hotwired/stimulus": "/assets/stimulus.min-4b1e420e.js",
+    "@hotwired/stimulus-loading": "/assets/stimulus-loading-1fc53fe7.js",
+    "@hotwired/turbo-rails": "/assets/turbo.min-3a2e143f.js",
+    "rails-ujs": "/assets/rails-ujs.esm-7729bd96.js",
+    "bootbox": "/assets/bootbox-c2c00034.js",
+    "jquery": "/assets/jquery-50ed4c0e.js",
+    "bootstrap": "/assets/bootstrap.esm-cdbcd76f.js",
+    "@popperjs/core": "/assets/@popperjs-core-esm-4db3d57e.js",
+    "cafe_bundle": "/assets/cafe_bundle-fceeb265.js",
+    "cafe": "/assets/cafe-00807d0d.js",
+    "cafe_event": "/assets/cafe_event-9c1cba6c.js",
+    "cafe_datatable": "/assets/cafe_datatable-ee3897cb.js",
+    "cafe_turbo": "/assets/cafe_turbo-4776a88a.js",
+    "verdict_strip": "/assets/verdict_strip-7c296d1d.js",
+    "setup_jquery": "/assets/setup_jquery-8615e1ed.js",
+    "setup_bootstrap": "/assets/setup_bootstrap-99153508.js",
+    "setup_select2": "/assets/setup_select2-8feaa952.js",
+    "moment": "/assets/moment-b380aa82.js",
+    "ace-builds": "/assets/ace-builds-b9ccee56.js",
+    "ace-mode-c_cpp": "/assets/ace-noconflict/mode-c_cpp-d023408f.js",
+    "ace-mode-pascal": "/assets/ace-noconflict/mode-pascal-5141db1a.js",
+    "ace-mode-ruby": "/assets/ace-noconflict/mode-ruby-03d46f60.js",
+    "ace-mode-python": "/assets/ace-noconflict/mode-python-69e61eb6.js",
+    "ace-mode-java": "/assets/ace-noconflict/mode-java-7bda6ef3.js",
+    "ace-mode-rust": "/assets/ace-noconflict/mode-rust-9a912bab.js",
+    "ace-mode-golang": "/assets/ace-noconflict/mode-golang-be94316f.js",
+    "ace-mode-php": "/assets/ace-noconflict/mode-php-c3ca1dfd.js",
+    "ace-mode-haskell": "/assets/ace-noconflict/mode-haskell-d564f123.js",
+    "ace-mode-sql": "/assets/ace-noconflict/mode-sql-53db0752.js",
+    "ace-mode-xml": "/assets/ace-noconflict/mode-xml-ad72c17c.js",
+    "ace-mode-markdown": "/assets/ace-noconflict/mode-markdown-23c359cc.js",
+    "ace-theme-merbivore": "/assets/ace-noconflict/theme-merbivore-bdb5c244.js",
+    "ace-theme-merbivore_soft": "/assets/ace-noconflict/theme-merbivore_soft-fea8e05e.js",
+    "ace-theme-dracula": "/assets/ace-noconflict/theme-dracula-d6883689.js",
+    "ace-theme-github": "/assets/ace-noconflict/theme-github-722545b9.js",
+    "highlight": "/assets/highlight/highlight-71d9bff6.js",
+    "controllers/announcement_controller": "/assets/controllers/announcement_controller-0ce07996.js",
+    "controllers/application": "/assets/controllers/application-3affb389.js",
+    "controllers/auto_submit_controller": "/assets/controllers/auto_submit_controller-ddb50175.js",
+    "controllers/bs_tab_controller": "/assets/controllers/bs_tab_controller-7495fc6d.js",
+    "controllers/chart_controller": "/assets/controllers/chart_controller-1fe739ab.js",
+    "controllers/children_select_controller": "/assets/controllers/children_select_controller-fa3cd883.js",
+    "controllers/contest_controller": "/assets/controllers/contest_controller-d1d11c0f.js",
+    "controllers/contest_timer_controller": "/assets/controllers/contest_timer_controller-3db6d963.js",
+    "controllers/dataset_mode_toggle_controller": "/assets/controllers/dataset_mode_toggle_controller-42bf6846.js",
+    "controllers/datatables/columns": "/assets/controllers/datatables/columns-fa10c521.js",
+    "controllers/datatables/configs": "/assets/controllers/datatables/configs-282f1ef6.js",
+    "controllers/datatables/init_controller": "/assets/controllers/datatables/init_controller-16c36c14.js",
+    "controllers/datatables/init_score_table_controller": "/assets/controllers/datatables/init_score_table_controller-1f2ef6cb.js",
+    "controllers/dismiss_announcement_controller": "/assets/controllers/dismiss_announcement_controller-cadb2acf.js",
+    "controllers/editor_controller": "/assets/controllers/editor_controller-56289173.js",
+    "controllers/event_dispatcher_controller": "/assets/controllers/event_dispatcher_controller-04e4a47a.js",
+    "controllers/form/filter_problem_controller": "/assets/controllers/form/filter_problem_controller-51cdafb7.js",
+    "controllers/form/filter_submission_controller": "/assets/controllers/form/filter_submission_controller-15ad5ccd.js",
+    "controllers/form/filter_user_controller": "/assets/controllers/form/filter_user_controller-d6f861e9.js",
+    "controllers/grounding_draft_controller": "/assets/controllers/grounding_draft_controller-0781c9d1.js",
+    "controllers/group_controller": "/assets/controllers/group_controller-04e70bf1.js",
+    "controllers": "/assets/controllers/index-749a6dee.js",
+    "controllers/init_ui_component_controller": "/assets/controllers/init_ui_component_controller-4b3fc6cd.js",
+    "controllers/initialize_controller": "/assets/controllers/initialize_controller-072a587a.js",
+    "controllers/main_controller": "/assets/controllers/main_controller-3aec9395.js",
+    "controllers/markdown_editor_controller": "/assets/controllers/markdown_editor_controller-be887ac3.js",
+    "controllers/problem_controller": "/assets/controllers/problem_controller-e2f6a2aa.js",
+    "controllers/problem_name_controller": "/assets/controllers/problem_name_controller-a3ae61a6.js",
+    "controllers/refresh_controller": "/assets/controllers/refresh_controller-262885b3.js",
+    "controllers/submission_comment_controller": "/assets/controllers/submission_comment_controller-f7fd8c1b.js",
+    "controllers/tag_controller": "/assets/controllers/tag_controller-0420330e.js",
+    "controllers/user_admin/admin_controller": "/assets/controllers/user_admin/admin_controller-a256aa5c.js",
+    "controllers/user_admin/base_controller": "/assets/controllers/user_admin/base_controller-19a8d0d1.js",
+    "controllers/user_admin/index_controller": "/assets/controllers/user_admin/index_controller-235b3ad0.js",
+    "controllers/viva_exam_toggle_controller": "/assets/controllers/viva_exam_toggle_controller-32dadf35.js",
+    "controllers/viva_session_controller": "/assets/controllers/viva_session_controller-4fb513e6.js",
+    "mixins/row_field_toggle": "/assets/mixins/row_field_toggle-c945cf86.js"
+  }
+}</script>
+<link rel="modulepreload" href="/assets/application-22a3007a.js">
+<link rel="modulepreload" href="/assets/datatables/datatables.min-5762938e.js">
+<link rel="modulepreload" href="/assets/datatables/vfs_fonts-53e983d7.js">
+<link rel="modulepreload" href="/assets/datatables/pdfmake.min-ec6eb0f2.js">
+<link rel="modulepreload" href="/assets/select2.min-5af8005e.js">
+<link rel="modulepreload" href="/assets/chart.umd-93fff58f.js">
+<link rel="modulepreload" href="/assets/tempus-dominus/tempus-dominus-e2871c38.js">
+<link rel="modulepreload" href="/assets/stimulus.min-4b1e420e.js">
+<link rel="modulepreload" href="/assets/stimulus-loading-1fc53fe7.js">
+<link rel="modulepreload" href="/assets/turbo.min-3a2e143f.js">
+<link rel="modulepreload" href="/assets/rails-ujs.esm-7729bd96.js">
+<link rel="modulepreload" href="/assets/bootbox-c2c00034.js">
+<link rel="modulepreload" href="/assets/jquery-50ed4c0e.js">
+<link rel="modulepreload" href="/assets/bootstrap.esm-cdbcd76f.js">
+<link rel="modulepreload" href="/assets/@popperjs-core-esm-4db3d57e.js">
+<link rel="modulepreload" href="/assets/cafe_bundle-fceeb265.js">
+<link rel="modulepreload" href="/assets/cafe-00807d0d.js">
+<link rel="modulepreload" href="/assets/cafe_event-9c1cba6c.js">
+<link rel="modulepreload" href="/assets/cafe_datatable-ee3897cb.js">
+<link rel="modulepreload" href="/assets/cafe_turbo-4776a88a.js">
+<link rel="modulepreload" href="/assets/verdict_strip-7c296d1d.js">
+<link rel="modulepreload" href="/assets/setup_jquery-8615e1ed.js">
+<link rel="modulepreload" href="/assets/setup_bootstrap-99153508.js">
+<link rel="modulepreload" href="/assets/setup_select2-8feaa952.js">
+<link rel="modulepreload" href="/assets/moment-b380aa82.js">
+<link rel="modulepreload" href="/assets/ace-builds-b9ccee56.js">
+<link rel="modulepreload" href="/assets/ace-noconflict/mode-c_cpp-d023408f.js">
+<link rel="modulepreload" href="/assets/ace-noconflict/mode-pascal-5141db1a.js">
+<link rel="modulepreload" href="/assets/ace-noconflict/mode-ruby-03d46f60.js">
+<link rel="modulepreload" href="/assets/ace-noconflict/mode-python-69e61eb6.js">
+<link rel="modulepreload" href="/assets/ace-noconflict/mode-java-7bda6ef3.js">
+<link rel="modulepreload" href="/assets/ace-noconflict/mode-rust-9a912bab.js">
+<link rel="modulepreload" href="/assets/ace-noconflict/mode-golang-be94316f.js">
+<link rel="modulepreload" href="/assets/ace-noconflict/mode-php-c3ca1dfd.js">
+<link rel="modulepreload" href="/assets/ace-noconflict/mode-haskell-d564f123.js">
+<link rel="modulepreload" href="/assets/ace-noconflict/mode-sql-53db0752.js">
+<link rel="modulepreload" href="/assets/ace-noconflict/mode-xml-ad72c17c.js">
+<link rel="modulepreload" href="/assets/ace-noconflict/mode-markdown-23c359cc.js">
+<link rel="modulepreload" href="/assets/ace-noconflict/theme-merbivore-bdb5c244.js">
+<link rel="modulepreload" href="/assets/ace-noconflict/theme-merbivore_soft-fea8e05e.js">
+<link rel="modulepreload" href="/assets/ace-noconflict/theme-dracula-d6883689.js">
+<link rel="modulepreload" href="/assets/ace-noconflict/theme-github-722545b9.js">
+<link rel="modulepreload" href="/assets/highlight/highlight-71d9bff6.js">
+<link rel="modulepreload" href="/assets/controllers/announcement_controller-0ce07996.js">
+<link rel="modulepreload" href="/assets/controllers/application-3affb389.js">
+<link rel="modulepreload" href="/assets/controllers/auto_submit_controller-ddb50175.js">
+<link rel="modulepreload" href="/assets/controllers/bs_tab_controller-7495fc6d.js">
+<link rel="modulepreload" href="/assets/controllers/chart_controller-1fe739ab.js">
+<link rel="modulepreload" href="/assets/controllers/children_select_controller-fa3cd883.js">
+<link rel="modulepreload" href="/assets/controllers/contest_controller-d1d11c0f.js">
+<link rel="modulepreload" href="/assets/controllers/contest_timer_controller-3db6d963.js">
+<link rel="modulepreload" href="/assets/controllers/dataset_mode_toggle_controller-42bf6846.js">
+<link rel="modulepreload" href="/assets/controllers/datatables/columns-fa10c521.js">
+<link rel="modulepreload" href="/assets/controllers/datatables/configs-282f1ef6.js">
+<link rel="modulepreload" href="/assets/controllers/datatables/init_controller-16c36c14.js">
+<link rel="modulepreload" href="/assets/controllers/datatables/init_score_table_controller-1f2ef6cb.js">
+<link rel="modulepreload" href="/assets/controllers/dismiss_announcement_controller-cadb2acf.js">
+<link rel="modulepreload" href="/assets/controllers/editor_controller-56289173.js">
+<link rel="modulepreload" href="/assets/controllers/event_dispatcher_controller-04e4a47a.js">
+<link rel="modulepreload" href="/assets/controllers/form/filter_problem_controller-51cdafb7.js">
+<link rel="modulepreload" href="/assets/controllers/form/filter_submission_controller-15ad5ccd.js">
+<link rel="modulepreload" href="/assets/controllers/form/filter_user_controller-d6f861e9.js">
+<link rel="modulepreload" href="/assets/controllers/grounding_draft_controller-0781c9d1.js">
+<link rel="modulepreload" href="/assets/controllers/group_controller-04e70bf1.js">
+<link rel="modulepreload" href="/assets/controllers/index-749a6dee.js">
+<link rel="modulepreload" href="/assets/controllers/init_ui_component_controller-4b3fc6cd.js">
+<link rel="modulepreload" href="/assets/controllers/initialize_controller-072a587a.js">
+<link rel="modulepreload" href="/assets/controllers/main_controller-3aec9395.js">
+<link rel="modulepreload" href="/assets/controllers/markdown_editor_controller-be887ac3.js">
+<link rel="modulepreload" href="/assets/controllers/problem_controller-e2f6a2aa.js">
+<link rel="modulepreload" href="/assets/controllers/problem_name_controller-a3ae61a6.js">
+<link rel="modulepreload" href="/assets/controllers/refresh_controller-262885b3.js">
+<link rel="modulepreload" href="/assets/controllers/submission_comment_controller-f7fd8c1b.js">
+<link rel="modulepreload" href="/assets/controllers/tag_controller-0420330e.js">
+<link rel="modulepreload" href="/assets/controllers/user_admin/admin_controller-a256aa5c.js">
+<link rel="modulepreload" href="/assets/controllers/user_admin/base_controller-19a8d0d1.js">
+<link rel="modulepreload" href="/assets/controllers/user_admin/index_controller-235b3ad0.js">
+<link rel="modulepreload" href="/assets/controllers/viva_exam_toggle_controller-32dadf35.js">
+<link rel="modulepreload" href="/assets/controllers/viva_session_controller-4fb513e6.js">
+<link rel="modulepreload" href="/assets/mixins/row_field_toggle-c945cf86.js">
+<script type="module">import "application"</script>
+
+
+<meta content="width=device-width, initial-scale=1" name="viewport">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="">
+<script>
+  // generate paths to be used in js
+  // for any parameterized id, the id is replaced with -123 to be gsubbed, later
+  window.AppRoute = {
+    // contests
+    contest: "/contests/-123",
+    viewContest: "/contests/-123/view",
+    cloneContest: "/contests/-123/clone",
+  
+    // users
+    // this is for rendering a stat, which was, inappropriately assigned to user_admin controller
+    statContestUserAdmin: "/user_admin/-123/stat/contest/-456",
+    statUserAdmin: "/user_admin/-123/stat",
+    editUserAdmin: "/user_admin/-123/edit",
+  
+    // problems
+    editProblem: "/problems/-123/edit",
+    statProblem: "/problems/-123/stat",
+  
+    // tag
+    tag: "/tags/-123",
+    editTag: "/tags/-123/edit",
+  }
+</script>
+
+<script>
+  // Inject UI fragments from Rails so JS modules stay DRY without hardcoding HTML.
+  // This specifically allows DataTables rendering (e.g., `dt_yes_no_pill_renderer` in `cafe_datatable.js`) 
+  // to inherit the exact same HTML and Bootstrap CSS classes generated by the Rails backend 
+  // (e.g., `ApplicationHelper#format_key_pair_value`), keeping the design system unified.
+  //
+  // Note: We use `window.CafeUI` distinctly instead of appending to the existing `cafe` variable
+  // because `cafe` is imported across the frontend as an immutable ES module (`import * as cafe`),
+  // and `application.js` globally clobbers `window.cafe` on load, which would erase these injections.
+  window.CafeUI = {
+    badges: {
+      yes: "<span class=\"badge bg-success-subtle text-success border border-success-subtle rounded-pill\"><span class=\"translation_missing\" title=\"translation missing: en.helpers.yes\">Yes<\/span><\/span>",
+      no: "<span class=\"badge bg-light text-secondary border border-secondary-subtle rounded-pill\"><span class=\"translation_missing\" title=\"translation missing: en.helpers.no\">No<\/span><\/span>"
+    }
+  }
+</script>
+
+</head>
+<body class="bg-light" data-controller="initialize ">
+<header>
+<nav class="navbar fixed-top navbar-dark bg-primary navbar-expand-lg shadow">
+<div class="container-fluid">
+<a class="navbar-brand d-flex align-items-center gap-2" href="/main/list">
+<img alt="" height="28" width="28" class="rounded" src="/assets/icon-9eb6bf2c.svg">
+CEDT
+</a>
+<div class="navbar-expand">
+<!-- display MODE button (with countdown in contest mode) -->
+</div>
+<button class="navbar-toggler" data-bs-target="#navbar-collapse" data-bs-toggle="collapse" type="button">
+<span class="navbar-toggler-icon"></span>
+</button>
+<div class="collapse navbar-collapse" id="navbar-collapse">
+<ul class="navbar-nav me-auto mb-2 mb-lg-0">
+<!-- submission -->
+<li class="nav-item dropdown mx-2">
+<a aria-expanded="false" class="nav-link dropdown-toggle active-with-children" data-bs-toggle="dropdown" href="#" role="button">
+Submissions
+</a>
+<ul class="dropdown-menu">
+<li><a class="dropdown-item  active " href="/submissions">View</a></li>
+</ul>
+</li>
+<!-- hall of fame -->
+<!-- admin section -->
+<!-- report -->
+<!-- announcement -->
+</ul>
+<ul class="navbar-nav">
+<li class="nav-item d-flex align-items-center">
+<a class="nav-link link-flex" data-user-id="12345" href="/users/profile">
+<span class="mi md-18">settings</span>
+</a>
+</li>
+<li class="nav-item d-flex align-items-center">
+<a class="nav-link link-flex gap-2" href="/main/logout">
+<span class="mi md-18">exit_to_app</span>
+Student Name
+</a>
+</li>
+</ul>
+</div>
+</div>
+</nav>
+</header>
+<script>
+  let server_time_offset_ms = 0
+  
+  window.addEventListener("load", function() {
+    $('.active-with-children').each( (index,obj) => { 
+      if ($(obj).siblings('.dropdown-menu').has('.active').length > 0) { 
+        $(obj).addClass('active')
+      }
+    } )
+  
+    //make view sub form use go_to_sub()
+    $("#view_sub_form").on('submit',function(e){
+        e.preventDefault();
+        go_to_sub();
+    });
+  
+  });
+  
+  function go_to_sub() {
+    sub_num = $('#view_sub_num').val();
+    if (!isNaN(sub_num) && !isNaN(parseFloat(sub_num))) {
+      window.location.href = "/submissions/-1234".replace('-1234',parseInt(sub_num))
+    }
+  }
+  
+  
+  // call check_in api and return a string of last check-in time
+  function check_in() {
+    fetch(check_in_url, {
+      method: 'POST',
+      headers: {
+        'X-CSRF-Token': csrfToken  // Send CSRF token in the headers
+      },
+    }).then( response => {
+      if (!response.ok) {
+        throw new Error('Network response was not ok');
+      }
+      return response.text() // this is a promise
+    });
+  }
+  
+  function checkInLoop() {
+    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content'); // Get the CSRF token
+    const check_in_url = '/contests/user_check_in'
+    const check_in_interval_seconds = 60
+    let response_received_time = moment()
+  
+  
+    //call check in
+    fetch(check_in_url, {
+      method: 'POST',
+      headers: {
+        'X-CSRF-Token': csrfToken  // Send CSRF token in the headers
+      },
+    }).then( response => {
+      response_received_time = moment()
+  
+      if (response.redirected) {
+        // Bounced to the login page: this window is no longer logged in
+        // (logged out, session expired, or refused by the device lock).
+        // Stop polling for good; retrying cannot succeed without a fresh login.
+        console.log('check-in stopped: this window is not logged in')
+        return null
+      }
+      if (!response.ok) {
+        throw new Error('Network response was not ok');
+      }
+      return response.text() // this is a promise
+    }).then( response_text => {
+      if (response_text === null) return
+      response = JSON.parse(response_text)
+      ms_since_last_check_in = response.ms_since_last_check_in
+  
+      //recalculate time offset
+      server_time_offset_ms = response_received_time - moment(response.current_time)
+  
+  
+      if (ms_since_last_check_in > check_in_interval_seconds * 1000) {
+        too_early_count = 0
+      } else {
+        too_early_count += 1
+      }
+      wait_multiplyer = (too_early_count + 1)
+      randomMs = 500 + 2000 * Math.random()
+      sleepDurationMs = wait_multiplyer * check_in_interval_seconds * 1000 + randomMs
+  
+      console.log(`Next check-in in ${sleepDurationMs / 1000} seconds...(collision = ${too_early_count})`);
+      setTimeout(checkInLoop,sleepDurationMs)
+  
+    }).catch( e => {
+      setTimeout(checkInLoop,5000)
+      throw e
+    }); // this catch is needed to handle the error happens in "then"
+  }
+  
+  function updateRemainingTime() {
+    const contestEndTime = Date.parse('')
+    if (!contestEndTime) return; // No contest end time to display
+  
+    const now = (new Date())
+    const extraTime = 0
+    const remainingTime = contestEndTime - now + server_time_offset_ms + (extraTime * 1000)
+  
+    if (remainingTime > 0) {
+      const hours = Math.floor(remainingTime / (1000 * 60 * 60));
+      const minutes = Math.floor((remainingTime % (1000 * 60 * 60)) / (1000 * 60));
+      const seconds = Math.floor((remainingTime % (1000 * 60)) / 1000);
+  
+      document.getElementById('countdown').textContent =
+        `${hours}h ${minutes}m ${seconds}s remaining`;
+    } else {
+      document.getElementById('countdown').textContent = 'Contest ended';
+    }
+  }
+  
+  // time should be a string in iso8601 format
+  function humanizeTime(time_iso8601,prepend_text_before = 'in ', prepend_text_after = '') {
+    const time = Date.parse(time_iso8601)
+    const now = new Date() ;
+    const remainingTime = time - now + server_time_offset_ms;
+    const hours = Math.floor(Math.abs(remainingTime) / (1000 * 60 * 60));
+    const minutes = Math.floor((Math.abs(remainingTime) % (1000 * 60 * 60)) / (1000 * 60));
+    const seconds = Math.floor((Math.abs(remainingTime) % (1000 * 60)) / 1000);
+    let time_text = ''
+    
+    //humanize
+    if (hours == 0) {
+      if (minutes <= 3) {
+         time_text = `${minutes * 60 + seconds} seconds`
+      } else {
+        time_text = `${minutes} minutes`
+      }
+    } else {
+      time_text = `${hours}h ${minutes}m`
+    }
+  
+    //return the text
+    if (remainingTime < 0) {
+      return prepend_text_after + time_text + ' ago'
+    } else {
+      return prepend_text_before + time_text
+    }
+  }
+</script>
+
+<!-- = content_tag(:p,flash[:notice],class: 'alert alert-success') if flash[:notice]!=nil -->
+<div class="container-fluid" id="main-content">
+<div class="container" data-controller="editor" data-editor-delay-value="4000">
+<textarea data-editor-target="source" id="text_sourcecode" style="display:none">int main()
+{
+    return 0;
+}</textarea>
+<div class="row mb-2">
+<div class="col-lg-8">
+<h3>
+<span class="font-monospace text-secondary">[00_Intro_11]</span>
+<span>00_Intro_★_Hello_World</span>
+</h3>
+
+<div class="row">
+<div class="col-md-6">
+<em>
+Limit:
+1.0<span class="text-body-tertiary">s</span>,
+<span>512</span><span class="text-body-tertiary">MB</span></em>
+</div>
+<div class="col-md-6 text-md-end">
+<div class="d-inline-flex align-items-center gap-1">
+<a target="_blank" data-turbo="false" class="link-flex" href="/problems/1360/download/statement"><span class="mi md-18">description</span> Read</a>
+<span>
+|
+</span>
+<a class="link-flex" href="/testcases/show_problem/1360"><span class="mi md-18">bug_report</span> Testcases</a>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="row">
+<div class="col-lg-8">
+<div>
+<div class="mb-3" data-editor-target="editor" id="editor" style="height: 500px; border-radius: 7px; font-size: 14px;"></div>
+</div>
+<div class="alert mb-3 alert-info">
+<div class="mb-2">
+<p>Write your code in the box above, choose a language, and then click the <strong>"Submit"</strong> button to submit the code.</p>
+
+</div>
+<form class="row row-cols-lg-auto g-3 align-items-center" data-action="editor#submit" enctype="multipart/form-data" action="/main/submit" accept-charset="UTF-8" method="post"><input type="hidden" name="authenticity_token" value="***" autocomplete="off"><input type="hidden" name="editor_text" id="editor_text" value="int main()
+{
+    return 0;
+}" data-editor-target="submitSource" autocomplete="off">
+<input type="hidden" name="submission[problem_id]" id="submission_problem_id" value="1360" autocomplete="off">
+<div class="col-auto">
+<label for="language_id">Language</label>
+</div>
+<div class="col-auto">
+<select class="form-select" data-action="change->editor#setLanguage" data-editor-target="languageSelect" style="width: 100px" id="language_id" name="language_id"><option value="1">C</option>
+<option selected="selected" value="2">C++</option>
+<option value="3">Pascal</option>
+<option value="4">Java</option>
+<option value="5">Ruby</option>
+<option value="6">Python</option>
+<option value="7">Haskell</option>
+<option value="8">Digital</option>
+<option value="9">PHP</option>
+<option value="10">Rust</option>
+<option value="11">Go</option>
+<option value="12">PostgreSQL</option>
+<option value="13">Archive</option>
+<option value="14">Text</option>
+<option value="15">Viva Exam</option></select>
+</div>
+<div class="col-auto">
+<input class="form-control" id="load_file" data-action="change->editor#loadFileToEditor" type="file" name="file">
+</div>
+<div class="col-auto">
+<input type="submit" name="commit" value="Submit" class="btn btn-success" id="live_submit" data-confirm="Submitting this source code for task [00_Intro_11] 00_Intro_★_Hello_World?" data-disable-with="Submit">
+</div>
+</form></div>
+</div>
+<div class="col-lg-4" data-turbo="">
+<div class="card mb-3 shadow-sm">
+<div class="card-body">
+<div class="row mb-2">
+<div class="col-md-12">
+<h5>
+Latest Submission Status
+<a id="refresh" class="btn btn-outline-secondary btn-sm" data-turbo="true" data-turbo-prefetch="false" href="/submissions/get_latest_submission_status/12345/1360">Refresh</a>
+</h5>
+</div>
+</div>
+<turbo-frame id="latest_status" src="/submissions/get_latest_submission_status/12345/1360"><div></div>
+</turbo-frame></div>
+</div>
+<turbo-frame id="problem_helpers"><div class="card mb-3 shadow-sm" data-turbo="">
+<div class="card-body">
+<div class="row mb-3">
+<div class="col-6">
+<h5 class="mb-0">
+Helper
+<a data-turbo="true" data-turbo-prefetch="false" class="btn btn-outline-secondary btn-sm" href="/submissions/2460978/comments?for=edit">Refresh</a>
+</h5>
+</div>
+<div class="col-6 text-end">
+<div class="text-end">
+<a data-bs-target="#helpers_help" data-bs-toggle="modal" href="#">[ What's this? ]</a>
+</div>
+</div>
+</div>
+<turbo-frame id="problem_hints">
+</turbo-frame><turbo-frame id="submission_comments"><em>-- There is no comment for this submission --</em>
+
+</turbo-frame></div>
+<div class="card-footer">
+<div id="llm_assist_picker">
+<div class="row">
+<div class="col">
+AI help by
+<code>claude-opus-4-5</code>
+</div>
+<div class="col-auto pb-0 text-end">
+<form class="d-inline" data-turbo="true" data-turbo-confirm="{&quot;title&quot;:&quot;Confirm Submission for AI Help&quot;,&quot;body&quot;:&quot;\u003cp\u003eThis action will send the problem statement, your \u003cstrong\u003eoriginal\u003c/strong\u003e source code \nfrom submission #2460978, and its score \n(0.0 [-]) to the\n\u003ccode\u003eclaude-opus-4-5\u003c/code\u003e large language model with a predefined prompt to request assistance.\u003c/p\u003e\n\n\u003cp\u003eRequesting assistance will reduce the \u003cstrong\u003efull score\u003c/strong\u003e for this problem by 10 points. If your final score for this problem does not exceed the \u003cstrong\u003ereduced full score\u003c/strong\u003e, you will receive that score. If your score exceeds the \u003cstrong\u003ereduced full score\u003c/strong\u003e, it will be capped at the \u003cstrong\u003ereduced full score\u003c/strong\u003e.\u003c/p\u003e\n\n\u003cp\u003eThe generated assistance will remain available to you permanently.\u003c/p\u003e\n\n\u003cp\u003eDo you want to confirm and request assistance?\u003c/p\u003e\n\n&quot;}" method="post" action="/submissions/2460978/comments/llm_assist"><button class="btn btn-link p-0 align-baseline" type="submit">Get</button><input type="hidden" name="authenticity_token" value="***" autocomplete="off"><input type="hidden" name="model" value="claude-opus-4-5" autocomplete="off"></form>
+</div>
+</div>
+<div class="row">
+<div class="col">
+AI help by
+<code>gemini-3.7-flash</code>
+</div>
+<div class="col-auto pb-0 text-end">
+<form class="d-inline" data-turbo="true" data-turbo-confirm="{&quot;title&quot;:&quot;Confirm Submission for AI Help&quot;,&quot;body&quot;:&quot;\u003cp\u003eThis action will send the problem statement, your \u003cstrong\u003eoriginal\u003c/strong\u003e source code \nfrom submission #2460978, and its score \n(0.0 [-]) to the\n\u003ccode\u003egemini-3.7-flash\u003c/code\u003e large language model with a predefined prompt to request assistance.\u003c/p\u003e\n\n\u003cp\u003eRequesting assistance will reduce the \u003cstrong\u003efull score\u003c/strong\u003e for this problem by 10 points. If your final score for this problem does not exceed the \u003cstrong\u003ereduced full score\u003c/strong\u003e, you will receive that score. If your score exceeds the \u003cstrong\u003ereduced full score\u003c/strong\u003e, it will be capped at the \u003cstrong\u003ereduced full score\u003c/strong\u003e.\u003c/p\u003e\n\n\u003cp\u003eThe generated assistance will remain available to you permanently.\u003c/p\u003e\n\n\u003cp\u003eDo you want to confirm and request assistance?\u003c/p\u003e\n\n&quot;}" method="post" action="/submissions/2460978/comments/llm_assist"><button class="btn btn-link p-0 align-baseline" type="submit">Get</button><input type="hidden" name="authenticity_token" value="***" autocomplete="off"><input type="hidden" name="model" value="gemini-3.7-flash" autocomplete="off"></form>
+</div>
+</div>
+</div>
+
+</div>
+</div>
+<div class="modal fade" id="helpers_help" role="dialog" tabindex="-1">
+<div class="modal-dialog" role="document">
+<div class="modal-content">
+<div class="modal-header">
+<h4>What are helpers?</h4>
+<button aria-label="Close" class="btn-close" data-bs-dismiss="modal" type="button"></button>
+</div>
+<div class="modal-body">
+There are two kinds of helpers.
+<ul>
+<li class="mb-2">
+<strong>Problem Hints</strong>
+are hints for this specific problem. The hint is pre-built according to
+the problem description without considering your submission.
+</li>
+<li class="mb-2">
+<strong>Submission Assistant</strong>
+is a specific helps on this particular submission.
+The help is generated by analyzing your submission and evaluation result
+mainly by an LLM.
+</li>
+</ul>
+</div>
+</div>
+</div>
+</div>
+
+</turbo-frame></div>
+</div>
+</div>
+
+</div>
+<turbo-frame data-turbo="true" id="msg_modal_main"></turbo-frame>
+<turbo-frame data-turbo="true" id="toast_main"><div class="toast-container position-fixed bottom-0 start-0 p-3" id="toast-area">
+<!-- place holder -->
+</div>
+</turbo-frame><turbo-frame data-turbo="true" id="js_response"><div id="js-response">
+<!-- place holder -->
+</div>
+</turbo-frame>
+<footer class="footer py-1 bg-light fixed-bottom border-top">
+<div class="container-fluid px-3 text-center small text-body-secondary">
+☕
+<a class="text-decoration-none fw-medium" href="https://github.com/nattee/cafe-grader-web">cafe-grader</a>
+<span class="mx-1 opacity-50">·</span>
+<span class="font-monospace">rev 4.7.3cu</span>
+</div>
+</footer>
+
+</body></html>

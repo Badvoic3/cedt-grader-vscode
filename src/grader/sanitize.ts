@@ -23,12 +23,19 @@ export function sanitizeHtml(html: string, opts: SanitizeOptions = {}): string {
   $('input[name="authenticity_token"]').attr('value', 'REDACTED');
   $('input[name="login"], input[name="password"]').attr('value', '');
 
-  // The profile link in the header shows the user's name.
+  // The header shows the user's full name next to the profile / logout icons
+  // (`<a href="/main/logout"><span class="mi">exit_to_app</span> Full Name</a>`).
+  // Icon spans (`.mi`) hold Material icon names, not personal data.
   const personal = new Set((opts.personal ?? []).filter((s) => s && s.length >= 2));
-  $('a[href$="/users/profile"], a[data-user-id]').each((_, a) => {
-    const t = cleanText($(a).text());
-    if (t) personal.add(t);
-    $(a).attr('data-user-id', FAKE_USER_ID);
+  $('a[href$="/users/profile"], a[data-user-id], a[href$="/main/logout"], a[href$="/login/logout"]').each((_, a) => {
+    const $a = $(a).clone();
+    $a.find('.mi, .material-icons, i').remove();
+    const t = cleanText($a.text());
+    if (t && !/^(log ?out|sign ?out|exit)$/i.test(t)) {
+      personal.add(t);
+      for (const part of t.split(' ')) if (part.length >= 2) personal.add(part);
+    }
+    if ($(a).attr('data-user-id') !== undefined) $(a).attr('data-user-id', FAKE_USER_ID);
   });
 
   let out = $.html();
