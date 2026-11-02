@@ -773,7 +773,8 @@ function historyRow(h: HistoryEntry, s: ViewState): HTMLElement {
         const tip = h.compileError ? W.compilationError : st.tip ? `${st.text}. ${st.tip}` : st.text;
         return el('span', { class: `pill ${h.compileError ? 'score-zero' : scoreClass(h.points, activeRawSum())}`, title: tip, 'aria-label': tip }, h.compileError ? W.ce : fmt(h.points));
       })(),
-      h.counted ? el('span', { class: 'badge counted', title: W.thisSubmissionHoldsYourCounted, 'aria-label': W.countedBestSubmission }, icon('star-full'), el('span', { class: 'counted-text' }, W.counted)) : null,
+      // The star takes the colour of the counted score on this problem (penalties included), like the score pill.
+      h.counted ? el('span', { class: `badge counted ${scoreClass(s.problem?.score.counted ?? h.points, activeRawSum())}`, title: W.thisSubmissionHoldsYourCounted, 'aria-label': W.countedBestSubmission }, icon('star-full'), el('span', { class: 'counted-text' }, W.counted)) : null,
       el('span', { class: 'grow ellipsis' },
         h.verdicts.length
           ? el('span', { class: 'muted small', title: W.ofTestsPassedShort(h.verdicts.filter((v) => v.ok).length, h.verdicts.length) }, `${h.verdicts.filter((v) => v.ok).length}/${h.verdicts.length}`)
