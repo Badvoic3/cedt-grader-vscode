@@ -8,6 +8,7 @@
 import './lang'; // first: sets the display language before anything below builds elements
 import { G, HOW_LINKED, W, W_SOURCE } from '../src/shared/strings';
 import { dateLocale } from '../src/shared/i18n';
+import { type SectionId, visibleSections } from '../src/shared/layout';
 import { outOfFor, scoreText } from '../src/grader/score';
 import { groupLabel, verdictLegend } from '../src/grader/verdicts';
 import { menuLabelMax, middleEllipsis } from './text';
@@ -433,7 +434,7 @@ function renderPickerList(s: ViewState): void {
 function scoreCard(sc: ScoreView): HTMLElement {
   const card = el('div', { class: 'score-card' },
     el('div', { class: 'row score-row' },
-      el('span', { class: 'muted small' }, W.countedScore),
+      el('span', { class: 'muted small', title: sc.source === 'problem-list' ? `${W.countedScore} · ${W.penaltiesFromListTip}` : undefined }, W.countedScore),
       el('span', { class: 'grow' }),
       sc.source === 'problem-list' ? el('span', { class: 'muted small', title: W.penaltiesFromListTip }, W.fromProblemList) : null,
     ),
@@ -985,7 +986,8 @@ let listSaveTimer: ReturnType<typeof setTimeout> | undefined;
 const problemList = new VirtualList<ProblemView>(document, {
   key: (p) => String(p.id),
   version: problemVersion,
-  kind: (p) => (titleParts(p).subtitle ? 'two-line' : 'one-line'),
+  // Compact mode hides the second line (full name stays in the tooltip).
+  kind: (p) => (titleParts(p).subtitle && !compactOn ? 'two-line' : 'one-line'),
   render: (p) => problemRow(p, state!, 'list'),
   fallbackHeight: (k) => (k === 'two-line' ? 38 : 24),
   maxHeight: PANEL.listMaxHeightPx,
@@ -1110,11 +1112,32 @@ function sectionKeys(s: ViewState): Record<string, string> {
   };
 }
 
+/** Panel layout settings: which sections, in which order, and compact mode. */
+let compactOn = false;
+let sectionOrderKey = '';
+function applyLayout(s: ViewState): void {
+  const compact = !!s.layout?.compact;
+  if (compact !== compactOn) {
+    compactOn = compact;
+    document.body.classList.toggle('compact', compact);
+    lastKeys.delete('problems'); // rows change height: lay the list out again
+  }
+  const order = visibleSections(s.layout?.sections ?? [], s.account.status === 'logged-in');
+  const key = order.join(',');
+  if (key === sectionOrderKey) return;
+  sectionOrderKey = key;
+  const all: Record<SectionId, ReturnType<typeof section>> = { account: sAccount, current: sCurrent, result: sResult, history: sHistory, problems: sProblems };
+  for (const [id, sec] of Object.entries(all) as [SectionId, ReturnType<typeof section>][]) sec.details.hidden = !order.includes(id);
+  // Move only when the order changed (existing elements are moved, nothing is rebuilt).
+  app.append(banner, promptBar, ...order.map((id) => all[id].details), ...(Object.keys(all) as SectionId[]).filter((id) => !order.includes(id)).map((id) => all[id].details));
+}
+
 function render(): void {
   if (!state) {
     sAccount.body.replaceChildren(el('p', { class: 'muted' }, W.loading));
     return;
   }
+  applyLayout(state);
   const active = document.activeElement;
   const pageScroll = document.scrollingElement?.scrollTop ?? 0;
   const keys = sectionKeys(state);
@@ -1188,6 +1211,7 @@ window.addEventListener('message', (ev: MessageEvent<ToWebview>) => {
       openPicker();
     } else if (m.target === 'result') {
       // Grading finished: show the Result section without taking keyboard focus from the editor.
+      if (sResult.details.hidden) return; // hidden by cedtGrader.panel.sections
       ui.collapsed.result = false;
       sResult.details.open = true;
       sResult.details.scrollIntoView?.({ block: 'nearest' });

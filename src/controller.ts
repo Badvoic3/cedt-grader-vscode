@@ -556,6 +556,7 @@ export class GraderController implements vscode.Disposable {
 
     return {
       baseUrl: this.cfg.baseUrl,
+      layout: { sections: this.cfg.panelSections, compact: this.cfg.panelCompact },
       account: {
         status: this.accountStatus,
         username: this.cfg.username,
