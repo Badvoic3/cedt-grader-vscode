@@ -1,6 +1,6 @@
 # Build "CEDT Grader Submit": a VS Code extension for cedt-grader.nattee.net
 
-**Status (v0.6.0):** Phases 1–5 are done (see each phase for what changed from the original plan; Phase 5 confirmed by the user's F5 / .vsix checkpoint on 2026-11-03). Phase 6 is next — see **Next steps** at the end. `CLAUDE.md` describes the current code (architecture, rules, where to change things, open questions); this file is the spec.
+**Status (v0.7.0):** Phases 1–5 are done; Phase 6 is built and waits for the user's final CHECKPOINT, then the GitHub Release (Marketplace later, see `CLAUDE.md` → Releasing) — see **Next steps** at the end. `CLAUDE.md` describes the current code (architecture, rules, where to change things, open questions); this file is the spec.
 
 A VS Code extension (TypeScript) that lets students submit the active source file to the CEDT Grader and see the verdict inside VS Code. It is a standalone grader extension. **Competitive Programming Helper (CPH)** (`DivyanshuAgrawal.competitive-programming-helper`) is optional: everything works without it, and when it is installed the extension stays compatible with it (see "CPH is optional" below).
 
@@ -283,7 +283,9 @@ Already in place (keep current): tests for parsers, `GraderClient` with a fake s
 - Keep `CLAUDE.md`, this file, the README and `CHANGELOG.md` current.
 - **CHECKPOINT:** list what I should test manually in the F5 Extension Development Host (log in, submit a correct solution, submit a compile error, submit a wrong answer, log out, install from the .vsix) and wait for my results.
 
-### Phase 6: Language and customization — LATER (after Phase 5)
+### Phase 6: Language and customization — BUILT, CHECKPOINT PENDING
+
+What changed from the plan below: `vscode.l10n` is not used for the panel (it can't follow our own setting); our tables (`strings.ts` / `strings.th.ts`) switch live, and `package.nls*.json` covers VS Code's own texts. Problem-list defaults and a tiles/text verdict setting were dropped by the user; added instead: save before submit and show the result (both on), a Troubleshooting link, `README.th.md`, README pictures, publisher `Badvoic3`.
 
 1. **Thai translation, English by default**
    - Setting `cedtGrader.displayLanguage`: "English" (default), "ไทย (Thai)", "Follow VS Code". Changing it updates the panel without restarting.
@@ -304,10 +306,10 @@ Already in place (keep current): tests for parsers, `GraderClient` with a fake s
 ## 4. Next steps (start here in a new session)
 
 1. Read `CLAUDE.md` (architecture, rules, "Where to change things", known limitations, **open questions**) and this file's Phase 5.
-2. Run `npm install`, `npm test`, `npm run build` — all green at v0.6.0 (344 tests); `npm run package` builds the `.vsix` without warnings.
+2. Run `npm install`, `npm test`, `npm run build` — all green at v0.7.0 (380 tests); `npm run package` builds the `.vsix` without warnings.
 3. Phase 5 is built ((a) cache management + "Clear Cached Data", (b) README install guide / troubleshooting / updating / uninstalling, (c) Getting Started walkthrough, (d) packaging: LICENSE, icon, repository, no source maps). Release decisions are in `CLAUDE.md`. The user confirmed the CHECKPOINT (2026-11-03); fixes after it: counted star coloured by the score, walkthrough auto-open documented (only for installs inside VS Code).
 4. Git history was rewritten to the GitHub noreply email before the first push (see `CLAUDE.md`). Keep `git config user.email` on the noreply address.
-5. Phase 6 (language and customization) is next; plan it first and show the user.
+5. Phase 6 is built (v0.7.0). After the user's CHECKPOINT results: GitHub Release v0.7.0 with the `.vsix`; Marketplace publish when the user has the publisher account (`CLAUDE.md` → Releasing).
 
 Layout changes need the user's approval first (Phase 4 rule); later requests win over earlier ones.
 

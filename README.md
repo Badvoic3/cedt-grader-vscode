@@ -10,13 +10,13 @@ It works on its own. If you also use Competitive Programming Helper, see [Works 
 
 The extension comes as one file, `cedt-grader-submit-<version>.vsix`. You don't need the Marketplace.
 
-1. **Get the file.** Download `cedt-grader-submit-<version>.vsix` (e.g. `cedt-grader-submit-0.6.0.vsix`) and remember where you saved it. Don't unzip it.
+1. **Get the file.** Open the [latest release](https://github.com/Badvoic3/cedt-grader-vscode/releases/latest) and download `cedt-grader-submit-<version>.vsix` (e.g. `cedt-grader-submit-0.7.0.vsix`) under *Assets*. Remember where you saved it. Don't unzip it.
 2. **Install it in VS Code.**
    - Open the Extensions view: the four-squares icon in the left bar, or <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>X</kbd> (<kbd>Cmd</kbd>+<kbd>Shift</kbd>+<kbd>X</kbd> on macOS).
    - Click the **⋯** (Views and More Actions) at the top of the Extensions view and choose **Install from VSIX…**.
    - Pick the `.vsix` file. If VS Code asks to reload or restart extensions, click it.
 
-   *Or, from a terminal:* `code --install-extension cedt-grader-submit-0.6.0.vsix`. On macOS, if `code` isn't found, run **Shell Command: Install 'code' command in PATH** from the Command Palette (<kbd>Cmd</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd>) first.
+   *Or, from a terminal:* `code --install-extension cedt-grader-submit-0.7.0.vsix`. On macOS, if `code` isn't found, run **Shell Command: Install 'code' command in PATH** from the Command Palette (<kbd>Cmd</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd>) first.
 3. **Check that it worked.** A **CEDT Grader** icon (a page with a check mark) appears in the left bar, and, if you installed from inside VS Code, the **Get started with CEDT Grader** page opens. If it doesn't (e.g. you installed from a terminal or while VS Code was closed), run **CEDT Grader: Get Started** from the Command Palette or the **⋯** menu at the top of the panel; you can open it again the same way any time.
 
 ### First steps
@@ -38,7 +38,7 @@ Install the new `.vsix` the same way (**⋯ → Install from VSIX…**). It repl
 ### Uninstalling
 
 1. Optional, to leave nothing behind: run **CEDT Grader: Clear Cached Data…** from the Command Palette and tick everything, including **Saved login** (this removes your password from the OS keychain). VS Code may keep an extension's stored data after uninstalling.
-2. In the Extensions view, find **CEDT Grader Submit**, click the gear icon and choose **Uninstall** (or `code --uninstall-extension cedt-student.cedt-grader-submit`).
+2. In the Extensions view, find **CEDT Grader Submit**, click the gear icon and choose **Uninstall** (or `code --uninstall-extension Badvoic3.cedt-grader-submit`).
 3. `.cedt-grader.json` files in your solution folders (your file-to-problem links) stay; delete them if you like.
 
 ## Use it

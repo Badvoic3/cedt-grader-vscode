@@ -309,6 +309,14 @@ No course- or problem-specific names in code (problem names come from the server
 - The controller (vscode-dependent) has no unit tests; its rules are kept in pure, tested helpers (`problemFiles.ts`, `suggestionGate.ts`, `match.ts`, `mappingOps.ts`, `paths.ts`) and the webview is tested in jsdom.
 - English only; texts are already in `src/shared/strings.ts`, ready for Phase 6.
 
+## Releasing
+
+- Publisher **`Badvoic3`** (extension ID `Badvoic3.cedt-grader-submit`), decided 2026-11-03 so the GitHub `.vsix` and the Marketplace are the same extension. The user registers exactly this publisher ID on the Marketplace later (not done yet: no Azure DevOps account). Changing it later would make the Marketplace version a second, separate extension.
+- The repo is public: `npm run package` / `npm run publish` let vsce rewrite README links to `https://github.com/Badvoic3/cedt-grader-vscode/{blob,raw}/HEAD/…` (the Marketplace needs web addresses; pictures load from GitHub). `test/i18n.test.ts` checks the scripts don't turn that off.
+- **GitHub Release** (main way to install for now): bump `version` (package.json + package-lock), CHANGELOG heading, `npm test`, `npm run package`, commit, `git tag -a vX.Y.Z`, push with the tag, then `gh release create vX.Y.Z cedt-grader-submit-X.Y.Z.vsix --title "vX.Y.Z" --notes-file <CHANGELOG section>`. README install step 1 links to `/releases/latest`.
+- **Marketplace** (when the user says "publish"): the user runs `! npx vsce login Badvoic3` once and pastes a personal access token (Azure DevOps → User settings → Personal access tokens, organization *All accessible organizations*, scope **Marketplace → Manage**; never pasted in chat). Then `npm run publish` (vsce publish; runs the production build). After that, move "Install from the Marketplace" first in both READMEs (search "CEDT Grader Submit"; updates are automatic) and keep the `.vsix` from Releases as the fallback.
+- Optional later: a GitHub Actions workflow publishing on `v*` tags with the token as repo secret `VSCE_PAT`.
+
 ## Release decisions (Phase 5)
 
 - LICENSE: MIT, © 2026 Nutthanun Kongsorn. `repository`: https://github.com/Badvoic3/cedt-grader-vscode. Icon: `media/icon.png` (128 px, rendered from `media/icon.svg`; the Activity Bar uses the SVG).
@@ -322,6 +330,6 @@ No course- or problem-specific names in code (problem names come from the server
 
 ## Not done yet
 
-- Phase 6: Thai translation (`cedtGrader.displayLanguage`, vscode.l10n, package.nls.th.json), plain-language review, more customization — see spec.
+- Phase 6: built (v0.7.0): Thai + plain English, submit options, Troubleshooting link, file-name pattern, panel sections / compact mode. Waiting for the final CHECKPOINT (F5 + .vsix) before the GitHub Release; Marketplace publishing waits for the user's publisher account.
 
 Commands (kept for keybindings; the panel is the primary interface): `cedtGrader.login`, `logout`, `submit`, `chooseProblem`, `clearMapping`, `loadTestcases`, `showLastResult`, `openStatement`, `refreshProblems`, `refreshHistory`, `showRequestLog`, `clearCache`, `openWalkthrough`, `openSettings`, `renameFileToProblem`, `focus`.

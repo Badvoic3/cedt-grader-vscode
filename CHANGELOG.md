@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased (Phase 6)
+## 0.7.0 — Phase 6 (language and customization)
 
 ### Language
 - Thai: setting **CEDT Grader: Display Language** (English, ไทย (Thai), Follow VS Code), switches the panel, statement viewer, messages and status bar at once. Command names, settings and the walkthrough are in Thai when VS Code itself is in Thai. Grader content and verdict words stay as they are; Thai dates use Gregorian years.
@@ -17,6 +17,10 @@
 ### Panel
 - **Choose and order the sections** (`cedtGrader.panel.sections`): hide the ones you don't use, move Problems up, etc. Account comes back while logged out.
 - **Compact mode** (`cedtGrader.panel.compact`): about 20% shorter panel with the same content.
+
+### Releases
+- Publisher `Badvoic3` (extension ID `Badvoic3.cedt-grader-submit`), the same ID the Marketplace version will use. If you installed an earlier `.vsix` (publisher `cedt-student`), uninstall it first.
+- The `.vsix` is attached to GitHub Releases; README links and pictures point to the public GitHub repository.
 
 ### Help
 - **Troubleshooting** link (connection banner, login errors, panel ⋯ menu, command) opens the README's troubleshooting section on GitHub, in the display language.

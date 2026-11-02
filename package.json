@@ -2,8 +2,8 @@
   "name": "cedt-grader-submit",
   "displayName": "CEDT Grader Submit",
   "description": "%extension.description%",
-  "version": "0.6.0",
-  "publisher": "cedt-student",
+  "version": "0.7.0",
+  "publisher": "Badvoic3",
   "license": "MIT",
   "icon": "media/icon.png",
   "repository": {
@@ -14,7 +14,11 @@
     "url": "https://github.com/Badvoic3/cedt-grader-vscode/issues"
   },
   "homepage": "https://github.com/Badvoic3/cedt-grader-vscode#readme",
-  "private": true,
+  "qna": "https://github.com/Badvoic3/cedt-grader-vscode/issues",
+  "galleryBanner": {
+    "color": "#1d4fa8",
+    "theme": "dark"
+  },
   "engines": {
     "vscode": "^1.90.0"
   },
@@ -27,8 +31,9 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "probe": "tsx scripts/probe.ts",
-    "package": "vsce package --no-dependencies --no-rewrite-relative-links",
-    "vscode:prepublish": "npm run build:prod"
+    "package": "vsce package --no-dependencies",
+    "vscode:prepublish": "npm run build:prod",
+    "publish": "vsce publish --no-dependencies"
   },
   "dependencies": {
     "cheerio": "^1.2.0",

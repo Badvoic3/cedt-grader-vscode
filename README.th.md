@@ -12,14 +12,14 @@
 
 ส่วนขยายนี้ติดตั้งผ่านไฟล์เดียวในชื่อ `cedt-grader-submit-<version>.vsix` (ไม่จำเป็นต้องค้นหาบน VS Code Marketplace)
 
-1. **ดาวน์โหลดไฟล์** `cedt-grader-submit-<version>.vsix` (เช่น `cedt-grader-submit-0.6.0.vsix`) บันทึกเก็บไว้ในเครื่อง (ไม่ต้องแตกไฟล์ zip ออกมา)
+1. **ดาวน์โหลดไฟล์** เปิดหน้า [รุ่นล่าสุด (latest release)](https://github.com/Badvoic3/cedt-grader-vscode/releases/latest) แล้วดาวน์โหลด `cedt-grader-submit-<version>.vsix` (เช่น `cedt-grader-submit-0.7.0.vsix`) ในส่วน *Assets* บันทึกเก็บไว้ในเครื่อง (ไม่ต้องแตกไฟล์ zip ออกมา)
 2. **ติดตั้งลงใน VS Code**
 * ไปที่แถบ Extensions: คลิกไอคอนบล็อกสี่เหลี่ยมสี่ช่องทางซ้ายมือ หรือกดคีย์ลัด Ctrl+Shift+X (Cmd+Shift+X สำหรับ macOS)
 * คลิกที่เมนูจุดสามจุด **⋯** (Views and More Actions) บริเวณมุมขวาบนของแถบ Extensions แล้วเลือก **Install from VSIX…**
 * เลือกไฟล์ `.vsix` ที่โหลดไว้ หาก VS Code มีการแจ้งเตือนให้ Reload หรือ Restart Extensions ให้กดยืนยันตามระบบ
 
 
-*หรือติดตั้งผ่าน Terminal:* ใช้คำสั่ง `code --install-extension cedt-grader-submit-0.6.0.vsix` (สำหรับ macOS หากระบบแจ้งว่าไม่พบคำสั่ง `code` ให้เปิด Command Palette ด้วย Cmd+Shift+P แล้วพิมพ์สั่ง **Shell Command: Install 'code' command in PATH** ก่อนรอบหนึ่ง)
+*หรือติดตั้งผ่าน Terminal:* ใช้คำสั่ง `code --install-extension cedt-grader-submit-0.7.0.vsix` (สำหรับ macOS หากระบบแจ้งว่าไม่พบคำสั่ง `code` ให้เปิด Command Palette ด้วย Cmd+Shift+P แล้วพิมพ์สั่ง **Shell Command: Install 'code' command in PATH** ก่อนรอบหนึ่ง)
 3. **ตรวจสอบความพร้อม:** เมื่อติดตั้งเสร็จ จะมีไอคอน **CEDT Grader** (สัญลักษณ์แผ่นเอกสารพร้อมเครื่องหมายถูก) ปรากฏบนแถบเครื่องมือด้านซ้าย และหน้าต่าง **Get started with CEDT Grader** จะเปิดขึ้นมาอัตโนมัติ หากหน้าดังกล่าวไม่เด้งขึ้นมา (เช่น ติดตั้งผ่าน Terminal หรือติดตั้งตอนปิดหน้าต่างอยู่) สามารถเปิดเองได้ตลอดเวลาโดยเรียกคำสั่ง **CEDT Grader: Get Started** จาก Command Palette หรือคลิกเมนู **⋯** ด้านบนสุดของแผง Grader
 
 ### เริ่มต้นส่งงาน
@@ -41,7 +41,7 @@
 ### การถอนการติดตั้ง
 
 1. หากต้องการล้างข้อมูลแคชทั้งหมดให้เกลี้ยงเครื่อง: เปิด Command Palette แล้วรันคำสั่ง **CEDT Grader: Clear Cached Data…** ติ๊กเลือกทุกหัวข้อ รวมถึง **ข้อมูลเข้าสู่ระบบที่บันทึกไว้** (เพื่อลบรหัสผ่านออกจาก Keychain หรือ Credential Manager ของระบบ) เนื่องจากปกติแล้ว VS Code อาจยังเก็บแคชบางส่วนไว้หลังถอนการติดตั้ง
-2. ไปที่แถบ Extensions ค้นหา **CEDT Grader Submit** คลิกไอคอนฟันเฟือง แล้วเลือก **Uninstall** (หรือรัน `code --uninstall-extension cedt-student.cedt-grader-submit` ใน Terminal)
+2. ไปที่แถบ Extensions ค้นหา **CEDT Grader Submit** คลิกไอคอนฟันเฟือง แล้วเลือก **Uninstall** (หรือรัน `code --uninstall-extension Badvoic3.cedt-grader-submit` ใน Terminal)
 3. หากมีไฟล์ `.cedt-grader.json` (ไฟล์บันทึกการจับคู่โจทย์) หลงเหลืออยู่ในโฟลเดอร์งาน สามารถลบออกด้วยตนเองได้ตามต้องการ
 
 ## คู่มือการใช้งาน
