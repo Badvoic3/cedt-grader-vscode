@@ -41,7 +41,7 @@ import { stat as fsStat, readFile as fsReadFile } from 'node:fs/promises';
 import { dismissKey, type LocatedEntry, moveCphProblem, reconnectCandidates, remapPath } from './mapping/mappingOps';
 import { cleanName, fileNameFor, type MatchSource, placeholder, resolveProblem, SOURCE_LABEL } from './mapping/match';
 import { MappingStore } from './mapping/store';
-import { linkedNotice, mergeProblemFiles, type ProblemFile, ProblemFileSearch } from './mapping/problemFiles';
+import { comparePaths, linkedNotice, mergeProblemFiles, type ProblemFile, ProblemFileSearch } from './mapping/problemFiles';
 import { pathKey } from './mapping/paths';
 import { LIMITS, TIMING, WEB_PATHS } from './shared/constants';
 import { HOW_LINKED, S } from './shared/strings';
@@ -976,7 +976,7 @@ export class GraderController implements vscode.Disposable {
     return kept;
   }
 
-  /** Existing files for a problem, most recently edited first; missing saved links reported, missing auto-matches dropped. */
+  /** Existing files for a problem, in the stable path order; missing saved links reported, missing auto-matches dropped. */
   private async existingFilesFor(problemId: number): Promise<{ found: { uri: vscode.Uri; t: number; how: ProblemFile['how'] }[]; gone: vscode.Uri[] }> {
     const found: { uri: vscode.Uri; t: number; how: ProblemFile['how'] }[] = [];
     const gone: vscode.Uri[] = [];
@@ -986,7 +986,7 @@ export class GraderController implements vscode.Disposable {
       else if (f.how === 'chosen') gone.push(vscode.Uri.file(f.fsPath));
       else await this.mapping.deleteAuto(vscode.Uri.file(f.fsPath));
     }
-    found.sort((a, b) => b.t - a.t);
+    found.sort((a, b) => comparePaths(vscode.workspace.asRelativePath(a.uri), vscode.workspace.asRelativePath(b.uri)));
     return { found, gone };
   }
 
