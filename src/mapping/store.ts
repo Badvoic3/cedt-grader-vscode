@@ -70,8 +70,8 @@ export class MappingStore {
   }
 
   /** Rename: an auto-match follows the file only if it still matches by name. */
-  async renameAuto(oldUri: vscode.Uri, newUri: vscode.Uri, problemName: (id: number) => string | undefined): Promise<void> {
-    await this.ctx.workspaceState.update(AUTO_KEY, autoAfterRename(this.autoMatches(), oldUri.fsPath, newUri.fsPath, problemName));
+  async renameAuto(oldUri: vscode.Uri, newUri: vscode.Uri, stillMatches: (fsPath: string, problemId: number) => boolean): Promise<void> {
+    await this.ctx.workspaceState.update(AUTO_KEY, autoAfterRename(this.autoMatches(), oldUri.fsPath, newUri.fsPath, stillMatches));
   }
 
   async deleteAuto(uri: vscode.Uri): Promise<void> {

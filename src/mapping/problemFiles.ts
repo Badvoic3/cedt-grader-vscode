@@ -1,5 +1,4 @@
 import { basename } from 'node:path';
-import { fileStem, normalizeName } from './match';
 import { pathKey, remapPath } from './paths';
 
 /**
@@ -10,9 +9,9 @@ import { pathKey, remapPath } from './paths';
  *  - chosen:   saved links (chosen by the user, or a confirmed suggestion);
  *  - cph / filename: remembered auto-matches (recorded when the file was open
  *    and matched by CPH data or by its name);
- *  - filename: files that would match by name but were never opened (one
- *    cached file search per problem);
- *  - suggested: confident suggestions remembered while open (treated like links).
+ *  - filename / suggested: what the one matcher (matchIndex.ts) says for the
+ *    workspace's source files, opened or not (cached index), plus confident
+ *    suggestions remembered while open (treated like links).
  * Excluded: files explicitly "not linked", and files manually linked to a
  * different problem (a manual link always wins).
  */
@@ -49,8 +48,8 @@ export function mergeProblemFiles(opts: {
   chosen: string[];
   /** All remembered auto-matches (any problem). */
   auto: AutoMatch[];
-  /** File-search hits for this problem's clean name. */
-  searched: string[];
+  /** Files the one matcher (matchIndex.ts) assigns to this problem. */
+  matched: { fsPath: string; how: 'filename' | 'suggested' }[];
   /** Files explicitly unlinked by the user. */
   unlinked: string[];
   /** Files with a saved link to a different problem. */
@@ -70,7 +69,7 @@ export function mergeProblemFiles(opts: {
   };
   for (const p of opts.chosen) add(p, 'chosen');
   for (const a of opts.auto) if (a.problemId === opts.problemId && (a.how !== 'suggested' || opts.includeSuggested !== false)) add(a.fsPath, a.how);
-  for (const p of opts.searched) add(p, 'filename');
+  for (const m of opts.matched) if (m.how !== 'suggested' || opts.includeSuggested !== false) add(m.fsPath, m.how);
   return [...out.values()].sort((a, b) => comparePaths(a.fsPath, b.fsPath));
 }
 
@@ -111,10 +110,17 @@ export function linkedNotice(files: ProblemFile[], currentFsPath: string, rel: (
 
 /**
  * Remembered auto-matches after a rename: an entry follows the file only if
- * it still matches by name (`stillMatches`); CPH matches are dropped (CPH's
- * file belongs to the old path). Returns the new list.
+ * the one matcher still gives the same problem for the new path
+ * (`stillMatches`); CPH matches are dropped (CPH's file belongs to the old
+ * path). Returns the new list.
  */
-export function autoAfterRename(auto: AutoMatch[], oldPath: string, newPath: string, problemName: (id: number) => string | undefined, caseInsensitive?: boolean): AutoMatch[] {
+export function autoAfterRename(
+  auto: AutoMatch[],
+  oldPath: string,
+  newPath: string,
+  stillMatches: (fsPath: string, problemId: number) => boolean,
+  caseInsensitive?: boolean,
+): AutoMatch[] {
   const out: AutoMatch[] = [];
   for (const a of auto) {
     const to = remapPath(a.fsPath, oldPath, newPath, caseInsensitive);
@@ -122,8 +128,7 @@ export function autoAfterRename(auto: AutoMatch[], oldPath: string, newPath: str
       out.push(a);
       continue;
     }
-    const name = problemName(a.problemId);
-    if (a.how === 'filename' && name && normalizeName(fileStem(to)) === normalizeName(name)) out.push({ ...a, fsPath: to });
+    if (a.how !== 'cph' && stillMatches(to, a.problemId)) out.push({ ...a, fsPath: to });
   }
   return out;
 }
@@ -131,33 +136,4 @@ export function autoAfterRename(auto: AutoMatch[], oldPath: string, newPath: str
 /** Drop remembered auto-matches for a deleted file or folder. */
 export function autoAfterDelete(auto: AutoMatch[], deleted: string, caseInsensitive?: boolean): AutoMatch[] {
   return auto.filter((a) => remapPath(a.fsPath, deleted, deleted, caseInsensitive) === null);
-}
-
-/**
- * Cached file search per problem. `find` (one workspace.findFiles) runs at
- * most once per problem until `invalidate()` (file create/delete/rename,
- * debounced by the caller).
- */
-export class ProblemFileSearch {
-  private readonly cache = new Map<number, Promise<string[]>>();
-
-  constructor(private readonly find: (problemId: number) => Promise<string[]>) {}
-
-  get(problemId: number): Promise<string[]> {
-    let p = this.cache.get(problemId);
-    if (!p) {
-      p = this.find(problemId).catch(() => []);
-      this.cache.set(problemId, p);
-    }
-    return p;
-  }
-
-  /** Cached result without searching (undefined when never searched). */
-  peek(problemId: number): Promise<string[]> | undefined {
-    return this.cache.get(problemId);
-  }
-
-  invalidate(): void {
-    this.cache.clear();
-  }
 }

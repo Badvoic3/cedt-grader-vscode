@@ -1,22 +1,14 @@
-import { basename, dirname, extname, sep } from 'node:path';
-import { cleanName } from './match';
+import { dirname, extname, sep } from 'node:path';
 
 /** Folders never searched ("Find file by name"). */
 export const EXCLUDED_DIRS = ['node_modules', '.git', '.cph', 'bin', 'build', 'out', 'dist', 'target', '.vscode-test'];
 /** Never source files. */
 export const BINARY_EXTS = new Set(['bin', 'o', 'obj', 'out', 'exe', 'zip', 'jar', 'class', 'a', 'so', 'dylib', 'dll', 'pdf']);
 
-/** Case-insensitive glob for a literal name (`[aA][bB]…`); glob special characters become `?`. */
-export function caseInsensitiveGlob(name: string): string {
-  return [...name]
-    .map((c) => (/[{}[\]*?,!\\]/.test(c) ? '?' : c.toLowerCase() !== c.toUpperCase() ? `[${c.toLowerCase()}${c.toUpperCase()}]` : c))
-    .join('');
-}
-
-/** `**\/<name>.{exts}` include glob for findFiles. */
-export function includeGlob(problemName: string, exts: string[]): string {
-  const e = exts.flatMap((x) => [x.toLowerCase(), x.toUpperCase()]);
-  return `**/${caseInsensitiveGlob(cleanName(problemName))}.{${[...new Set(e)].join(',')}}`;
+/** `**\/*.{exts}` include glob for findFiles: every source file of the given extensions (both cases). */
+export function sourceGlob(exts: string[]): string {
+  const e = exts.map((x) => x.toLowerCase().replace(/^\./, '')).filter((x) => x && !BINARY_EXTS.has(x));
+  return `**/*.{${[...new Set(e.flatMap((x) => [x, x.toUpperCase()]))].join(',')}}`;
 }
 
 /**
@@ -37,14 +29,16 @@ export function excludeGlob(settingsExcludes: Record<string, unknown>[], gitigno
   return `{${[...parts].join(',')}}`;
 }
 
-/** Keep only source files named exactly like the problem (case-insensitive), with a permitted extension, outside excluded folders. */
-export function filterCandidates(paths: string[], problemName: string, permittedExts: string[]): string[] {
-  const name = cleanName(problemName).toLowerCase();
-  const exts = new Set(permittedExts.map((e) => e.toLowerCase().replace(/^\./, '')).filter((e) => e && !BINARY_EXTS.has(e)));
+/**
+ * Keep only source files: an extension of a known language (never a binary
+ * one), outside excluded folders (build output, .cph, node_modules, *.dSYM…).
+ * Which problem a file belongs to is decided by the one matcher (matchIndex.ts).
+ */
+export function filterSourceFiles(paths: string[], sourceExts: string[]): string[] {
+  const exts = new Set(sourceExts.map((e) => e.toLowerCase().replace(/^\./, '')).filter((e) => e && !BINARY_EXTS.has(e)));
   return paths.filter((p) => {
     const ext = extname(p).slice(1).toLowerCase();
     if (!exts.has(ext) || BINARY_EXTS.has(ext)) return false;
-    if (basename(p, extname(p)).toLowerCase() !== name) return false;
     const segs = dirname(p).split(/[\\/]/);
     return !segs.some((s) => EXCLUDED_DIRS.includes(s) || s.toLowerCase().endsWith('.dsym'));
   });
