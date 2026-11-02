@@ -252,7 +252,22 @@ const sHistory = section('history', 'History', [
 ]);
 const sProblems = section('problems', 'Problems', [iconButton('refresh', 'Refresh problem list', () => send({ type: 'refreshProblems' }))]);
 const banner = el('div', { class: 'banner', role: 'alert', hidden: true });
-app.append(banner, sAccount.details, sCurrent.details, sResult.details, sHistory.details, sProblems.details);
+const promptBar = el('div', { class: 'prompt', role: 'status', hidden: true });
+app.append(banner, promptBar, sAccount.details, sCurrent.details, sResult.details, sHistory.details, sProblems.details);
+
+/** Inline question with plain buttons (instead of a modal dialog). */
+function renderPrompt(s: ViewState): void {
+  const q = s.prompt;
+  promptBar.hidden = !q;
+  promptBar.replaceChildren();
+  if (!q) return;
+  promptBar.className = `prompt notice${q.tone === 'warn' ? ' warn' : ''}`;
+  appendChildren(promptBar, [
+    el('div', { class: 'row' }, icon(q.tone === 'warn' ? 'warning' : 'info'), el('span', { class: 'grow' }, q.text)),
+    q.detail ? el('p', { class: 'small muted' }, q.detail) : null,
+    el('div', { class: 'row gap' }, ...q.buttons.map((b) => button(b.label, () => send({ type: 'promptAnswer', id: q.id, button: b.id }), { kind: b.primary ? 'primary' : 'secondary' }))),
+  ]);
+}
 
 /** One banner for connection problems, with Retry (or Log in). Cached data stays visible below it. */
 function renderBanner(s: ViewState): void {
@@ -428,12 +443,23 @@ function renderCurrent(s: ViewState): void {
               ]
             : []),
           { icon: 'sparkle', label: 'Auto-detect the problem', tip: 'Match this file to a problem again (file name, CPH data)', onclick: () => send({ type: 'autoDetect' }) },
-          ...(p && p.source === 'saved' ? [{ icon: 'close', label: 'Remove link', tip: 'Forget the problem chosen for this file', onclick: () => send({ type: 'unmapProblem' }) }] : []),
+          ...(p && p.source !== 'suggested'
+            ? [{ icon: 'close', label: 'Unlink this file', tip: 'Remove the link and stop auto-detecting a problem for this file', onclick: () => send({ type: 'unmapProblem' }) }]
+            : []),
         ]),
       ),
       combo,
       pickerOpen ? (renderPickerList(s), pickerBox) : null,
       p ? sourceLine(p.source, p.id, p.name) : null,
+      !p && s.notLinked
+        ? el('div', { class: 'notice' },
+            el('div', { class: 'row' }, icon('debug-disconnect'), el('span', { class: 'grow' }, 'Not linked to a problem')),
+            el('div', { class: 'row gap' },
+              button('Choose problem', () => openPicker(), { kind: 'primary', title: 'Pick the grader problem for this file' }),
+              button('Auto-detect', () => send({ type: 'autoDetect' }), { title: 'Match this file to a problem again (file name, CPH data)' }),
+            ),
+          )
+        : null,
       p?.unavailable
         ? el('div', { class: 'notice warn', role: 'alert' },
             el('div', { class: 'row' }, icon('warning'), el('span', { class: 'grow' }, 'This problem is no longer available on the grader.')),
@@ -626,7 +652,8 @@ function renderResult(s: ViewState): void {
 function miniStrip(verdicts: VerdictView[]): HTMLElement {
   const passed = verdicts.filter((v) => v.ok).length;
   const strip = el('div', { class: 'mini-strip', role: 'img', 'aria-label': `${passed} of ${verdicts.length} tests passed` });
-  const mini = (v: VerdictView) => el('span', { class: `mini v-${v.kind in VERDICT_LETTER ? v.kind : 'unknown'}` });
+  const mini = (v: VerdictView) => el('span', { class: `mini v-${v.kind in VERDICT_LETTER ? v.kind : 'unknown'}`, title: v.label });
+  const groupCount = new Set(verdicts.filter((v) => v.group !== undefined).map((v) => v.group)).size;
   let i = 0;
   while (i < verdicts.length) {
     const v = verdicts[i];
@@ -636,7 +663,7 @@ function miniStrip(verdicts: VerdictView[]): HTMLElement {
       continue;
     }
     const members = verdicts.filter((x) => x.group === v.group);
-    strip.append(el('span', { class: 'mini-group' }, ...members.map(mini)));
+    strip.append(el('span', { class: 'mini-group', title: groupLabel(v.group, groupCount, members) }, ...members.map(mini)));
     i += members.length;
   }
   return strip;
@@ -660,7 +687,7 @@ function detailBox(d: SubmissionDetailView): HTMLElement {
       body.append(
         el('tr', {},
           el('td', { class: 'num' }, String(e.index)),
-          el('td', {}, el('span', { class: `mini v-${e.kind in VERDICT_LETTER ? e.kind : 'unknown'}`, 'aria-hidden': 'true' }), ' ', e.label.replace(/^Test \d+: /, '')),
+          el('td', {}, el('span', { class: `mini v-${e.kind in VERDICT_LETTER ? e.kind : 'unknown'}`, 'aria-hidden': 'true', title: e.label }), ' ', e.label.replace(/^Test \d+: /, '')),
           el('td', { class: 'num' }, e.score === null ? '–' : fmt(e.score)),
           el('td', { class: 'num' }, seconds(e.timeMs)),
           el('td', { class: 'num' }, megabytes(e.memoryKb)),
@@ -741,29 +768,44 @@ function renderHistory(s: ViewState): void {
 
 function problemRow(p: ProblemView, s: ViewState, where: 'picker' | 'list'): HTMLElement {
   const mapped = s.problem?.id === p.id;
-  return el('div', { class: `problem-row${mapped ? ' mapped' : ''}`, role: where === 'picker' ? 'option' : undefined, 'aria-selected': where === 'picker' ? String(mapped) : undefined },
-    el('button', {
-      class: 'problem-main',
-      type: 'button',
-      disabled: !s.file,
-      title: s.file ? `Use ${p.name} (#${p.id}) for ${s.file.name}` : 'Open a source file to map a problem',
-      onclick: () => {
+  const sub = titleParts(p).subtitle;
+  const main = el('button', {
+    class: 'problem-main',
+    type: 'button',
+    'aria-label': `${p.name} #${p.id}${sub ? `, ${sub}` : ''}`,
+    // Picker: choose this problem for the file. List: open its linked file (or offer choices).
+    disabled: where === 'picker' && !s.file,
+    onclick: () => {
+      if (where === 'picker') {
         pickerOpen = false;
         pickerSearch.value = '';
         send({ type: 'mapProblem', problemId: p.id });
-      },
+      } else {
+        send({ type: 'problemRowClick', problemId: p.id });
+      }
     },
-      el('span', { class: 'problem-name ellipsis' }, mapped ? icon('check') : null, p.name, el('span', { class: 'muted id' }, ` #${p.id}`)),
-      titleParts(p).subtitle ? el('span', { class: 'problem-full ellipsis muted' }, titleParts(p).subtitle!) : null,
-    ),
+  },
+    el('span', { class: 'problem-name ellipsis' }, mapped ? icon('check') : null, p.name, el('span', { class: 'muted id' }, ` #${p.id}`)),
+    sub ? el('span', { class: 'problem-full ellipsis muted' }, sub) : null,
+  );
+  // Tooltip: just the names (bold "name #id", the title below).
+  main.dataset.tipTitle = `${p.name} #${p.id}`;
+  main.dataset.tip = main.disabled ? `${sub ? `${sub} · ` : ''}Open a source file to link a problem` : (sub ?? '');
+  const fileName = s.file?.name;
+  return el('div', { class: `problem-row${mapped ? ' mapped' : ''}`, role: where === 'picker' ? 'option' : undefined, 'aria-selected': where === 'picker' ? String(mapped) : undefined },
+    main,
     scorePill(p.score),
     el('span', { class: 'row-actions' },
-      iconButton('copy', 'Copy problem name', () => send({ type: 'copyName', problemId: p.id })),
-      p.hasFile
-        ? iconButton('go-to-file', 'Go to linked file', () => send({ type: 'goToFile', problemId: p.id }))
-        : iconButton('search', 'Find file by name', () => send({ type: 'findFile', problemId: p.id })),
-      iconButton('new-file', 'New file for this problem', () => send({ type: 'newFile', problemId: p.id })),
       iconButton('book', 'Open statement', () => send({ type: 'openStatement', problemId: p.id })),
+      menuButton(`row-${where}-${p.id}`, `More actions for ${p.name}`, [
+        ...(fileName && where === 'list' ? [{ icon: 'link', label: `Link to ${fileName}`, tip: `Use ${p.name} for ${fileName}`, onclick: () => send({ type: 'mapProblem', problemId: p.id }) }] : []),
+        { icon: 'copy', label: 'Copy problem name', onclick: () => send({ type: 'copyName', problemId: p.id }) },
+        p.hasFile
+          ? { icon: 'go-to-file', label: 'Go to linked file', onclick: () => send({ type: 'goToFile', problemId: p.id }) }
+          : { icon: 'search', label: 'Find file by name', onclick: () => send({ type: 'findFile', problemId: p.id }) },
+        { icon: 'new-file', label: 'New file for this problem', onclick: () => send({ type: 'newFile', problemId: p.id }) },
+        { icon: 'globe', label: 'Open on the grader website', onclick: () => send({ type: 'openProblemInBrowser', problemId: p.id }) },
+      ]),
     ),
   );
 }
@@ -786,7 +828,7 @@ function linkedFilesNotice(s: ViewState): HTMLElement {
             icon(f.current ? 'circle-filled' : 'go-to-file'), el('span', { class: 'grow ellipsis' }, f.path), f.current ? el('span', { class: 'muted small' }, 'this file') : null),
         ),
       ),
-      el('div', { class: 'row gap' }, button('Keep only this file', () => send({ type: 'keepOnlyThisFile' }), { title: 'Unlink the other files (they are not changed)' })),
+      el('div', { class: 'row gap' }, button('Unlink the other files', () => send({ type: 'keepOnlyThisFile' }), { title: 'Removes only the links; the files themselves are not deleted' })),
     );
   }
   return box;
@@ -798,10 +840,11 @@ const SOURCE_TEXT: Record<string, string> = { saved: 'Chosen by you', filename: 
 /** "How matched" line under the problem selector (text, not icon-only). Only "Suggested" stands out, with Confirm. */
 function sourceLine(source: string, problemId: number, name: string): HTMLElement {
   if (source === 'suggested') {
-    return el('div', { class: 'row source-line suggested' },
+    return el('div', { class: 'row source-line source-suggested small muted' },
       icon('lightbulb'),
-      el('span', { class: 'grow small' }, 'Suggested from the file name'),
-      button('Confirm', () => send({ type: 'confirmProblem', problemId }), { kind: 'primary', title: `Link this file to ${name} (#${problemId})` }),
+      el('span', {}, 'Suggested from the file name'),
+      el('span', {}, '·'),
+      el('button', { class: 'link small', type: 'button', title: `Link this file to ${name} (#${problemId})`, onclick: () => send({ type: 'confirmProblem', problemId }) }, 'Use this'),
     );
   }
   return el('div', { class: `row source-line source-${source} small muted` }, icon(SOURCE_ICON[source] ?? 'info'), el('span', {}, SOURCE_TEXT[source] ?? source));
@@ -885,8 +928,9 @@ function sectionKeys(s: ViewState): Record<string, string> {
   const pid = s.problem?.id ?? null;
   return {
     banner: j([s.connection, s.problems.loaded, s.history.items.length > 0]),
+    prompt: j([s.prompt]),
     account: j([s.account, s.baseUrl, showLoginForm]),
-    current: j([openMenu, s.file, s.problem, s.languages, s.submit, s.matching, s.testcases, s.cph, s.gradingElsewhere, pickerOpen, pickerOpen ? s.problems : s.problems.loaded]),
+    current: j([openMenu, s.notLinked, s.file, s.problem, s.languages, s.submit, s.matching, s.testcases, s.cph, s.gradingElsewhere, pickerOpen, pickerOpen ? s.problems : s.problems.loaded]),
     result: j([s.result, s.submit.enabled, s.submit.reason, legendOpen === 'result']),
     history: j([pid, s.history, legendOpen === 'history']),
     problems: j([openMenu, s.problems, !!s.file, pid, ui.filter]),
@@ -902,6 +946,7 @@ function render(): void {
   const keys = sectionKeys(state);
   const renderers: Record<string, (s: ViewState) => void> = {
     banner: renderBanner,
+    prompt: renderPrompt,
     account: renderAccount,
     current: renderCurrent,
     result: renderResult,

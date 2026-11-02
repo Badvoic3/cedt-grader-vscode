@@ -30,8 +30,8 @@ export function installTooltips(doc: Document = document, delay = 300): TooltipA
   let pointer: { x: number; y: number } | null = null;
 
   const tipOf = (t: EventTarget | null): HTMLElement | null => {
-    const el = t instanceof doc.defaultView!.Element ? (t as Element).closest<HTMLElement>('[data-tip]') : null;
-    return el && el.dataset.tip ? el : null;
+    const el = t instanceof doc.defaultView!.Element ? (t as Element).closest<HTMLElement>('[data-tip], [data-tip-title]') : null;
+    return el && (el.dataset.tip || el.dataset.tipTitle) ? el : null;
   };
 
   function place(el: HTMLElement): void {
@@ -49,9 +49,21 @@ export function installTooltips(doc: Document = document, delay = 300): TooltipA
     tip.style.top = `${Math.round(top)}px`;
   }
 
+  /** Optional bold first line (`data-tip-title`) above the text (`data-tip`). */
+  function fill(el: HTMLElement): void {
+    tip.replaceChildren();
+    if (el.dataset.tipTitle) {
+      const b = doc.createElement('strong');
+      b.textContent = el.dataset.tipTitle;
+      tip.append(b);
+      if (el.dataset.tip) tip.append(doc.createElement('br'));
+    }
+    if (el.dataset.tip) tip.append(doc.createTextNode(el.dataset.tip));
+  }
+
   function show(el: HTMLElement): void {
     anchor = el;
-    tip.textContent = el.dataset.tip ?? '';
+    fill(el);
     tip.hidden = false;
     el.setAttribute('aria-describedby', tip.id);
     place(el);
@@ -102,7 +114,7 @@ export function installTooltips(doc: Document = document, delay = 300): TooltipA
     refresh(): void {
       if (!anchor || anchor.isConnected) {
         if (anchor) {
-          tip.textContent = anchor.dataset.tip ?? '';
+          fill(anchor);
           place(anchor);
         }
         return;

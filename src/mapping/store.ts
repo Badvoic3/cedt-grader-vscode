@@ -6,15 +6,17 @@ import {
   type MappingEntry,
   type MappingFileData,
   countDuplicateEntries,
-  normalizeRel,
   parseMappingFile,
   reverseIndex,
   serializeMappingFile,
 } from './mappingFile';
 import { affectedByDelete, expired, type LocatedEntry, planRename } from './mappingOps';
+import { normalizeAbsPath, normalizeRelPath, pathKey, remapPath } from './paths';
 
 const STATE_KEY = 'cedtGrader.mappings';
 const LEGACY_KEY = 'cedtGrader.mapping';
+/** Files the user explicitly unlinked: auto-detection must not re-link them. */
+const UNLINKED_KEY = 'cedtGrader.unlinked';
 
 /** workspaceState entry: also remembers the absolute path, for reverse lookup. */
 interface StateEntry extends MappingEntry {
@@ -34,17 +36,33 @@ export class MappingStore {
 
   constructor(private readonly ctx: vscode.ExtensionContext) {}
 
-  private keyFor(uri: vscode.Uri): { memento: vscode.Memento; key: string; folder?: vscode.WorkspaceFolder; rel?: string } {
+  /** State key: `<folder name>/<pathKey(relative path)>` (or pathKey of the absolute path outside folders). */
+  private keyFor(uri: vscode.Uri): { memento: vscode.Memento; key: string; oldKey: string; folder?: vscode.WorkspaceFolder; rel?: string } {
     const folder = vscode.workspace.getWorkspaceFolder(uri);
-    if (!folder) return { memento: this.ctx.globalState, key: uri.fsPath };
-    const rel = normalizeRel(vscode.workspace.asRelativePath(uri, false));
-    return { memento: this.ctx.workspaceState, key: `${folder.name}/${rel}`, folder, rel };
+    if (!folder) return { memento: this.ctx.globalState, key: pathKey(uri.fsPath), oldKey: uri.fsPath };
+    const rel = normalizeRelPath(vscode.workspace.asRelativePath(uri, false));
+    return { memento: this.ctx.workspaceState, key: `${folder.name}/${pathKey(rel)}`, oldKey: `${folder.name}/${rel}`, folder, rel };
+  }
+
+  // ------------------------------------------------- explicit "not linked"
+
+  isUnlinked(uri: vscode.Uri): boolean {
+    const { memento, key } = this.keyFor(uri);
+    return !!memento.get<Record<string, string>>(UNLINKED_KEY, {})[key];
+  }
+
+  async setUnlinked(uri: vscode.Uri, on: boolean): Promise<void> {
+    const { memento, key } = this.keyFor(uri);
+    const all = { ...memento.get<Record<string, string>>(UNLINKED_KEY, {}) };
+    if (on) all[key] = normalizeAbsPath(uri.fsPath);
+    else delete all[key];
+    await memento.update(UNLINKED_KEY, all);
   }
 
   async get(uri: vscode.Uri, baseUrl: string): Promise<MappingEntry | undefined> {
-    const { memento, key, folder, rel } = this.keyFor(uri);
+    const { memento, key, oldKey, folder, rel } = this.keyFor(uri);
     const all = memento.get<Record<string, StateEntry>>(STATE_KEY, {});
-    const fromState = all[key] ?? this.legacy(memento)[uri.fsPath];
+    const fromState = all[key] ?? all[oldKey] ?? this.legacy(memento)[uri.fsPath];
     if (fromState?.staleSince) return undefined;
     if (fromState && (!fromState.baseUrl || fromState.baseUrl === baseUrl)) return fromState;
     if (folder && rel) return lookup(await this.readFile(folder), rel, baseUrl);
@@ -52,11 +70,13 @@ export class MappingStore {
   }
 
   async set(uri: vscode.Uri, entry: MappingEntry | undefined): Promise<void> {
-    const { memento, key, folder, rel } = this.keyFor(uri);
+    const { memento, key, oldKey, folder, rel } = this.keyFor(uri);
     const all = { ...memento.get<Record<string, StateEntry>>(STATE_KEY, {}) };
-    if (entry) all[key] = { ...entry, fsPath: uri.fsPath };
+    delete all[oldKey];
+    if (entry) all[key] = { ...entry, fsPath: normalizeAbsPath(uri.fsPath) };
     else delete all[key];
     await memento.update(STATE_KEY, all);
+    if (entry && this.isUnlinked(uri)) await this.setUnlinked(uri, false); // choosing a problem clears "not linked"
     const legacy = this.legacy(memento);
     if (legacy[uri.fsPath]) {
       const rest = { ...legacy };
@@ -66,8 +86,8 @@ export class MappingStore {
 
     if (folder && rel) {
       const data = await this.readFile(folder);
+      for (const k of Object.keys(data.files)) if (pathKey(k) === pathKey(rel)) delete data.files[k];
       if (entry) data.files[rel] = entry;
-      else delete data.files[rel];
       this.cache.set(folder.uri.toString(), data);
       try {
         await vscode.workspace.fs.writeFile(
@@ -94,8 +114,9 @@ export class MappingStore {
     const seen = new Map<string, vscode.Uri>();
     const out = new Map<number, vscode.Uri[]>();
     const add = (id: number, uri: vscode.Uri) => {
-      if (seen.has(uri.fsPath)) return;
-      seen.set(uri.fsPath, uri);
+      const k = pathKey(uri.fsPath);
+      if (seen.has(k)) return;
+      seen.set(k, uri);
       out.set(id, [...(out.get(id) ?? []), uri]);
     };
     for (const memento of [this.ctx.workspaceState, this.ctx.globalState]) {
@@ -120,14 +141,14 @@ export class MappingStore {
     for (const memento of [this.ctx.workspaceState, this.ctx.globalState]) {
       for (const e of Object.values(memento.get<Record<string, StateEntry>>(STATE_KEY, {}))) {
         const { fsPath, ...entry } = e;
-        if (!out.has(fsPath)) out.set(fsPath, { fsPath, entry });
+        if (!out.has(pathKey(fsPath))) out.set(pathKey(fsPath), { fsPath, entry });
       }
-      for (const [fsPath, entry] of Object.entries(this.legacy(memento))) if (!out.has(fsPath)) out.set(fsPath, { fsPath, entry });
+      for (const [fsPath, entry] of Object.entries(this.legacy(memento))) if (!out.has(pathKey(fsPath))) out.set(pathKey(fsPath), { fsPath, entry });
     }
     for (const folder of vscode.workspace.workspaceFolders ?? []) {
       for (const [rel, entry] of Object.entries((await this.readFile(folder)).files)) {
         const fsPath = vscode.Uri.joinPath(folder.uri, rel).fsPath;
-        if (!out.has(fsPath)) out.set(fsPath, { fsPath, entry });
+        if (!out.has(pathKey(fsPath))) out.set(pathKey(fsPath), { fsPath, entry });
       }
     }
     return [...out.values()];
@@ -139,6 +160,16 @@ export class MappingStore {
     for (const m of plan) {
       await this.set(vscode.Uri.file(m.from), undefined);
       await this.set(vscode.Uri.file(m.to), m.entry);
+    }
+    // "Not linked" follows the file too.
+    for (const memento of [this.ctx.workspaceState, this.ctx.globalState]) {
+      for (const fsPath of Object.values(memento.get<Record<string, string>>(UNLINKED_KEY, {}))) {
+        const to = remapPath(fsPath, oldUri.fsPath, newUri.fsPath);
+        if (to) {
+          await this.setUnlinked(vscode.Uri.file(fsPath), false);
+          await this.setUnlinked(vscode.Uri.file(to), true);
+        }
+      }
     }
     return plan;
   }
@@ -171,37 +202,68 @@ export class MappingStore {
    */
   async cleanupDuplicates(): Promise<number> {
     let removed = 0;
+    // 1. Workspace state: one entry per file (canonical key; legacy absolute-path keys folded in).
     for (const memento of [this.ctx.workspaceState, this.ctx.globalState]) {
-      const legacy = this.legacy(memento);
       const current = memento.get<Record<string, StateEntry>>(STATE_KEY, {});
-      const currentPaths = new Set(Object.values(current).map((e) => e.fsPath));
-      const keep: Record<string, MappingEntry> = {};
-      for (const [fsPath, e] of Object.entries(legacy)) {
-        if (currentPaths.has(fsPath)) removed++;
-        else keep[fsPath] = e;
+      const legacy = this.legacy(memento);
+      const rebuilt: Record<string, StateEntry> = {};
+      const add = (fsPath: string, entry: MappingEntry) => {
+        const { key } = this.keyFor(vscode.Uri.file(fsPath));
+        if (rebuilt[key]) removed++;
+        else rebuilt[key] = { ...entry, fsPath: normalizeAbsPath(fsPath) };
+      };
+      for (const e of Object.values(current)) {
+        const { fsPath, ...entry } = e;
+        add(fsPath, entry);
       }
-      if (Object.keys(keep).length !== Object.keys(legacy).length) await memento.update(LEGACY_KEY, keep);
+      for (const [fsPath, entry] of Object.entries(legacy)) add(fsPath, entry);
+      const changed =
+        Object.keys(legacy).length > 0 || JSON.stringify(Object.keys(rebuilt).sort()) !== JSON.stringify(Object.keys(current).sort());
+      if (changed) {
+        await memento.update(STATE_KEY, rebuilt);
+        if (Object.keys(legacy).length) await memento.update(LEGACY_KEY, undefined);
+      }
     }
+    // 2. .cedt-grader.json: duplicate / same-path keys (./x.cpp vs x.cpp, NFD vs NFC, case on macOS).
     for (const folder of vscode.workspace.workspaceFolders ?? []) {
       const uri = vscode.Uri.joinPath(folder.uri, MAPPING_FILE_NAME);
+      const open = vscode.workspace.textDocuments.find((d) => d.uri.toString() === uri.toString());
+      if (open?.isDirty) continue; // never clobber unsaved edits; cleaned on the next save
       let text: string;
       try {
-        text = new TextDecoder().decode(await vscode.workspace.fs.readFile(uri));
+        text = open ? open.getText() : new TextDecoder().decode(await vscode.workspace.fs.readFile(uri));
       } catch {
         continue;
       }
-      const dups = countDuplicateEntries(text);
-      if (!dups) continue;
-      const data = parseMappingFile(text); // last entry per (normalized) path wins, like JSON.parse
-      try {
-        await vscode.workspace.fs.writeFile(uri, new TextEncoder().encode(serializeMappingFile(data)));
+      const before = countDuplicateEntries(text);
+      const data = parseMappingFile(text); // later entries win, like JSON.parse
+      const cleaned = serializeMappingFile(data);
+      if (!before && cleaned.trim() === text.trim()) continue;
+      if (!before) {
+        // Only spelling changes (e.g. "./"): rewrite quietly.
+        await this.writeMappingText(uri, open, cleaned);
         this.cache.set(folder.uri.toString(), data);
-        removed += dups;
-      } catch {
-        /* read-only */
+        continue;
       }
+      await this.writeMappingText(uri, open, cleaned);
+      this.cache.set(folder.uri.toString(), data);
+      // Count only what really changed on disk.
+      const after = countDuplicateEntries(new TextDecoder().decode(await vscode.workspace.fs.readFile(uri)));
+      removed += Math.max(0, before - after);
     }
     return removed;
+  }
+
+  /** Write `.cedt-grader.json`; through the open editor if it is open (so the change is visible and saved). */
+  private async writeMappingText(uri: vscode.Uri, open: vscode.TextDocument | undefined, text: string): Promise<void> {
+    if (open) {
+      const edit = new vscode.WorkspaceEdit();
+      edit.replace(uri, new vscode.Range(open.positionAt(0), open.positionAt(open.getText().length)), text);
+      await vscode.workspace.applyEdit(edit);
+      await open.save();
+      return;
+    }
+    await vscode.workspace.fs.writeFile(uri, new TextEncoder().encode(text));
   }
 
   private legacy(memento: vscode.Memento): Record<string, MappingEntry> {

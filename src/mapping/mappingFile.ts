@@ -1,3 +1,5 @@
+import { normalizeRelPath, pathKey } from './paths';
+
 /**
  * `.cedt-grader.json` at the workspace root: maps workspace-relative source
  * paths (POSIX separators) to grader problems. Pure data handling; the
@@ -34,10 +36,15 @@ export function parseMappingFile(text: string): MappingFileData {
   }
   const files = (raw as { files?: unknown })?.files;
   if (!files || typeof files !== 'object') return out;
+  const byKey = new Map<string, string>(); // pathKey → stored (canonical) key; later entries win, like JSON.parse
   for (const [k, v] of Object.entries(files as Record<string, unknown>)) {
     const e = v as Partial<MappingEntry>;
     if (typeof e?.problemId === 'number' && Number.isInteger(e.problemId) && e.problemId > 0) {
-      out.files[normalizeRel(k)] = {
+      const rel = normalizeRelPath(k);
+      const prev = byKey.get(pathKey(rel));
+      if (prev !== undefined) delete out.files[prev];
+      byKey.set(pathKey(rel), rel);
+      out.files[rel] = {
         problemId: e.problemId,
         name: typeof e.name === 'string' ? e.name : '',
         ...(typeof e.baseUrl === 'string' ? { baseUrl: e.baseUrl } : {}),
@@ -50,17 +57,20 @@ export function parseMappingFile(text: string): MappingFileData {
 
 export function serializeMappingFile(d: MappingFileData): string {
   const sorted: Record<string, MappingEntry> = {};
-  for (const k of Object.keys(d.files).sort()) sorted[k] = d.files[k];
+  for (const k of Object.keys(d.files).sort()) sorted[normalizeRelPath(k)] = d.files[k];
   return JSON.stringify({ version: 1, files: sorted }, null, 2) + '\n';
 }
 
+/** @see normalizeRelPath (one normalization for all link paths). */
 export function normalizeRel(p: string): string {
-  return p.replace(/\\/g, '/').replace(/^\.\//, '');
+  return normalizeRelPath(p);
 }
 
 /** Entry for `rel`, ignoring entries made for a different grader server. */
 export function lookup(d: MappingFileData, rel: string, baseUrl: string): MappingEntry | undefined {
-  const e = d.files[normalizeRel(rel)];
+  const want = pathKey(rel);
+  const k = Object.keys(d.files).find((x) => pathKey(x) === want);
+  const e = k === undefined ? undefined : d.files[k];
   if (!e || e.staleSince) return undefined;
   if (e.baseUrl && e.baseUrl !== baseUrl) return undefined;
   return e;
@@ -90,9 +100,9 @@ export function countDuplicateEntries(text: string): number {
   let m: RegExpExecArray | null;
   while ((m = re.exec(text))) {
     try {
-      keys.push(normalizeRel(JSON.parse(`"${m[1]}"`) as string));
+      keys.push(pathKey(JSON.parse(`"${m[1]}"`) as string));
     } catch {
-      keys.push(normalizeRel(m[1]));
+      keys.push(pathKey(m[1]));
     }
   }
   return keys.length - new Set(keys).size;

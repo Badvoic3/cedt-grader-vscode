@@ -101,10 +101,16 @@ export class GraderController implements vscode.Disposable {
   };
   /** Problems the grader no longer offers (missing from the list, or 404/403 this session). */
   private readonly unavailableIds = new Set<number>();
+  /** The active file was explicitly unlinked (auto-detection is off for it). */
+  private notLinked = false;
   /** Other files linked to the current problem (duplicate notice). */
   private linkedFiles: vscode.Uri[] = [];
   /** CPH tip: "Not now" hides it for this session. */
   private cphTipHidden = false;
+  /** Inline question in the panel (calm alternative to modal dialogs). */
+  private prompt: InlinePrompt | null = null;
+  private promptResolve: ((v: string | undefined) => void) | null = null;
+  private promptSeq = 0;
   /** Problems with at least one mapped file (for "go to file"). */
   private mappedIds = new Set<number>();
   private testcasesBusy = false;
@@ -486,6 +492,8 @@ export class GraderController implements vscode.Disposable {
         ? { path: vscode.workspace.asRelativePath(file, false), name: file.path.split('/').pop() ?? '', languageGuess: lang, supported: lang !== null }
         : null,
       problem: problem ? { ...this.problemView(problem), source: problem.source, sourceLabel: SOURCE_LABEL[problem.source], unavailable } : null,
+      notLinked: !problem && !!file && this.notLinked,
+      prompt: this.prompt,
       linkedFiles:
         problem && this.linkedFiles.length > 1
           ? this.linkedFiles.map((u) => ({ path: vscode.workspace.asRelativePath(u), current: u.fsPath === file?.fsPath }))
@@ -621,6 +629,38 @@ export class GraderController implements vscode.Disposable {
 
   private allowedLanguages(p: Pick<Problem, 'permittedLanguageIds'>): Language[] {
     return p.permittedLanguageIds === null ? this.languages : this.languages.filter((l) => p.permittedLanguageIds!.includes(l.id));
+  }
+
+  /**
+   * Ask in the panel with plain buttons (no OS dialog). Resolves with the
+   * chosen button id, or undefined when replaced, dismissed or the active
+   * file changes. Native modal dialogs are only for actions that can't be
+   * undone or lose data (overwrite a file, clear data, exam submit).
+   */
+  askInline(text: string, buttons: InlinePrompt['buttons'], opts: { detail?: string; tone?: 'info' | 'warn' } = {}): Promise<string | undefined> {
+    this.promptResolve?.(undefined);
+    const id = ++this.promptSeq;
+    this.prompt = { id, text, detail: opts.detail ?? null, tone: opts.tone ?? 'info', buttons };
+    this.emit();
+    if (!this.data.isVisible()) void vscode.commands.executeCommand('cedtGrader.panel.focus');
+    return new Promise((resolve) => {
+      this.promptResolve = (v) => {
+        if (this.prompt?.id === id) {
+          this.prompt = null;
+          this.promptResolve = null;
+          this.emit();
+        }
+        resolve(v);
+      };
+    });
+  }
+
+  answerPrompt(id: number, button: string | null): void {
+    if (this.prompt?.id === id) this.promptResolve?.(button ?? undefined);
+  }
+
+  private cancelPrompt(): void {
+    this.promptResolve?.(undefined);
   }
 
   private markUnavailable(problemId: number): void {
@@ -789,16 +829,22 @@ export class GraderController implements vscode.Disposable {
     const changed = this.fileUri?.toString() !== uri.toString();
     this.fileUri = uri;
     if (changed) {
+      this.cancelPrompt();
       this.selectedLanguageId = this.ctx.workspaceState.get<Record<string, number>>(LANGUAGE_KEY, {})[uri.fsPath] ?? null;
       this.languagesError = null;
       this.expandedSubmission = null;
     }
 
     // Matching order: saved → CPH .prob → exact file name → suggestions (never saved automatically).
+    // An explicitly unlinked file is left alone ("Not linked to a problem").
     const entry = await this.mapping.get(uri, this.cfg.baseUrl);
+    const unlinked = !entry && this.mapping.isUnlinked(uri);
     const list = this.data.problemList()?.problems;
-    const cph = entry ? null : await readCphProblem(uri.fsPath, this.cphSaveLocation());
-    const m = resolveProblem({ savedProblemId: entry?.problemId ?? null, cph, filePath: uri.fsPath, problems: list, baseUrl: this.cfg.baseUrl });
+    const cph = entry || unlinked ? null : await readCphProblem(uri.fsPath, this.cphSaveLocation());
+    const m = unlinked
+      ? ({ kind: 'none', suggestions: [] } as const)
+      : resolveProblem({ savedProblemId: entry?.problemId ?? null, cph, filePath: uri.fsPath, problems: list, baseUrl: this.cfg.baseUrl });
+    this.notLinked = unlinked;
     const mapped = await this.mapping.mappedProblemIds(this.cfg.baseUrl);
     if (seq !== this.refreshSeq) return;
     this.mappedIds = mapped;
@@ -815,7 +861,7 @@ export class GraderController implements vscode.Disposable {
       this.matchInfo.ambiguous = m.candidates;
       this.matchInfo.ambiguousSource = m.source;
     } else {
-      this.matchInfo.suggestions = m.suggestions;
+      this.matchInfo.suggestions = [...m.suggestions];
       // The closest candidate is pre-selected but marked "suggested" (submit asks first).
       if (m.suggestions.length) problem = { ...m.suggestions[0], source: 'suggested' };
     }
@@ -913,10 +959,19 @@ export class GraderController implements vscode.Disposable {
       `${vscode.workspace.asRelativePath(c.fsPath)}, linked to ${this.problemById(c.entry.problemId)?.name ?? c.entry.name ?? `#${c.entry.problemId}`}`;
     let chosen: LocatedEntry | undefined;
     if (candidates.length === 1) {
-      const keep = 'Keep';
-      const pick = await vscode.window.showInformationMessage(`This looks like ${describeEntry(candidates[0])}. Keep the link?`, keep, 'Not this one');
-      if (pick === keep) chosen = candidates[0];
-      else if (pick) await this.dismissReconnect(candidates, uri);
+      const pick = await this.askInline(`This looks like ${describeEntry(candidates[0])}. Keep the link?`, [
+        { id: 'keep', label: 'Keep', primary: true },
+        { id: 'no', label: 'Not this one' },
+      ]);
+      if (pick === 'keep') chosen = candidates[0];
+      else if (pick === 'no') await this.dismissReconnect(candidates, uri);
+    } else if (candidates.length <= 3) {
+      const pick = await this.askInline(`${uri.path.split('/').pop()} may be a moved file. Keep which link?`, [
+        ...candidates.map((c, i) => ({ id: String(i), label: `${vscode.workspace.asRelativePath(c.fsPath)} → ${this.problemById(c.entry.problemId)?.name ?? c.entry.name}` })),
+        { id: 'skip', label: 'None of these' },
+      ]);
+      if (pick === 'skip') await this.dismissReconnect(candidates, uri);
+      else if (pick !== undefined) chosen = candidates[Number(pick)];
     } else {
       const pick = await vscode.window.showQuickPick(
         [
@@ -993,12 +1048,83 @@ export class GraderController implements vscode.Disposable {
     await this.setActiveFile(this.fileUri);
   }
 
-  /** Clear the saved mapping of the active file (auto-detection applies again). */
+  /**
+   * "Unlink this file": remove the link AND remember "not linked", so
+   * auto-detection doesn't re-link it. Choosing a problem or Auto-detect clears it.
+   */
   async unmapCurrentFile(): Promise<void> {
     if (!this.fileUri) return;
     await this.mapping.set(this.fileUri, undefined);
+    await this.mapping.setUnlinked(this.fileUri, true);
     this.problem = null;
     await this.setActiveFile(this.fileUri);
+  }
+
+  /** Open the problem dropdown in the panel (e.g. "Choose another problem"). */
+  async focusProblemPicker(): Promise<void> {
+    await vscode.commands.executeCommand('cedtGrader.panel.focus');
+    this.focusTarget?.('problem-search');
+  }
+  /** Set by the sidebar provider: focus something inside the panel. */
+  focusTarget: ((t: 'login' | 'problem-search' | 'submit') => void) | null = null;
+
+  /**
+   * Click on a row of the problem list: open its linked file (several → most
+   * recently edited first; missing → offer to remove the stale link). With no
+   * linked file, offer choices; never link automatically.
+   */
+  async problemRowClick(problemId: number): Promise<void> {
+    const p = this.problemById(problemId);
+    if (!p) return;
+    const files = await this.mapping.filesFor(problemId, this.cfg.baseUrl);
+    const found: { uri: vscode.Uri; t: number }[] = [];
+    const gone: vscode.Uri[] = [];
+    for (const f of files) {
+      const st = await fsStat(f.fsPath).catch(() => null);
+      if (st) found.push({ uri: f, t: st.mtimeMs });
+      else gone.push(f);
+    }
+    if (gone.length) {
+      const pick = await this.askInline(
+        `${gone.length === 1 ? vscode.workspace.asRelativePath(gone[0]) : `${gone.length} linked files`} no longer exist${gone.length === 1 ? 's' : ''}.`,
+        [
+          { id: 'remove', label: 'Remove the stale link', primary: true },
+          { id: 'keep', label: 'Keep' },
+        ],
+      );
+      if (pick === 'remove') {
+        for (const g of gone) await this.mapping.set(g, undefined);
+        this.mappedIds = await this.mapping.mappedProblemIds(this.cfg.baseUrl);
+        this.emit();
+      }
+    }
+    if (found.length) {
+      found.sort((a, b) => b.t - a.t);
+      const target =
+        found.length === 1
+          ? found[0].uri
+          : (
+              await vscode.window.showQuickPick(
+                found.map((f) => ({ label: vscode.workspace.asRelativePath(f.uri), detail: `edited ${new Date(f.t).toLocaleString()}`, uri: f.uri })),
+                { placeHolder: `Files linked to ${p.name}` },
+              )
+            )?.uri;
+      if (target) await vscode.window.showTextDocument(target);
+      return;
+    }
+    if (gone.length) return;
+    const fileName = this.fileUri?.path.split('/').pop();
+    const choices = [
+      ...(this.fileUri ? [{ label: `$(link) Link to ${fileName}`, id: 'link' }] : []),
+      { label: '$(new-file) Create a new file', id: 'new' },
+      { label: '$(search) Find a file by name', id: 'find' },
+      { label: '$(book) Open statement', id: 'statement' },
+    ];
+    const pick = await vscode.window.showQuickPick(choices, { placeHolder: `${p.name}: no file is linked yet` });
+    if (pick?.id === 'link') await this.mapCurrentFile(problemId);
+    else if (pick?.id === 'new') await this.newFileForProblem(problemId);
+    else if (pick?.id === 'find') await this.findFileByName(problemId);
+    else if (pick?.id === 'statement') await this.openStatement(problemId);
   }
 
   /** Remove duplicate link entries (and tell the user). */
@@ -1012,6 +1138,7 @@ export class GraderController implements vscode.Disposable {
     const uri = this.fileUri;
     if (!uri) return;
     const entry = await this.mapping.get(uri, this.cfg.baseUrl);
+    await this.mapping.setUnlinked(uri, false); // Auto-detect clears "not linked"
     const list = this.data.problemList()?.problems;
     if (!list) {
       await this.refreshProblems(false);
@@ -1019,32 +1146,30 @@ export class GraderController implements vscode.Disposable {
     }
     const cph = await readCphProblem(uri.fsPath, this.cphSaveLocation());
     const m = resolveProblem({ savedProblemId: null, cph, filePath: uri.fsPath, problems: this.data.problemList()!.problems, baseUrl: this.cfg.baseUrl });
-    const found =
-      m.kind === 'match'
-        ? `${m.problem.name} (#${m.problem.id}), ${SOURCE_LABEL[m.source].toLowerCase()}`
-        : m.kind === 'ambiguous'
-          ? `${m.candidates.length} equally good matches`
-          : m.suggestions.length
-            ? `no exact match; closest: ${m.suggestions[0].name}`
-            : 'no match';
-    if (entry) {
-      if (m.kind === 'match' && m.problem.id === entry.problemId) {
-        void vscode.window.showInformationMessage(`Auto-detect agrees with your choice: ${found}.`);
-        return;
-      }
-      const replace = 'Use Auto-detect';
-      const pick = await vscode.window.showWarningMessage(
-        `You linked this file to ${this.problemById(entry.problemId)?.name ?? entry.name ?? `#${entry.problemId}`}. Auto-detect found: ${found}.`,
-        { modal: true, detail: 'Replace your choice with the auto-detected result?' },
-        replace,
-      );
-      if (pick !== replace) return;
+    const how: Record<string, string> = { cph: 'from CPH data', filename: 'from the file name' };
+    if (entry && m.kind === 'match' && m.problem.id !== entry.problemId) {
+      const pick = await this.askInline(`Auto-detect found ${m.problem.name} (${how[m.source] ?? 'suggested'}).`, [
+        { id: 'switch', label: 'Switch to it', primary: true },
+        { id: 'keep', label: 'Keep current' },
+      ]);
+      if (pick !== 'switch') return;
       await this.mapping.set(uri, undefined);
-    } else {
-      void vscode.window.setStatusBarMessage(`Auto-detect: ${found}`, 4000);
+      await this.setActiveFile(uri);
+      return;
+    }
+    if (entry && m.kind === 'match') {
+      void this.askInline(`Auto-detect agrees: ${m.problem.name} (${how[m.source] ?? ''}).`, [{ id: 'ok', label: 'OK' }]);
+      return;
+    }
+    if (entry) {
+      void this.askInline(
+        m.kind === 'ambiguous' ? `Auto-detect found ${m.candidates.length} equally good matches; your choice is kept.` : 'Auto-detect found no exact match; your choice is kept.',
+        [{ id: 'ok', label: 'OK' }],
+      );
+      return;
     }
     await this.setActiveFile(uri);
-    if (m.kind === 'ambiguous' || (m.kind === 'none' && m.suggestions.length)) await vscode.commands.executeCommand('cedtGrader.panel.focus');
+    if (m.kind === 'none' && !m.suggestions.length) void this.askInline('Auto-detect found no matching problem. Choose one from the list.', [{ id: 'ok', label: 'OK' }]);
   }
 
   /** Jump to one of the files linked to the current problem (index into the list the panel shows). */
@@ -1065,13 +1190,15 @@ export class GraderController implements vscode.Disposable {
     if (!file || !problem) return;
     const others = this.linkedFiles.filter((u) => u.fsPath !== file.fsPath);
     if (!others.length) return;
-    const ok = 'Unlink Others';
-    const pick = await vscode.window.showWarningMessage(
-      `Keep only ${vscode.workspace.asRelativePath(file)} linked to ${problem.name}?`,
-      { modal: true, detail: `The link is removed from: ${others.map((u) => vscode.workspace.asRelativePath(u)).join(', ')}. The files themselves are not changed.` },
-      ok,
+    const pick = await this.askInline(
+      `Unlink ${others.length === 1 ? vscode.workspace.asRelativePath(others[0]) : `${others.length} other files`} from ${problem.name}?`,
+      [
+        { id: 'unlink', label: 'Unlink', primary: true },
+        { id: 'cancel', label: 'Cancel' },
+      ],
+      { detail: 'Only the links are removed; the files themselves are not deleted.' },
     );
-    if (pick !== ok) return;
+    if (pick !== 'unlink') return;
     for (const u of others) await this.mapping.set(u, undefined);
     if (this.problem?.source !== 'saved') await this.mapping.set(file, { problemId: problem.id, name: problem.name, baseUrl: this.cfg.baseUrl });
     await this.setActiveFile(file);
@@ -1281,7 +1408,6 @@ export class GraderController implements vscode.Disposable {
           const create = 'Create Folder';
           const ok = await vscode.window.showInformationMessage(
             `Create ${vscode.workspace.asRelativePath(folder)}/ for ${set.cases.length} test case${set.cases.length === 1 ? '' : 's'}?`,
-            { modal: true },
             create,
           );
           if (ok !== create) return;
@@ -1432,9 +1558,6 @@ export class GraderController implements vscode.Disposable {
     const key = fileUri.fsPath;
     const fileName = fileUri.path.split('/').pop() ?? '';
 
-    this.busy = true;
-    this.gradingFile = key;
-    this.emit();
     let sentId: number | null = null;
     let countedBefore: number | null = null;
     try {
@@ -1485,43 +1608,50 @@ export class GraderController implements vscode.Disposable {
           if (t > mine && (!newest || t > newest.t)) newest = { uri: u, t };
         }
         if (newest) {
-          const go = 'Submit This File';
-          const open = 'Open the Other File';
-          const pick = await vscode.window.showWarningMessage(
+          const pick = await this.askInline(
             `Submit this file? ${vscode.workspace.asRelativePath(newest.uri)} was changed more recently.`,
-            { modal: true, detail: `Both files are linked to ${problem.name} (#${problem.id}).` },
-            go,
-            open,
+            [
+              { id: 'go', label: 'Submit this file', primary: true },
+              { id: 'open', label: 'Open the other file' },
+            ],
+            { tone: 'warn', detail: `Both files are linked to ${problem.name} (#${problem.id}).` },
           );
-          if (pick === open) await vscode.window.showTextDocument(newest.uri);
-          if (pick !== go) return;
+          if (pick === 'open') await vscode.window.showTextDocument(newest.uri);
+          if (pick !== 'go') return;
         }
       }
 
       // A suggested (unconfirmed) match always asks, even with confirmations off.
       if (problem.source === 'suggested') {
-        const use = 'Use This Problem and Submit';
-        const pick = await vscode.window.showWarningMessage(
-          `${problem.name} (#${problem.id}) was only suggested from the file name.`,
-          { modal: true, detail: `Submit ${fileName} to ${problem.name} (#${problem.id})? The file will be linked to this problem.` },
-          use,
-        );
-        if (pick !== use) return;
+        const full = problem.fullName.trim();
+        const subtitle = full && full !== problem.name ? (full.startsWith(`${problem.name}:`) ? full.slice(problem.name.length + 1).trim() : full) : '';
+        const sub = subtitle ? ` (${subtitle})` : '';
+        const pick = await this.askInline(`Submit to ${problem.name}${sub}?`, [
+          { id: 'submit', label: 'Submit', primary: true },
+          { id: 'choose', label: 'Choose another problem' },
+        ]);
+        if (pick === 'choose') await this.focusProblemPicker();
+        if (pick !== 'submit') return;
         await this.mapping.set(fileUri, { problemId: problem.id, name: problem.name, baseUrl: this.cfg.baseUrl });
         if (this.problem) this.problem = { ...this.problem, source: 'saved' };
         warned = true;
       }
 
       if (this.cfg.confirmBeforeSubmit && !warned) {
-        const ok = 'Submit';
-        const pick = await vscode.window.showInformationMessage(
+        const pick = await this.askInline(
           `Submit ${fileName} to ${problem.name} (#${problem.id})${language ? ` as ${language.name}` : ''}?`,
-          { modal: true, detail: 'Turn this off with the setting "CEDT Grader: Confirm Before Submit".' },
-          ok,
+          [
+            { id: 'submit', label: 'Submit', primary: true },
+            { id: 'cancel', label: 'Cancel' },
+          ],
+          { detail: 'You can turn this question off in Settings ("CEDT Grader: Confirm Before Submit").' },
         );
-        if (pick !== ok) return;
+        if (pick !== 'submit') return;
       }
 
+      // Busy from here on (questions above don't lock the panel).
+      this.busy = true;
+      this.gradingFile = key;
       this.setResult(key, newResult(problem, 'submitting', 'Submitting…'));
       const sub = await this.client.submit(problem.id, languageId!, doc.getText(), fileName);
       sentId = sub.id;
@@ -1552,9 +1682,11 @@ export class GraderController implements vscode.Disposable {
       if (err instanceof ProblemUnavailableError) this.markUnavailable(problem.id);
       if (!connectionMsg) void this.showError(err, msg);
     } finally {
-      this.busy = false;
-      this.gradingFile = null;
-      this.pollAbort = null;
+      if (this.gradingFile === key) {
+        this.busy = false;
+        this.gradingFile = null;
+        this.pollAbort = null;
+      }
       this.emit();
     }
   }
@@ -1735,6 +1867,14 @@ export class GraderController implements vscode.Disposable {
     const pick = await vscode.window.showErrorMessage(msg, ...actions);
     if (pick === 'Show Log') this.output.show();
   }
+}
+
+export interface InlinePrompt {
+  id: number;
+  text: string;
+  detail: string | null;
+  tone: 'info' | 'warn';
+  buttons: { id: string; label: string; primary?: boolean }[];
 }
 
 /** VS Code language id for a file name, so "Open this version" gets syntax highlighting. */

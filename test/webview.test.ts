@@ -41,6 +41,8 @@ const base: ViewState = {
   matching: { suggestions: [], ambiguous: null, note: null },
   linkedFiles: [],
   cphTip: false,
+  notLinked: false,
+  prompt: null,
   testcases: { busy: false },
   cph: { installed: true },
   languages: { loading: false, items: [], selectedId: null, mismatch: null },
@@ -148,7 +150,11 @@ describe.runIf(existsSync(resolve(__dirname, '../esbuild.mjs')))('sidebar webvie
     post(loggedIn);
     doc.querySelector<HTMLButtonElement>('#submit-btn')!.click();
     expect(sent.at(-1)).toEqual({ type: 'submit' });
+    // Row click opens the linked file (or offers choices); it never links by itself.
     doc.querySelectorAll<HTMLButtonElement>('#sec-problems .problem-main')[1].click();
+    expect(sent.at(-1)).toEqual({ type: 'problemRowClick', problemId: 1271 });
+    // Linking is an explicit action in the row menu.
+    menuPick(doc, 'More actions for 01_Expr_11', 'Link to 00 11 intro.cpp');
     expect(sent.at(-1)).toEqual({ type: 'mapProblem', problemId: 1271 });
     const sel = doc.querySelector<HTMLSelectElement>('#lang')!;
     sel.value = '1';
@@ -283,21 +289,30 @@ describe.runIf(existsSync(resolve(__dirname, '../esbuild.mjs')))('sidebar webvie
     expect(sent.at(-1)).toEqual({ type: 'loadTestcases' });
     doc.querySelector<HTMLButtonElement>('#sec-current .combo')!.click();
     expect(doc.activeElement).toBe(doc.querySelector('.picker-search'));
-    const rows = doc.querySelectorAll('#sec-problems .problem-row');
-    const label = (r: Element) => [...r.querySelectorAll('.row-actions button')].map((b) => b.getAttribute('aria-label'));
-    expect(label(rows[0])).toContain('Go to linked file'); // has a mapped file
-    expect(label(rows[1])).toContain('Find file by name'); // no mapped file
-    rows[1].querySelector<HTMLButtonElement>('[aria-label="New file for this problem"]')!.click();
+    const items = (menu: string) => {
+      doc.querySelector<HTMLButtonElement>(`[aria-label="${menu}"]`)!.click();
+      const t = [...doc.querySelectorAll('.menu .menu-item')].map((b) => b.textContent);
+      doc.dispatchEvent(new (doc.defaultView as unknown as typeof globalThis).KeyboardEvent('keydown', { key: 'Escape' }));
+      return t;
+    };
+    expect(items('More actions for 00_Intro_11')).toContain('Go to linked file'); // has a mapped file
+    expect(items('More actions for 01_Expr_11')).toContain('Find file by name'); // no mapped file
+    menuPick(doc, 'More actions for 01_Expr_11', 'New file for this problem');
     expect(sent.at(-1)).toEqual({ type: 'newFile', problemId: 1271 });
+    // Row tooltip: just the names.
+    const main = doc.querySelectorAll<HTMLElement>('#sec-problems .problem-main')[1];
+    expect(main.dataset.tipTitle).toBe('01_Expr_11 #1271');
+    expect(main.dataset.tip).toBe('An Expression');
   });
 
   it('Phase 3: suggested match is labelled, no test-case button, picker lists suggestions first', () => {
     const { doc, sent, post } = boot();
     const sug = { id: 1271, name: '01_Expr_11', fullName: 'An Expression', score: score(null), hasFile: false, hasTestcase: true, status: 'untried' as const, tags: [], lastSubmissionTime: null, lastOpened: null };
     post({ ...loggedIn, problem: { ...sug, source: 'suggested', sourceLabel: 'Suggested — click to confirm', unavailable: false }, matching: { suggestions: [sug], ambiguous: null, note: null } });
-    expect(doc.querySelector('#sec-current .source-line.suggested')!.textContent).toContain('Suggested');
+    expect(doc.querySelector('#sec-current .source-line.source-suggested')!.textContent).toContain('Suggested');
     expect(doc.querySelector('#sec-current')!.textContent).toContain('Suggested from the file name');
-    const confirm = [...doc.querySelectorAll<HTMLButtonElement>('#sec-current button')].find((b) => b.textContent === 'Confirm')!;
+    expect(doc.querySelector('#sec-current .source-line.source-suggested')!.textContent).toContain('Suggested from the file name·Use this');
+    const confirm = [...doc.querySelectorAll<HTMLButtonElement>('#sec-current button')].find((b) => b.textContent === 'Use this')!;
     confirm.click();
     expect(sent.at(-1)).toEqual({ type: 'confirmProblem', problemId: 1271 });
     expect([...doc.querySelectorAll('#sec-current button')].some((b) => b.textContent?.includes('Load test cases'))).toBe(false);
@@ -482,7 +497,7 @@ describe.runIf(existsSync(resolve(__dirname, '../esbuild.mjs')))('sidebar webvie
     expect(rows[0].disabled).toBe(true); // this file
     rows[1].click();
     expect(sent.at(-1)).toEqual({ type: 'openLinkedFile', index: 1 });
-    [...doc.querySelectorAll<HTMLButtonElement>('#sec-current .notice.linked button')].find((b) => b.textContent === 'Keep only this file')!.click();
+    [...doc.querySelectorAll<HTMLButtonElement>('#sec-current .notice.linked button')].find((b) => b.textContent === 'Unlink the other files')!.click();
     expect(sent.at(-1)).toEqual({ type: 'keepOnlyThisFile' });
   });
 
@@ -522,6 +537,71 @@ describe.runIf(existsSync(resolve(__dirname, '../esbuild.mjs')))('sidebar webvie
     sel.value = 'score-desc';
     sel.dispatchEvent(new dom.window.Event('change'));
     expect(sent.at(-1)).toEqual({ type: 'setFilter', filter: { status: 'all', topic: null, sort: 'score-desc' } });
+  });
+
+  it('inline prompt (no modal): text, detail and plain buttons answer by id', () => {
+    const { doc, sent, post } = boot();
+    post({ ...loggedIn, prompt: { id: 7, text: 'Auto-detect found 104_exam67_1_P2 (from CPH data).', detail: null, tone: 'info', buttons: [{ id: 'switch', label: 'Switch to it', primary: true }, { id: 'keep', label: 'Keep current' }] } });
+    const bar = doc.querySelector<HTMLElement>('.prompt')!;
+    expect(bar.hidden).toBe(false);
+    expect(bar.textContent).toContain('Auto-detect found 104_exam67_1_P2 (from CPH data).');
+    [...bar.querySelectorAll<HTMLButtonElement>('button')].find((b) => b.textContent === 'Keep current')!.click();
+    expect(sent.at(-1)).toEqual({ type: 'promptAnswer', id: 7, button: 'keep' });
+    post({ ...loggedIn, prompt: null });
+    expect(doc.querySelector<HTMLElement>('.prompt')!.hidden).toBe(true);
+  });
+
+  it('explicitly unlinked file: "Not linked to a problem" with Choose problem / Auto-detect', () => {
+    const { doc, sent, post } = boot();
+    post({ ...loggedIn, problem: null, notLinked: true });
+    const cur = doc.querySelector('#sec-current')!;
+    expect(cur.textContent).toContain('Not linked to a problem');
+    [...cur.querySelectorAll<HTMLButtonElement>('button')].find((b) => b.textContent === 'Auto-detect')!.click();
+    expect(sent.at(-1)).toEqual({ type: 'autoDetect' });
+    [...cur.querySelectorAll<HTMLButtonElement>('button')].find((b) => b.textContent === 'Choose problem')!.click();
+    expect(doc.activeElement).toBe(doc.querySelector('.picker-search'));
+  });
+
+  it('"…" menu has "Unlink this file" for any linked file (not for suggestions)', () => {
+    const { doc, sent, post } = boot();
+    post({ ...loggedIn, problem: { ...loggedIn.problem!, source: 'filename', sourceLabel: 'Matched by file name' } });
+    menuPick(doc, 'More actions for this problem', 'Unlink this file');
+    expect(sent.at(-1)).toEqual({ type: 'unmapProblem' });
+  });
+
+  it('History tile tooltips (collapsed strip and expanded details) through the custom tooltip', async () => {
+    const { dom, doc, post } = boot();
+    const verdicts = [
+      { index: 1, ok: true, kind: 'correct', label: 'Test 1 of 3: Correct', group: 1 },
+      { index: 2, ok: false, kind: 'wrong', label: 'Test 2 of 3: Wrong Answer', group: 1 },
+      { index: 3, ok: false, kind: 'time_limit', label: 'Test 3 of 3: Time Limit Exceed' },
+    ];
+    const st = { ...loggedIn, history: { ...loggedIn.history, items: [{ ...loggedIn.history.items[0], verdicts }] } };
+    post(st);
+    const hover = async (el: Element) => {
+      el.dispatchEvent(new dom.window.MouseEvent('mouseover', { bubbles: true }));
+      await new Promise((r) => setTimeout(r, 350));
+      return doc.getElementById('cedt-tooltip')!;
+    };
+    const tiles = doc.querySelectorAll('#sec-history .mini-strip .mini');
+    expect(tiles).toHaveLength(3);
+    let tip = await hover(tiles[2]);
+    expect(tip.hidden).toBe(false);
+    expect(tip.textContent).toBe('Test 3 of 3: Time Limit Exceed');
+    const group = doc.querySelector('#sec-history .mini-group')!;
+    expect(group.getAttribute('data-tip')).toBe('Group 1 of 1: 1/2 passed. Tests in a box are scored together — the box earns the lowest score inside it.');
+    // expanded entry: per-test table tiles
+    post({
+      ...st,
+      history: {
+        ...st.history,
+        expanded: { submissionId: 2460977, loading: false, error: null, detail: { submissionId: 2460977, url: 'u', status: 'done', compilerMessage: null, maxRuntimeMs: 1, peakMemoryKb: 1, hasSource: true, sourceFilename: 'a.cpp', evaluations: [{ index: 1, kind: 'wrong', label: 'Test 1: Wrong Answer', score: 0, timeMs: 1, memoryKb: 1 }] } },
+      },
+    });
+    const evalTile = doc.querySelector('#sec-history .evals .mini')!;
+    tip = await hover(evalTile);
+    expect(tip.textContent).toBe('Test 1: Wrong Answer');
+    for (const t of doc.querySelectorAll('#sec-history .mini')) expect(t.getAttribute('data-tip')).toBeTruthy();
   });
 
   it('filter narrows the problem list and is remembered (UI state only)', () => {
