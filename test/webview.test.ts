@@ -147,7 +147,7 @@ describe.runIf(existsSync(resolve(__dirname, '../esbuild.mjs')))('sidebar webvie
     expect(doc.querySelector('.tile-group')).not.toBeNull();
     expect(doc.querySelector('#sec-result .score')!.textContent).toBe('70 / 100');
     expect(doc.querySelector('#sec-current .score')!.textContent).toBe('70 / 100');
-    expect(doc.querySelector('#sec-current')!.textContent).toContain('Latest: 40 — your best 70 still counts.');
+    expect(doc.querySelector('#sec-current')!.textContent).toContain('Latest: 40. Your best, 70, still counts.');
     expect(doc.querySelector('#sec-current .penalty')!.textContent).toBe('-10 AI assist');
     expect(doc.querySelector('#sec-result')!.textContent).toContain('Counted score improved: 40 → 70.');
     expect(doc.querySelectorAll('.history-row')).toHaveLength(2);
@@ -196,7 +196,7 @@ describe.runIf(existsSync(resolve(__dirname, '../esbuild.mjs')))('sidebar webvie
     expect(doc.querySelector('#sec-result .score')).not.toBeNull();
     post({ ...loggedIn, file: { path: 'b.cpp', name: 'b.cpp', languageGuess: 'C++', supported: true, renameTo: null }, result: null, gradingElsewhere: '00_Intro_11' });
     expect(doc.querySelector('#sec-result .score')).toBeNull();
-    expect(doc.querySelector('#sec-result')!.textContent).toContain('No submission yet');
+    expect(doc.querySelector('#sec-result')!.textContent).toContain('Nothing submitted from this file yet');
     expect(doc.querySelector('#sec-current')!.textContent).toContain('Grading 00_Intro_11 for another file');
   });
 

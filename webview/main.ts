@@ -276,18 +276,18 @@ const loginForm = el(
   loginUser,
   el('label', { for: 'login-pass' }, W.password),
   loginPass,
-  el('label', { class: 'check', for: 'login-remember' }, loginRemember, W.rememberPasswordOnThisComputer),
-  el('button', { class: 'btn primary', type: 'submit' }, icon('sign-in'), W.logIn),
+  el('label', { class: 'check', for: 'login-remember' }, loginRemember, ' ', W.rememberPassword),
+  el('button', { class: 'btn primary', type: 'submit' }, icon('sign-in'), ' ', W.logIn),
 );
 let showLoginForm = false;
 
-const pickerSearch = el('input', { type: 'search', class: 'picker-search', placeholder: W.searchByNameOrId, 'aria-label': W.searchProblems, spellcheck: 'false' });
+const pickerSearch = el('input', { type: 'search', class: 'picker-search', placeholder: W.searchPlaceholder, 'aria-label': W.searchProblems, spellcheck: 'false' });
 const pickerList = el('div', { class: 'picker-list', role: 'listbox' });
 // One persistent container: typing only re-renders the list, never moves the search box.
 const pickerBox = el('div', { class: 'picker' }, pickerSearch, pickerList);
 let pickerOpen = false;
 
-const problemFilter = el('input', { type: 'search', placeholder: W.filterByNameOrId, 'aria-label': W.filterProblems, spellcheck: 'false', value: ui.filter });
+const problemFilter = el('input', { type: 'search', placeholder: W.filterPlaceholder, 'aria-label': W.filterProblems, spellcheck: 'false', value: ui.filter });
 
 const sAccount = section('account', W.sectionAccount);
 const sCurrent = section('current', W.sectionCurrent);
@@ -299,7 +299,7 @@ const sHistory = section('history', W.sectionHistory, [
   }),
   iconButton('refresh', W.refreshHistory, () => send({ type: 'refreshHistory' })),
 ]);
-const sProblems = section('problems', W.sectionProblems, [iconButton('refresh', W.refreshProblemList, () => send({ type: 'refreshProblems' }))]);
+const sProblems = section('problems', W.sectionProblems, [iconButton('refresh', W.refreshProblems, () => send({ type: 'refreshProblems' }))]);
 const banner = el('div', { class: 'banner', role: 'alert', hidden: true });
 const promptBar = el('div', { class: 'prompt', role: 'status', hidden: true });
 app.append(banner, promptBar, sAccount.details, sCurrent.details, sResult.details, sHistory.details, sProblems.details);
@@ -329,10 +329,10 @@ function renderBanner(s: ViewState): void {
     el('div', { class: 'row' },
       icon(c.kind === 'session' ? 'account' : c.kind === 'offline' ? 'debug-disconnect' : 'warning'),
       el('strong', { class: 'grow' }, c.title),
-      button(c.action === 'login' ? [icon('sign-in'), W.logIn] : [icon('refresh'), W.retry], () => send({ type: 'retry' }), { kind: 'primary' }),
+      button(c.action === 'login' ? [icon('sign-in'), ' ', W.logIn] : [icon('refresh'), ' ', W.retry], () => send({ type: 'retry' }), { kind: 'primary' }),
     ),
     el('p', {}, c.message),
-    (s.problems.loaded || s.history.items.length > 0) && el('p', { class: 'small muted' }, W.showingSavedDataBelowIt),
+    (s.problems.loaded || s.history.items.length > 0) && el('p', { class: 'small muted' }, W.showingSavedData),
   ]);
 }
 
@@ -359,20 +359,20 @@ function renderAccount(s: ViewState): void {
           el('strong', { class: 'ellipsis' }, a.fullName || a.username),
           el('span', { class: 'muted small ellipsis' }, a.fullName ? `${a.username} · ${host}` : host),
         ),
-        button([icon('sign-out'), W.logOut], () => send({ type: 'logout' }), { title: W.logOutAndForgetThe }),
+        button([icon('sign-out'), ' ', W.logOut], () => send({ type: 'logout' }), { title: W.logOutTip }),
       ),
     );
     return;
   }
   if (a.status === 'logging-in') {
-    b.append(el('div', { class: 'row muted' }, icon('loading', 'codicon-modifier-spin'), W.loggingInTo(host)));
+    b.append(el('div', { class: 'row muted' }, icon('loading', 'codicon-modifier-spin'), ' ', W.loggingIn(host)));
     return;
   }
   if (a.hasSavedPassword && a.username && !showLoginForm) {
     b.append(
-      el('div', { class: 'row' }, el('span', { class: 'dot', 'aria-hidden': 'true' }), el('span', { class: 'grow ellipsis' }, W.savedLogin, el('strong', {}, a.username))),
+      el('div', { class: 'row' }, el('span', { class: 'dot', 'aria-hidden': 'true' }), el('span', { class: 'grow ellipsis' }, W.savedLogin, ' ', el('strong', {}, a.username))),
       el('div', { class: 'row gap' },
-        button([icon('sign-in'), W.logIn], () => send({ type: 'loginSaved' }), { kind: 'primary' }),
+        button([icon('sign-in'), ' ', W.logIn], () => send({ type: 'loginSaved' }), { kind: 'primary' }),
         el('button', { class: 'link', type: 'button', onclick: () => { showLoginForm = true; render(); } }, W.useAnotherAccount),
       ),
     );
@@ -420,7 +420,7 @@ function renderPickerList(s: ViewState): void {
       pickerList.append(el('div', { class: 'picker-group muted small' }, W.allProblems));
     }
     for (const p of hits.slice(0, 50)) pickerList.append(problemRow(p, s, 'picker'));
-    if (hits.length > 50) pickerList.append(el('div', { class: 'muted pad' }, W.moreRefineTheSearch(hits.length - 50)));
+    if (hits.length > 50) pickerList.append(el('div', { class: 'muted pad' }, W.moreResults(hits.length - 50)));
   }
 }
 
@@ -429,22 +429,22 @@ function scoreCard(sc: ScoreView): HTMLElement {
     el('div', { class: 'row score-row' },
       el('span', { class: 'muted small' }, W.countedScore),
       el('span', { class: 'grow' }),
-      sc.source === 'problem-list' ? el('span', { class: 'muted small', title: W.hintAiAssistPenaltiesRead }, W.fromProblemList) : null,
+      sc.source === 'problem-list' ? el('span', { class: 'muted small', title: W.penaltiesFromListTip }, W.fromProblemList) : null,
     ),
     (() => {
       const t = scoreText(sc.counted, sc.rawSum);
       return el('div', { class: `score ${scoreClass(sc.counted, sc.rawSum, outOf(sc))}`, title: t.tip ?? undefined }, sc.counted === null ? W.notAttempted : t.text);
     })(),
     el('div', { class: 'score-facts small' },
-      el('span', {}, W.best, el('strong', {}, fmt(sc.best))),
-      el('span', {}, W.latest, el('strong', {}, fmt(sc.latest))),
-      el('span', {}, W.attempts, el('strong', {}, String(sc.attempts))),
+      el('span', {}, W.best, ' ', el('strong', {}, fmt(sc.best))),
+      el('span', {}, W.latest, ' ', el('strong', {}, fmt(sc.latest))),
+      el('span', {}, W.attempts, ' ', el('strong', {}, String(sc.attempts))),
       sc.penaltyLabel ? el('span', { class: 'penalty' }, sc.penaltyLabel) : null,
       sc.rawSum ? el('span', { class: 'muted' }, W.rawSumScoring) : null,
     ),
   );
   if (sc.latestBelowCounted && sc.latest !== null && sc.counted !== null) {
-    card.append(el('p', { class: 'hint' }, icon('info'), W.latestYourBestStillCounts(fmt(sc.latest), fmt(sc.counted))));
+    card.append(el('p', { class: 'hint' }, icon('info'), ' ', W.latestBelowBest(fmt(sc.latest), fmt(sc.counted))));
   }
   return card;
 }
@@ -453,7 +453,7 @@ function renderCurrent(s: ViewState): void {
   const b = sCurrent.body;
   b.replaceChildren();
   if (!s.file) {
-    b.append(el('p', { class: 'muted' }, icon('file'), W.openSourceToSubmit));
+    b.append(el('p', { class: 'muted' }, icon('file'), ' ', W.openFileToSubmit));
     return;
   }
   b.append(
@@ -471,7 +471,7 @@ function renderCurrent(s: ViewState): void {
       class: 'combo',
       type: 'button',
       'aria-expanded': String(pickerOpen),
-      title: p ? W.chooseAnotherProblem(p.name, p.id) : W.chooseProblem,
+      title: p ? W.changeProblemTip(p.name, p.id) : W.chooseProblem,
       onclick: () => (pickerOpen ? closePicker() : openPicker()),
     },
     p
@@ -490,7 +490,7 @@ function renderCurrent(s: ViewState): void {
         p ? iconButton('book', W.openStatement, () => send({ type: 'openStatement', problemId: p.id })) : null,
         p ? iconButton('copy', W.copyProblemName, () => send({ type: 'copyName', problemId: p.id })) : null,
         p ? iconButton('globe', W.openOnTheGraderWebsite, () => send({ type: 'openProblemInBrowser', problemId: p.id })) : null,
-        iconButton('sparkle', W.autoDetectTheProblemFor, () => send({ type: 'autoDetect' })),
+        iconButton('sparkle', W.autoDetectTip, () => send({ type: 'autoDetect' })),
         // Every state: a chosen link is unlinked; a name / CPH match or a suggestion becomes "not linked".
         p ? iconButton('close', p.source === 'saved' ? W.unlinkThisFileTip : W.dontMatchThisFileTip, () => send({ type: 'unmapProblem' })) : null,
       ),
@@ -507,8 +507,8 @@ function renderCurrent(s: ViewState): void {
         ? el('div', { class: 'notice' },
             el('div', { class: 'row' }, icon('debug-disconnect'), el('span', { class: 'grow' }, W.notLinkedToAProblem)),
             el('div', { class: 'row gap' },
-              button(W.chooseProblem, () => openPicker(), { kind: 'primary', title: W.pickTheGraderProblemFor }),
-              button(W.autoDetect, () => send({ type: 'autoDetect' }), { title: W.matchThisFileToA }),
+              button(W.chooseProblem, () => openPicker(), { kind: 'primary', title: W.chooseProblemTip }),
+              button(W.autoDetect, () => send({ type: 'autoDetect' }), { title: W.autoDetectAgainTip }),
             ),
           )
         : null,
@@ -516,8 +516,8 @@ function renderCurrent(s: ViewState): void {
         ? el('div', { class: 'notice warn', role: 'alert' },
             el('div', { class: 'row' }, icon('warning'), el('span', { class: 'grow' }, W.problemUnavailableMsg)),
             el('div', { class: 'row gap' },
-              button(W.changeProblem, () => openPicker(), { title: W.linkThisFileToAnother }),
-              button(W.removeLink, () => send({ type: 'unmapProblem' }), { title: W.forgetTheLinkForThis }),
+              button(W.changeProblem, () => openPicker(), { title: W.changeProblemTitle }),
+              button(W.removeLink, () => send({ type: 'unmapProblem' }), { title: W.removeLinkTip }),
             ),
           )
         : null,
@@ -532,7 +532,7 @@ function renderCurrent(s: ViewState): void {
     const select = el('select', {
       id: 'lang',
       disabled: L.loading || L.items.length <= 1,
-      title: L.loading ? W.loadingLanguages : L.items.length <= 1 ? W.thisProblemAllowsOnlyOne : W.languageForThisSubmission,
+      title: L.loading ? W.loadingLanguages : L.items.length <= 1 ? W.oneLanguageOnly : W.languageTip,
       onchange: (e: Event) => send({ type: 'selectLanguage', languageId: Number((e.target as HTMLSelectElement).value) }),
     });
     if (L.items.length === 0) select.append(el('option', {}, L.loading ? W.loading : '—'));
@@ -542,15 +542,15 @@ function renderCurrent(s: ViewState): void {
     if (p.hasTestcase) {
       b.append(
         button(
-          s.testcases.busy ? [icon('loading', 'codicon-modifier-spin'), W.loadingTestCases] : [icon('beaker'), W.loadTestCases],
+          s.testcases.busy ? [icon('loading', 'codicon-modifier-spin'), ' ', W.loadingTestCases] : [icon('beaker'), ' ', W.loadTestCases],
           () => send({ type: 'loadTestcases' }),
           {
             disabled: s.testcases.busy,
             title: s.testcases.busy
               ? W.downloadingTestCases
               : s.cph.installed
-                ? W.downloadIntoCph
-                : W.downloadAsFiles,
+                ? W.loadTestCasesCphTip
+                : W.loadTestCasesFilesTip,
           },
         ),
       );
@@ -563,10 +563,10 @@ function renderCurrent(s: ViewState): void {
       el('div', { class: 'notice warn', role: 'status' },
         el('div', { class: 'row' },
           icon('warning'),
-          el('span', { class: 'grow' }, W.thisProblemDoesnTAccept(mm.wanted)),
+          el('span', { class: 'grow' }, W.languageNotAccepted(mm.wanted)),
           button(W.change, () => openPicker()),
         ),
-        el('p', { class: 'small muted' }, W.accepted(mm.allowed.join(', '))),
+        el('p', { class: 'small muted' }, W.acceptedLanguages(mm.allowed.join(', '))),
       ),
     );
   }
@@ -574,11 +574,11 @@ function renderCurrent(s: ViewState): void {
   if (s.cphTip) {
     b.append(
       el('div', { class: 'notice tip', role: 'note' },
-        el('div', { class: 'row' }, icon('lightbulb'), el('span', { class: 'grow small' }, W.wantToRunTestCases)),
+        el('div', { class: 'row' }, icon('lightbulb'), el('span', { class: 'grow small' }, W.cphTip)),
         el('div', { class: 'row gap' },
-          button(W.install, () => send({ type: 'cphTip', action: 'install' }), { kind: 'primary', title: W.openCphSPageIn }),
-          button(W.notNow, () => send({ type: 'cphTip', action: 'later' }), { title: W.hideUntilVsCodeRestarts }),
-          el('button', { class: 'link small', type: 'button', title: W.donTShowThisTip, onclick: () => send({ type: 'cphTip', action: 'never' }) }, W.donTShowAgain),
+          button(W.install, () => send({ type: 'cphTip', action: 'install' }), { kind: 'primary', title: W.cphInstallTip }),
+          button(W.notNow, () => send({ type: 'cphTip', action: 'later' }), { title: W.notNowTip }),
+          el('button', { class: 'link small', type: 'button', title: W.dontShowAgainTip, onclick: () => send({ type: 'cphTip', action: 'never' }) }, W.dontShowAgain),
         ),
       ),
     );
@@ -591,7 +591,7 @@ function renderCurrent(s: ViewState): void {
       ` ${sub.busy ? 'Grading…' : sub.label}`,
     ),
   );
-  if (s.gradingElsewhere) b.append(el('p', { class: 'hint' }, icon('loading', 'codicon-modifier-spin'), W.gradingForAnotherFile(s.gradingElsewhere)));
+  if (s.gradingElsewhere) b.append(el('p', { class: 'hint' }, icon('loading', 'codicon-modifier-spin'), ' ', W.gradingOtherFile(s.gradingElsewhere)));
   // One message: the mismatch notice already explains a disabled Submit.
   if (sub.reason && !mm) b.append(el('p', { class: 'hint', id: 'submit-reason' }, icon('info'), ' ', sub.reason));
 }
@@ -644,9 +644,9 @@ function legend(): HTMLElement {
   return el('div', { class: 'legend', role: 'note' },
     el('strong', {}, W.readingTheResults),
     ...verdictLegend().map((c) => el('div', { class: 'row' }, el('span', { class: `tile v-${c.kind}`, 'aria-hidden': 'true' }, c.code), el('span', {}, c.word))),
-    el('div', { class: 'row' }, el('span', { class: 'tile-group', 'aria-hidden': 'true' }, el('span', { class: 'tile v-correct' }, 'P'), el('span', { class: 'tile v-correct' }, 'P'), el('span', { class: 'tile v-wrong' }, '-')), el('span', {}, W.aBoxTestsScoredTogether)),
-    el('p', { class: 'small' }, W.oneTilePerTestCase),
-    el('p', { class: 'small muted' }, W.hoverATileOrA),
+    el('div', { class: 'row' }, el('span', { class: 'tile-group', 'aria-hidden': 'true' }, el('span', { class: 'tile v-correct' }, 'P'), el('span', { class: 'tile v-correct' }, 'P'), el('span', { class: 'tile v-wrong' }, '-')), el('span', {}, W.legendBox)),
+    el('p', { class: 'small' }, W.legendTiles),
+    el('p', { class: 'small muted' }, W.legendHover),
   );
 }
 
@@ -655,7 +655,7 @@ function renderResult(s: ViewState): void {
   b.replaceChildren();
   const r = s.result;
   if (!r) {
-    b.append(el('p', { class: 'muted' }, W.noSubmissionYetForThis));
+    b.append(el('p', { class: 'muted' }, W.noResultYet));
     return;
   }
   b.append(
@@ -689,7 +689,7 @@ function renderResult(s: ViewState): void {
       el('details', { class: 'compiler', open: true },
         el('summary', {}, W.compilerMessage),
         el('pre', {}, r.compilerMessage || W.empty),
-        button([icon('go-to-file'), W.openInEditor], () => send({ type: 'showCompilerMessage' })),
+        button([icon('go-to-file'), ' ', W.openInEditor], () => send({ type: 'showCompilerMessage' })),
       ),
     );
   }
@@ -697,14 +697,14 @@ function renderResult(s: ViewState): void {
     b.append(el('div', { class: r.phase === 'error' ? 'error' : 'notice' }, icon(r.phase === 'error' ? 'error' : 'clock'), ' ', r.message ?? ''));
   }
   if (r.phase !== 'submitting' && r.phase !== 'grading') {
-    b.append(el('div', { class: 'row gap' }, button([icon('debug-restart'), W.resubmit], () => send({ type: 'resubmit' }), { disabled: !s.submit.enabled, title: s.submit.reason ?? W.submitTheCurrentFileAgain })));
+    b.append(el('div', { class: 'row gap' }, button([icon('debug-restart'), ' ', W.resubmit], () => send({ type: 'resubmit' }), { disabled: !s.submit.enabled, title: s.submit.reason ?? W.resubmitTip })));
   }
 }
 
 /** Compact strip for history rows: every test (no cut-off), wraps on its own line, groups kept as boxes. */
 function miniStrip(verdicts: VerdictView[]): HTMLElement {
   const passed = verdicts.filter((v) => v.ok).length;
-  const strip = el('div', { class: 'mini-strip', role: 'img', 'aria-label': W.ofTestsPassed(passed, verdicts.length) });
+  const strip = el('div', { class: 'mini-strip', role: 'img', 'aria-label': W.testsPassed(passed, verdicts.length) });
   const mini = (v: VerdictView) => el('span', { class: `mini v-${v.kind in VERDICT_LETTER ? v.kind : 'unknown'}`, title: v.label });
   const groupCount = new Set(verdicts.filter((v) => v.group !== undefined).map((v) => v.group)).size;
   let i = 0;
@@ -726,8 +726,8 @@ function detailBox(d: SubmissionDetailView): HTMLElement {
   const box = el('div', { class: 'detail' });
   box.append(
     el('div', { class: 'score-facts small' },
-      el('span', {}, W.maxTime, el('strong', {}, seconds(d.maxRuntimeMs))),
-      el('span', {}, W.peakMemory, el('strong', {}, megabytes(d.peakMemoryKb))),
+      el('span', {}, W.maxTime, ' ', el('strong', {}, seconds(d.maxRuntimeMs))),
+      el('span', {}, W.peakMemory, ' ', el('strong', {}, megabytes(d.peakMemoryKb))),
       d.sourceFilename ? el('span', { class: 'mono' }, d.sourceFilename) : null,
     ),
   );
@@ -753,8 +753,8 @@ function detailBox(d: SubmissionDetailView): HTMLElement {
   if (d.compilerMessage) box.append(el('details', { class: 'compiler' }, el('summary', {}, W.compilerMessage), el('pre', {}, d.compilerMessage)));
   box.append(
     el('div', { class: 'row gap' },
-      button([icon('go-to-file'), W.openThisVersion], () => send({ type: 'openSubmissionSource', submissionId: d.submissionId }), { disabled: !d.hasSource, title: d.hasSource ? W.openTheSubmittedSourceIn : W.theGraderDoesNotReturn }),
-      button([icon('diff'), W.compareWithCurrentFile], () => send({ type: 'compareSubmission', submissionId: d.submissionId }), { disabled: !d.hasSource, title: d.hasSource ? W.compareWithCurrentFileTip : W.theGraderDoesNotReturn }),
+      button([icon('go-to-file'), ' ', W.openThisVersion], () => send({ type: 'openSubmissionSource', submissionId: d.submissionId }), { disabled: !d.hasSource, title: d.hasSource ? W.openThisVersionTip : W.noSourceTip }),
+      button([icon('diff'), ' ', W.compareWithCurrentFile], () => send({ type: 'compareSubmission', submissionId: d.submissionId }), { disabled: !d.hasSource, title: d.hasSource ? W.compareWithCurrentFile : W.noSourceTip }),
       el('button', { class: 'link', type: 'button', title: W.openInBrowser, onclick: () => send({ type: 'openSubmission', submissionId: d.submissionId }) }, W.website, icon('link-external')),
     ),
   );
@@ -767,7 +767,7 @@ function historyRow(h: HistoryEntry, s: ViewState): HTMLElement {
   const row = el('div', { class: `history-item${open ? ' open' : ''}${h.counted ? ' counted' : ''}` });
   appendChildren(row, [
     el('div', { class: 'row history-line' },
-    el('button', { class: 'history-row grow', type: 'button', 'aria-expanded': String(open), title: W.submission(h.submissionId, exact(h.submittedAt)), onclick: () => send({ type: 'toggleSubmission', submissionId: h.submissionId }) },
+    el('button', { class: 'history-row grow', type: 'button', 'aria-expanded': String(open), title: W.submissionTip(h.submissionId, exact(h.submittedAt)), onclick: () => send({ type: 'toggleSubmission', submissionId: h.submissionId }) },
       icon(open ? 'chevron-down' : 'chevron-right'),
       el('span', { class: 'mono muted' }, h.number !== null ? `${h.number}.` : `#${h.submissionId}`),
       (() => {
@@ -776,10 +776,10 @@ function historyRow(h: HistoryEntry, s: ViewState): HTMLElement {
         return el('span', { class: `pill ${h.compileError ? 'score-zero' : scoreClass(h.points, activeRawSum())}`, title: tip, 'aria-label': tip }, h.compileError ? W.ce : fmt(h.points));
       })(),
       // The star takes the colour of the counted score on this problem (penalties included), like the score pill.
-      h.counted ? el('span', { class: `badge counted ${scoreClass(s.problem?.score.counted ?? h.points, activeRawSum())}`, title: W.thisSubmissionHoldsYourCounted, 'aria-label': W.countedBestSubmission }, icon('star-full'), el('span', { class: 'counted-text' }, W.counted)) : null,
+      h.counted ? el('span', { class: `badge counted ${scoreClass(s.problem?.score.counted ?? h.points, activeRawSum())}`, title: W.countedTip, 'aria-label': W.countedLabel }, icon('star-full'), el('span', { class: 'counted-text' }, W.counted)) : null,
       el('span', { class: 'grow ellipsis' },
         h.verdicts.length
-          ? el('span', { class: 'muted small', title: W.ofTestsPassedShort(h.verdicts.filter((v) => v.ok).length, h.verdicts.length) }, `${h.verdicts.filter((v) => v.ok).length}/${h.verdicts.length}`)
+          ? el('span', { class: 'muted small', title: W.testsPassed(h.verdicts.filter((v) => v.ok).length, h.verdicts.length) }, `${h.verdicts.filter((v) => v.ok).length}/${h.verdicts.length}`)
           : h.compileError
             ? el('span', { class: 'muted small' }, W.compileError)
             : h.comment
@@ -797,7 +797,7 @@ function historyRow(h: HistoryEntry, s: ViewState): HTMLElement {
       el('div', { class: 'row small muted pad-left' }, h.language ?? '', h.language ? ' · ' : '', exact(h.submittedAt), ` · #${h.submissionId}`),
     );
     if (ex!.detail) row.append(detailBox(ex!.detail));
-    else if (ex!.loading) row.append(el('p', { class: 'muted small pad-left' }, icon('loading', 'codicon-modifier-spin'), W.loadingDetails));
+    else if (ex!.loading) row.append(el('p', { class: 'muted small pad-left' }, icon('loading', 'codicon-modifier-spin'), ' ', W.loadingDetails));
     else if (ex!.error) row.append(el('div', { class: 'error pad-left' }, icon('error'), ' ', ex!.error));
   }
   return row;
@@ -807,20 +807,20 @@ function renderHistory(s: ViewState): void {
   const b = sHistory.body;
   b.replaceChildren();
   if (!s.problem) {
-    b.append(el('p', { class: 'muted' }, W.chooseAProblemToSee));
+    b.append(el('p', { class: 'muted' }, W.chooseProblemForHistory));
     return;
   }
   const H = s.history;
   if (legendOpen === 'history') b.append(legend());
-  if (H.stale) b.append(el('p', { class: 'hint' }, icon('warning'), W.mayBeOutOfDate));
+  if (H.stale) b.append(el('p', { class: 'hint' }, icon('warning'), ' ', W.mayBeOutOfDate));
   if (!H.items.length) {
-    b.append(el('p', { class: 'muted' }, H.loading ? W.loading : H.error ? '' : W.noSubmissionsForThisProblem));
+    b.append(el('p', { class: 'muted' }, H.loading ? W.loading : H.error ? '' : W.noSubmissions));
   } else {
     const list = el('div', { class: 'history' });
     for (const h of H.items) list.append(historyRow(h, s));
-    b.append(list, el('p', { class: 'muted small' }, W.nSubmissions(H.items.length, H.items.length === 1 ? '' : 's')));
+    b.append(list, el('p', { class: 'muted small' }, W.nSubmissions(H.items.length)));
   }
-  if (H.loading && H.items.length) b.append(el('p', { class: 'muted small' }, icon('loading', 'codicon-modifier-spin'), W.refreshing));
+  if (H.loading && H.items.length) b.append(el('p', { class: 'muted small' }, icon('loading', 'codicon-modifier-spin'), ' ', W.refreshing));
   if (H.error) b.append(el('div', { class: 'error' }, icon('error'), ' ', H.error));
 }
 
@@ -834,10 +834,10 @@ function headerMenuItems(p: ViewState['problem']): MenuItem[] {
           { icon: 'globe', label: W.openOnTheGraderWebsite, onclick: () => send({ type: 'openProblemInBrowser', problemId: p.id }) },
         ]
       : []),
-    { icon: 'sparkle', label: W.autoDetectTheProblemFor, onclick: () => send({ type: 'autoDetect' }) },
+    { icon: 'sparkle', label: W.autoDetectTip, onclick: () => send({ type: 'autoDetect' }) },
     ...(p && state?.file?.renameTo ? [{ icon: 'edit', label: W.renameToProblem, tip: W.renameToProblemTip(state.file.name, state.file.renameTo), onclick: () => send({ type: 'renameFileToProblem' }) }] : []),
     ...(p
-      ? [{ icon: 'close', label: p.source === 'saved' ? W.unlinkThisFile : W.donTMatchThisFile, tip: W.autoDetectWonTRe, onclick: () => send({ type: 'unmapProblem' }) }]
+      ? [{ icon: 'close', label: p.source === 'saved' ? W.unlinkThisFile : W.dontMatchThisFile, tip: W.autoDetectWontRelink, onclick: () => send({ type: 'unmapProblem' }) }]
       : []),
   ];
 }
@@ -885,7 +885,7 @@ function problemRow(p: ProblemView, s: ViewState, where: 'picker' | 'list'): HTM
   );
   // Tooltip: just the names (bold "name #id", the title below).
   main.dataset.tipTitle = `${p.name} #${p.id}`;
-  main.dataset.tip = main.disabled ? W.openSourceToLink(sub ? `${sub} · ` : '') : (sub ?? '');
+  main.dataset.tip = main.disabled ? W.openFileToLink(sub ? `${sub} · ` : '') : (sub ?? '');
   // Icons as before the "…" menu (shown on hover / keyboard focus); right-click offers the same and more.
   return withContextMenu(
     el('div', { class: `problem-row${mapped ? ' mapped' : ''}`, role: where === 'picker' ? 'option' : undefined, 'aria-selected': where === 'picker' ? String(mapped) : undefined },
@@ -911,7 +911,7 @@ function linkedFilesNotice(s: ViewState): HTMLElement {
   box.append(
     el('div', { class: 'row' },
       icon('files'),
-      el('span', { class: 'grow small' }, s.linkedNotice ?? W.filesAreLinkedToThis(s.linkedFiles.length)),
+      el('span', { class: 'grow small' }, s.linkedNotice ?? W.nFilesLinked(s.linkedFiles.length)),
       el('button', { class: 'link small', type: 'button', 'aria-expanded': String(linkedOpen), title: linkedOpen ? W.hideTheList : W.showTheFiles, onclick: () => { linkedOpen = !linkedOpen; forceRender(); } }, linkedOpen ? W.hide : W.show),
       el('button', { class: 'link small', type: 'button', title: W.dismissNoticeTip, onclick: () => send({ type: 'dismissLinkedNotice' }) }, W.dismiss),
     ),
@@ -939,14 +939,14 @@ function linkedFilesNotice(s: ViewState): HTMLElement {
               hide(button(W.open, () => send({ type: 'openLinkedFile', index: i }), { title: W.openPath(f.path) })),
               hide(
                 f.how === 'chosen'
-                  ? button(W.unlink, () => send({ type: 'unlinkLinkedFile', index: i }), { title: W.removeTheLinkOfThe(f.path) })
-                  : button(W.donTMatchThisFile, () => send({ type: 'unlinkLinkedFile', index: i }), { title: W.stopMatchingToThisProblem(f.path) }),
+                  ? button(W.unlink, () => send({ type: 'unlinkLinkedFile', index: i }), { title: W.unlinkFileTip(f.path) })
+                  : button(W.dontMatchThisFile, () => send({ type: 'unlinkLinkedFile', index: i }), { title: W.dontMatchFileTip(f.path) }),
               ),
             ),
           );
         }),
       ),
-      el('div', { class: 'row gap' }, button(W.unlinkTheOtherFiles, () => send({ type: 'keepOnlyThisFile' }), { title: W.removesOnlyTheLinksThe })),
+      el('div', { class: 'row gap' }, button(W.unlinkTheOtherFiles, () => send({ type: 'keepOnlyThisFile' }), { title: W.unlinkOthersTip })),
     );
   }
   return box;
@@ -960,9 +960,9 @@ function sourceLine(source: string, problemId: number, name: string): HTMLElemen
   if (source === 'suggested') {
     return el('div', { class: 'row source-line source-suggested small muted' },
       icon('lightbulb'),
-      el('span', {}, W.suggestedFromTheFileName),
+      el('span', {}, W.suggestedFromFileName),
       el('span', {}, '·'),
-      el('button', { class: 'link small', type: 'button', title: W.linkThisFileTo(name, problemId), onclick: () => send({ type: 'confirmProblem', problemId }) }, W.useThis),
+      el('button', { class: 'link small', type: 'button', title: W.useThisTip(name, problemId), onclick: () => send({ type: 'confirmProblem', problemId }) }, W.useThis),
     );
   }
   return el('div', { class: `row source-line source-${source} small muted` }, icon(SOURCE_ICON[source] ?? 'info'), el('span', {}, SOURCE_TEXT[source] ?? source));
@@ -1021,9 +1021,9 @@ function renderProblems(s: ViewState): void {
   b.replaceChildren();
   const P = s.problems;
   if (!P.loaded) {
-    if (P.loading) b.append(el('p', { class: 'muted' }, icon('loading', 'codicon-modifier-spin'), W.loadingProblemsIcon));
-    else if (s.account.status !== 'logged-in' && !s.account.hasSavedPassword) b.append(el('p', { class: 'muted' }, W.logInToSeeYour));
-    else b.append(button([icon('refresh'), W.loadProblemsIcon], () => send({ type: 'refreshProblems' })));
+    if (P.loading) b.append(el('p', { class: 'muted' }, icon('loading', 'codicon-modifier-spin'), ' ', W.loadingProblems));
+    else if (s.account.status !== 'logged-in' && !s.account.hasSavedPassword) b.append(el('p', { class: 'muted' }, W.logInToSeeProblems));
+    else b.append(button([icon('refresh'), ' ', W.loadProblems], () => send({ type: 'refreshProblems' })));
     if (P.error) b.append(el('div', { class: 'error' }, icon('error'), ' ', P.error));
     return;
   }
@@ -1037,16 +1037,16 @@ function renderProblems(s: ViewState): void {
   listRestored = true;
   b.append(el('p', { class: 'muted small list-count' }, hits.length === P.items.length ? W.nProblems(P.items.length) : W.nOfProblems(hits.length, P.items.length)));
   if (P.penaltyNote) b.append(el('p', { class: 'hint' }, icon('info'), ' ', P.penaltyNote));
-  if (P.stale) b.append(el('p', { class: 'hint' }, icon('warning'), W.mayBeOutOfDate));
-  if (P.loading) b.append(el('p', { class: 'muted small' }, icon('loading', 'codicon-modifier-spin'), W.refreshing));
+  if (P.stale) b.append(el('p', { class: 'hint' }, icon('warning'), ' ', W.mayBeOutOfDate));
+  if (P.loading) b.append(el('p', { class: 'muted small' }, icon('loading', 'codicon-modifier-spin'), ' ', W.refreshing));
   if (P.error) b.append(el('div', { class: 'error' }, icon('error'), ' ', P.error));
 }
 
 const STATUS_FILTERS: { key: ProblemFilter['status']; label: string; tip: string }[] = [
   { key: 'all', label: W.all, tip: W.allProblems },
-  { key: 'unsolved', label: W.unsolved, tip: W.notTriedYetOrNot },
-  { key: 'inprogress', label: W.inProgress, tip: W.submittedBestScoreBelow100 },
-  { key: 'solved', label: W.solved, tip: W.bestScore100OrMore },
+  { key: 'unsolved', label: W.unsolved, tip: W.unsolvedTip },
+  { key: 'inprogress', label: W.inProgress, tip: W.inProgressTip },
+  { key: 'solved', label: W.solved, tip: W.solvedTip },
 ];
 
 function statusFilter(f: ProblemFilter): HTMLElement {

@@ -19,14 +19,14 @@ describe('classifyConnectionError: each error type → its banner message', () =
   const cases: [string, unknown, string, string, 'retry' | 'login'][] = [
     ['no internet (DNS)', networkErrorFrom(fetchFailed('ENOTFOUND'), 'h'), 'offline', 'No internet connection', 'retry'],
     ['network down', networkErrorFrom(fetchFailed('ENETUNREACH'), 'h'), 'offline', 'No internet connection', 'retry'],
-    ['server unreachable', networkErrorFrom(fetchFailed('ECONNREFUSED'), 'h'), 'unreachable', 'Cannot reach the grader', 'retry'],
-    ['connection reset', networkErrorFrom(fetchFailed('ECONNRESET'), 'h'), 'unreachable', 'Cannot reach the grader', 'retry'],
+    ['server unreachable', networkErrorFrom(fetchFailed('ECONNREFUSED'), 'h'), 'unreachable', "Can't reach the grader", 'retry'],
+    ['connection reset', networkErrorFrom(fetchFailed('ECONNRESET'), 'h'), 'unreachable', "Can't reach the grader", 'retry'],
     ['timeout', networkErrorFrom(timeout(), 'h'), 'timeout', 'The grader is not responding', 'retry'],
-    ['server error 5xx', new ServerBusyError('HTTP 503', 503), 'server', 'Grader server error', 'retry'],
+    ['server error 5xx', new ServerBusyError('HTTP 503', 503), 'server', 'Grader problem', 'retry'],
     ['rate limited 429', new ServerBusyError('HTTP 429', 429), 'throttled', 'Too many requests', 'retry'],
     ['too many login attempts', new AuthError('Too many failed login attempts.', 'throttled'), 'throttled', 'Too many login attempts', 'retry'],
-    ['session expired, re-login impossible', new SessionExpiredError('expired', false), 'session', 'Session expired', 'login'],
-    ['session expired, re-login failed', new AuthError('Wrong username or password.', 'wrong-password'), 'session', 'Session expired', 'login'],
+    ['session expired, re-login impossible', new SessionExpiredError('expired', false), 'session', 'Login expired', 'login'],
+    ['session expired, re-login failed', new AuthError('Wrong username or password.', 'wrong-password'), 'session', 'Login expired', 'login'],
   ];
   for (const [name, err, kind, title, action] of cases) {
     it(name, () => {
@@ -73,15 +73,15 @@ describe('describeSubmitFailure', () => {
   const offline = networkErrorFrom(fetchFailed('ENOTFOUND'), 'h');
   it('before reaching the server: nothing was submitted', () => {
     expect(describeSubmitFailure(offline, null)).toBe('Nothing was submitted: no internet connection.');
-    expect(describeSubmitFailure(networkErrorFrom(fetchFailed('ECONNREFUSED'), 'h'), null)).toBe('Nothing was submitted: cannot reach the grader.');
+    expect(describeSubmitFailure(networkErrorFrom(fetchFailed('ECONNREFUSED'), 'h'), null)).toBe("Nothing was submitted: can't reach the grader.");
     expect(describeSubmitFailure(new SessionExpiredError('x', false), null)).toMatch(/^Nothing was submitted: your login expired/);
   });
   it('ambiguous cases say so', () => {
-    expect(describeSubmitFailure(networkErrorFrom(timeout(), 'h'), null)).toMatch(/may or may not have been received/);
-    expect(describeSubmitFailure(new ServerBusyError('x', 502), null)).toMatch(/server error\. Nothing was submitted \(check History/);
+    expect(describeSubmitFailure(networkErrorFrom(timeout(), 'h'), null)).toMatch(/may or may not have received your code/);
+    expect(describeSubmitFailure(new ServerBusyError('x', 502), null)).toMatch(/grader's side\. Nothing was submitted \(check History/);
   });
   it('after the submission was sent: results will load later', () => {
-    expect(describeSubmitFailure(offline, 8001)).toBe('Your submission #8001 was sent. Results will load when the connection is back.');
+    expect(describeSubmitFailure(offline, 8001)).toBe('Your submission #8001 was sent. Its result loads when the connection is back.');
   });
   it('other errors are not rewritten', () => {
     expect(describeSubmitFailure(new LanguageNotAllowedError('x'), null)).toBeNull();
