@@ -1,0 +1,29 @@
+{
+  "id": 1759,
+  "name": "DigLo69_Exam2__1",
+  "full_name": "DigLo69_Exam2__1",
+  "full_score": null,
+  "difficulty": null,
+  "tags": [
+    "DigLo"
+  ],
+  "submission_count": 2,
+  "best_score": 100,
+  "last_score": 100,
+  "last_result": "PPPPPPPPP",
+  "last_submission_time": "2026-10-12T10:02:11.000+07:00",
+  "last_submission_id": 2446079,
+  "has_testcase": true,
+  "has_attachment": true,
+  "permitted_languages": [
+    {
+      "id": 8,
+      "name": "digital",
+      "ext": "dig"
+    }
+  ],
+  "submission_ids": [
+    2446079,
+    2445933
+  ]
+}

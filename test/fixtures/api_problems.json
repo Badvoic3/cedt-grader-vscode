@@ -1,0 +1,340 @@
+[
+  {
+    "id": 1759,
+    "name": "DigLo69_Exam2__1",
+    "full_name": "DigLo69_Exam2__1",
+    "difficulty": null,
+    "tags": [
+      "DigLo"
+    ],
+    "submission_count": 2,
+    "best_score": 100,
+    "last_score": 100,
+    "last_result": "PPPPPPPPP",
+    "last_submission_time": "2026-10-12T10:02:11.000+07:00",
+    "last_submission_id": 2446079,
+    "has_testcase": true,
+    "has_attachment": true,
+    "permitted_languages": [
+      {
+        "id": 8,
+        "name": "digital",
+        "ext": "dig"
+      }
+    ]
+  },
+  {
+    "id": 1760,
+    "name": "DigLo69_Exam2__2",
+    "full_name": "DigLo69_Exam2__2",
+    "difficulty": null,
+    "tags": [
+      "DigLo"
+    ],
+    "submission_count": 1,
+    "best_score": 100,
+    "last_score": 100,
+    "last_result": "PPPPPPPPP",
+    "last_submission_time": "2026-10-12T10:55:14.000+07:00",
+    "last_submission_id": 2446818,
+    "has_testcase": true,
+    "has_attachment": true,
+    "permitted_languages": [
+      {
+        "id": 8,
+        "name": "digital",
+        "ext": "dig"
+      }
+    ]
+  },
+  {
+    "id": 1761,
+    "name": "DigLo69_Exam2__3",
+    "full_name": "DigLo69_Exam2__3",
+    "difficulty": null,
+    "tags": [
+      "DigLo"
+    ],
+    "submission_count": 3,
+    "best_score": 100,
+    "last_score": 100,
+    "last_result": "PPPPPPPPP",
+    "last_submission_time": "2026-11-02T10:21:52.000+07:00",
+    "last_submission_id": 2460967,
+    "has_testcase": true,
+    "has_attachment": true,
+    "permitted_languages": [
+      {
+        "id": 8,
+        "name": "digital",
+        "ext": "dig"
+      }
+    ]
+  },
+  {
+    "id": 1752,
+    "name": "diglab_06_02",
+    "full_name": "Digital: Simulation 06 - 02 Counter from Quiz2",
+    "difficulty": null,
+    "tags": [
+      "DigLo"
+    ],
+    "submission_count": 5,
+    "best_score": 100,
+    "last_score": 100,
+    "last_result": "PPPPPPPPP",
+    "last_submission_time": "2026-10-05T14:06:54.000+07:00",
+    "last_submission_id": 2437029,
+    "has_testcase": false,
+    "has_attachment": true,
+    "permitted_languages": [
+      {
+        "id": 8,
+        "name": "digital",
+        "ext": "dig"
+      }
+    ]
+  },
+  {
+    "id": 1753,
+    "name": "diglab_06_03",
+    "full_name": "Digital: Simulation 06 - 03 Vending Machine Mealy",
+    "difficulty": null,
+    "tags": [
+      "DigLo"
+    ],
+    "submission_count": 3,
+    "best_score": 100,
+    "last_score": 100,
+    "last_result": "PPPPPPPPPPPPPPP",
+    "last_submission_time": "2026-10-05T14:29:23.000+07:00",
+    "last_submission_id": 2437175,
+    "has_testcase": false,
+    "has_attachment": true,
+    "permitted_languages": [
+      {
+        "id": 8,
+        "name": "digital",
+        "ext": "dig"
+      }
+    ]
+  },
+  {
+    "id": 1754,
+    "name": "diglab_06_04",
+    "full_name": "Digital: Simulation 06 - 04 Vending Machine Moore",
+    "difficulty": null,
+    "tags": [
+      "DigLo"
+    ],
+    "submission_count": 1,
+    "best_score": 100,
+    "last_score": 100,
+    "last_result": "PPPPPPPPPPPPPPP",
+    "last_submission_time": "2026-10-05T14:29:51.000+07:00",
+    "last_submission_id": 2437181,
+    "has_testcase": false,
+    "has_attachment": true,
+    "permitted_languages": [
+      {
+        "id": 8,
+        "name": "digital",
+        "ext": "dig"
+      }
+    ]
+  },
+  {
+    "id": 1755,
+    "name": "diglab_07_02",
+    "full_name": "Digital: Simulation 07 - 02 Number increment",
+    "difficulty": null,
+    "tags": [
+      "DigLo"
+    ],
+    "submission_count": 1,
+    "best_score": 100,
+    "last_score": 100,
+    "last_result": "PPPPPPPPPPPP",
+    "last_submission_time": "2026-10-07T14:21:27.000+07:00",
+    "last_submission_id": 2439821,
+    "has_testcase": false,
+    "has_attachment": true,
+    "permitted_languages": [
+      {
+        "id": 8,
+        "name": "digital",
+        "ext": "dig"
+      }
+    ]
+  },
+  {
+    "id": 1756,
+    "name": "DigLo69_Project",
+    "full_name": "DigLo69_Project",
+    "difficulty": null,
+    "tags": [
+      "DigLo"
+    ],
+    "submission_count": 0,
+    "best_score": null,
+    "last_score": null,
+    "last_result": null,
+    "last_submission_time": null,
+    "last_submission_id": null,
+    "has_testcase": false,
+    "has_attachment": true,
+    "permitted_languages": [
+      {
+        "id": 8,
+        "name": "digital",
+        "ext": "dig"
+      }
+    ]
+  },
+  {
+    "id": 1749,
+    "name": "DigLo69_Exam1__1",
+    "full_name": "DigLo69_Exam1__1",
+    "difficulty": null,
+    "tags": [
+      "DigLo"
+    ],
+    "submission_count": 2,
+    "best_score": 100,
+    "last_score": 100,
+    "last_result": "PPPPPPPPP",
+    "last_submission_time": "2026-10-05T09:43:03.000+07:00",
+    "last_submission_id": 2434015,
+    "has_testcase": true,
+    "has_attachment": true,
+    "permitted_languages": [
+      {
+        "id": 8,
+        "name": "digital",
+        "ext": "dig"
+      }
+    ]
+  },
+  {
+    "id": 1750,
+    "name": "DigLo69_Exam1__2",
+    "full_name": "DigLo69_Exam1__2",
+    "difficulty": null,
+    "tags": [
+      "DigLo"
+    ],
+    "submission_count": 1,
+    "best_score": 100,
+    "last_score": 100,
+    "last_result": "PPPPPPPPP",
+    "last_submission_time": "2026-10-05T10:02:34.000+07:00",
+    "last_submission_id": 2434554,
+    "has_testcase": true,
+    "has_attachment": true,
+    "permitted_languages": [
+      {
+        "id": 8,
+        "name": "digital",
+        "ext": "dig"
+      }
+    ]
+  },
+  {
+    "id": 1751,
+    "name": "DigLo69_Exam1__3",
+    "full_name": "DigLo69_Exam1__3",
+    "difficulty": null,
+    "tags": [
+      "DigLo"
+    ],
+    "submission_count": 2,
+    "best_score": 100,
+    "last_score": 100,
+    "last_result": "PPPPPPPPP",
+    "last_submission_time": "2026-10-05T10:18:54.000+07:00",
+    "last_submission_id": 2435096,
+    "has_testcase": true,
+    "has_attachment": true,
+    "permitted_languages": [
+      {
+        "id": 8,
+        "name": "digital",
+        "ext": "dig"
+      }
+    ]
+  },
+  {
+    "id": 1746,
+    "name": "104_exam_subtasks_example",
+    "full_name": "104_exam_subtasks_example",
+    "difficulty": 5,
+    "tags": [
+      "ComProg"
+    ],
+    "submission_count": 3,
+    "best_score": 100,
+    "last_score": 100,
+    "last_result": "PPPPPPPPPPPPPPP",
+    "last_submission_time": "2026-09-18T18:42:11.000+07:00",
+    "last_submission_id": 2407051,
+    "has_testcase": false,
+    "has_attachment": false,
+    "permitted_languages": [
+      {
+        "id": 2,
+        "name": "cpp",
+        "ext": "cpp"
+      }
+    ]
+  },
+  {
+    "id": 1734,
+    "name": "da68_f2_closed_city",
+    "full_name": "เมืองปิด",
+    "difficulty": null,
+    "tags": [],
+    "submission_count": 0,
+    "best_score": null,
+    "last_score": null,
+    "last_result": null,
+    "last_submission_time": null,
+    "last_submission_id": null,
+    "has_testcase": false,
+    "has_attachment": false,
+    "permitted_languages": null
+  },
+  {
+    "id": 1733,
+    "name": "da68_f2_remaining_merge",
+    "full_name": "Remaining Merge",
+    "difficulty": null,
+    "tags": [],
+    "submission_count": 0,
+    "best_score": null,
+    "last_score": null,
+    "last_result": null,
+    "last_submission_time": null,
+    "last_submission_id": null,
+    "has_testcase": false,
+    "has_attachment": false,
+    "permitted_languages": null
+  },
+  {
+    "id": 1732,
+    "name": "da68_f2_sackknap",
+    "full_name": "SackKnap",
+    "difficulty": null,
+    "tags": [
+      "DataAlgo"
+    ],
+    "submission_count": 0,
+    "best_score": null,
+    "last_score": null,
+    "last_result": null,
+    "last_submission_time": null,
+    "last_submission_id": null,
+    "has_testcase": false,
+    "has_attachment": false,
+    "permitted_languages": null
+  }
+]

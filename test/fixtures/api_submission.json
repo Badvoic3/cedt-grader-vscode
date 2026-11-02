@@ -1,0 +1,82 @@
+{
+  "id": 2446079,
+  "problem_id": 1759,
+  "problem_name": "DigLo69_Exam2__1",
+  "user_id": 12345,
+  "language": "digital",
+  "source": "// source removed",
+  "source_filename": "live_edit.dig",
+  "submitted_at": "2026-10-12T10:02:11.000+07:00",
+  "points": 100,
+  "status": "done",
+  "grader_comment": "PPPPPPPPP",
+  "compiler_message": "\n",
+  "max_runtime": 2461,
+  "peak_memory": 134016,
+  "number": 2,
+  "evaluations": [
+    {
+      "testcase_id": 21186,
+      "result": "correct",
+      "score": 1,
+      "time": 2395,
+      "memory": 127952
+    },
+    {
+      "testcase_id": 21187,
+      "result": "correct",
+      "score": 1,
+      "time": 2220,
+      "memory": 123356
+    },
+    {
+      "testcase_id": 21188,
+      "result": "correct",
+      "score": 1,
+      "time": 2304,
+      "memory": 126784
+    },
+    {
+      "testcase_id": 21189,
+      "result": "correct",
+      "score": 1,
+      "time": 2265,
+      "memory": 127880
+    },
+    {
+      "testcase_id": 21190,
+      "result": "correct",
+      "score": 1,
+      "time": 2461,
+      "memory": 134016
+    },
+    {
+      "testcase_id": 21191,
+      "result": "correct",
+      "score": 1,
+      "time": 2440,
+      "memory": 133832
+    },
+    {
+      "testcase_id": 21192,
+      "result": "correct",
+      "score": 1,
+      "time": 2337,
+      "memory": 124500
+    },
+    {
+      "testcase_id": 21193,
+      "result": "correct",
+      "score": 1,
+      "time": 2342,
+      "memory": 131324
+    },
+    {
+      "testcase_id": 21194,
+      "result": "correct",
+      "score": 1,
+      "time": 2314,
+      "memory": 125412
+    }
+  ]
+}
