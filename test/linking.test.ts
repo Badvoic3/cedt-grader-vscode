@@ -6,7 +6,8 @@ import { TestcaseStore } from '../src/data/testcaseStore';
 import { GraderClient, type Problem } from '../src/grader';
 import { cphProbPath, type CphProblem } from '../src/mapping/cph';
 import { GRADER_ID_BASE, importIntoCph, normalizeEol } from '../src/mapping/cphImport';
-import { cleanName, fileNameFor, normalizeName, resolveProblem, suggest } from '../src/mapping/match';
+import { cleanName, decideSuggestion, fileNameFor, normalizeName, resolveProblem, scoreCandidates, suggest } from '../src/mapping/match';
+import { MATCH } from '../src/shared/constants';
 import { parseMappingFile, reverseIndex } from '../src/mapping/mappingFile';
 import { createFileNoOverwrite } from '../src/mapping/newFile';
 import { FakeGrader } from './fakeServer';
@@ -79,11 +80,33 @@ describe('matching order', () => {
     expect((m({ filePath: '/w/00_intro_11.cpp', problems: dup }) as { candidates: Problem[] }).candidates.map((p) => p.id)).toEqual([1360, 5000]);
   });
 
-  it('4. otherwise suggestions (closest few), not a match', () => {
+  it('4a. a confident suggestion (score ≥ MATCH.suggestMinScore, clearly ahead) is used as "suggested"', () => {
+    const r = m({ filePath: '/w/da68_f2_closed.cpp' });
+    expect(r).toMatchObject({ kind: 'match', source: 'suggested', problem: { id: 1734 } });
+  });
+
+  it('4b. two candidates close in score → "Several problems could match", none picked', () => {
     const r = m({ filePath: '/w/01_expr.cpp' });
+    expect(r.kind).toBe('ambiguous');
+    expect((r as { source: string }).source).toBe('suggested');
+    expect((r as { candidates: Problem[] }).candidates.map((p) => p.id).sort()).toEqual([1271, 1272]);
+  });
+
+  it('4c. below the threshold: not used; candidates only for the picker', () => {
+    const r = m({ filePath: '/w/closed.cpp' });
     expect(r.kind).toBe('none');
-    expect((r as { suggestions: Problem[] }).suggestions.map((p) => p.id).slice(0, 2).sort()).toEqual([1271, 1272]);
+    expect(decideSuggestion(scoreCandidates('closed', problems))).toEqual({ kind: 'below' });
     expect(suggest('totally_unrelated', problems)).toEqual([]);
+  });
+
+  it('4d. folder named like a problem tag adds MATCH.folderTagBonus (can break a tie)', () => {
+    const tagged = problems.map((p) => (p.id === 1272 ? { ...p, tags: ['Expr'] } : p));
+    const plain = scoreCandidates('01_expr', tagged);
+    const inFolder = scoreCandidates('01_expr', tagged, ['hw', 'expr']);
+    const s = (xs: typeof plain, id: number) => xs.find((x) => x.p.id === id)!.score;
+    expect(s(inFolder, 1272) - s(plain, 1272)).toBeCloseTo(MATCH.folderTagBonus);
+    expect(s(inFolder, 1271)).toBe(s(plain, 1271));
+    expect(m({ filePath: '/w/expr/01_expr.cpp', problems: tagged, folders: ['expr'] })).toMatchObject({ kind: 'match', source: 'suggested', problem: { id: 1272 } });
   });
 });
 

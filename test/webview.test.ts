@@ -325,7 +325,7 @@ describe.runIf(existsSync(resolve(__dirname, '../esbuild.mjs')))('sidebar webvie
     expect(main.dataset.tip).toBe('An Expression');
   });
 
-  it('Phase 3: suggested match is labelled, no test-case button, picker lists suggestions first', () => {
+  it('suggested match: labelled as a guess, works like a link (score, history, test cases, statement), picker lists suggestions first', () => {
     const { doc, sent, post } = boot();
     const sug = { id: 1271, name: '01_Expr_11', fullName: 'An Expression', score: score(null), hasFile: false, hasTestcase: true, status: 'untried' as const, tags: [], lastSubmissionTime: null, lastOpened: null };
     post({ ...loggedIn, problem: { ...sug, source: 'suggested', sourceLabel: 'Suggested — click to confirm', unavailable: false }, matching: { suggestions: [sug], ambiguous: null, note: null } });
@@ -335,7 +335,12 @@ describe.runIf(existsSync(resolve(__dirname, '../esbuild.mjs')))('sidebar webvie
     const confirm = [...doc.querySelectorAll<HTMLButtonElement>('#sec-current button')].find((b) => b.textContent === 'Use this')!;
     confirm.click();
     expect(sent.at(-1)).toEqual({ type: 'confirmProblem', problemId: 1271 });
-    expect([...doc.querySelectorAll('#sec-current button')].some((b) => b.textContent?.includes('Load test cases'))).toBe(false);
+    // Read-only features as for a link; write actions ask in the extension (one question, then confirmed).
+    expect([...doc.querySelectorAll('#sec-current button')].some((b) => b.textContent?.includes('Load test cases'))).toBe(true);
+    expect(doc.querySelector('#sec-current .score-card, #sec-current .score')).not.toBeNull();
+    expect(doc.querySelector('#sec-current [aria-label="Open statement"]')).not.toBeNull();
+    post({ ...loggedIn, problem: { ...sug, source: 'suggested', sourceLabel: 'Suggested — click to confirm', unavailable: false }, matching: { suggestions: [sug], ambiguous: null, note: null } });
+    expect(doc.querySelectorAll('#sec-history .history-row').length).toBeGreaterThan(0); // history shown for the suggestion
     doc.querySelector<HTMLButtonElement>('#sec-current .combo')!.click();
     expect(doc.querySelector('.picker-group')!.textContent).toBe('Suggested for this file');
   });
