@@ -1,7 +1,8 @@
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { GraderClient } from '../grader/client';
 import type { GraderCase } from '../mapping/cphImport';
+import { touch, writeAtomic } from './cacheFiles';
 
 /**
  * Grader test cases per problem, cached in the extension's globalStorage
@@ -27,6 +28,8 @@ export class TestcaseStore {
     private readonly dir: string,
     private readonly client: () => GraderClient,
     private readonly log: (line: string) => void = () => {},
+    /** A file was written (the controller enforces the cache size limit). */
+    private readonly onWrite: (path: string) => void = () => {},
   ) {}
 
   private file(problemId: number): string {
@@ -40,6 +43,7 @@ export class TestcaseStore {
     if (!opts.refresh) {
       try {
         const set = JSON.parse(await readFile(this.file(problemId), 'utf8')) as TestcaseSet;
+        await touch(this.file(problemId)); // least recently used goes first when the cache is full
         this.log(`cache hit  testcases:${problemId} (disk)`);
         return { status: 'ok', set, fromCache: true };
       } catch {
@@ -64,8 +68,8 @@ export class TestcaseStore {
       opts.onProgress?.(++done, sorted.length);
     }
     try {
-      await mkdir(join(this.file(problemId), '..'), { recursive: true });
-      await writeFile(this.file(problemId), JSON.stringify(set));
+      await writeAtomic(this.file(problemId), JSON.stringify(set));
+      this.onWrite(this.file(problemId));
     } catch (err) {
       this.log(`testcase cache not written: ${err instanceof Error ? err.message : err}`);
     }

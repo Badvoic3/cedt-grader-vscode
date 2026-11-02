@@ -78,6 +78,19 @@ export const PANEL = {
   statementStateSaveMs: 400,
 } as const;
 
+/**
+ * Downloaded files in globalStorage (statements, test cases). The size limit
+ * is also the setting `cedtGrader.cacheMaxMB`; least recently used files go
+ * first. The daily cleanup removes files unused this long and leftover
+ * temporary files (`*.tmp`, from an interrupted write).
+ */
+export const CACHE = {
+  maxMbDefault: 100,
+  maxMbMinimum: 10,
+  unusedDays: 30,
+  tempDays: 30,
+} as const;
+
 /** Links of deleted files are kept (stale) this many days, so a moved file can reconnect. */
 export const STALE_LINK_DAYS = 30;
 

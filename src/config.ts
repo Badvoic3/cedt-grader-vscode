@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { DEFAULT_BASE_URL } from './grader/client';
+import { CACHE } from './shared/constants';
 
 export interface GraderConfig {
   baseUrl: string;
@@ -12,6 +13,8 @@ export interface GraderConfig {
   statementBeside: boolean;
   /** Language for new files when the active file's language isn't permitted (default C++). */
   defaultLanguage: string;
+  /** Size limit of downloaded files (statements, test cases), in MB. */
+  cacheMaxMB: number;
 }
 
 /**
@@ -41,5 +44,6 @@ export function readConfig(): GraderConfig {
     debugRequests: c.get<boolean>('debugRequests', false) === true,
     statementBeside: c.get<boolean>('statementBeside', true) !== false,
     defaultLanguage: String(c.get<string>('defaultLanguage', 'C++') || 'C++'),
+    cacheMaxMB: Math.max(CACHE.maxMbMinimum, Number(c.get('cacheMaxMB', CACHE.maxMbDefault)) || CACHE.maxMbDefault),
   };
 }

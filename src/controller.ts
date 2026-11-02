@@ -31,6 +31,8 @@ import {
 import { dirname } from 'node:path';
 import { chooseTestcaseTarget, CPH_EXTENSION_ID, CphPresence, saveTestcasesAsFiles, testsFolderFor } from './cphIntegration';
 import { TestcaseStore } from './data/testcaseStore';
+import { cleanupCache, clearCacheFiles, enforceLimit, formatBytes, scanCache, statementIds, totalBytes } from './data/cacheFiles';
+import { type BackupRecord, backupsToDelete, CLEAR_DEFAULTS, CLEAR_ORDER, type ClearCategory, keepIds, planClear, recordBackup } from './data/cacheClear';
 import { cphProbPath as cphProbPathFor, readCphProblem } from './mapping/cph';
 import { importIntoCph } from './mapping/cphImport';
 import { createFileNoOverwrite, pathExists as exists } from './mapping/newFile';
@@ -38,7 +40,8 @@ import { chooseNewFileLanguage } from './mapping/newFileLanguage';
 import { BINARY_EXTS, excludeGlob, filterSourceFiles, rankCandidates, sourceGlob } from './mapping/findByName';
 import { buildMatchIndex, type IndexedFile, matchFile, OnceCache, type SourceFile } from './mapping/matchIndex';
 import { EXTENSION_LANGUAGE } from './grader/languages';
-import { stat as fsStat, readFile as fsReadFile } from 'node:fs/promises';
+import { stat as fsStat, readFile as fsReadFile, rm } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
 import { dismissKey, type LocatedEntry, moveCphProblem, reconnectCandidates, remapPath } from './mapping/mappingOps';
 import { cleanName, fileNameFor, type MatchSource, placeholder, resolveProblem, SOURCE_LABEL } from './mapping/match';
 import { MappingStore } from './mapping/store';
@@ -46,27 +49,28 @@ import { comparePaths, linkedNotice, mergeProblemFiles, noticeDismissed, noticeS
 import { pathKey } from './mapping/paths';
 import { confirmSuggestion } from './mapping/suggestionGate';
 import { freeName, invalidFileName, nameMatchesProblem, renameProposal } from './mapping/renameToProblem';
-import { LIMITS, TIMING, WEB_PATHS } from './shared/constants';
+import { CACHE, LIMITS, TIMING, WEB_PATHS } from './shared/constants';
 import { PICK_HOW, S } from './shared/strings';
+import { KEYS } from './shared/stateKeys';
 import type { HistoryEntry, ProblemFilter, ProblemView, ResultView, SubmissionDetailView, ViewState } from './shared/messages';
 
 /** Dismissed "files for this problem" notices: problem id → notice signature (workspaceState; "Clear Cached Data" resets it). */
-export const DISMISSED_NOTICES_KEY = 'cedtGrader.dismissedNotices';
+export const DISMISSED_NOTICES_KEY = KEYS.dismissedNotices;
 
 export const EXAM_WARNING = S.exam.warning;
 
 /** URI scheme serving the source of a past submission (for the diff view). */
 export const SUBMISSION_SCHEME = 'cedt-grader-submission';
 
-const LANGUAGE_KEY = 'cedtGrader.languageByFile';
-const DISMISSED_KEY = 'cedtGrader.dismissedReconnects';
-const CLEANUP_KEY = 'cedtGrader.lastMappingCleanup';
-const TESTCASE_TARGET_KEY = 'cedtGrader.testcaseTarget';
-const NEWFILE_LANG_KEY = 'cedtGrader.lastNewFileLanguage';
-const FILTER_KEY = 'cedtGrader.problemFilter';
-const OPENED_KEY = 'cedtGrader.recentlyOpened';
-const CPH_TIP_KEY = 'cedtGrader.cphTipDismissed';
-const REMEMBER_KEY = 'cedtGrader.rememberPassword';
+const LANGUAGE_KEY = KEYS.languageByFile;
+const DISMISSED_KEY = KEYS.dismissedReconnects;
+const CLEANUP_KEY = KEYS.lastCleanup;
+const TESTCASE_TARGET_KEY = KEYS.testcaseTarget;
+const NEWFILE_LANG_KEY = KEYS.lastNewFileLanguage;
+const FILTER_KEY = KEYS.problemFilter;
+const OPENED_KEY = KEYS.recentlyOpened;
+const CPH_TIP_KEY = KEYS.cphTipDismissed;
+const REMEMBER_KEY = KEYS.rememberPassword;
 
 type Listener = (s: ViewState) => void;
 
@@ -144,6 +148,8 @@ export class GraderController implements vscode.Disposable {
   /** A submission that was sent but whose result could not be fetched (connection lost). */
   private pendingPoll: { key: string; problem: Problem; submissionId: number; countedBefore: number | null } | null = null;
   readonly statements: StatementPanels;
+  /** Cache size-limit runs, one at a time. */
+  private cacheJob: Promise<void> = Promise.resolve();
 
   constructor(private readonly ctx: vscode.ExtensionContext) {
     this.output = vscode.window.createOutputChannel('CEDT Grader');
@@ -160,7 +166,7 @@ export class GraderController implements vscode.Disposable {
         save: (at, list) => void ctx.workspaceState.update(this.problemsKey(), { at, list }),
       },
     });
-    this.testcases = new TestcaseStore(ctx.globalStorageUri.fsPath, () => this.client, (l) => this.requestLog(l));
+    this.testcases = new TestcaseStore(ctx.globalStorageUri.fsPath, () => this.client, (l) => this.requestLog(l), (p) => this.cacheWritten(p));
     this.cph = new CphPresence(vscode.extensions, () => this.emit());
     this.data.onChange = () => this.emit();
     this.data.onError = (e, key) => {
@@ -174,7 +180,7 @@ export class GraderController implements vscode.Disposable {
     this.data.onSuccess = () => this.connectionOk();
     this.statements = new StatementPanels(
       ctx.extensionUri,
-      new StatementStore(ctx.globalStorageUri.fsPath, () => this.client, (l) => this.requestLog(l)),
+      new StatementStore(ctx.globalStorageUri.fsPath, () => this.client, (l) => this.requestLog(l), (p) => this.cacheWritten(p)),
       {
         memento: ctx.globalState,
         beside: () => this.cfg.statementBeside,
@@ -237,7 +243,7 @@ export class GraderController implements vscode.Disposable {
   /** Restores a stored API token (no network). Never logs in on its own. */
   async init(): Promise<void> {
     // Problem list saved by versions before v2 (no tags): no longer read, remove it.
-    await this.ctx.workspaceState.update(`cedtGrader.problems:${this.cfg.baseUrl}:${this.cfg.username}`, undefined);
+    await this.ctx.workspaceState.update(`${KEYS.problemsPrefix}:${this.cfg.baseUrl}:${this.cfg.username}`, undefined);
     await this.dailyCleanup();
     await this.cleanupDuplicateLinks();
     this.hasSavedPassword = !!(await this.getPassword());
@@ -364,7 +370,7 @@ export class GraderController implements vscode.Disposable {
 
   private problemsKey(): string {
     // v2: problems carry `tags`; older saved lists are still read safely (normalized), but new ones go here.
-    return `cedtGrader.problems.v2:${this.cfg.baseUrl}:${this.cfg.username}`;
+    return `${KEYS.problemsPrefix}.v2:${this.cfg.baseUrl}:${this.cfg.username}`;
   }
 
   private secretKey(kind: 'password' | 'token', username = this.cfg.username): string {
@@ -1113,13 +1119,141 @@ export class GraderController implements vscode.Disposable {
 
   // ------------------------------------------------------ moved files
 
-  /** Stale mappings (older than 30 days) are removed, at most once a day. */
+  /**
+   * At most once a day: stale mappings older than 30 days, downloaded files
+   * unused for 30 days, leftover temporary files, then the size limit.
+   * Never touches the workspace.
+   */
   private async dailyCleanup(): Promise<void> {
     const last = this.ctx.globalState.get<number>(CLEANUP_KEY, 0);
     if (Date.now() - last < TIMING.dailyCleanupMs) return;
     await this.ctx.globalState.update(CLEANUP_KEY, Date.now());
     const n = await this.mapping.expireStale();
     if (n) this.log(`Removed ${n} mapping(s) whose file has been missing for 30 days.`);
+    const r = await cleanupCache(this.cacheRoot(), {
+      now: Date.now(),
+      maxBytes: this.cfg.cacheMaxMB * 1024 * 1024,
+      unusedDays: CACHE.unusedDays,
+      tempDays: CACHE.tempDays,
+    });
+    if (r.removed) this.log(`Cache cleanup: removed ${r.removed} file(s), ${formatBytes(r.bytes)}.`);
+    await this.pruneStatementViews();
+  }
+
+  private cacheRoot(): string {
+    return this.ctx.globalStorageUri.fsPath;
+  }
+
+  /** A downloaded file was written: keep the cache under `cedtGrader.cacheMaxMB` (one run at a time; the new file stays). */
+  private cacheWritten(path: string): void {
+    this.cacheJob = this.cacheJob
+      .then(async () => {
+        const r = await enforceLimit(this.cacheRoot(), this.cfg.cacheMaxMB * 1024 * 1024, [path]);
+        if (r.removed) {
+          this.requestLog(`cache limit: removed ${r.removed} least recently used file(s), ${formatBytes(r.bytes)}`);
+          await this.pruneStatementViews();
+        }
+      })
+      .catch((err) => this.logError('Cache limit', err));
+  }
+
+  /** Forget the saved page / zoom of statements that are no longer cached. */
+  private async pruneStatementViews(): Promise<void> {
+    const views = this.ctx.globalState.get<Record<string, unknown>>(KEYS.statementView, {});
+    if (!Object.keys(views).length) return;
+    const kept = keepIds(views, statementIds(await scanCache(this.cacheRoot())));
+    if (Object.keys(kept).length !== Object.keys(views).length) await this.ctx.globalState.update(KEYS.statementView, kept);
+  }
+
+  /** Remember a `.prob.bak` this extension wrote, so "Clear Cached Data" can offer to remove it (and nothing else). */
+  private async recordBackup(path: string | null | undefined): Promise<void> {
+    if (!path) return;
+    await this.ctx.globalState.update(KEYS.backups, recordBackup(this.backups(), path, new Date()));
+  }
+
+  private backups(): BackupRecord[] {
+    return this.ctx.globalState.get<BackupRecord[]>(KEYS.backups, []);
+  }
+
+  /**
+   * "Clear Cached Data": shows the size in use, lets the user tick what to
+   * clear (`CLEAR_DEFAULTS`), confirms (modal: can't be undone), then clears.
+   */
+  async clearCachedData(): Promise<void> {
+    const files = await scanCache(this.cacheRoot());
+    const fileBytes = totalBytes(files);
+    const listKeys = this.ctx.workspaceState.keys().filter((k) => k.startsWith(KEYS.problemsPrefix));
+    const listBytes = listKeys.reduce((n, k) => n + Buffer.byteLength(JSON.stringify(this.ctx.workspaceState.get(k)) ?? ''), 0);
+    const backups = backupsToDelete(this.backups(), existsSync);
+    const linkCount = (await this.mapping.allEntries()).length;
+    const C = S.cache;
+    const rows: Record<ClearCategory, { label: string; detail: string; description?: string; show: boolean }> = {
+      files: { label: C.files, detail: C.filesDetail, description: formatBytes(fileBytes), show: true },
+      lists: { label: C.lists, detail: C.listsDetail, description: formatBytes(listBytes), show: true },
+      links: { label: C.links, detail: C.linksDetail, description: linkCount ? String(linkCount) : undefined, show: true },
+      login: { label: C.login, detail: C.loginDetail, show: true },
+      backups: { label: C.backups, detail: C.backupsDetail(backups.length), show: backups.length > 0 },
+    };
+    const items = CLEAR_ORDER.filter((c) => rows[c].show).map((c) => ({
+      id: c,
+      label: rows[c].label,
+      description: rows[c].description,
+      detail: rows[c].detail,
+      picked: CLEAR_DEFAULTS[c],
+    }));
+    const picked = await vscode.window.showQuickPick(items, {
+      canPickMany: true,
+      title: C.title(formatBytes(fileBytes + listBytes)),
+      placeHolder: C.placeholder,
+      ignoreFocusOut: true,
+    });
+    if (!picked?.length) return;
+    const what = picked.map((p) => p.label.toLowerCase()).join(', ');
+    if ((await vscode.window.showWarningMessage(C.confirm(what), { modal: true }, C.clear)) !== C.clear) return;
+
+    const plan = planClear(new Set(picked.map((p) => p.id)), {
+      workspace: this.ctx.workspaceState.keys(),
+      global: this.ctx.globalState.keys(),
+    });
+    let freed = 0;
+    let skippedDirty = 0;
+    if (plan.logout) await this.logout();
+    if (plan.cacheFiles) {
+      freed += (await clearCacheFiles(this.cacheRoot())).bytes;
+      this.data.forgetDetails();
+    }
+    if (plan.staleLinks) await this.mapping.removeStale();
+    if (plan.allLinks) skippedDirty = (await this.mapping.emptyMappingFiles()).skippedDirty;
+    for (const k of plan.workspaceKeys) await this.ctx.workspaceState.update(k, undefined);
+    for (const k of plan.globalKeys) await this.ctx.globalState.update(k, undefined);
+    if (plan.resetData) freed += listBytes;
+    if (plan.backups) {
+      for (const b of backups) {
+        try {
+          const size = (await fsStat(b.path)).size;
+          await rm(b.path, { force: true });
+          freed += size;
+        } catch {
+          /* already gone */
+        }
+      }
+      await this.ctx.globalState.update(KEYS.backups, undefined);
+    }
+    this.mapping.invalidate();
+    this.matchIndex.invalidate();
+    this.selectedLanguageId = null;
+    if (plan.resetData) {
+      this.results.clear();
+      this.expandedSubmission = null;
+      this.unavailableIds.clear();
+      this.data.clear();
+      if (this.client.isLoggedIn) void this.data.loadProblems();
+    }
+    await this.refreshMappedIds();
+    if (this.fileUri) await this.setActiveFile(this.fileUri);
+    else this.emit();
+    void vscode.window.setStatusBarMessage(C.cleared(formatBytes(freed)), TIMING.statusMessageMs * 2);
+    if (skippedDirty) void vscode.window.showWarningMessage(C.skippedDirty(skippedDirty));
   }
 
   /** Update mappings (and per-file state) for files renamed or moved inside VS Code. */
@@ -1172,6 +1306,7 @@ export class GraderController implements vscode.Disposable {
     let skipped = 0;
     for (const m of withCph) {
       const r = await moveCphProblem(m.from, m.to, save);
+      await this.recordBackup(r.backup);
       if (r.status === 'moved') done++;
       else if (r.status === 'target-exists') skipped++;
     }
@@ -1721,6 +1856,7 @@ export class GraderController implements vscode.Disposable {
         problemUrl: this.url(WEB_PATHS.problem(problem.id)),
         cases: set.cases,
       });
+      await this.recordBackup(result.backupPath);
       const parts = [S.testcases.savedCph(set.cases.length, total, tooLarge)];
       if (result.alreadyPresent) parts.push(S.testcases.alreadyPresent(result.alreadyPresent));
       if (result.updated) parts.push(S.testcases.updated(result.updated));

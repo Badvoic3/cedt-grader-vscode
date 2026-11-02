@@ -86,7 +86,7 @@ export async function moveCphProblem(
   oldSrc: string,
   newSrc: string,
   saveLocation?: string,
-): Promise<{ status: 'moved' | 'none' | 'target-exists'; from: string; to: string }> {
+): Promise<{ status: 'moved' | 'none' | 'target-exists'; from: string; to: string; backup?: string }> {
   const from = cphProbPath(oldSrc, saveLocation);
   const to = cphProbPath(newSrc, saveLocation);
   if (!(await pathExists(from))) return { status: 'none', from, to };
@@ -95,6 +95,7 @@ export async function moveCphProblem(
   const moved: CphProblem = { ...p, srcPath: newSrc, ...(p.url === oldSrc ? { url: newSrc } : {}) };
   await mkdir(dirname(to), { recursive: true });
   await writeFile(to, JSON.stringify(moved));
-  await rename(from, `${from}.bak`); // the old file is kept as a backup
-  return { status: 'moved', from, to };
+  const backup = `${from}.bak`;
+  await rename(from, backup); // the old file is kept as a backup
+  return { status: 'moved', from, to, backup };
 }
