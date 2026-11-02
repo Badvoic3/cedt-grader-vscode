@@ -40,6 +40,7 @@ const base: ViewState = {
   problem: null,
   matching: { suggestions: [], ambiguous: null, note: null },
   testcases: { busy: false },
+  cph: { installed: true },
   languages: { loading: false, items: [], selectedId: null, mismatch: null },
   connection: null,
   submit: { enabled: false, busy: false, reason: 'Open a source file to submit it.', label: 'Submit to Grader' },
@@ -264,27 +265,31 @@ describe.runIf(existsSync(resolve(__dirname, '../esbuild.mjs')))('sidebar webvie
     const { doc, sent, post } = boot();
     post(loggedIn);
     const cur = doc.querySelector('#sec-current')!;
-    expect(cur.querySelector('.badge.source-saved')!.textContent).toBe('saved');
-    [...cur.querySelectorAll<HTMLButtonElement>('button')].find((b) => b.getAttribute('aria-label') === 'Copy the problem name')!.click();
+    const src = cur.querySelector('.source-icon.source-saved')!;
+    expect(src.getAttribute('title')).toBe('saved'); // the controller sends the tooltip text (e.g. "Chosen by you")
+    [...cur.querySelectorAll<HTMLButtonElement>('button')].find((b) => b.getAttribute('aria-label') === 'Copy problem name')!.click();
     expect(sent.at(-1)).toEqual({ type: 'copyName', problemId: 1360 });
-    [...cur.querySelectorAll<HTMLButtonElement>('button')].find((b) => b.textContent?.includes('Load test cases into CPH'))!.click();
+    [...cur.querySelectorAll<HTMLButtonElement>('button')].find((b) => b.textContent?.includes('Load test cases'))!.click();
     expect(sent.at(-1)).toEqual({ type: 'loadTestcases' });
     [...cur.querySelectorAll<HTMLButtonElement>('button.link')].find((b) => b.textContent === 'Change')!.click();
     expect(doc.activeElement).toBe(doc.querySelector('.picker-search'));
     const rows = doc.querySelectorAll('#sec-problems .problem-row');
     const label = (r: Element) => [...r.querySelectorAll('.row-actions button')].map((b) => b.getAttribute('aria-label'));
-    expect(label(rows[0])).toContain('Go to the file for 00_Intro_11'); // has a mapped file
-    expect(label(rows[1])).toContain('Find a file named 01_Expr_11.*'); // no mapped file
-    rows[1].querySelector<HTMLButtonElement>('[aria-label="New file for 01_Expr_11"]')!.click();
+    expect(label(rows[0])).toContain('Go to linked file'); // has a mapped file
+    expect(label(rows[1])).toContain('Find file by name'); // no mapped file
+    rows[1].querySelector<HTMLButtonElement>('[aria-label="New file for this problem"]')!.click();
     expect(sent.at(-1)).toEqual({ type: 'newFile', problemId: 1271 });
   });
 
   it('Phase 3: suggested match is labelled, no test-case button, picker lists suggestions first', () => {
-    const { doc, post } = boot();
+    const { doc, sent, post } = boot();
     const sug = { id: 1271, name: '01_Expr_11', fullName: 'An Expression', score: score(null), hasFile: false, hasTestcase: true };
-    post({ ...loggedIn, problem: { ...sug, source: 'suggested', sourceLabel: 'suggested' }, matching: { suggestions: [sug], ambiguous: null, note: null } });
-    expect(doc.querySelector('#sec-current .badge.source-suggested')).not.toBeNull();
+    post({ ...loggedIn, problem: { ...sug, source: 'suggested', sourceLabel: 'Suggested — click to confirm' }, matching: { suggestions: [sug], ambiguous: null, note: null } });
+    expect(doc.querySelector('#sec-current .source-icon.source-suggested')!.getAttribute('title')).toBe('Suggested — click to confirm');
     expect(doc.querySelector('#sec-current')!.textContent).toContain('Suggested from the file name');
+    const confirm = [...doc.querySelectorAll<HTMLButtonElement>('#sec-current button')].find((b) => b.textContent === 'Confirm')!;
+    confirm.click();
+    expect(sent.at(-1)).toEqual({ type: 'confirmProblem', problemId: 1271 });
     expect([...doc.querySelectorAll('#sec-current button')].some((b) => b.textContent?.includes('Load test cases'))).toBe(false);
     doc.querySelector<HTMLButtonElement>('#sec-current .combo')!.click();
     expect(doc.querySelector('.picker-group')!.textContent).toBe('Suggested for this file');
@@ -298,6 +303,53 @@ describe.runIf(existsSync(resolve(__dirname, '../esbuild.mjs')))('sidebar webvie
     expect(doc.querySelector('#sec-current')!.textContent).toContain('Several problems match this file name');
     doc.querySelector<HTMLButtonElement>('#sec-current .combo')!.click();
     expect(doc.querySelector('.picker-group')!.textContent).toBe('Matches for this file');
+  });
+
+  it('CPH not installed: same UI, neutral texts, no "CPH" in the main UI', () => {
+    const { doc, post } = boot();
+    post({ ...loggedIn, cph: { installed: false } });
+    const btn = [...doc.querySelectorAll<HTMLButtonElement>('#sec-current button')].find((b) => b.textContent?.includes('Load test cases'))!;
+    expect(btn.textContent).toBe(' Load test cases');
+    expect(btn.getAttribute('title')).toContain("CPH isn't installed");
+    expect(doc.querySelector('#submit-btn')).not.toBeNull();
+    expect(doc.querySelectorAll('#sec-problems .problem-row')).toHaveLength(2);
+    // "CPH" only appears where it is actually used (tooltips), not as visible UI text.
+    expect(doc.body.textContent).not.toMatch(/CPH/);
+  });
+
+  it('accessibility: every icon-only button has a tooltip and the same aria-label; disabled buttons say why', () => {
+    const states: ViewState[] = [
+      base,
+      { ...base, account: { ...base.account, hasSavedPassword: true, username: 'student' } },
+      loggedIn,
+      { ...loggedIn, connection: { kind: 'offline', title: 'No internet connection', message: 'x', action: 'retry' } },
+      { ...loggedIn, languages: { ...loggedIn.languages, items: [{ id: 8, name: 'Digital' }], mismatch: { wanted: 'C++', allowed: ['Digital'] } }, submit: { ...loggedIn.submit, enabled: false, reason: "This problem doesn't accept C++." } },
+      { ...loggedIn, problem: { ...loggedIn.problem!, source: 'suggested', sourceLabel: 'Suggested — click to confirm' } },
+      { ...loggedIn, result: { ...loggedIn.result!, phase: 'error', message: 'x' }, submit: { ...loggedIn.submit, enabled: false, reason: 'Log in first.' } },
+      { ...loggedIn, result: { ...loggedIn.result!, compileError: true, verdicts: [], compilerMessage: 'err' } },
+      { ...loggedIn, testcases: { busy: true } },
+      {
+        ...loggedIn,
+        history: {
+          ...loggedIn.history,
+          expanded: { submissionId: 2460977, loading: false, error: null, detail: { submissionId: 2460977, url: 'u', status: 'done', compilerMessage: 'm', maxRuntimeMs: 1, peakMemoryKb: 1, hasSource: false, sourceFilename: null, evaluations: [] } },
+        },
+      },
+    ];
+    const problems: string[] = [];
+    for (const st of states) {
+      const { doc, post } = boot();
+      post(st);
+      doc.querySelector<HTMLButtonElement>('#sec-current .combo')?.click(); // picker open too
+      for (const b of doc.querySelectorAll<HTMLButtonElement>('button')) {
+        const iconOnly = !(b.textContent ?? '').trim();
+        const title = b.getAttribute('title') ?? '';
+        const aria = b.getAttribute('aria-label') ?? '';
+        if (iconOnly && (!title || title !== aria)) problems.push(`icon button without matching title/aria-label: ${b.outerHTML.slice(0, 120)}`);
+        if (b.disabled && !title) problems.push(`disabled button without a reason: ${b.outerHTML.slice(0, 120)}`);
+      }
+    }
+    expect(problems).toEqual([]);
   });
 
   it('filter narrows the problem list and is remembered (UI state only)', () => {

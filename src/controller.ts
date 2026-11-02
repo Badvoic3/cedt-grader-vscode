@@ -27,6 +27,8 @@ import {
   type SubmissionDetail,
   summarize,
 } from './grader';
+import { dirname } from 'node:path';
+import { chooseTestcaseTarget, CPH_EXTENSION_ID, CphPresence, saveTestcasesAsFiles, testsFolderFor } from './cphIntegration';
 import { TestcaseStore } from './data/testcaseStore';
 import { cphProbPath as cphProbPathFor, readCphProblem } from './mapping/cph';
 import { importIntoCph } from './mapping/cphImport';
@@ -45,6 +47,7 @@ export const SUBMISSION_SCHEME = 'cedt-grader-submission';
 const LANGUAGE_KEY = 'cedtGrader.languageByFile';
 const DISMISSED_KEY = 'cedtGrader.dismissedReconnects';
 const CLEANUP_KEY = 'cedtGrader.lastMappingCleanup';
+const TESTCASE_TARGET_KEY = 'cedtGrader.testcaseTarget';
 const REMEMBER_KEY = 'cedtGrader.rememberPassword';
 
 type Listener = (s: ViewState) => void;
@@ -93,6 +96,8 @@ export class GraderController implements vscode.Disposable {
   /** Files already asked about "keep the link?" this session. */
   private readonly reconnectAsked = new Set<string>();
   private readonly testcases: TestcaseStore;
+  /** CPH is optional: only used when installed (re-checked when extensions change). */
+  readonly cph: CphPresence;
   /** Connection banner (null = all good) and what its Retry button re-runs. */
   private connection: ConnectionProblem | null = null;
   private retryAction: (() => Promise<unknown>) | null = null;
@@ -116,6 +121,7 @@ export class GraderController implements vscode.Disposable {
       },
     });
     this.testcases = new TestcaseStore(ctx.globalStorageUri.fsPath, () => this.client, (l) => this.requestLog(l));
+    this.cph = new CphPresence(vscode.extensions, () => this.emit());
     this.data.onChange = () => this.emit();
     this.data.onError = (e, key) => this.reportError(e, () => this.reloadKey(key));
     this.data.onSuccess = () => this.connectionOk();
@@ -139,6 +145,7 @@ export class GraderController implements vscode.Disposable {
     this.disposables.push(
       this.output,
       this.statements,
+      this.cph,
       vscode.window.onDidChangeActiveTextEditor((e) => {
         if (e && e.document.uri.scheme === 'file') void this.setActiveFile(e.document.uri);
       }),
@@ -431,12 +438,13 @@ export class GraderController implements vscode.Disposable {
         suggestions: this.matchInfo.suggestions.map((p) => this.problemView(p)),
         ambiguous: this.matchInfo.ambiguous?.map((p) => this.problemView(p)) ?? null,
         note: this.matchInfo.ambiguous
-          ? `Several problems match this ${this.matchInfo.ambiguousSource === 'cph' ? 'CPH problem name' : 'file name'}. Choose one.`
+          ? `Several problems match this ${this.matchInfo.ambiguousSource === 'cph' ? "file's CPH data" : 'file name'}. Choose one.`
           : this.matchInfo.staleMappingId !== null
             ? `The saved problem #${this.matchInfo.staleMappingId} no longer exists; the mapping is ignored.`
             : null,
       },
       testcases: { busy: this.testcasesBusy },
+      cph: { installed: this.cph.installed },
       languages: {
         loading: languagesLoading,
         items: problem ? this.allowedLanguages(problem).map((l) => ({ id: l.id, name: l.name })) : [],
@@ -948,9 +956,10 @@ export class GraderController implements vscode.Disposable {
 
   /**
    * Download the grader's test cases (one at a time, cached in globalStorage)
-   * and add them to the CPH problem file of the active source.
+   * and save them: into CPH's problem file when CPH is installed, otherwise as
+   * `<problem>/tests/<n>.in|out` files (asked once per workspace) or not at all.
    */
-  async loadTestcasesIntoCph(refresh = false): Promise<void> {
+  async loadTestcases(refresh = false): Promise<void> {
     const problem = this.currentProblem();
     const file = this.fileUri;
     if (!problem || !file || this.testcasesBusy) return;
@@ -985,6 +994,57 @@ export class GraderController implements vscode.Disposable {
       }
       const { set } = res;
       const total = set.cases.length + set.truncated.length;
+      const tooLarge = set.truncated.length
+        ? `; ${set.truncated.length} ${set.truncated.length === 1 ? 'was' : 'were'} too large to download`
+        : '';
+      const refetch = 'Download Again';
+
+      const target = chooseTestcaseTarget(this.cph.installed, this.ctx.workspaceState.get<'files'>(TESTCASE_TARGET_KEY));
+      if (target !== 'cph') {
+        if (target === 'ask') {
+          const files = 'Save as Files';
+          const install = 'Install CPH';
+          const pick = await vscode.window.showInformationMessage(
+            `Downloaded ${set.cases.length} test case${set.cases.length === 1 ? '' : 's'}. Where should they go?`,
+            { detail: 'Save them as .in / .out files next to your source, or install CPH to run them inside VS Code.' },
+            files,
+            install,
+          );
+          if (pick === install) {
+            await vscode.commands.executeCommand('extension.open', CPH_EXTENSION_ID);
+            return;
+          }
+          if (pick !== files) return;
+          await this.ctx.workspaceState.update(TESTCASE_TARGET_KEY, 'files'); // remembered per workspace
+        }
+        const folder = testsFolderFor(dirname(file.fsPath), problem.name);
+        if (!(await exists(folder))) {
+          const create = 'Create Folder';
+          const ok = await vscode.window.showInformationMessage(
+            `Create ${vscode.workspace.asRelativePath(folder)}/ for ${set.cases.length} test case${set.cases.length === 1 ? '' : 's'}?`,
+            { modal: true },
+            create,
+          );
+          if (ok !== create) return;
+        }
+        const r = await saveTestcasesAsFiles(folder, set.cases);
+        const extra = [r.unchanged ? `${r.unchanged} unchanged` : '', r.keptExisting ? `${r.keptExisting} existing files kept (not overwritten)` : '']
+          .filter(Boolean)
+          .join(', ');
+        const open = 'Show Folder';
+        const install = 'Install CPH';
+        const pick = await vscode.window.showInformationMessage(
+          `Saved ${r.written} of ${total} test case${total === 1 ? '' : 's'} to ${vscode.workspace.asRelativePath(folder)}/${tooLarge}${extra ? ` (${extra})` : ''}. Install CPH to run these tests in VS Code.`,
+          open,
+          install,
+          ...(res.fromCache ? [refetch] : []),
+        );
+        if (pick === open) await vscode.commands.executeCommand('revealInExplorer', vscode.Uri.file(folder));
+        if (pick === install) await vscode.commands.executeCommand('extension.open', CPH_EXTENSION_ID);
+        if (pick === refetch) await this.loadTestcases(true);
+        return;
+      }
+
       const result = await importIntoCph({
         srcPath: file.fsPath,
         saveLocation: this.cphSaveLocation(),
@@ -992,22 +1052,20 @@ export class GraderController implements vscode.Disposable {
         problemUrl: this.url(`/submissions/direct_edit_problem/${problem.id}`),
         cases: set.cases,
       });
-      const parts = [`Loaded ${set.cases.length} of ${total} test case${total === 1 ? '' : 's'} into CPH`];
-      if (set.truncated.length) parts.push(`${set.truncated.length} ${set.truncated.length === 1 ? 'was' : 'were'} too large to download`);
+      const parts = [`Saved to CPH: loaded ${set.cases.length} of ${total} test case${total === 1 ? '' : 's'}${tooLarge}`];
       if (result.alreadyPresent) parts.push(`${result.alreadyPresent} already present`);
       if (result.updated) parts.push(`${result.updated} updated`);
       if (result.added) parts.push(`${result.added} added`);
       const reload = 'Reload in CPH';
-      const refetch = 'Download Again';
       const pick = await vscode.window.showInformationMessage(
         `${parts.join('; ')}.${result.backupPath ? ' Previous CPH file backed up (.bak).' : ''} CPH reloads tests when you switch to the file; don't run tests in CPH before that.`,
         reload,
         ...(res.fromCache ? [refetch] : []),
       );
       if (pick === reload) await this.reloadCph(file);
-      if (pick === refetch) await this.loadTestcasesIntoCph(true);
+      if (pick === refetch) await this.loadTestcases(true);
     } catch (err) {
-      if (classifyConnectionError(err)) this.reportError(err, () => this.loadTestcasesIntoCph(refresh));
+      if (classifyConnectionError(err)) this.reportError(err, () => this.loadTestcases(refresh));
       else void vscode.window.showErrorMessage(`Could not load test cases: ${this.describe(err)}`);
     } finally {
       this.testcasesBusy = false;

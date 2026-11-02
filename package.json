@@ -1,7 +1,7 @@
 {
   "name": "cedt-grader-submit",
   "displayName": "CEDT Grader Submit",
-  "description": "Submit the active file to CEDT Grader (cafe-grader-web) and see the verdict inside VS Code. Works alongside Competitive Programming Helper.",
+  "description": "Submit your code to CEDT Grader (cafe-grader) from VS Code: see scores, verdicts, history and problem statements in a sidebar.",
   "version": "0.1.0",
   "publisher": "cedt-student",
   "license": "MIT",
@@ -50,7 +50,7 @@
     "grader",
     "cedt",
     "competitive programming",
-    "cph"
+    "submit"
   ],
   "activationEvents": [
     "onLanguage:c",
@@ -155,7 +155,7 @@
       },
       {
         "command": "cedtGrader.loadTestcases",
-        "title": "Load Test Cases into CPH",
+        "title": "Load Test Cases",
         "category": "CEDT Grader",
         "icon": "$(beaker)"
       }

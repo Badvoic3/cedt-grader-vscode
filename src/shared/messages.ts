@@ -132,6 +132,8 @@ export interface ViewState {
     note: string | null;
   };
   testcases: { busy: boolean };
+  /** CPH (optional) installed and enabled. */
+  cph: { installed: boolean };
   languages: {
     loading: boolean;
     items: LanguageView[];
@@ -199,6 +201,7 @@ export type FromWebview =
   | { type: 'goToFile'; problemId: number }
   | { type: 'findFile'; problemId: number }
   | { type: 'loadTestcases' }
+  | { type: 'confirmProblem'; problemId: number }
   | { type: 'showCompilerMessage' }
   | { type: 'openSettings' };
 
