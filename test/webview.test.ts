@@ -16,8 +16,8 @@ beforeAll(() => {
   execFileSync(process.execPath, ['esbuild.mjs'], { cwd: resolve(__dirname, '..'), stdio: 'ignore' });
 }, 60_000);
 
-function boot() {
-  const dom = new JSDOM('<!DOCTYPE html><body><div id="app"></div></body>', { runScripts: 'outside-only' });
+function boot(lang: 'en' | 'th' = 'en') {
+  const dom = new JSDOM(`<!DOCTYPE html><html lang="${lang}"><body><div id="app"></div></body></html>`, { runScripts: 'outside-only' });
   const sent: FromWebview[] = [];
   let saved: unknown;
   Object.assign(dom.window, {
@@ -389,9 +389,9 @@ describe.runIf(existsSync(resolve(__dirname, '../esbuild.mjs')))('sidebar webvie
       },
     ];
     const problems: string[] = [];
-    for (const st of states) {
-      const { doc, post } = boot();
-      post(st);
+    for (const st of states.flatMap((s) => [['en', s], ['th', s]] as const)) {
+      const { doc, post } = boot(st[0]);
+      post(st[1]);
       doc.querySelector<HTMLButtonElement>('#sec-current .combo')?.click(); // picker open too
       for (const b of doc.querySelectorAll<HTMLButtonElement>('button')) {
         const iconOnly = !(b.textContent ?? '').trim();
@@ -403,6 +403,24 @@ describe.runIf(existsSync(resolve(__dirname, '../esbuild.mjs')))('sidebar webvie
       }
     }
     expect(problems).toEqual([]);
+  });
+
+  it('Thai: the panel is built in the language of <html lang> (texts from strings.th.ts)', () => {
+    const out = boot('th');
+    out.post(base);
+    const doc = out.doc;
+    expect([...doc.querySelectorAll('summary, .section-title, h2')].map((e) => e.textContent).join(' ')).toContain('บัญชี');
+    expect(doc.querySelector<HTMLInputElement>('#login-user')!.placeholder).toBe('ชื่อผู้ใช้');
+    expect(doc.body.textContent).toContain('เข้าสู่ระบบ');
+    expect(doc.body.textContent).toContain('จำรหัสผ่านไว้ในเครื่องนี้');
+    out.post(loggedIn);
+    expect(doc.querySelector('#sec-current')!.textContent).toContain('คะแนนที่ได้');
+    // Grader content stays as it is.
+    expect(doc.querySelector('#sec-current')!.textContent).toContain('00_Intro_11');
+    // The same bundle in English.
+    const en = boot('en');
+    en.post(base);
+    expect(en.doc.body.textContent).toContain('Remember password on this computer');
   });
 
   it('header: no repeated name, subtitle from full name; match line under the selector; score pill tooltip', () => {

@@ -1,4 +1,5 @@
 import { EN, G, HOW_LINKED, MATCH_SOURCE, PICK_HOW, S, type Strings, W, W_SOURCE } from './strings';
+import { TH } from './strings.th';
 
 /**
  * Display language (setting `cedtGrader.displayLanguage`). No `vscode`
@@ -14,7 +15,7 @@ export type Lang = 'en' | 'th';
 export type LangSetting = Lang | 'auto';
 
 /** Registered translations; a language without a table shows English. */
-const TABLES: Partial<Record<Lang, Strings>> = { en: EN };
+const TABLES: Partial<Record<Lang, Strings>> = { en: EN, th: TH };
 
 let current: Lang = 'en';
 
@@ -59,8 +60,9 @@ export function currentLang(): Lang {
 
 /**
  * Locale for dates and times. English keeps VS Code's / the system's locale
- * (`undefined`, as before); Thai uses `th-TH`.
+ * (`undefined`, as before); Thai uses Thai month names with Gregorian years
+ * (2 พ.ย. 2026), as the grader website shows them.
  */
 export function dateLocale(lang: Lang = current): string | undefined {
-  return lang === 'th' ? 'th-TH' : undefined;
+  return lang === 'th' ? 'th-TH-u-ca-gregory' : undefined;
 }
