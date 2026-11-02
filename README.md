@@ -6,8 +6,38 @@ It works on its own. If you also use Competitive Programming Helper, see [Works 
 
 ## Install
 
-1. Get the `.vsix` file (or build it: `npm install && npm run package`).
-2. In VS Code, open the Extensions view, click **⋯ → Install from VSIX…**, and pick the file.
+The extension comes as one file, `cedt-grader-submit-<version>.vsix`. You don't need the Marketplace.
+
+1. **Get the file.** Download `cedt-grader-submit-<version>.vsix` (e.g. `cedt-grader-submit-0.6.0.vsix`) and remember where you saved it. Don't unzip it.
+2. **Install it in VS Code.**
+   - Open the Extensions view: the four-squares icon in the left bar, or <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>X</kbd> (<kbd>Cmd</kbd>+<kbd>Shift</kbd>+<kbd>X</kbd> on macOS).
+   - Click the **⋯** (Views and More Actions) at the top of the Extensions view and choose **Install from VSIX…**.
+   - Pick the `.vsix` file. If VS Code asks to reload or restart extensions, click it.
+
+   *Or, from a terminal:* `code --install-extension cedt-grader-submit-0.6.0.vsix`. On macOS, if `code` isn't found, run **Shell Command: Install 'code' command in PATH** from the Command Palette (<kbd>Cmd</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd>) first.
+3. **Check that it worked.** A **CEDT Grader** icon (a page with a check mark) appears in the left bar, and the **Get started with CEDT Grader** page opens once.
+
+### First steps
+
+1. Click the **CEDT Grader** icon in the left bar.
+2. **Log in** with your grader username and password. Leave **Remember password on this computer** on if this is your own computer.
+3. **Open a solution file** (e.g. `00_Intro_11.cpp`). Open the folder that holds your solutions first (**File → Open Folder…**), so links can be saved.
+4. **Check the problem** under *Current problem*. A file named like the problem is found automatically; otherwise pick it from the list (search by name or id). Your choice is remembered.
+5. Press **Submit to Grader**. The result, the per-test verdicts and your counted score appear in the panel.
+
+### Optional: install CPH
+
+[Competitive Programming Helper](https://marketplace.visualstudio.com/items?itemName=DivyanshuAgrawal.competitive-programming-helper) (CPH) runs test cases on your own computer. Install it from the Extensions view (search for "Competitive Programming Helper") if you want **Load test cases** to put the grader's test cases into CPH. Everything else works without it. See [Works with CPH](#works-with-cph).
+
+### Updating to a new version
+
+Install the new `.vsix` the same way (**⋯ → Install from VSIX…**). It replaces the old version; reload if asked. Your login, links and settings are kept. The version you have is shown on the extension's page in the Extensions view; what changed is in `CHANGELOG.md`.
+
+### Uninstalling
+
+1. Optional, to leave nothing behind: run **CEDT Grader: Clear Cached Data…** from the Command Palette and tick everything, including **Saved login** (this removes your password from the OS keychain). VS Code may keep an extension's stored data after uninstalling.
+2. In the Extensions view, find **CEDT Grader Submit**, click the gear icon and choose **Uninstall** (or `code --uninstall-extension cedt-student.cedt-grader-submit`).
+3. `.cedt-grader.json` files in your solution folders (your file-to-problem links) stay; delete them if you like.
 
 ## Use it
 
@@ -36,7 +66,7 @@ Renaming or moving a linked file in VS Code keeps the link. If you move files in
 **Also available:**
 - The status bar item (`☁ Submit to Grader`, the score after grading) opens the panel.
 - The ☁ button in the editor title bar (C, C++, Python, Java files) submits the current file.
-- Every action is a command (`CEDT Grader: …` in the Command Palette), so you can bind keyboard shortcuts: Log In, Log Out, Submit Current File, Choose Problem for This File, Clear Problem for This File, Rename File to Match the Problem, Load Test Cases, Show Last Result, Open Problem Statement, Reload Problem List, Reload Submission History, Show Panel, Open Settings, Show Request Log.
+- Every action is a command (`CEDT Grader: …` in the Command Palette), so you can bind keyboard shortcuts: Log In, Log Out, Submit Current File, Choose Problem for This File, Clear Problem for This File, Rename File to Match the Problem, Load Test Cases, Show Last Result, Open Problem Statement, Reload Problem List, Reload Submission History, Show Panel, Open Settings, Show Request Log, Clear Cached Data….
 
 ## Problem statements
 
@@ -66,7 +96,52 @@ With **Remember password on this computer** on, your password is kept in the OS 
 | `cedtGrader.confirmBeforeSubmit` | `true` | Ask before each submission. |
 | `cedtGrader.statementBeside` | `true` | Open statements beside your code. |
 | `cedtGrader.defaultLanguage` | `C++` | Language for **New file for this problem** when your current file's language isn't allowed. |
+| `cedtGrader.cacheMaxMB` | `100` | Size limit for downloaded statements and test cases (see [Cache and storage](#cache-and-storage)). |
 | `cedtGrader.debugRequests` | `false` | Log each grader request and cache hit/miss to *Output → CEDT Grader: Requests* (no passwords or tokens). |
+
+## Cache and storage
+
+To avoid downloading the same thing twice, the extension keeps:
+
+- **Downloaded files** (problem statements, test cases) in VS Code's own storage for extensions, never in your project. They are limited to `cedtGrader.cacheMaxMB` (100 MB by default): when the limit is reached, the files you haven't opened for the longest time are deleted first. Once a day, files you haven't used for 30 days are removed.
+- **The problem list** (shown right away when VS Code starts, then reloaded once) and, while VS Code is open, your submission history and details.
+- **Links** between your files and problems, in `.cedt-grader.json` in your folder and in VS Code's workspace storage.
+- **Your password and login token** in the OS keychain, only with "Remember password" on.
+
+**CEDT Grader: Clear Cached Data…** (Command Palette, or the **⋯** menu at the top of the panel) shows how much space is used and lets you choose what to clear:
+
+| Choice | Ticked at first | Clears |
+|---|---|---|
+| Downloaded files | yes | statements, test cases, submission details |
+| Problem list, history and remembered matches | yes | saved problem list, history, automatic matches, "not linked" files, dismissed notices, recently opened problems, links of deleted files |
+| File-to-problem links | no | every problem you chose for a file, also inside `.cedt-grader.json` (the file itself is kept) |
+| Saved login | no | your saved password and login token (same as Log Out) |
+| Backup files from test-case imports | no | old CPH test files (`.prob.bak`) this extension kept; shown only if there are any |
+
+It asks once more before deleting. Nothing else in your folders is ever deleted.
+
+## Troubleshooting
+
+**I can't log in.**
+- "Wrong username or password": check them on the [grader website](https://cedt-grader.nattee.net). A wrong saved password is forgotten automatically, so type it again.
+- "Too many failed login attempts": the grader blocks logins for a while after several failures (website and VS Code count together). Wait a few minutes, then try once. The extension never retries a failed login by itself.
+- "Login refused by the grader" (or a message from the grader about your account or network): your account may be disabled or limited to certain networks. Ask your instructor.
+- Using another cafe-grader server? Set `cedtGrader.baseUrl` in your **user** settings.
+
+**The wrong problem is detected for my file.**
+Click the problem name under *Current problem* and pick the right one; your choice is remembered and always wins. ✕ next to the problem (**Unlink this file** / **Don't match this file**) stops automatic matching for that file; the sparkle icon (**Auto-detect**) tries again. **Rename file to match the problem** renames the file so it matches next time too.
+
+**"This problem doesn't accept C++" (or another language).**
+The grader only allows some languages per problem. Usually the file is linked to the wrong problem: click **Change** and pick the right one. Otherwise check the language dropdown above **Submit** and the file's extension (`.cpp`, `.c`, `.py`, …).
+
+**No internet / the grader is down.**
+A banner at the top of the panel says what happened; press **Retry** when you're back online. What was already loaded stays visible ("may be out of date"). If a submission failed, the message says whether it reached the grader; check **History** before submitting again.
+
+**Where is my password stored?**
+Only if **Remember password on this computer** is on: in your operating system's keychain (macOS Keychain, Windows Credential Manager, or the Linux secret service) through VS Code's SecretStorage. Never in settings, files or logs. **Log out** (or Clear Cached Data → Saved login) deletes it.
+
+**Something else.**
+Output → *CEDT Grader* shows errors. Turn on `cedtGrader.debugRequests` and run **CEDT Grader: Show Request Log** to see every request (no passwords or tokens).
 
 ## Exams
 
