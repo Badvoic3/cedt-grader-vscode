@@ -35,11 +35,11 @@ const base: ViewState = {
   file: null,
   problem: null,
   languages: { loading: false, items: [], selectedId: null, forced: false, error: null },
-  contest: null,
+  gradingElsewhere: null,
   submit: { enabled: false, busy: false, reason: 'Open a source file to submit it.', label: 'Submit to Grader' },
   result: null,
   history: [],
-  problems: { loading: false, loaded: false, items: [], error: null, contest: false },
+  problems: { loading: false, loaded: false, items: [], error: null },
 };
 
 const loggedIn: ViewState = {
@@ -48,7 +48,6 @@ const loggedIn: ViewState = {
   file: { path: 'grader/00 11 intro.cpp', name: '00 11 intro.cpp', languageGuess: 'C++', supported: true },
   problem: { id: 1360, name: '00_Intro_11', fullName: '<img src=x onerror=alert(1)>', bestScore: 100, source: 'mapping', statementUrl: null },
   languages: { loading: false, items: [{ id: 1, name: 'C' }, { id: 2, name: 'C++' }], selectedId: 2, forced: false, error: null },
-  contest: { blocked: false, certain: true, reason: 'No contest markers found.', allowSetting: false },
   submit: { enabled: true, busy: false, reason: null, label: 'Submit to Grader' },
   result: {
     phase: 'done', problemId: 1360, problemName: '00_Intro_11', submissionId: 2460977, submissionUrl: 'https://x/submissions/2460977',
@@ -59,10 +58,10 @@ const loggedIn: ViewState = {
       { index: 3, ok: false, kind: 'wrong', label: 'Test 3 of 4: Wrong Answer' },
       { index: 4, ok: false, kind: 'brand_new', label: 'Test 4 of 4: <b>Mystery</b>', group: 1 },
     ],
-    compileError: false, compilerMessage: null, message: null, contest: false,
+    compileError: false, compilerMessage: null, message: null,
   },
   history: [{ submissionId: 2460977, url: 'https://x/submissions/2460977', score: 70, comment: 'PP-T', time: '12:43:48', compileError: false }],
-  problems: { loading: false, loaded: true, items: [{ id: 1360, name: '00_Intro_11', fullName: 'Hello', bestScore: 100 }, { id: 1271, name: '01_Expr_11', fullName: 'An Expression', bestScore: null }], error: null, contest: false },
+  problems: { loading: false, loaded: true, items: [{ id: 1360, name: '00_Intro_11', fullName: 'Hello', bestScore: 100 }, { id: 1271, name: '01_Expr_11', fullName: 'An Expression', bestScore: null }], error: null },
 };
 
 describe.runIf(existsSync(resolve(__dirname, '../esbuild.mjs')))('sidebar webview', () => {
@@ -115,17 +114,33 @@ describe.runIf(existsSync(resolve(__dirname, '../esbuild.mjs')))('sidebar webvie
     expect(sent.at(-1)).toEqual({ type: 'selectLanguage', languageId: 1 });
   });
 
-  it('contest: submit disabled, badge and website message shown', () => {
+  it('problem picker: typing keeps the search box open and focused (regression)', () => {
+    const { dom, doc, post } = boot();
+    post(loggedIn);
+    doc.querySelector<HTMLButtonElement>('#sec-current .combo')!.click();
+    const search = doc.querySelector<HTMLInputElement>('.picker-search')!;
+    expect(doc.activeElement).toBe(search);
+    for (const ch of ['0', '1']) {
+      search.value += ch;
+      search.dispatchEvent(new dom.window.Event('input'));
+      const again = doc.querySelector<HTMLInputElement>('.picker-search');
+      expect(again).toBe(search); // still the same, attached element
+      expect(doc.body.contains(search)).toBe(true);
+    }
+    expect(doc.querySelectorAll('.picker-list .problem-row')).toHaveLength(1); // '01' → 01_Expr_11
+    post({ ...loggedIn }); // a state push while typing must not close or blur it
+    expect(doc.body.contains(search)).toBe(true);
+    expect(doc.activeElement).toBe(search);
+  });
+
+  it('result section only shows the active file result', () => {
     const { doc, post } = boot();
-    post({
-      ...loggedIn,
-      contest: { blocked: true, certain: true, reason: 'x', contestName: 'DigLo69 Exam 2', allowSetting: false },
-      submit: { enabled: false, busy: false, reason: 'This problem is part of an active contest/exam. Submit through the website.', label: 'Submit to Grader' },
-    });
-    expect(doc.querySelector<HTMLButtonElement>('#submit-btn')!.disabled).toBe(true);
-    expect(doc.querySelector('.badge.contest')).not.toBeNull();
-    expect(doc.body.textContent).toContain('Submit through the website.');
-    expect(doc.body.textContent).toContain('Open in browser');
+    post(loggedIn);
+    expect(doc.querySelector('#sec-result .score')).not.toBeNull();
+    post({ ...loggedIn, file: { path: 'b.cpp', name: 'b.cpp', languageGuess: 'C++', supported: true }, result: null, gradingElsewhere: '00_Intro_11' });
+    expect(doc.querySelector('#sec-result .score')).toBeNull();
+    expect(doc.querySelector('#sec-result')!.textContent).toContain('No submission yet');
+    expect(doc.querySelector('#sec-current')!.textContent).toContain('Grading 00_Intro_11 for another file');
   });
 
   it('filter narrows the problem list and is remembered (UI state only)', () => {

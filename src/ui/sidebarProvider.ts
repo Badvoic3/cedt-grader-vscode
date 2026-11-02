@@ -76,9 +76,6 @@ export class SidebarProvider implements vscode.WebviewViewProvider, vscode.Dispo
       case 'refreshProblems':
         await c.refreshProblems(true);
         return;
-      case 'recheckProblem':
-        await c.recheck();
-        return;
       case 'openStatement':
         if (Number.isInteger(m.problemId)) await c.openStatement(m.problemId);
         return;

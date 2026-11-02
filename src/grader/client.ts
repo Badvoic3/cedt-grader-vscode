@@ -1,7 +1,5 @@
-import { detectContest, mustBlock } from './contest';
 import {
   AuthError,
-  ContestBlockedError,
   GraderError,
   LanguageNotAllowedError,
   NetworkError,
@@ -24,7 +22,7 @@ import {
   parseSubmitPage,
   parseUserId,
 } from './parsers';
-import type { ContestDetection, Evaluation, Problem, SubmissionStatus, SubmitPage } from './types';
+import type { Evaluation, Problem, SubmissionStatus, SubmitPage } from './types';
 
 export const DEFAULT_BASE_URL = 'https://cedt-grader.nattee.net';
 
@@ -37,12 +35,6 @@ export interface GraderClientOptions {
   baseUrl?: string;
   /** Called on (re-)login. Return undefined to abort the login. */
   getCredentials: () => Promise<Credentials | undefined>;
-  /**
-   * Called when the login form contains the `accept_agree` checkbox (forced on
-   * in exam mode). Must ask the human; return true only on explicit consent.
-   * When absent, login is refused.
-   */
-  confirmAgreement?: (agreementText: string) => Promise<boolean>;
   fetch?: FetchLike;
   log?: Logger;
   /** Injectable clock and sleep for tests. */
@@ -51,11 +43,6 @@ export interface GraderClientOptions {
 }
 
 export interface SubmitOptions {
-  /**
-   * Must only be true after the user explicitly confirmed a contest submission
-   * (setting enabled + modal confirmation for this very submission).
-   */
-  allowContest?: boolean;
   /** Path of the source file (for the multipart filename hint). */
   filename?: string;
 }
@@ -63,7 +50,6 @@ export interface SubmitOptions {
 export interface SubmitResult {
   submissionId: number;
   pollUrl: string | null;
-  contest: ContestDetection;
 }
 
 export interface PollOptions {
@@ -99,22 +85,17 @@ const defaultSleep = (ms: number, signal?: AbortSignal) =>
 
 /**
  * Talks to a cafe-grader-web server through its HTML forms.
- *
- * Contest safety: this client never requests anything under `/contests`,
- * never sends check-ins and does not pretend to be a browser. `submit()`
- * re-checks contest mode on the fresh submit page every time.
+ * It never requests anything under `/contests` and does not pretend to be a browser.
  */
 export class GraderClient {
   readonly http: HttpSession;
   readonly baseUrl: string;
   private loggedIn = false;
-  private loginInFlight: Promise<ContestDetection> | null = null;
+  private loginInFlight: Promise<void> | null = null;
   /** Discovered after login / submit; never hard-coded. */
   userId: number | null = null;
   /** Problems parsed from the page login landed on (/main/list), if any. */
   landingProblems: Problem[] | null = null;
-  /** Detection from the most recent logged-in page we saw. */
-  lastContest: ContestDetection | null = null;
   private readonly now: () => Date;
   private readonly sleep: NonNullable<GraderClientOptions['sleep']>;
 
@@ -135,8 +116,8 @@ export class GraderClient {
 
   // ---------------------------------------------------------------- login
 
-  /** Log in with fresh credentials. Returns the contest detection of the landing page. */
-  login(): Promise<ContestDetection> {
+  /** Log in with fresh credentials. */
+  login(): Promise<void> {
     if (!this.loginInFlight) {
       this.loginInFlight = this.doLogin().finally(() => {
         this.loginInFlight = null;
@@ -145,7 +126,7 @@ export class GraderClient {
     return this.loginInFlight;
   }
 
-  private async doLogin(): Promise<ContestDetection> {
+  private async doLogin(): Promise<void> {
     const creds = await this.opts.getCredentials();
     if (!creds || !creds.username || !creds.password) {
       throw new AuthError('No username/password configured. Run "CEDT Grader: Log In".', 'no-credentials');
@@ -173,15 +154,7 @@ export class GraderClient {
       commit: 'Login',
     });
     if (form.hasAgreement) {
-      const ok = this.opts.confirmAgreement ? await this.opts.confirmAgreement(form.agreementText) : false;
-      if (!ok) {
-        throw new AuthError(
-          'The grader asks you to accept an agreement before logging in (this is how exam mode starts). ' +
-            'Log in through the website instead.',
-          'agreement-required',
-        );
-      }
-      body.set('accept_agree', form.agreementValue);
+      throw new AuthError('The grader asks you to accept an agreement first. Log in once through the website.', 'agreement-required');
     }
 
     const res = await this.http.request('/login/login', { method: 'POST', body });
@@ -203,18 +176,12 @@ export class GraderClient {
     return this.afterLoggedInPage(res);
   }
 
-  private afterLoggedInPage(page: HttpResult): ContestDetection {
+  private afterLoggedInPage(page: HttpResult): void {
     const uid = parseUserId(page.body);
     if (uid !== null) this.userId = uid;
-    const token = extractCsrf(page.body);
-    this.http.redactor.add(token);
-    const det = detectContest(page.body, this.now());
-    this.lastContest = det;
+    this.http.redactor.add(extractCsrf(page.body));
     // Login lands on /main/list: keep its problems so callers need no second fetch.
-    this.landingProblems = /\/main\/list$/.test(page.path)
-      ? parseProblemList(page.body).map((p) => ({ ...p, contest: mustBlock(det) }))
-      : null;
-    return det;
+    this.landingProblems = /\/main\/list$/.test(page.path) ? parseProblemList(page.body) : null;
   }
 
   /** Forget the session locally (cookies are only in memory). */
@@ -223,7 +190,6 @@ export class GraderClient {
     this.http.redactor.clear();
     this.loggedIn = false;
     this.userId = null;
-    this.lastContest = null;
     this.landingProblems = null;
   }
 
@@ -272,35 +238,30 @@ export class GraderClient {
 
   // ------------------------------------------------------------- reading
 
-  async listProblems(): Promise<{ problems: Problem[]; contest: ContestDetection }> {
+  async listProblems(): Promise<Problem[]> {
     return this.withSession(async () => {
       const res = await this.getPage('/main/list');
-      const contest = detectContest(res.body, this.now());
-      this.lastContest = contest;
       const uid = parseUserId(res.body);
       if (uid !== null) this.userId = uid;
-      const problems = parseProblemList(res.body).map((p) => ({ ...p, contest: mustBlock(contest) }));
-      return { problems, contest };
+      return parseProblemList(res.body);
     });
   }
 
-  /** Fresh submit page + contest detection for that page. */
-  async getSubmitPage(problemId: number): Promise<SubmitPage & { contest: ContestDetection }> {
+  /** Fresh submit page (languages, CSRF token, exam hint). */
+  async getSubmitPage(problemId: number): Promise<SubmitPage> {
     assertId(problemId);
     return this.withSession(() => this.fetchSubmitPage(problemId));
   }
 
-  private async fetchSubmitPage(problemId: number): Promise<SubmitPage & { contest: ContestDetection }> {
+  private async fetchSubmitPage(problemId: number): Promise<SubmitPage> {
     const res = await this.getPage(`/submissions/direct_edit_problem/${problemId}`);
     if (/\/main\/list$/.test(res.path)) {
       const alert = extractAlerts(res.body)[0];
       throw new SubmitRejectedError(alert ? alert : `Problem #${problemId} is not available for you.`);
     }
-    const contest = detectContest(res.body, this.now());
-    this.lastContest = contest;
     const uid = parseUserId(res.body);
     if (uid !== null) this.userId = uid;
-    return { ...parseSubmitPage(res.body, problemId), contest };
+    return parseSubmitPage(res.body, problemId);
   }
 
   async getLanguages(problemId: number) {
@@ -309,20 +270,13 @@ export class GraderClient {
 
   // -------------------------------------------------------------- submit
 
-  /**
-   * Submit `source` as `languageId` for `problemId`.
-   * Fetches the submit page first (fresh CSRF token) and refuses when the
-   * page indicates a contest, unless `opts.allowContest` is true.
-   */
-  async submit(problemId: number, languageId: number, source: string, opts: SubmitOptions = {}): Promise<SubmitResult> {
+  /** Submit `source` as `languageId` for `problemId` (fetches the submit page first for a fresh CSRF token). */
+  async submit(problemId: number, languageId: number, source: string, _opts: SubmitOptions = {}): Promise<SubmitResult> {
     assertId(problemId);
     if (!source.trim()) throw new SubmitRejectedError('The file is empty.');
 
     return this.withSession(async () => {
       const page = await this.fetchSubmitPage(problemId);
-      if (mustBlock(page.contest) && opts.allowContest !== true) {
-        throw new ContestBlockedError();
-      }
       if (!page.canSubmit) {
         throw new SubmitRejectedError('This problem is not open for your submissions.');
       }
@@ -369,7 +323,7 @@ export class GraderClient {
       } catch (err) {
         if (!(err instanceof NetworkError)) throw err;
       }
-      return { submissionId, pollUrl, contest: page.contest };
+      return { submissionId, pollUrl };
     });
   }
 

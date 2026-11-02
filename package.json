@@ -188,12 +188,6 @@
           "type": "boolean",
           "default": true,
           "description": "Ask for confirmation before each submission."
-        },
-        "cedtGrader.allowContestSubmissions": {
-          "type": "boolean",
-          "default": false,
-          "scope": "application",
-          "markdownDescription": "Allow submitting **contest/exam** problems from VS Code. Even when on, you must confirm every time that your instructor has permitted it. VS Code does not send the website's contest check-ins. Leave this off unless your instructor says otherwise."
         }
       }
     }

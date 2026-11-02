@@ -46,7 +46,6 @@ export interface ResultView {
   compilerMessage: string | null;
   /** Human readable status or error text. */
   message: string | null;
-  contest: boolean;
 }
 
 export interface HistoryEntry {
@@ -56,15 +55,6 @@ export interface HistoryEntry {
   comment: string | null;
   time: string;
   compileError: boolean;
-}
-
-export interface ContestView {
-  blocked: boolean;
-  certain: boolean;
-  reason: string;
-  contestName?: string;
-  /** `cedtGrader.allowContestSubmissions` is on (still confirms every time). */
-  allowSetting: boolean;
 }
 
 export interface ViewState {
@@ -90,7 +80,6 @@ export interface ViewState {
     forced: boolean;
     error: string | null;
   };
-  contest: ContestView | null;
   submit: {
     enabled: boolean;
     busy: boolean;
@@ -98,14 +87,16 @@ export interface ViewState {
     reason: string | null;
     label: string;
   };
+  /** Result for the active file only. */
   result: ResultView | null;
+  /** Problem name of a submission being graded for another file, if any. */
+  gradingElsewhere: string | null;
   history: HistoryEntry[];
   problems: {
     loading: boolean;
     loaded: boolean;
     items: ProblemView[];
     error: string | null;
-    contest: boolean;
   };
 }
 
@@ -124,7 +115,6 @@ export type FromWebview =
   | { type: 'mapProblem'; problemId: number }
   | { type: 'unmapProblem' }
   | { type: 'refreshProblems' }
-  | { type: 'recheckProblem' }
   | { type: 'openStatement'; problemId: number }
   | { type: 'openProblemInBrowser'; problemId: number }
   | { type: 'openSubmission'; submissionId: number }

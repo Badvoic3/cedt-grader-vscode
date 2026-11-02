@@ -6,13 +6,12 @@ export interface GraderConfig {
   username: string;
   pollIntervalSeconds: number;
   confirmBeforeSubmit: boolean;
-  allowContestSubmissions: boolean;
 }
 
 /**
  * Security-relevant settings are read from the *user* (global) scope only, so
  * a cloned repository's `.vscode/settings.json` cannot redirect the login to
- * another server or switch on contest submissions.
+ * another server.
  */
 export function readConfig(): GraderConfig {
   const c = vscode.workspace.getConfiguration('cedtGrader');
@@ -33,6 +32,5 @@ export function readConfig(): GraderConfig {
     username: String(userValue('username', '')).trim(),
     pollIntervalSeconds: Math.max(3, Number(c.get('pollIntervalSeconds', 5)) || 5),
     confirmBeforeSubmit: c.get<boolean>('confirmBeforeSubmit', true),
-    allowContestSubmissions: userValue<boolean>('allowContestSubmissions', false) === true,
   };
 }

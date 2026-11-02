@@ -1,4 +1,5 @@
 import * as cheerio from 'cheerio/slim';
+import { isContestPage } from './contest';
 import type { Evaluation, Language, Problem, SubmissionStatus, SubmitPage, Verdict } from './types';
 
 type CheerioAPI = cheerio.CheerioAPI;
@@ -30,10 +31,8 @@ export function extractCsrf(html: string): string | null {
 export interface LoginForm {
   present: boolean;
   token: string | null;
-  /** `accept_agree` checkbox rendered (contest/exam mode forces it on). */
+  /** `accept_agree` checkbox rendered: we never tick it, the user accepts on the website. */
   hasAgreement: boolean;
-  agreementValue: string;
-  agreementText: string;
 }
 
 export function hasLoginForm(html: string): boolean {
@@ -49,19 +48,10 @@ export function parseLoginForm(html: string): LoginForm {
     form.find('input[name="authenticity_token"]').attr('value') ??
     $('meta[name="csrf-token"]').attr('content') ??
     null;
-  const agree = form.find('input[name="accept_agree"]').first();
-  let agreementText = '';
-  if (agree.length) {
-    const id = agree.attr('id');
-    const label = id ? form.find(`label[for="${id}"]`).text() : '';
-    agreementText = cleanText(label || agree.parent().text());
-  }
   return {
     present,
     token,
-    hasAgreement: agree.length > 0,
-    agreementValue: agree.attr('value') ?? '1',
-    agreementText,
+    hasAgreement: form.find('input[name="accept_agree"]').length > 0,
   };
 }
 
@@ -182,6 +172,7 @@ export function parseSubmitPage(html: string, problemId: number): SubmitPage {
       form.find('input[name="authenticity_token"]').attr('value') ??
       $('meta[name="csrf-token"]').attr('content') ??
       null,
+    contestPage: isContestPage(html),
   };
 }
 

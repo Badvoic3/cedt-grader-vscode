@@ -4,10 +4,8 @@
  */
 import { describe, expect, it } from 'vitest';
 import {
-  detectContest,
   extractCsrf,
   hasLoginForm,
-  mustBlock,
   parseCompilerMessage,
   parseLoginForm,
   parsePollUrl,
@@ -16,7 +14,7 @@ import {
   parseSubmitPage,
   parseUserId,
 } from '../src/grader';
-import { DURING_CONTEST, realFixture } from './helpers';
+import { realFixture } from './helpers';
 
 const list = realFixture('main_list.html');
 const submit = realFixture('direct_edit_problem.html');
@@ -25,17 +23,6 @@ const login = realFixture('login_page.html');
 const graded = realFixture('latest_status_graded.turbo.html');
 const pending = realFixture('latest_status_pending.turbo.html');
 const cmsg = realFixture('compiler_msg.turbo.html');
-
-/** What `_header.html.haml` adds while a contest is running. */
-function asRunningContest(html: string): string {
-  return html
-    .replace('</nav>', '<div class="btn btn-dark" id="countdown"></div></nav>')
-    .replace("Date.parse('')", "Date.parse('2026-11-02T16:00:00+07:00')")
-    .replace(
-      '</body>',
-      '<script>window.addEventListener("load", function() {\n  too_early_count = 0\n  setInterval(updateRemainingTime,500)\n  setTimeout(checkInLoop,1000)\n})</script></body>',
-    );
-}
 
 describe.runIf(list)('real /main/list', () => {
   it('parses all problems', () => {
@@ -57,24 +44,6 @@ describe.runIf(list)('real /main/list', () => {
     expect(parseUserId(list!)).toBe(12345);
   });
 
-  it('is detected as normal (its checkInLoop reschedules itself, which must not count)', () => {
-    const d = detectContest(list!);
-    expect(d).toMatchObject({ inContest: false, certain: true, signals: ['header-script'] });
-  });
-
-  it('is detected as contest once the header contest markup is present', () => {
-    const d = detectContest(asRunningContest(list!), DURING_CONTEST);
-    expect(mustBlock(d)).toBe(true);
-    expect(d.signals).toEqual(expect.arrayContaining(['countdown:(running)', 'check-in-loop-started', 'contest-end-time:running']));
-  });
-
-  it('only the load-listener start counts as "loop started"', () => {
-    const onlyStart = list!.replace(
-      '</body>',
-      '<script>window.addEventListener("load", function() { setTimeout(checkInLoop,1000) })</script></body>',
-    );
-    expect(detectContest(onlyStart).signals).toContain('check-in-loop-started');
-  });
 });
 
 describe.runIf(submit)('real submit page', () => {
@@ -91,10 +60,6 @@ describe.runIf(submit)('real submit page', () => {
     expect(p.csrfToken).toBeTruthy();
   });
 
-  it('normal → not blocked; contest markup → blocked', () => {
-    expect(mustBlock(detectContest(submit!))).toBe(false);
-    expect(mustBlock(detectContest(asRunningContest(submit!), DURING_CONTEST))).toBe(true);
-  });
 });
 
 describe.runIf(edit)('real /submissions/{id}/edit', () => {
@@ -109,7 +74,6 @@ describe.runIf(login)('real login page', () => {
     expect(f.present).toBe(true);
     expect(f.token).toBeTruthy();
     expect(f.hasAgreement).toBe(false);
-    expect(mustBlock(detectContest(login!))).toBe(true); // not a logged-in page → uncertain
   });
 });
 
