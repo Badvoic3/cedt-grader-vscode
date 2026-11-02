@@ -10,10 +10,11 @@ describe('statement viewer toolbar', () => {
     expect(buttons.length).toBe(9);
     for (const b of buttons) {
       expect(b.textContent?.trim()).toBe('');
-      expect(b.getAttribute('title')).toBeTruthy();
-      expect(b.getAttribute('aria-label')).toBe(b.getAttribute('title'));
+      expect(b.hasAttribute('title')).toBe(false); // custom tooltip, not the native one
+      expect(b.dataset.tip).toBeTruthy();
+      expect(b.getAttribute('aria-label')).toBe(b.dataset.tip);
     }
-    expect(buttons.map((b) => b.title)).toContain('Open in browser');
+    expect(buttons.map((b) => b.dataset.tip)).toContain('Open in browser');
     for (const i of toolbar.querySelectorAll('input')) expect(i.getAttribute('aria-label')).toBeTruthy();
   });
 });

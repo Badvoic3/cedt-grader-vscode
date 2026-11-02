@@ -59,6 +59,21 @@ export function extractAlerts(html: string): string[] {
   return out;
 }
 
+/**
+ * Topic filter pills of `/main/list` (`main/_problem_list.html.haml`:
+ * `@primary_tags = Tag.where(kind: 'topic')` rendered as `.topic-badge`,
+ * with the tag description as tooltip). The API has no tag kind.
+ */
+export function parseTopicTags(html: string): { name: string; description: string | null }[] {
+  const $ = cheerio.load(html);
+  const out: { name: string; description: string | null }[] = [];
+  $('.topic-badge').each((_, el) => {
+    const name = cleanText($(el).text());
+    if (name && !out.some((t) => t.name === name)) out.push({ name, description: cleanText($(el).attr('data-bs-title')) || null });
+  });
+  return out;
+}
+
 const PROBLEM_ID_PATTERNS = [
   /\/submissions\/direct_edit_problem\/(\d+)/,
   /\/submissions\/prob\/(\d+)/,

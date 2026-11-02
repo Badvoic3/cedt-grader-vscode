@@ -26,6 +26,7 @@ import {
   type StoredToken,
   type SubmissionDetail,
   summarize,
+  problemStatus,
 } from './grader';
 import { dirname } from 'node:path';
 import { chooseTestcaseTarget, CPH_EXTENSION_ID, CphPresence, saveTestcasesAsFiles, testsFolderFor } from './cphIntegration';
@@ -33,10 +34,14 @@ import { TestcaseStore } from './data/testcaseStore';
 import { cphProbPath as cphProbPathFor, readCphProblem } from './mapping/cph';
 import { importIntoCph } from './mapping/cphImport';
 import { createFileNoOverwrite, pathExists as exists } from './mapping/newFile';
+import { chooseNewFileLanguage } from './mapping/newFileLanguage';
+import { BINARY_EXTS, excludeGlob, filterCandidates, includeGlob, rankCandidates } from './mapping/findByName';
+import { EXTENSION_LANGUAGE } from './grader/languages';
+import { stat as fsStat, readFile as fsReadFile } from 'node:fs/promises';
 import { dismissKey, type LocatedEntry, moveCphProblem, reconnectCandidates, remapPath } from './mapping/mappingOps';
 import { cleanName, fileNameFor, type MatchSource, placeholder, resolveProblem, SOURCE_LABEL } from './mapping/match';
 import { MappingStore } from './mapping/store';
-import type { HistoryEntry, ProblemView, ResultView, SubmissionDetailView, ViewState } from './shared/messages';
+import type { HistoryEntry, ProblemFilter, ProblemView, ResultView, SubmissionDetailView, ViewState } from './shared/messages';
 
 export const EXAM_WARNING =
   'This problem looks like part of an exam/contest. Submitting from VS Code may not be allowed. Check with your instructor.';
@@ -48,6 +53,8 @@ const LANGUAGE_KEY = 'cedtGrader.languageByFile';
 const DISMISSED_KEY = 'cedtGrader.dismissedReconnects';
 const CLEANUP_KEY = 'cedtGrader.lastMappingCleanup';
 const TESTCASE_TARGET_KEY = 'cedtGrader.testcaseTarget';
+const NEWFILE_LANG_KEY = 'cedtGrader.lastNewFileLanguage';
+const FILTER_KEY = 'cedtGrader.problemFilter';
 const REMEMBER_KEY = 'cedtGrader.rememberPassword';
 
 type Listener = (s: ViewState) => void;
@@ -398,6 +405,8 @@ export class GraderController implements vscode.Disposable {
       score: summarize(p),
       hasFile: this.mappedIds.has(p.id),
       hasTestcase: p.hasTestcase,
+      status: problemStatus(p),
+      tags: p.tags,
     };
   }
 
@@ -465,6 +474,8 @@ export class GraderController implements vscode.Disposable {
         stale: pState.stale,
         items: this.problems.map((p) => this.problemView(p)),
         error: pState.error,
+        filter: this.problemFilter(),
+        topics: this.topics(list),
         penaltyNote:
           !list || list.listStatus === 'loaded'
             ? null
@@ -532,6 +543,26 @@ export class GraderController implements vscode.Disposable {
         memoryKb: e.memoryKb,
       })),
     };
+  }
+
+  private problemFilter(): ProblemFilter {
+    return this.ctx.workspaceState.get<ProblemFilter>(FILTER_KEY, { status: 'all', topic: null });
+  }
+
+  /** Persist the problem-list filter per workspace. */
+  async setProblemFilter(f: ProblemFilter): Promise<void> {
+    const valid: ProblemFilter['status'][] = ['all', 'unsolved', 'inprogress', 'solved'];
+    await this.ctx.workspaceState.update(FILTER_KEY, { status: valid.includes(f.status) ? f.status : 'all', topic: f.topic || null });
+    this.emit();
+  }
+
+  /** Topic pills: the website's topic tags when known, otherwise every tag in use. */
+  private topics(list: import('./grader').ProblemList | undefined): { name: string; description: string | null }[] {
+    if (!list) return [];
+    if (list.topics && list.topics.length) return list.topics;
+    const names = new Set<string>();
+    for (const p of list.problems) for (const t of p.tags) names.add(t);
+    return [...names].sort((a, b) => a.localeCompare(b)).map((name) => ({ name, description: null }));
   }
 
   private allowedLanguages(p: Pick<Problem, 'permittedLanguageIds'>): Language[] {
@@ -898,8 +929,25 @@ export class GraderController implements vscode.Disposable {
       return;
     }
     await this.data.languages().catch(() => undefined);
-    const ext = this.allowedLanguages(p)[0]?.ext || (this.fileUri ? /\.([^./]+)$/.exec(this.fileUri.path)?.[1] : undefined) || 'cpp';
-    const target = vscode.Uri.joinPath(folder, fileNameFor(p.name, ext));
+    const permitted = this.allowedLanguages(p);
+    if (!permitted.length) {
+      void vscode.window.showInformationMessage('Languages could not be loaded yet. Try again in a moment.');
+      return;
+    }
+    // Active file's language → last used for new files → cedtGrader.defaultLanguage → ask. Never archive/binary automatically.
+    const choice = chooseNewFileLanguage({
+      permitted,
+      activeFilePath: this.fileUri?.fsPath ?? null,
+      lastUsedLanguageId: this.ctx.globalState.get<number>(NEWFILE_LANG_KEY) ?? null,
+      defaultLanguageName: this.cfg.defaultLanguage,
+    });
+    const language =
+      choice.kind === 'auto'
+        ? choice.language
+        : (await vscode.window.showQuickPick(choice.options.map((l) => ({ label: l.name, description: l.ext ? `.${l.ext}` : undefined, l })), { placeHolder: `Language for the new ${p.name} file` }))?.l;
+    if (!language) return;
+    await this.ctx.globalState.update(NEWFILE_LANG_KEY, language.id);
+    const target = vscode.Uri.joinPath(folder, fileNameFor(p.name, language.ext && language.ext !== 'null' ? language.ext : 'txt'));
     const created = await createFileNoOverwrite(target.fsPath, async () => {
       const open = 'Open Existing';
       const overwrite = 'Overwrite';
@@ -935,21 +983,62 @@ export class GraderController implements vscode.Disposable {
     if (target) await vscode.window.showTextDocument(target);
   }
 
-  /** One workspace.findFiles for the clean name, only when asked (max 20 results). */
+  /**
+   * "Find file by name" (only when clicked): one workspace.findFiles for source
+   * files named like the problem (case-insensitive) with an extension of a
+   * permitted language; build output, binaries and excluded folders are skipped.
+   */
   async findFileByName(problemId: number): Promise<void> {
     const p = this.problemById(problemId);
     if (!p) return;
-    const name = cleanName(p.name).replace(/[{}[\]*?,]/g, '?');
-    const found = await vscode.workspace.findFiles(`**/${name}.*`, '**/{node_modules,.git,.cph,build,dist,out,target,.vscode-test}/**', 20);
-    if (!found.length) {
-      void vscode.window.showInformationMessage(`No file named "${cleanName(p.name)}.*" in the workspace.`);
+    await this.data.languages().catch(() => undefined);
+    const exts = new Set<string>();
+    for (const l of this.allowedLanguages(p)) {
+      if (l.ext && !BINARY_EXTS.has(l.ext.toLowerCase())) exts.add(l.ext.toLowerCase());
+      // Other extensions of the same language (e.g. .cc / .cxx for C++).
+      for (const [ext, lang] of Object.entries(EXTENSION_LANGUAGE)) if (lang === l.name) exts.add(ext.slice(1));
+    }
+    if (!exts.size) {
+      void vscode.window.showInformationMessage(`No source-file language is allowed for ${p.name}.`);
       return;
     }
-    const target =
-      found.length === 1
-        ? found[0]
-        : (await vscode.window.showQuickPick(found.map((u) => ({ label: vscode.workspace.asRelativePath(u), uri: u })), { placeHolder: `Files named ${cleanName(p.name)}` }))?.uri;
-    if (target) await vscode.window.showTextDocument(target); // the file name matches exactly → auto-linked
+    const cfg = (section: string) => vscode.workspace.getConfiguration(section).get<Record<string, unknown>>('exclude') ?? {};
+    const root = vscode.workspace.workspaceFolders?.[0]?.uri;
+    let gitignore: string | null = null;
+    if (root) gitignore = await fsReadFile(vscode.Uri.joinPath(root, '.gitignore').fsPath, 'utf8').catch(() => null);
+    const found = await vscode.workspace.findFiles(includeGlob(p.name, [...exts]), excludeGlob([cfg('files'), cfg('search')], gitignore), 50);
+    const kept = filterCandidates(found.map((u) => u.fsPath), p.name, [...exts]).slice(0, 20);
+    if (!kept.length) {
+      void vscode.window.showInformationMessage(`No source file named "${cleanName(p.name)}" (${[...exts].map((e) => `.${e}`).join(', ')}) in the workspace.`);
+      return;
+    }
+    const mtimes = new Map<string, number>();
+    for (const f of kept) mtimes.set(f, (await fsStat(f).catch(() => null))?.mtimeMs ?? 0);
+    const activeDir = this.fileUri ? vscode.Uri.joinPath(this.fileUri, '..').fsPath : null;
+    const ranked = rankCandidates(kept, activeDir, (f) => mtimes.get(f) ?? 0);
+    let target: string | undefined = ranked[0];
+    if (ranked.length > 1) {
+      target = (
+        await vscode.window.showQuickPick(
+          ranked.map((f) => ({
+            label: vscode.workspace.asRelativePath(f),
+            description: activeDir && vscode.Uri.joinPath(vscode.Uri.file(f), '..').fsPath === activeDir ? 'same folder' : undefined,
+            detail: `modified ${new Date(mtimes.get(f) ?? 0).toLocaleString()}`,
+            f,
+          })),
+          { placeHolder: `Files named ${cleanName(p.name)}` },
+        )
+      )?.f;
+    }
+    if (!target) return;
+    const uri = vscode.Uri.file(target);
+    await vscode.window.showTextDocument(uri);
+    const link = 'Link';
+    const pick = await vscode.window.showInformationMessage(`Link ${vscode.workspace.asRelativePath(uri)} to ${p.name} (#${p.id})?`, link, 'Not Now');
+    if (pick === link) {
+      await this.mapping.set(uri, { problemId: p.id, name: p.name, baseUrl: this.cfg.baseUrl });
+      await this.setActiveFile(uri);
+    }
   }
 
   // ---------------------------------------------------------- test cases

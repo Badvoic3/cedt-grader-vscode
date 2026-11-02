@@ -196,11 +196,12 @@ export class DataService {
       this.pendingProblems = true;
       return;
     }
-    const previous = this.problemList()?.problems;
+    const prevList = this.problemList();
+    const previous = prevList?.problems;
     await Promise.all([
       this.loadHistory(problemId, true),
       this.run('problems', () =>
-        this.cache.get('problems', SESSION, () => this.opts.client().listProblems({ penalties: false, previous }), true),
+        this.cache.get('problems', SESSION, () => this.opts.client().listProblems({ penalties: false, previous, previousTopics: prevList?.topics ?? null }), true),
       ),
     ]);
     this.savePersisted();

@@ -38,6 +38,8 @@ export interface ApiProblem {
   last_submission_id: number | null;
   has_testcase: boolean;
   has_attachment: boolean;
+  /** Public tag names. */
+  tags?: string[];
   /** null = all languages allowed. */
   permitted_languages: ApiLanguageRef[] | null;
   /** `show` only. */

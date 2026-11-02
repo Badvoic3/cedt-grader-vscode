@@ -5,7 +5,10 @@
  * textContent / attributes only, never innerHTML. The webview has no network
  * access (CSP default-src 'none'); all actions are postMessage'd to the host.
  */
-import type { FromWebview, HistoryEntry, ProblemView, ScoreView, SubmissionDetailView, ToWebview, VerdictView, ViewState } from '../src/shared/messages';
+import { groupLabel, VERDICT_LEGEND } from '../src/grader/verdicts';
+import { filterProblems, matches } from './filters';
+import { installTooltips } from './tooltip';
+import type { FromWebview, HistoryEntry, ProblemFilter, ProblemView, ScoreView, SubmissionDetailView, ToWebview, VerdictView, ViewState } from '../src/shared/messages';
 
 interface VsCodeApi {
   postMessage(m: FromWebview): void;
@@ -36,6 +39,8 @@ function el<K extends keyof HTMLElementTagNameMap>(tag: K, attrs: Attrs = {}, ..
     if (v === undefined || v === false) continue;
     if (k.startsWith('on') && typeof v === 'function') e.addEventListener(k.slice(2), v as EventListener);
     else if (k === 'class') e.className = String(v);
+    // Tooltips use the custom component (native `title` tooltips vanish on re-render).
+    else if (k === 'title') e.dataset.tip = String(v);
     else if (v === true) e.setAttribute(k, '');
     else e.setAttribute(k, String(v));
   }
@@ -80,8 +85,22 @@ function scoreClass(score: number | null, rawSum = false): string {
 }
 
 function scorePill(s: ScoreView): HTMLElement {
-  const title = s.counted === null ? 'Not attempted' : `Counted score ${fmt(s.counted)}${s.penaltyLabel ? ` (${s.penaltyLabel})` : ''}`;
-  return el('span', { class: `pill ${scoreClass(s.counted, s.rawSum)}`, title }, fmt(s.counted));
+  const tip =
+    s.counted === null
+      ? 'Not attempted yet'
+      : `Counted score: ${fmt(s.counted)}${s.rawSum ? '' : ' / 100'} (your best submission${s.penaltyLabel ? `, ${s.penaltyLabel}` : ''}) · ${s.attempts} attempt${s.attempts === 1 ? '' : 's'}`;
+  return el('span', { class: `pill score-pill ${scoreClass(s.counted, s.rawSum)}`, title: tip, 'aria-label': tip }, fmt(s.counted));
+}
+
+/** Name and subtitle without repeating the name ("104_68_1_exam2_P1: Scholarship" → subtitle "Scholarship"). */
+function titleParts(p: { name: string; fullName: string }): { name: string; subtitle: string | null } {
+  const full = p.fullName.trim();
+  if (!full || full === p.name) return { name: p.name, subtitle: null };
+  if (full.startsWith(`${p.name}:`)) {
+    const rest = full.slice(p.name.length + 1).trim();
+    return { name: p.name, subtitle: rest || null };
+  }
+  return { name: p.name, subtitle: full };
 }
 
 /** Relative time ("3 min ago", "2 days ago"). */
@@ -191,9 +210,6 @@ function renderBanner(s: ViewState): void {
 
 let state: ViewState | null = null;
 
-function matches(p: ProblemView, q: string): boolean {
-  return !q || p.name.toLowerCase().includes(q) || p.fullName.toLowerCase().includes(q) || String(p.id) === q || `#${p.id}` === q;
-}
 
 // -------------------------------------------------------------- sections
 
@@ -321,12 +337,14 @@ function renderCurrent(s: ViewState): void {
       class: 'combo',
       type: 'button',
       'aria-expanded': String(pickerOpen),
-      title: p ? `${p.name} — ${p.fullName} (#${p.id})` : 'Choose problem',
+      title: p ? `${p.name} (#${p.id}) — choose another problem` : 'Choose problem',
       onclick: () => (pickerOpen ? closePicker() : openPicker()),
     },
-    p ? sourceIcon(p.source, p.sourceLabel) : null,
     p
-      ? el('span', { class: 'grow ellipsis' }, el('strong', {}, p.name), el('span', { class: 'muted' }, ` #${p.id}`), p.fullName && p.fullName !== p.name ? el('span', { class: 'muted' }, ` ${p.fullName}`) : null)
+      ? el('span', { class: 'grow combo-text' },
+          el('span', { class: 'ellipsis' }, el('strong', {}, p.name), el('span', { class: 'muted' }, ` #${p.id}`)),
+          titleParts(p).subtitle ? el('span', { class: 'ellipsis muted small' }, titleParts(p).subtitle!) : null,
+        )
       : el('span', { class: 'grow muted' }, 'Choose problem…'),
     icon(pickerOpen ? 'chevron-up' : 'chevron-down'),
   );
@@ -341,14 +359,8 @@ function renderCurrent(s: ViewState): void {
       ),
       combo,
       pickerOpen ? (renderPickerList(s), pickerBox) : null,
+      p ? sourceLine(p.source, p.id, p.name) : null,
       s.matching.note ? el('p', { class: 'hint' }, icon('info'), ' ', s.matching.note) : null,
-      p?.source === 'suggested'
-        ? el('div', { class: 'row suggested' },
-            icon('lightbulb'),
-            el('span', { class: 'grow small' }, 'Suggested from the file name'),
-            button('Confirm', () => send({ type: 'confirmProblem', problemId: p.id }), { kind: 'primary', title: `Link this file to ${p.name} (#${p.id})` }),
-          )
-        : null,
     ),
   );
 
@@ -418,25 +430,49 @@ function verdictTile(v: VerdictView): HTMLElement {
   return el('span', { class: `tile v-${known ? v.kind : 'unknown'}`, title: v.label, role: 'img', 'aria-label': v.label }, VERDICT_LETTER[v.kind] ?? '?');
 }
 
+/** One tile per test, in order; `[...]` groups drawn as a box (as on the website). */
 function verdictStrip(verdicts: VerdictView[]): HTMLElement {
   const strip = el('div', { class: 'strip', role: 'group', 'aria-label': 'Verdict per test' });
-  let group: HTMLElement | null = null;
-  let groupNo: number | undefined;
-  for (const v of verdicts) {
-    if (v.group !== undefined) {
-      if (!group || groupNo !== v.group) {
-        group = el('span', { class: 'tile-group', title: `Group ${v.group}: scored together (lowest score counts)` });
-        groupNo = v.group;
-        strip.append(group);
-      }
-      group.append(verdictTile(v));
-    } else {
-      group = null;
-      groupNo = undefined;
+  const groupCount = new Set(verdicts.filter((v) => v.group !== undefined).map((v) => v.group)).size;
+  let i = 0;
+  while (i < verdicts.length) {
+    const v = verdicts[i];
+    if (v.group === undefined) {
       strip.append(verdictTile(v));
+      i++;
+      continue;
     }
+    const members = verdicts.filter((x) => x.group === v.group);
+    const label = groupLabel(v.group, groupCount, members);
+    strip.append(el('span', { class: 'tile-group', title: label, 'aria-label': label, role: 'group' }, ...members.map(verdictTile)));
+    i += members.length;
   }
   return strip;
+}
+
+/** Plain text for comments that are not a verdict strip ("No testcase", odd brackets, …). */
+function plainComment(comment: string): HTMLElement {
+  return el('code', { class: 'comment' }, `[${comment}]`);
+}
+
+let legendOpen: string | null = null;
+/** "?" button with the "Reading the results" popover (like the website's legend). */
+function legendButton(where: string): HTMLElement {
+  const btn = iconButton('question', 'Reading the results', () => {
+    legendOpen = legendOpen === where ? null : where;
+    forceRender();
+  });
+  btn.setAttribute('aria-expanded', String(legendOpen === where));
+  return btn;
+}
+function legend(): HTMLElement {
+  return el('div', { class: 'legend', role: 'note' },
+    el('strong', {}, 'Reading the results'),
+    ...VERDICT_LEGEND.map((c) => el('div', { class: 'row' }, el('span', { class: `tile v-${c.kind}`, 'aria-hidden': 'true' }, c.code), el('span', {}, c.word))),
+    el('div', { class: 'row' }, el('span', { class: 'tile-group', 'aria-hidden': 'true' }, el('span', { class: 'tile v-correct' }, 'P'), el('span', { class: 'tile v-correct' }, 'P'), el('span', { class: 'tile v-wrong' }, '-')), el('span', {}, 'a box = tests scored together')),
+    el('p', { class: 'small' }, 'One tile per test case, in order. A box earns the lowest score inside it: one failing tile fails the whole box.'),
+    el('p', { class: 'small muted' }, 'Hover a tile or a box for details.'),
+  );
 }
 
 function renderResult(s: ViewState): void {
@@ -462,8 +498,10 @@ function renderResult(s: ViewState): void {
   if (r.phase === 'done' || ((r.phase === 'timeout' || r.phase === 'error') && r.verdicts.length)) {
     const text = r.compileError ? 'Compilation error' : r.points !== null ? `${fmt(r.points)} points` : (r.message ?? 'Graded');
     b.append(el('div', { class: 'row score-row' }, el('span', { class: `score ${r.compileError ? 'score-zero' : scoreClass(r.points)}` }, text)));
-    if (r.verdicts.length) b.append(verdictStrip(r.verdicts));
-    else if (r.comment && !r.compileError) b.append(el('code', { class: 'comment' }, r.comment));
+    if (r.verdicts.length) {
+      b.append(el('div', { class: 'row strip-row' }, verdictStrip(r.verdicts), el('span', { class: 'grow' }), legendButton('result')));
+      if (legendOpen === 'result') b.append(legend());
+    } else if (r.comment && !r.compileError) b.append(plainComment(r.comment));
     const failed = r.verdicts.filter((v) => !v.ok);
     if (failed.length && failed.length <= 6) b.append(el('ul', { class: 'failed' }, ...failed.map((v) => el('li', {}, v.label))));
     if (r.improvement) b.append(el('p', { class: 'improvement' }, icon('graph-line'), ' ', r.improvement));
@@ -541,7 +579,15 @@ function historyRow(h: HistoryEntry, s: ViewState): HTMLElement {
       el('span', { class: 'mono muted' }, h.number !== null ? `${h.number}.` : `#${h.submissionId}`),
       el('span', { class: `pill ${h.compileError ? 'score-zero' : scoreClass(h.points)}` }, h.compileError ? 'CE' : fmt(h.points)),
       h.counted ? el('span', { class: 'badge counted', title: 'This submission holds your counted (best) score' }, icon('star-full'), 'counted') : null,
-      el('span', { class: 'grow ellipsis' }, h.verdicts.length ? miniStrip(h.verdicts) : el('span', { class: 'muted small' }, h.compileError ? 'compile error' : (h.comment ?? h.status.replace(/_/g, ' ')))),
+      el('span', { class: 'grow ellipsis' },
+        h.verdicts.length
+          ? miniStrip(h.verdicts)
+          : h.compileError
+            ? el('span', { class: 'muted small' }, 'compile error')
+            : h.comment
+              ? el('span', { class: 'mono small' }, `[${h.comment}]`)
+              : el('span', { class: 'muted small' }, h.status.replace(/_/g, ' ')),
+      ),
       el('span', { class: 'muted small nowrap', title: exact(h.submittedAt) }, relative(h.submittedAt)),
     ),
   );
@@ -570,7 +616,8 @@ function renderHistory(s: ViewState): void {
   } else {
     const list = el('div', { class: 'history' });
     for (const h of H.items) list.append(historyRow(h, s));
-    b.append(list, el('p', { class: 'muted small' }, `${H.items.length} submission${H.items.length === 1 ? '' : 's'}`));
+    b.append(list, el('div', { class: 'row muted small' }, el('span', { class: 'grow' }, `${H.items.length} submission${H.items.length === 1 ? '' : 's'}`), legendButton('history')));
+    if (legendOpen === 'history') b.append(legend());
   }
   if (H.loading && H.items.length) b.append(el('p', { class: 'muted small' }, icon('loading', 'codicon-modifier-spin'), ' Refreshing…'));
   if (H.error) b.append(el('div', { class: 'error' }, icon('error'), ' ', H.error));
@@ -591,7 +638,7 @@ function problemRow(p: ProblemView, s: ViewState, where: 'picker' | 'list'): HTM
       },
     },
       el('span', { class: 'problem-name ellipsis' }, mapped ? icon('check') : null, p.name, el('span', { class: 'muted id' }, ` #${p.id}`)),
-      p.fullName && p.fullName !== p.name ? el('span', { class: 'problem-full ellipsis muted' }, p.fullName) : null,
+      titleParts(p).subtitle ? el('span', { class: 'problem-full ellipsis muted' }, titleParts(p).subtitle!) : null,
     ),
     scorePill(p.score),
     el('span', { class: 'row-actions' },
@@ -606,10 +653,18 @@ function problemRow(p: ProblemView, s: ViewState, where: 'picker' | 'list'): HTM
 }
 
 const SOURCE_ICON: Record<string, string> = { saved: 'pinned', filename: 'file', cph: 'beaker', suggested: 'lightbulb' };
+const SOURCE_TEXT: Record<string, string> = { saved: 'Chosen by you', filename: 'Matched by file name', cph: 'Matched from CPH data', suggested: 'Suggested' };
 
-/** Small icon next to the problem name saying how it was chosen (tooltip = label). Only "suggested" stands out. */
-function sourceIcon(source: string, label: string): HTMLElement {
-  return el('span', { class: `source-icon source-${source}`, title: label, 'aria-label': label, role: 'img' }, icon(SOURCE_ICON[source] ?? 'info'));
+/** "How matched" line under the problem selector (text, not icon-only). Only "Suggested" stands out, with Confirm. */
+function sourceLine(source: string, problemId: number, name: string): HTMLElement {
+  if (source === 'suggested') {
+    return el('div', { class: 'row source-line suggested' },
+      icon('lightbulb'),
+      el('span', { class: 'grow small' }, 'Suggested from the file name'),
+      button('Confirm', () => send({ type: 'confirmProblem', problemId }), { kind: 'primary', title: `Link this file to ${name} (#${problemId})` }),
+    );
+  }
+  return el('div', { class: `row source-line source-${source} small muted` }, icon(SOURCE_ICON[source] ?? 'info'), el('span', {}, SOURCE_TEXT[source] ?? source));
 }
 
 function renderProblems(s: ViewState): void {
@@ -623,20 +678,72 @@ function renderProblems(s: ViewState): void {
     if (P.error) b.append(el('div', { class: 'error' }, icon('error'), ' ', P.error));
     return;
   }
-  b.append(problemFilter);
+  b.append(statusFilter(P.filter), problemFilter);
+  if (P.topics.length) b.append(topicFilter(P.filter, P.topics));
   const q = problemFilter.value.trim().toLowerCase();
-  const hits = P.items.filter((p) => matches(p, q));
+  const hits = filterProblems(P.items, P.filter, q);
   const list = el('div', { class: 'problem-list' });
   for (const p of hits.slice(0, 150)) list.append(problemRow(p, s, 'list'));
   b.append(list);
-  b.append(el('p', { class: 'muted small' }, hits.length > 150 ? `Showing 150 of ${hits.length}. Refine the filter.` : `${hits.length} of ${P.items.length} problems · scores shown are counted scores`));
+  b.append(el('p', { class: 'muted small' }, hits.length > 150 ? `Showing 150 of ${hits.length}. Refine the filter.` : `${hits.length} of ${P.items.length} problems`));
   if (P.penaltyNote) b.append(el('p', { class: 'hint' }, icon('info'), ' ', P.penaltyNote));
   if (P.stale) b.append(el('p', { class: 'hint' }, icon('warning'), ' May be out of date (could not reach the grader).'));
   if (P.loading) b.append(el('p', { class: 'muted small' }, icon('loading', 'codicon-modifier-spin'), ' Refreshing…'));
   if (P.error) b.append(el('div', { class: 'error' }, icon('error'), ' ', P.error));
 }
 
+const STATUS_FILTERS: { key: ProblemFilter['status']; label: string; tip: string }[] = [
+  { key: 'all', label: 'All', tip: 'All problems' },
+  { key: 'unsolved', label: 'Unsolved', tip: 'Not tried yet or not 100 yet' },
+  { key: 'inprogress', label: 'In progress', tip: 'Submitted, best score below 100' },
+  { key: 'solved', label: 'Solved', tip: 'Best score 100 or more' },
+];
+
+function statusFilter(f: ProblemFilter): HTMLElement {
+  return el('div', { class: 'segmented', role: 'radiogroup', 'aria-label': 'Filter problems by status' },
+    ...STATUS_FILTERS.map((x) =>
+      el('button', {
+        class: `seg${f.status === x.key ? ' active' : ''}`, type: 'button', role: 'radio', 'aria-checked': String(f.status === x.key), title: x.tip,
+        onclick: () => send({ type: 'setFilter', filter: { ...f, status: x.key } }),
+      }, x.label),
+    ),
+  );
+}
+
+function topicFilter(f: ProblemFilter, topics: { name: string; description: string | null }[]): HTMLElement {
+  return el('div', { class: 'topics', role: 'group', 'aria-label': 'Filter problems by topic' },
+    ...topics.map((t) =>
+      el('button', {
+        class: `topic${f.topic === t.name ? ' active' : ''}`, type: 'button', 'aria-pressed': String(f.topic === t.name),
+        title: `${t.description ? `${t.description}. ` : ''}${f.topic === t.name ? 'Click again to show all topics' : `Show only ${t.name} problems`}`,
+        onclick: () => send({ type: 'setFilter', filter: { ...f, topic: f.topic === t.name ? null : t.name } }),
+      }, t.name),
+    ),
+  );
+}
+
 // ---------------------------------------------------------------- wiring
+
+const tooltip = installTooltips(document);
+
+/**
+ * Sections re-render only when their own data changed, so the element under
+ * the cursor (and its tooltip) isn't recreated by unrelated state pushes
+ * (polling, history loading, …).
+ */
+const lastKeys = new Map<string, string>();
+function sectionKeys(s: ViewState): Record<string, string> {
+  const j = JSON.stringify;
+  const pid = s.problem?.id ?? null;
+  return {
+    banner: j([s.connection, s.problems.loaded, s.history.items.length > 0]),
+    account: j([s.account, s.baseUrl, showLoginForm]),
+    current: j([s.file, s.problem, s.languages, s.submit, s.matching, s.testcases, s.cph, s.gradingElsewhere, pickerOpen, pickerOpen ? s.problems : s.problems.loaded]),
+    result: j([s.result, s.submit.enabled, s.submit.reason, legendOpen === 'result']),
+    history: j([pid, s.history, legendOpen === 'history']),
+    problems: j([s.problems, !!s.file, pid, ui.filter]),
+  };
+}
 
 function render(): void {
   if (!state) {
@@ -644,14 +751,29 @@ function render(): void {
     return;
   }
   const active = document.activeElement;
-  renderBanner(state);
-  renderAccount(state);
-  renderCurrent(state);
-  renderResult(state);
-  renderHistory(state);
-  renderProblems(state);
+  const keys = sectionKeys(state);
+  const renderers: Record<string, (s: ViewState) => void> = {
+    banner: renderBanner,
+    account: renderAccount,
+    current: renderCurrent,
+    result: renderResult,
+    history: renderHistory,
+    problems: renderProblems,
+  };
+  for (const [name, fn] of Object.entries(renderers)) {
+    if (lastKeys.get(name) === keys[name]) continue;
+    lastKeys.set(name, keys[name]);
+    fn(state);
+  }
   // Persistent inputs survive re-render; restore focus if it was on one of them.
   if (active instanceof HTMLInputElement && document.body.contains(active) && document.activeElement !== active) active.focus();
+  tooltip.refresh();
+}
+
+/** Re-render everything (local UI changes such as opening the picker or the legend). */
+function forceRender(): void {
+  lastKeys.clear();
+  render();
 }
 
 pickerSearch.addEventListener('input', () => state && renderPickerList(state));

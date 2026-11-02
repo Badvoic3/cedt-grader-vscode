@@ -15,7 +15,7 @@ import { fixture } from './helpers';
 const BASE = 'https://cedt-grader.nattee.net';
 const P = (id: number, name: string, fullName = name): Problem => ({
   id, name, fullName, bestScore: null, lastScore: null, lastResult: null, lastSubmissionId: null, lastSubmissionTime: null,
-  submissionCount: 0, hasTestcase: true, hasAttachment: false, permittedLanguageIds: null, list: null,
+  submissionCount: 0, hasTestcase: true, hasAttachment: false, permittedLanguageIds: null, tags: [], list: null,
 });
 const problems = [
   P(1360, '00_Intro_11', '00_Intro_★_Hello_World'),
