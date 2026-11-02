@@ -30,6 +30,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider, vscode.Dispo
       }),
       this.controller.onState((state) => this.post({ type: 'state', state })),
     ];
+    this.controller.focusTarget = (t) => setTimeout(() => this.focus(t), 150);
     // Nothing is fetched while the panel is hidden; pending loads run when it is shown.
     this.controller.setPanelVisible(view.visible);
     subs.push(view.onDidChangeVisibility(() => this.controller.setPanelVisible(view.visible)));
@@ -112,6 +113,12 @@ export class SidebarProvider implements vscode.WebviewViewProvider, vscode.Dispo
         return;
       case 'setFilter':
         if (m.filter && typeof m.filter === 'object') await c.setProblemFilter(m.filter);
+        return;
+      case 'promptAnswer':
+        if (Number.isInteger(m.id)) c.answerPrompt(m.id, typeof m.button === 'string' ? m.button : null);
+        return;
+      case 'problemRowClick':
+        if (Number.isInteger(m.problemId)) await c.problemRowClick(m.problemId);
         return;
       case 'autoDetect':
         await c.autoDetect();

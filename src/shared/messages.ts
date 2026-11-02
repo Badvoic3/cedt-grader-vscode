@@ -145,6 +145,10 @@ export interface ViewState {
   linkedFiles: { path: string; current: boolean }[];
   /** Show the dismissible "install CPH" tip. */
   cphTip: boolean;
+  /** The file was explicitly unlinked: "Not linked to a problem" (auto-detection off). */
+  notLinked: boolean;
+  /** Inline question with plain buttons (instead of a modal dialog). */
+  prompt: { id: number; text: string; detail: string | null; tone: 'info' | 'warn'; buttons: { id: string; label: string; primary?: boolean }[] } | null;
   /** How the active file was (or wasn't) matched. */
   matching: {
     /** Closest candidates, shown first in the picker (never saved automatically). */
@@ -231,6 +235,8 @@ export type FromWebview =
   | { type: 'confirmProblem'; problemId: number }
   | { type: 'setFilter'; filter: ProblemFilter }
   | { type: 'autoDetect' }
+  | { type: 'promptAnswer'; id: number; button: string | null }
+  | { type: 'problemRowClick'; problemId: number }
   | { type: 'openLinkedFile'; index: number }
   | { type: 'keepOnlyThisFile' }
   | { type: 'cphTip'; action: 'install' | 'later' | 'never' }

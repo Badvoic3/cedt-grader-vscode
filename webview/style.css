@@ -535,3 +535,6 @@ select.sort { width: auto; flex: 0 1 auto; max-width: 48%; }
 
 /* Result header: "Attempt 3 · #id ↗" with the legend on the right */
 .result-head { gap: 6px; }
+.prompt { margin: 6px 8px; }
+.prompt[hidden] { display: none; }
+.source-line.source-suggested .codicon { color: var(--warn); }

@@ -18,13 +18,13 @@ const E = (fsPath: string, problemId = 1, extra: object = {}): LocatedEntry => (
 
 describe('renames inside VS Code', () => {
   it('single file rename keeps how the problem was chosen', () => {
-    const plan = planRename([E('/w/a.cpp', 1), E('/w/b.cpp', 2)], '/w/a.cpp', '/w/sub/a2.cpp', '/');
+    const plan = planRename([E('/w/a.cpp', 1), E('/w/b.cpp', 2)], '/w/a.cpp', '/w/sub/a2.cpp', false);
     expect(plan).toEqual([{ from: '/w/a.cpp', to: '/w/sub/a2.cpp', entry: { problemId: 1, name: 'p1' } }]);
   });
 
   it('folder rename moves every mapped file inside it (and only those)', () => {
     const entries = [E('/w/hw/a.cpp', 1), E('/w/hw/deep/b.cpp', 2), E('/w/hw2/c.cpp', 3), E('/w/other.cpp', 4)];
-    const plan = planRename(entries, '/w/hw', '/w/homework', '/');
+    const plan = planRename(entries, '/w/hw', '/w/homework', false);
     expect(plan.map((p) => [p.from, p.to])).toEqual([
       ['/w/hw/a.cpp', '/w/homework/a.cpp'],
       ['/w/hw/deep/b.cpp', '/w/homework/deep/b.cpp'],
@@ -32,13 +32,13 @@ describe('renames inside VS Code', () => {
   });
 
   it('a stale mark is cleared when the file is moved back', () => {
-    const plan = planRename([E('/w/a.cpp', 1, { staleSince: '2026-01-01T00:00:00Z' })], '/w/a.cpp', '/w/b.cpp', '/');
+    const plan = planRename([E('/w/a.cpp', 1, { staleSince: '2026-01-01T00:00:00Z' })], '/w/a.cpp', '/w/b.cpp', false);
     expect(plan[0].entry).toEqual({ problemId: 1, name: 'p1' });
   });
 
   it('remapPath does not match name prefixes', () => {
-    expect(remapPath('/w/hw2/c.cpp', '/w/hw', '/x', '/')).toBeNull();
-    expect(remapPath('/w/hw', '/w/hw', '/x', '/')).toBe('/x');
+    expect(remapPath('/w/hw2/c.cpp', '/w/hw', '/x', false)).toBeNull();
+    expect(remapPath('/w/hw', '/w/hw', '/x', false)).toBe('/x');
   });
 });
 
@@ -68,8 +68,8 @@ describe('moves outside VS Code → reconnect prompt', () => {
 describe('deleted files → stale → expired after 30 days', () => {
   it('delete marks (does not remove) mappings of the file or folder', () => {
     const entries = [E('/w/hw/a.cpp', 1), E('/w/hw/b.cpp', 2), E('/w/c.cpp', 3)];
-    expect(affectedByDelete(entries, '/w/hw', '/').map((e) => e.fsPath)).toEqual(['/w/hw/a.cpp', '/w/hw/b.cpp']);
-    expect(affectedByDelete([E('/w/a.cpp', 1, { staleSince: 'x' })], '/w/a.cpp', '/')).toEqual([]); // already stale
+    expect(affectedByDelete(entries, '/w/hw', false).map((e) => e.fsPath)).toEqual(['/w/hw/a.cpp', '/w/hw/b.cpp']);
+    expect(affectedByDelete([E('/w/a.cpp', 1, { staleSince: 'x' })], '/w/a.cpp', false)).toEqual([]); // already stale
   });
 
   it('only stale mappings older than 30 days expire', () => {
