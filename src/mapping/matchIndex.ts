@@ -19,21 +19,21 @@ export interface SourceFile {
 
 export interface FileMatch {
   problemId: number;
-  /** Exact normalized name, or a confident suggestion. */
-  how: 'filename' | 'suggested';
+  /** Exact normalized file name, exact name of the folder it is in, or a confident suggestion. */
+  how: 'filename' | 'folder' | 'suggested';
 }
 
 /** The problem a file would show when opened (null: none, below the threshold, or a tie). */
 export function matchFile(file: SourceFile, problems: Problem[], baseUrl: string, namePattern?: string): FileMatch | null {
   const r = resolveProblem({ savedProblemId: null, cph: null, filePath: file.fsPath, problems, baseUrl, folders: file.folders, namePattern });
   if (r.kind !== 'match') return null;
-  if (r.source !== 'filename' && r.source !== 'suggested') return null;
+  if (r.source !== 'filename' && r.source !== 'folder' && r.source !== 'suggested') return null;
   return { problemId: r.problem.id, how: r.source };
 }
 
 export interface IndexedFile {
   fsPath: string;
-  how: 'filename' | 'suggested';
+  how: 'filename' | 'folder' | 'suggested';
 }
 
 /** problem id → files, computed with `matchFile` (so both directions always agree). */

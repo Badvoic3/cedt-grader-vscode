@@ -1,7 +1,7 @@
 import { STALE_LINK_DAYS } from '../shared/constants';
 import { mkdir, readFile, rename, stat, writeFile } from 'node:fs/promises';
-import { basename, dirname } from 'node:path';
-import { pathKey, remapPath } from './paths';
+import { basename, dirname, relative } from 'node:path';
+import { isAtOrInside, isInside, pathKey, remapPath } from './paths';
 import { cphProbPath, type CphProblem } from './cph';
 import type { MappingEntry } from './mappingFile';
 
@@ -30,6 +30,46 @@ export function planRename(entries: LocatedEntry[], oldPath: string, newPath: st
     }
   }
   return out;
+}
+
+/**
+ * Folder mode: the folder link a file belongs to, i.e. the nearest folder
+ * entry above it (non-stale). A file's own entry is checked by the caller first.
+ */
+export function nearestFolderLink(entries: LocatedEntry[], fsPath: string, caseInsensitive?: boolean): LocatedEntry | undefined {
+  let best: LocatedEntry | undefined;
+  for (const e of entries) {
+    if (!e.entry.folder || e.entry.staleSince || !isInside(fsPath, e.fsPath, caseInsensitive)) continue;
+    if (!best || e.fsPath.length > best.fsPath.length) best = e;
+  }
+  return best;
+}
+
+/** Absolute path of a folder link's submit file (null when not chosen yet). */
+export function submitFilePath(folderPath: string, submitFile: string | undefined): string | null {
+  if (!submitFile) return null;
+  const joiner = folderPath.includes('\\') && !folderPath.includes('/') ? '\\' : '/';
+  return `${folderPath.replace(/[\\/]+$/, '')}${joiner}${submitFile.split('/').join(joiner)}`;
+}
+
+/**
+ * A folder link's submit file after `oldPath` (a file or folder) moved to
+ * `newPath`: the new relative path, `undefined` when it left the folder (asked
+ * again on the next submit), or null when unaffected.
+ */
+export function submitFileAfterMove(folderPath: string, submitFile: string | undefined, oldPath: string, newPath: string, caseInsensitive?: boolean): string | undefined | null {
+  const abs = submitFilePath(folderPath, submitFile);
+  if (!abs) return null;
+  const moved = remapPath(abs, oldPath, newPath, caseInsensitive);
+  if (moved === null) return null;
+  if (!isInside(moved, folderPath, caseInsensitive)) return undefined;
+  return relative(folderPath, moved).split(/[\\/]/).join('/');
+}
+
+/** Was a folder link's submit file deleted (itself or a folder above it, inside the linked folder)? */
+export function submitFileDeleted(folderPath: string, submitFile: string | undefined, deletedPath: string, caseInsensitive?: boolean): boolean {
+  const abs = submitFilePath(folderPath, submitFile);
+  return !!abs && isAtOrInside(abs, deletedPath, caseInsensitive) && !isAtOrInside(folderPath, deletedPath, caseInsensitive);
 }
 
 /** Entries affected by deleting `deletedPath` (a file or a folder). */

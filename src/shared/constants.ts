@@ -106,6 +106,23 @@ export const CACHE = {
   tempDays: 30,
 } as const;
 
+/**
+ * Problem attachments (`GET /api/v1/problems/{id}/files/attachment`), saved
+ * into the workspace on click. A zip is extracted into a new folder; these
+ * caps are checked on the declared sizes before inflating and again on the
+ * real output (zip bombs).
+ */
+export const ATTACHMENT = {
+  /** Largest download accepted. */
+  maxDownloadBytes: 20 * 1024 * 1024,
+  /** Most files extracted from one zip. */
+  maxEntries: 500,
+  /** Largest total size of the extracted files. */
+  maxTotalBytes: 50 * 1024 * 1024,
+  /** Submit-file question: inline buttons up to this many files, a quick pick above. */
+  maxInlineChoices: 6,
+} as const;
+
 /** Links of deleted files are kept (stale) this many days, so a moved file can reconnect. */
 export const STALE_LINK_DAYS = 30;
 

@@ -497,13 +497,20 @@ function renderCurrent(s: ViewState): void {
         p ? iconButton('book', W.openStatement, () => send({ type: 'openStatement', problemId: p.id })) : null,
         p ? iconButton('copy', W.copyProblemName, () => send({ type: 'copyName', problemId: p.id })) : null,
         p ? iconButton('globe', W.openOnTheGraderWebsite, () => send({ type: 'openProblemInBrowser', problemId: p.id })) : null,
+        // The website's "File": a template file or a zip package (only problems that have one).
+        p?.hasAttachment
+          ? iconButton('cloud-download', W.downloadAttachment, () => send({ type: 'downloadAttachment', problemId: p.id }), { disabledReason: s.attachment.busy === p.id ? W.downloading : null })
+          : null,
+        p && s.folderMode
+          ? iconButton(s.folderMode.on ? 'file' : 'folder', s.folderMode.on ? W.linkOnlyFile : W.linkFolder, () => send({ type: 'toggleFolderMode' }), { disabledReason: s.folderMode.disabledReason })
+          : null,
         iconButton('sparkle', W.autoDetectTip, () => send({ type: 'autoDetect' })),
         // Every state: a chosen link is unlinked; a name / CPH match or a suggestion becomes "not linked".
-        p ? iconButton('close', p.source === 'saved' ? W.unlinkThisFileTip : W.dontMatchThisFileTip, () => send({ type: 'unmapProblem' })) : null,
+        p ? iconButton('close', unlinkLabel(p, s, true), () => send({ type: 'unmapProblem' })) : null,
       ),
       combo,
       pickerOpen ? (renderPickerList(s), pickerBox) : null,
-      p ? sourceLine(p.source, p.id, p.name) : null,
+      p ? (s.folder ? folderLine(s.folder) : sourceLine(p.source, p.id, p.name)) : null,
       p && s.file?.renameTo
         ? el('div', { class: 'row source-line small muted' },
             icon('edit'),
@@ -546,6 +553,19 @@ function renderCurrent(s: ViewState): void {
     if (L.selectedId === null && L.items.length) select.append(el('option', { value: '', selected: true, disabled: true }, W.chooseLanguage));
     for (const l of L.items) select.append(el('option', { value: l.id, selected: l.id === L.selectedId }, l.name));
     b.append(el('div', { class: 'field' }, el('label', { class: 'field-label', for: 'lang' }, W.language), select));
+    // Folder mode: which file of the folder Submit sends (the grader takes one file).
+    if (s.folder) {
+      const F = s.folder;
+      const pick = el('select', {
+        id: 'submit-file',
+        disabled: !F.candidates.length,
+        title: W.submitFileTip,
+        onchange: (e: Event) => send({ type: 'setSubmitFile', file: (e.target as HTMLSelectElement).value }),
+      });
+      if (F.submitFile === null) pick.append(el('option', { value: '', selected: true, disabled: true }, W.submitFileAsk));
+      for (const f of F.candidates) pick.append(el('option', { value: f, selected: f === F.submitFile }, f));
+      b.append(el('div', { class: 'field' }, el('label', { class: 'field-label', for: 'submit-file' }, W.submits), pick, el('p', { class: 'small muted' }, W.submitFileTip)));
+    }
     if (p.hasTestcase) {
       b.append(
         button(
@@ -841,12 +861,32 @@ function headerMenuItems(p: ViewState['problem']): MenuItem[] {
           { icon: 'globe', label: W.openOnTheGraderWebsite, onclick: () => send({ type: 'openProblemInBrowser', problemId: p.id }) },
         ]
       : []),
+    ...(p?.hasAttachment
+      ? [{ icon: 'cloud-download', label: W.downloadAttachment, onclick: () => send({ type: 'downloadAttachment', problemId: p.id }), disabledReason: state?.attachment.busy === p.id ? W.downloading : null }]
+      : []),
+    ...(p && state?.folderMode
+      ? [{
+          icon: state.folderMode.on ? 'file' : 'folder',
+          label: state.folderMode.on ? W.linkOnlyFile : W.linkFolder,
+          tip: state.folderMode.on ? undefined : W.linkFolderTip,
+          onclick: () => send({ type: 'toggleFolderMode' }),
+          disabledReason: state.folderMode.disabledReason,
+        }]
+      : []),
     { icon: 'sparkle', label: W.autoDetectTip, onclick: () => send({ type: 'autoDetect' }) },
     ...(p && state?.file?.renameTo ? [{ icon: 'edit', label: W.renameToProblem, tip: W.renameToProblemTip(state.file.name, state.file.renameTo), onclick: () => send({ type: 'renameFileToProblem' }) }] : []),
-    ...(p
-      ? [{ icon: 'close', label: p.source === 'saved' ? W.unlinkThisFile : W.dontMatchThisFile, tip: W.autoDetectWontRelink, onclick: () => send({ type: 'unmapProblem' }) }]
+    ...(p && state
+      ? [{ icon: 'close', label: unlinkLabel(p, state, false), tip: W.autoDetectWontRelink, onclick: () => send({ type: 'unmapProblem' }) }]
       : []),
   ];
+}
+
+/** ✕: "Unlink this file / folder" for a link, "Don't match this file / folder" for a match. */
+function unlinkLabel(p: NonNullable<ViewState['problem']>, s: ViewState, long: boolean): string {
+  if (s.folder) return long ? W.unlinkThisFolderTip : W.unlinkThisFolder;
+  if (p.source === 'folder') return long ? W.dontMatchThisFolderTip : W.dontMatchThisFolder;
+  if (p.source === 'saved') return long ? W.unlinkThisFileTip : W.unlinkThisFile;
+  return long ? W.dontMatchThisFileTip : W.dontMatchThisFile;
 }
 
 /** Right-click on a problem row: the row's icons, plus linking the open file and the website. */
@@ -859,6 +899,9 @@ function rowMenuItems(p: ProblemView, s: ViewState): MenuItem[] {
       ? { icon: 'go-to-file', label: W.goToLinkedFile, onclick: () => send({ type: 'goToFile', problemId: p.id }) }
       : { icon: 'search', label: W.findFileByName, onclick: () => send({ type: 'findFile', problemId: p.id }) },
     { icon: 'new-file', label: W.newFileForThisProblem, onclick: () => send({ type: 'newFile', problemId: p.id }) },
+    ...(p.hasAttachment
+      ? [{ icon: 'cloud-download', label: W.downloadAttachment, onclick: () => send({ type: 'downloadAttachment', problemId: p.id }), disabledReason: s.attachment.busy === p.id ? W.downloading : null }]
+      : []),
     { icon: 'book', label: W.openStatement, onclick: () => send({ type: 'openStatement', problemId: p.id }) },
     { icon: 'globe', label: W.openOnTheGraderWebsite, onclick: () => send({ type: 'openProblemInBrowser', problemId: p.id }) },
   ];
@@ -904,6 +947,9 @@ function problemRow(p: ProblemView, s: ViewState, where: 'picker' | 'list'): HTM
           ? iconButton('go-to-file', W.goToLinkedFile, () => send({ type: 'goToFile', problemId: p.id }))
           : iconButton('search', W.findFileByName, () => send({ type: 'findFile', problemId: p.id })),
         iconButton('new-file', W.newFileForThisProblem, () => send({ type: 'newFile', problemId: p.id })),
+        p.hasAttachment
+          ? iconButton('cloud-download', W.downloadAttachment, () => send({ type: 'downloadAttachment', problemId: p.id }), { disabledReason: s.attachment.busy === p.id ? W.downloading : null })
+          : null,
         iconButton('book', W.openStatement, () => send({ type: 'openStatement', problemId: p.id })),
       ),
     ),
@@ -938,7 +984,7 @@ function linkedFilesNotice(s: ViewState): HTMLElement {
           };
           return el('div', { class: `linked-row${f.current ? ' current' : ''}`, 'aria-current': f.current ? 'true' : undefined },
             el('div', { class: 'row' },
-              icon(f.current ? 'circle-filled' : 'file'),
+              icon(f.current ? 'circle-filled' : f.path.endsWith('/') ? 'folder' : 'file'),
               el('span', { class: 'grow ellipsis', title: f.path }, f.path),
             ),
             el('div', { class: 'row gap small' },
@@ -959,7 +1005,7 @@ function linkedFilesNotice(s: ViewState): HTMLElement {
   return box;
 }
 
-const SOURCE_ICON: Record<string, string> = { saved: 'pinned', filename: 'file', cph: 'beaker', suggested: 'lightbulb' };
+const SOURCE_ICON: Record<string, string> = { saved: 'pinned', filename: 'file', folder: 'folder', cph: 'beaker', suggested: 'lightbulb' };
 const SOURCE_TEXT: Record<string, string> = W_SOURCE;
 
 /** "How matched" line under the problem selector (text, not icon-only). Only "Suggested" stands out, with Confirm. */
@@ -975,13 +1021,18 @@ function sourceLine(source: string, problemId: number, name: string): HTMLElemen
   return el('div', { class: `row source-line source-${source} small muted` }, icon(SOURCE_ICON[source] ?? 'info'), el('span', {}, SOURCE_TEXT[source] ?? source));
 }
 
+/** Folder mode: "Folder linked by you: pkg/" (instead of the match line). */
+function folderLine(f: NonNullable<ViewState['folder']>): HTMLElement {
+  return el('div', { class: 'row source-line source-folder small muted' }, icon('folder'), el('span', { class: 'ellipsis', title: f.path }, W.folderLinked(f.path)));
+}
+
 /**
  * Problem list: one persistent virtualized list (every problem reachable by
  * scrolling). Rows are keyed by problem id and rebuilt only when their own
  * data changed; an editor switch only updates the rows whose ✓ changed.
  */
 const problemVersion = (p: ProblemView) =>
-  JSON.stringify([p.name, p.fullName, p.score, p.status, p.hasFile, p.hasTestcase, state?.problem?.id === p.id]);
+  JSON.stringify([p.name, p.fullName, p.score, p.status, p.hasFile, p.hasTestcase, p.hasAttachment, state?.attachment.busy === p.id, state?.problem?.id === p.id]);
 let listSaveTimer: ReturnType<typeof setTimeout> | undefined;
 const problemList = new VirtualList<ProblemView>(document, {
   key: (p) => String(p.id),
@@ -1105,10 +1156,10 @@ function sectionKeys(s: ViewState): Record<string, string> {
     banner: j([s.connection, s.problems.loaded, s.history.items.length > 0]),
     prompt: j([s.prompt]),
     account: j([s.account, s.baseUrl, showLoginForm]),
-    current: j([s.notLinked, s.linkedNotice, s.linkedFiles, s.file, s.problem, s.languages, s.submit, s.matching, s.testcases, s.cph, s.gradingElsewhere, pickerOpen, pickerOpen ? s.problems : s.problems.loaded]),
+    current: j([s.notLinked, s.linkedNotice, s.linkedFiles, s.file, s.problem, s.languages, s.submit, s.matching, s.testcases, s.cph, s.gradingElsewhere, s.folder, s.folderMode, s.attachment, pickerOpen, pickerOpen ? s.problems : s.problems.loaded]),
     result: j([s.result, s.submit.enabled, s.submit.reason, legendOpen === 'result', s.problem?.score.rawSum]),
     history: j([pid, s.history, legendOpen === 'history', s.problem?.score.rawSum]),
-    problems: j([{ ...s.problems, items: s.problems.items.length }, ui.filter]),
+    problems: j([{ ...s.problems, items: s.problems.items.length }, ui.filter, s.attachment]),
   };
 }
 

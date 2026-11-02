@@ -83,6 +83,8 @@ Handy actions in the problem list and picker: **copy the exact problem name**, *
 
 Renaming or moving a linked file in VS Code keeps the link. If you move files in Finder or git, the extension asks whether to keep the old link when you open the file.
 
+**Attachments and folder mode.** For problems with an attachment (the website's "File"), the cloud-download icon on the current problem or on a problem row downloads it (only when you click). A single file is saved next to your file under its own name and the panel offers to rename it to match the problem. A zip package (e.g. `main.cpp` + `student.h` + a library header) is checked first and then extracted into a **new** folder; choose **Extract to `<problem name>/` and link it** to put the problem in *folder mode*: every file in that folder shows the problem. Nothing is ever overwritten. You can also switch an existing file's link to its whole folder with the folder icon (**Link the whole folder** / **Link only this file**). The grader takes one file per submission, so in folder mode Submit sends one chosen file — usually the file you edit (e.g. `student.h`), not the provided `main.cpp`; the panel asks once and shows it under **Submits**. Files in a folder *named* like a problem are also matched automatically ("Matched by folder name").
+
 **Test cases.** For problems that provide them, **Load test cases** downloads the grader's test cases (large cases the grader only shows in part are skipped). Without CPH they can be saved as files: `<problem name>/tests/1.in`, `1.out`, … next to your source (the extension asks before creating the folder and never overwrites your files). With CPH installed they go into CPH instead (see below).
 
 **Also available:**
