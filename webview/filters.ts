@@ -1,3 +1,4 @@
+import { W } from '../src/shared/strings';
 import type { ProblemFilter, ProblemSort, ProblemView } from '../src/shared/messages';
 
 /** Text search: name, full name, or id ("1360" / "#1360"). */
@@ -20,13 +21,13 @@ export function filterProblems(items: ProblemView[], f: ProblemFilter, q: string
 }
 
 export const SORTS: { key: ProblemSort; label: string }[] = [
-  { key: 'default', label: 'Default order' },
-  { key: 'name-asc', label: 'Name A–Z' },
-  { key: 'name-desc', label: 'Name Z–A' },
-  { key: 'latest', label: 'Latest submission' },
-  { key: 'score-asc', label: 'Best score (low to high)' },
-  { key: 'score-desc', label: 'Best score (high to low)' },
-  { key: 'recent', label: 'Recently opened' },
+  { key: 'default', label: W.defaultOrder },
+  { key: 'name-asc', label: W.nameAZ },
+  { key: 'name-desc', label: W.nameZA },
+  { key: 'latest', label: W.latestSubmission },
+  { key: 'score-asc', label: W.bestScoreLowToHigh },
+  { key: 'score-desc', label: W.bestScoreHighToLow },
+  { key: 'recent', label: W.recentlyOpened },
 ];
 
 /**

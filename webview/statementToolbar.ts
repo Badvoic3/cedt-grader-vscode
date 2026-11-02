@@ -29,34 +29,35 @@ export interface ToolbarHandlers {
 }
 
 export function buildToolbar(h: ToolbarHandlers) {
-  const pageInput = el('input', { class: 'page', type: 'number', min: '1', value: '1', 'aria-label': 'Page number', 'data-tip': 'Page number' });
+  const pageInput = el('input', { class: 'page', type: 'number', min: '1', value: '1', 'aria-label': W.pageNumber, 'data-tip': W.pageNumber });
   const pageCount = el('span', { class: 'muted' }, '/ –');
-  const zoomLabel = el('span', { class: 'muted zoom', 'data-tip': 'Zoom level' }, '');
-  const search = el('input', { class: 'search', type: 'search', placeholder: 'Find in statement', 'aria-label': 'Find in statement', 'data-tip': 'Find in statement (Cmd/Ctrl+F)' });
+  const zoomLabel = el('span', { class: 'muted zoom', 'data-tip': W.zoomLevel }, '');
+  const search = el('input', { class: 'search', type: 'search', placeholder: W.findInStatement, 'aria-label': W.findInStatement, 'data-tip': W.findInStatementCmdCtrl });
   const matches = el('span', { class: 'muted matches' }, '');
   const titleEl = el('span', { class: 'title' }, '');
   const pdfTools = el('div', { class: 'group pdf-only' },
-    btn('zoom-out', 'Zoom out (Cmd/Ctrl -)', h.zoomOut),
+    btn('zoom-out', W.zoomOutCmdCtrl, h.zoomOut),
     zoomLabel,
-    btn('zoom-in', 'Zoom in (Cmd/Ctrl +)', h.zoomIn),
-    btn('screen-full', 'Fit width (Cmd/Ctrl 0)', h.fitWidth),
+    btn('zoom-in', W.zoomInCmdCtrl, h.zoomIn),
+    btn('screen-full', W.fitWidthCmdCtrl0, h.fitWidth),
     el('span', { class: 'sep' }),
-    btn('chevron-up', 'Previous page', h.prevPage),
+    btn('chevron-up', W.previousPage, h.prevPage),
     pageInput,
     pageCount,
-    btn('chevron-down', 'Next page', h.nextPage),
+    btn('chevron-down', W.nextPage, h.nextPage),
     el('span', { class: 'sep' }),
     search,
-    btn('arrow-up', 'Previous match (Shift+Enter)', h.prevMatch),
-    btn('arrow-down', 'Next match (Enter)', h.nextMatch),
+    btn('arrow-up', W.previousMatchShiftEnter, h.prevMatch),
+    btn('arrow-down', W.nextMatchEnter, h.nextMatch),
     matches,
   );
-  const toolbar = el('div', { class: 'toolbar', role: 'toolbar', 'aria-label': 'Statement' },
+  const toolbar = el('div', { class: 'toolbar', role: 'toolbar', 'aria-label': W.statement },
     titleEl,
     pdfTools,
     el('span', { class: 'grow' }),
-    btn('refresh', 'Refresh (download again)', h.refresh),
-    btn('globe', 'Open in browser', h.openInBrowser),
+    btn('refresh', W.refreshDownloadAgain, h.refresh),
+    btn('globe', W.openInBrowser, h.openInBrowser),
   );
   return { toolbar, pageInput, pageCount, zoomLabel, search, matches, titleEl };
-}
+}import { W } from '../src/shared/strings';
+

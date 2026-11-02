@@ -1,3 +1,4 @@
+import { G } from '../shared/strings';
 import { randomBytes } from 'node:crypto';
 import * as cheerio from 'cheerio/slim';
 import MarkdownIt from 'markdown-it';
@@ -174,6 +175,6 @@ export function render(base: Base, st: Statement, view: StatementViewState | nul
     ...base,
     type: 'message',
     error: false,
-    text: st.reason === 'hidden' ? 'The statement is not available in VS Code for this problem. Use "Open in Browser".' : 'This problem has no statement.',
+    text: st.reason === 'hidden' ? G.theStatementIsNotAvailable : G.thisProblemHasNoStatement,
   };
 }

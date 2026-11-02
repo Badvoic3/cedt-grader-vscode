@@ -200,7 +200,7 @@ Statement viewer (`webview/statement.ts`, `webview/zoom.ts`): pinch (Ctrl+wheel)
 | Penalty cap / "solved" threshold (server literal 100) | `SERVER_SCORE_CAP` in `src/shared/constants.ts`; "out of" uses the problem's `full_score` |
 | Languages / extensions | from the server (`GET /api/v1/languages` `ext`); fallback table + aliases in `src/grader/languages.ts`; non-source (never auto-picked) in `src/mapping/newFileLanguage.ts`; binary extensions in `src/mapping/findByName.ts` |
 | Verdict codes, words, group text | `src/grader/verdicts.ts` (website `RESULT_CODE` order) |
-| User-facing text | `src/shared/strings.ts` (host messages, questions, picks; `HOW_LINKED`). Sidebar/statement webview labels are still inline in `webview/*.ts` (next step: move them too). |
+| User-facing text | `src/shared/strings.ts`: `S` host messages / questions / picks, `W` sidebar + statement webviews, `G` grader errors / connection banner / status bar / score lines, `HOW_LINKED`, `PICK_HOW`, `W_SOURCE` |
 | Path normalization for links | `src/mapping/paths.ts` |
 | "Files for this problem" rules and notice wording | `src/mapping/problemFiles.ts` |
 | Folders never searched | `EXCLUDED_DIRS` in `src/mapping/findByName.ts` |

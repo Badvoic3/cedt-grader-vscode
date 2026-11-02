@@ -1,3 +1,4 @@
+import { G } from '../shared/strings';
 import { TIMING } from '../shared/constants';
 import { AuthError, GraderError, LanguageNotAllowedError, networkErrorFrom, ProblemUnavailableError, ServerBusyError, SessionExpiredError, SubmitRejectedError } from './errors';
 import type { FetchLike, Logger } from './http';
@@ -115,10 +116,10 @@ export class ApiClient {
     this.redactor.add(password);
     const res = await this.raw('POST', '/api/v1/auth/login', { login, password }, false);
     const body = (await this.json(res)) as Partial<ApiLoginResponse> & { error?: string };
-    if (res.status === 401) throw new AuthError('Wrong username or password.', 'wrong-password');
-    if (res.status === 429) throw new AuthError('Too many failed login attempts. Wait a few minutes and try again.', 'throttled');
-    if (res.status === 403) throw new AuthError(body.error ?? 'Login refused by the grader.', 'unknown');
-    if (!res.ok || !body.token) throw new AuthError(body.error ?? `Login failed (HTTP ${res.status}).`, 'unknown');
+    if (res.status === 401) throw new AuthError(G.wrongUsernameOrPassword, 'wrong-password');
+    if (res.status === 429) throw new AuthError(G.tooManyFailedLoginAttempts, 'throttled');
+    if (res.status === 403) throw new AuthError(body.error ?? G.loginRefusedByTheGrader, 'unknown');
+    if (!res.ok || !body.token) throw new AuthError(body.error ?? G.loginFailedHttp(res.status), 'unknown');
     this.setToken(body.token);
     return body as ApiLoginResponse;
   }
@@ -131,7 +132,7 @@ export class ApiClient {
       await res.body?.cancel().catch(() => {});
       if (attempt >= GET_RETRIES) {
         throw new ServerBusyError(
-          res.status === 429 ? 'The grader is rate-limiting requests. Try again in a minute.' : `The grader returned an error (HTTP ${res.status}).`,
+          res.status === 429 ? G.rateLimitedTryLater : G.theGraderReturnedAnError(res.status),
           res.status,
         );
       }
@@ -157,10 +158,10 @@ export class ApiClient {
         const body = (await this.json(res)) as { error?: string } | null;
         return { status: res.status, error: body?.error ?? null };
       }
-      if (res.status === 401) throw new SessionExpiredError('Your grader login has expired.', true);
-      if (res.status !== 429 && res.status < 500) throw new GraderError(`The grader refused the request (HTTP ${res.status}).`);
+      if (res.status === 401) throw new SessionExpiredError(G.loginExpiredShort, true);
+      if (res.status !== 429 && res.status < 500) throw new GraderError(G.theGraderRefusedTheRequest(res.status));
       await res.body?.cancel().catch(() => {});
-      if (attempt >= GET_RETRIES) throw new ServerBusyError(`The grader returned an error (HTTP ${res.status}).`, res.status);
+      if (attempt >= GET_RETRIES) throw new ServerBusyError(G.theGraderReturnedAnError(res.status), res.status);
       await this.sleep(2000 * 2 ** attempt);
     }
   }
@@ -182,7 +183,7 @@ export class ApiClient {
       }
       if (res.status !== 429 && res.status < 500) return this.handle(res, path);
       await res.body?.cancel().catch(() => {});
-      if (attempt >= GET_RETRIES) throw new ServerBusyError(`The grader returned an error (HTTP ${res.status}).`, res.status);
+      if (attempt >= GET_RETRIES) throw new ServerBusyError(G.theGraderReturnedAnError(res.status), res.status);
       await this.sleep(2000 * 2 ** attempt);
     }
   }
@@ -192,28 +193,28 @@ export class ApiClient {
     const res = await this.raw('POST', `/api/v1/problems/${problemId}/submissions`, { language_id: languageId, source, filename }, true);
     if (res.status === 201 || res.ok) return (await this.json(res)) as ApiCreatedSubmission;
     const body = (await this.json(res)) as { error?: string; errors?: string[]; permitted_languages?: { id: number; name: string }[] };
-    if (res.status === 401) throw new SessionExpiredError('Your grader login has expired.', true);
+    if (res.status === 401) throw new SessionExpiredError(G.loginExpiredShort, true);
     if (res.status === 422 && body.permitted_languages) {
       throw new LanguageNotAllowedError(
-        `That language is not allowed for this problem. Allowed: ${body.permitted_languages.map((l) => l.name).join(', ')}.`,
+        G.thatLanguageIsNotAllowed(body.permitted_languages.map((l) => l.name).join(', ')),
       );
     }
     const msg = body.error ?? body.errors?.join('; ') ?? `HTTP ${res.status}`;
-    if (res.status === 404 || res.status === 403) throw new ProblemUnavailableError(`This problem is no longer available on the grader (${msg}).`, res.status);
-    throw new SubmitRejectedError(`Submission rejected: ${msg}`);
+    if (res.status === 404 || res.status === 403) throw new ProblemUnavailableError(G.problemUnavailableMsg(msg), res.status);
+    throw new SubmitRejectedError(G.submissionRejected(msg));
   }
 
   private async handle<T>(res: Response, path = ''): Promise<T> {
     const body = await this.json(res);
     if (res.ok) return body as T;
     const msg = (body as { error?: string } | null)?.error ?? `HTTP ${res.status}`;
-    if (res.status === 401) throw new SessionExpiredError('Your grader login has expired.', true);
+    if (res.status === 401) throw new SessionExpiredError(G.loginExpiredShort, true);
     // Problem endpoints: 404 = gone, 403 = no longer open to you.
     if ((res.status === 404 || res.status === 403) && /^\/api\/v1\/problems\/\d+/.test(path)) {
-      throw new ProblemUnavailableError('This problem is no longer available on the grader.', res.status);
+      throw new ProblemUnavailableError(G.problemUnavailable, res.status);
     }
-    if (res.status === 404) throw new GraderError(`Not found on the grader (${msg}).`);
-    throw new GraderError(`The grader refused the request: ${msg}`);
+    if (res.status === 404) throw new GraderError(G.notFoundOnTheGrader(msg));
+    throw new GraderError(G.refusedMsg(msg));
   }
 
   private async json(res: Response): Promise<unknown> {
@@ -222,7 +223,7 @@ export class ApiClient {
     try {
       return JSON.parse(text);
     } catch {
-      if (res.status >= 500) throw new ServerBusyError(`The grader returned an error (HTTP ${res.status}).`, res.status);
+      if (res.status >= 500) throw new ServerBusyError(G.theGraderReturnedAnError(res.status), res.status);
       return null;
     }
   }
@@ -231,7 +232,7 @@ export class ApiClient {
     const headers: Record<string, string> = { Accept: 'application/json' };
     if (body !== undefined) headers['Content-Type'] = 'application/json';
     if (auth) {
-      if (!this.token) throw new SessionExpiredError('Not logged in.', true);
+      if (!this.token) throw new SessionExpiredError(G.notLoggedIn, true);
       headers['Authorization'] = `Bearer ${this.token}`;
     }
     const timeout = AbortSignal.timeout(TIMEOUT_MS);
@@ -250,7 +251,7 @@ export class ApiClient {
     this.log(`${method} ${path} → ${res.status}`);
     if (res.status >= 500 && !passErrors) {
       await res.body?.cancel().catch(() => {});
-      throw new ServerBusyError(`The grader returned an error (HTTP ${res.status}).`, res.status);
+      throw new ServerBusyError(G.theGraderReturnedAnError(res.status), res.status);
     }
     return res;
   }
