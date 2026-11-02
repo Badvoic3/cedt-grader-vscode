@@ -202,9 +202,12 @@ describe('READMEs', () => {
       }
     }
   });
-  it('both READMEs and the pictures are packaged, links stay relative', () => {
+  it('both READMEs and the pictures are packaged; links are rewritten to the public GitHub repo (the Marketplace needs web addresses)', () => {
     const ignore = read('.vscodeignore');
     for (const line of ['!README.md', '!README.th.md', '!media/readme/**']) expect(ignore).toContain(line);
-    expect(JSON.parse(read('package.json')).scripts.package).toContain('--no-rewrite-relative-links');
+    const pkg = JSON.parse(read('package.json'));
+    for (const script of [pkg.scripts.package, pkg.scripts.publish]) expect(script).not.toContain('--no-rewrite-relative-links');
+    expect(pkg.repository.url).toMatch(/^https:\/\/github\.com\//);
+    expect(pkg.private).toBeUndefined();
   });
 });
