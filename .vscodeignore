@@ -3,10 +3,12 @@
 !media/icon.svg
 !media/icon.png
 !media/walkthrough/**
+!media/readme/**
 !media/dist/**
 # No source maps: the production build (vscode:prepublish) empties dist/ and media/dist/ first.
 !package.json
 !package.nls*.json
 !README.md
+!README.th.md
 !CHANGELOG.md
 !LICENSE

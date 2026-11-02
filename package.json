@@ -27,7 +27,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "probe": "tsx scripts/probe.ts",
-    "package": "vsce package --no-dependencies",
+    "package": "vsce package --no-dependencies --no-rewrite-relative-links",
     "vscode:prepublish": "npm run build:prod"
   },
   "dependencies": {

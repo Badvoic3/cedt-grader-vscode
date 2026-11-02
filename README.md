@@ -1,8 +1,10 @@
 # CEDT Grader Submit
 
+**English** · [ภาษาไทย](README.th.md)
+
 Submit the file you are editing to **CEDT Grader** ([cedt-grader.nattee.net](https://cedt-grader.nattee.net), a [cafe-grader-web](https://github.com/nattee/cafe-grader-web) server) and see your score, per-test verdicts, submission history and the problem statement inside VS Code, without opening a browser.
 
-It works on its own. If you also use Competitive Programming Helper, see [Works with CPH](#works-with-cph).
+It works on its own. If you also use Competitive Programming Helper, see [Works with CPH](#works-with-cph). The panel is in English or Thai ([Language](#language)).
 
 ## Install
 
@@ -43,6 +45,8 @@ Install the new `.vsix` the same way (**⋯ → Install from VSIX…**). It repl
 
 Click the **CEDT Grader** icon in the Activity Bar. The sidebar has five sections:
 
+<img src="media/readme/panel.png" width="300" alt="The CEDT Grader panel: Account, Current problem with a counted score of 90 / 100, Result with one tile per test, History and the Problems list">
+
 | Section | What it does |
 |---|---|
 | **Account** | Log in with your grader username and password. Keep **Remember password on this computer** on to stay logged in (stored in the macOS Keychain / OS keychain). **Log out** forgets both the login and the password. |
@@ -53,9 +57,27 @@ Click the **CEDT Grader** icon in the Activity Bar. The sidebar has five section
 
 Typical flow: open `sol.cpp` → pick the problem once (it is remembered) → **Submit** → confirm. That's two clicks for every later submission.
 
+**Current problem.** The file name, the problem it belongs to and how it was chosen (here: *Matched by file name*), the icons for the statement, copying the name, the grader website, Auto-detect and ✕, then your counted score, the language and **Submit to Grader**.
+
+<img src="media/readme/current.png" width="340" alt="Current problem section: 00_Intro_11.cpp matched by file name to problem 00_Intro_11, counted score 90 / 100 with best 100, latest 100, 3 attempts and a -10 AI assist penalty, language C++, Load test cases and Submit to Grader">
+
+**Reading the results.** One tile per test, in order, coloured as on the website: green P = correct, red - = wrong answer, yellow T = time limit, and so on. Tests in a dashed box are scored together: one failing tile fails the whole box. The **?** button opens this legend; hover a tile for its test.
+
+<img src="media/readme/result.png" width="340" alt="Result section with the Reading the results legend open: one tile per test, a dashed box for tests scored together, the score 71 / 100 and Counted score improved: 40 → 71">
+
+**History.** Click a submission to see each test's result, time and memory, open that version, or compare it with your current file. The star marks the submission that counts.
+
+<img src="media/readme/history.png" width="340" alt="History with submission 3 expanded: per-test results, score, time and memory, and the buttons Open this version and Compare with current file">
+
+**Problems.** Every problem with its counted score. Filter by status or topic, search, sort; a ✓ marks the problem of the file you have open.
+
+<img src="media/readme/problems.png" width="340" alt="Problems list with the filters All, Unsolved, In progress and Solved, a search box, sorting, topic chips and seven problems with their counted scores">
+
 **Linking files to problems.** A file is linked automatically when its name matches a problem name (`00_Intro_11.cpp` → `00_Intro_11`; case, spaces, `-`, `_` and `.` don't matter). A file named *close to* one problem gets it as a suggestion ("Suggested from the file name · **Use this**"): you see its score, history and statement right away, and submitting or loading test cases asks once first. If several problems fit about equally, or none fits well, the panel asks you to choose. Your own choice always wins and is saved in `.cedt-grader.json` and VS Code's workspace storage; a line under the problem says how it was chosen. The ✕ next to the problem works in every case: **Unlink this file** for your own choice, **Don't match this file** for an automatic match; either way auto-detection leaves that file alone until you choose again. Clicking a problem finds the same files that would show that problem when opened (one matcher both ways). **Rename file to match the problem** renames e.g. `sol.cpp` to `00_Intro_11.cpp` (editable first, never overwrites, Undo works; the link and CPH tests follow).
 
 If two files belong to the same problem (drafts, or the same file name in two folders), the panel tells you and lists them, with Open and Unlink (or **Dismiss** until the files change); before submitting it asks if the other file was changed more recently.
+
+<img src="media/readme/notice.png" width="340" alt="Current problem with the notice: Another file with the same name also matches this problem, with Show and Dismiss">
 
 Handy actions in the problem list and picker: **copy the exact problem name**, **new file for this problem** (creates `<name>.cpp` next to your file), **go to the file** for a problem (or find one by name). Questions that aren't about losing work appear right in the panel, not as pop-ups.
 
@@ -76,9 +98,11 @@ Click the book icon next to the problem to open its statement in a tab beside yo
 
 A banner at the top of the sidebar says what went wrong (no internet, server error, session expired, too many attempts, timeout) and offers **Retry**. Your last loaded data stays visible, marked "may be out of date". If a submission was already sent, its result loads once the connection is back.
 
+<img src="media/readme/banner.png" width="340" alt="Banner: No internet connection, with a Retry button; History below is marked May be out of date">
+
 ## Scores
 
-The panel shows the score the grader **counts**: your best submission, not your latest, out of 100 (the grader scales every normal problem to 100, whatever its number of tests). Problems that add up raw test scores ("raw sum") show the raw number with no maximum. Hint and AI-assist penalties are taken off (e.g. "-10 AI assist"), as on the website's problem list. If your latest submission scored lower, the panel says so ("Latest: 40 — your best 70 still counts"). Exam (contest-window) rules are not applied.
+The panel shows the score the grader **counts**: your best submission, not your latest, out of 100 (the grader scales every normal problem to 100, whatever its number of tests). Problems that add up raw test scores ("raw sum") show the raw number with no maximum. Hint and AI-assist penalties are taken off (e.g. "-10 AI assist"), as on the website's problem list. If your latest submission scored lower, the panel says so ("Latest: 40. Your best, 70, still counts."). Exam (contest-window) rules are not applied.
 
 The extension only mirrors what the grader shows. **Your instructor's final grading may differ.**
 
@@ -90,6 +114,7 @@ With **Remember password on this computer** on, your password is kept in the OS 
 
 | Setting | Default | |
 |---|---|---|
+| `cedtGrader.displayLanguage` | `en` | Language of the panel and messages: English, ไทย (Thai), or Follow VS Code. See [Language](#language). |
 | `cedtGrader.baseUrl` | `https://cedt-grader.nattee.net` | Another cafe-grader server. User settings only. |
 | `cedtGrader.username` | | Filled in when you log in from the panel. |
 | `cedtGrader.pollIntervalSeconds` | `5` | How often to check while grading (minimum 3). Polling only runs after a submission and stops after 3 minutes. |
@@ -98,6 +123,14 @@ With **Remember password on this computer** on, your password is kept in the OS 
 | `cedtGrader.defaultLanguage` | `C++` | Language for **New file for this problem** when your current file's language isn't allowed. |
 | `cedtGrader.cacheMaxMB` | `100` | Size limit for downloaded statements and test cases (see [Cache and storage](#cache-and-storage)). |
 | `cedtGrader.debugRequests` | `false` | Log each grader request and cache hit/miss to *Output → CEDT Grader: Requests* (no passwords or tokens). |
+
+## Language
+
+The panel, the statement viewer, messages, dialogs and the status bar are in **English** or **Thai**. Change it with the setting **CEDT Grader: Display Language** (`cedtGrader.displayLanguage`): *English* (default), *ไทย (Thai)*, or *Follow VS Code*. It changes at once, without a restart.
+
+- Command names in the Command Palette, the settings descriptions and the Get Started walkthrough follow **VS Code's own display language**. They are in Thai only when VS Code itself is in Thai (Thai language pack).
+- Grader content (problem names, statements, compiler messages) is never translated. Verdict words (Wrong Answer, Time Limit Exceed, …) stay as the website shows them.
+- Dates in Thai use Thai month names with Gregorian years (2 พ.ย. 2026), like the grader website.
 
 ## Cache and storage
 
@@ -125,7 +158,7 @@ It asks once more before deleting. Nothing else in your folders is ever deleted.
 **I can't log in.**
 - "Wrong username or password": check them on the [grader website](https://cedt-grader.nattee.net). A wrong saved password is forgotten automatically, so type it again.
 - "Too many failed login attempts": the grader blocks logins for a while after several failures (website and VS Code count together). Wait a few minutes, then try once. The extension never retries a failed login by itself.
-- "Login refused by the grader" (or a message from the grader about your account or network): your account may be disabled or limited to certain networks. Ask your instructor.
+- "The grader refused the login" (or a message from the grader about your account or network): your account may be disabled or limited to certain networks. Ask your instructor.
 - Using another cafe-grader server? Set `cedtGrader.baseUrl` in your **user** settings.
 
 **The wrong problem is detected for my file.**

@@ -184,3 +184,27 @@ describe('no hard-coded messages outside strings.ts', () => {
     expect(offenders).toEqual([]);
   });
 });
+
+describe('READMEs', () => {
+  const read = (f: string) => readFileSync(join(root, f), 'utf8');
+  it('each README links to the other language at the top', () => {
+    expect(read('README.md').split('\n').slice(0, 4).join('\n')).toContain('[ภาษาไทย](README.th.md)');
+    expect(read('README.th.md').split('\n').slice(0, 4).join('\n')).toContain('[English](README.md)');
+  });
+  it('every picture exists, has alt text, and the Thai README uses the Thai pictures', () => {
+    for (const f of ['README.md', 'README.th.md']) {
+      const imgs = [...read(f).matchAll(/<img src="([^"]+)"[^>]*alt="([^"]+)"/g)];
+      expect(imgs.length, f).toBeGreaterThan(5);
+      for (const [, src, alt] of imgs) {
+        expect(existsSync(join(root, src)), src).toBe(true);
+        expect(alt.length, src).toBeGreaterThan(20);
+        expect(src.endsWith('.th.png'), src).toBe(f === 'README.th.md');
+      }
+    }
+  });
+  it('both READMEs and the pictures are packaged, links stay relative', () => {
+    const ignore = read('.vscodeignore');
+    for (const line of ['!README.md', '!README.th.md', '!media/readme/**']) expect(ignore).toContain(line);
+    expect(JSON.parse(read('package.json')).scripts.package).toContain('--no-rewrite-relative-links');
+  });
+});
