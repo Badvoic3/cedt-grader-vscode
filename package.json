@@ -1,7 +1,7 @@
 {
   "name": "cedt-grader-submit",
   "displayName": "CEDT Grader Submit",
-  "description": "Submit your code to CEDT Grader (cafe-grader) from VS Code: see scores, verdicts, history and problem statements in a sidebar.",
+  "description": "%extension.description%",
   "version": "0.6.0",
   "publisher": "cedt-student",
   "license": "MIT",
@@ -73,7 +73,7 @@
       "activitybar": [
         {
           "id": "cedtGrader",
-          "title": "CEDT Grader",
+          "title": "%viewContainer.title%",
           "icon": "media/icon.svg"
         }
       ]
@@ -83,107 +83,107 @@
         {
           "type": "webview",
           "id": "cedtGrader.panel",
-          "name": "Grader",
+          "name": "%view.name%",
           "icon": "media/icon.svg",
-          "contextualTitle": "CEDT Grader"
+          "contextualTitle": "%view.contextualTitle%"
         }
       ]
     },
     "commands": [
       {
         "command": "cedtGrader.login",
-        "title": "Log In",
-        "category": "CEDT Grader",
+        "title": "%command.login.title%",
+        "category": "%command.category%",
         "icon": "$(sign-in)"
       },
       {
         "command": "cedtGrader.logout",
-        "title": "Log Out",
-        "category": "CEDT Grader",
+        "title": "%command.logout.title%",
+        "category": "%command.category%",
         "icon": "$(sign-out)"
       },
       {
         "command": "cedtGrader.submit",
-        "title": "Submit Current File",
-        "category": "CEDT Grader",
+        "title": "%command.submit.title%",
+        "category": "%command.category%",
         "icon": "$(cloud-upload)"
       },
       {
         "command": "cedtGrader.chooseProblem",
-        "title": "Choose Problem for This File",
-        "category": "CEDT Grader",
+        "title": "%command.chooseProblem.title%",
+        "category": "%command.category%",
         "icon": "$(list-selection)"
       },
       {
         "command": "cedtGrader.showLastResult",
-        "title": "Show Last Result",
-        "category": "CEDT Grader",
+        "title": "%command.showLastResult.title%",
+        "category": "%command.category%",
         "icon": "$(history)"
       },
       {
         "command": "cedtGrader.openStatement",
-        "title": "Open Problem Statement",
-        "category": "CEDT Grader",
+        "title": "%command.openStatement.title%",
+        "category": "%command.category%",
         "icon": "$(book)"
       },
       {
         "command": "cedtGrader.refreshProblems",
-        "title": "Reload Problem List",
-        "category": "CEDT Grader",
+        "title": "%command.refreshProblems.title%",
+        "category": "%command.category%",
         "icon": "$(refresh)"
       },
       {
         "command": "cedtGrader.focus",
-        "title": "Show Panel",
-        "category": "CEDT Grader",
+        "title": "%command.focus.title%",
+        "category": "%command.category%",
         "icon": "$(layout-sidebar-left)"
       },
       {
         "command": "cedtGrader.openSettings",
-        "title": "Open Settings",
-        "category": "CEDT Grader",
+        "title": "%command.openSettings.title%",
+        "category": "%command.category%",
         "icon": "$(gear)"
       },
       {
         "command": "cedtGrader.showRequestLog",
-        "title": "Show Request Log",
-        "category": "CEDT Grader",
+        "title": "%command.showRequestLog.title%",
+        "category": "%command.category%",
         "icon": "$(output)"
       },
       {
         "command": "cedtGrader.refreshHistory",
-        "title": "Reload Submission History",
-        "category": "CEDT Grader",
+        "title": "%command.refreshHistory.title%",
+        "category": "%command.category%",
         "icon": "$(refresh)"
       },
       {
         "command": "cedtGrader.clearMapping",
-        "title": "Clear Problem for This File",
-        "category": "CEDT Grader",
+        "title": "%command.clearMapping.title%",
+        "category": "%command.category%",
         "icon": "$(close)"
       },
       {
         "command": "cedtGrader.renameFileToProblem",
-        "title": "Rename File to Match the Problem",
-        "category": "CEDT Grader",
+        "title": "%command.renameFileToProblem.title%",
+        "category": "%command.category%",
         "icon": "$(edit)"
       },
       {
         "command": "cedtGrader.loadTestcases",
-        "title": "Load Test Cases",
-        "category": "CEDT Grader",
+        "title": "%command.loadTestcases.title%",
+        "category": "%command.category%",
         "icon": "$(beaker)"
       },
       {
         "command": "cedtGrader.clearCache",
-        "title": "Clear Cached Data…",
-        "category": "CEDT Grader",
+        "title": "%command.clearCache.title%",
+        "category": "%command.category%",
         "icon": "$(trash)"
       },
       {
         "command": "cedtGrader.openWalkthrough",
-        "title": "Get Started",
-        "category": "CEDT Grader",
+        "title": "%command.openWalkthrough.title%",
+        "category": "%command.category%",
         "icon": "$(rocket)"
       }
     ],
@@ -229,66 +229,86 @@
       ]
     },
     "configuration": {
-      "title": "CEDT Grader",
+      "title": "%config.title%",
       "properties": {
+        "cedtGrader.displayLanguage": {
+          "type": "string",
+          "default": "en",
+          "enum": [
+            "en",
+            "th",
+            "auto"
+          ],
+          "enumItemLabels": [
+            "%config.displayLanguage.label.en%",
+            "ไทย (Thai)",
+            "%config.displayLanguage.label.auto%"
+          ],
+          "markdownDescription": "%config.displayLanguage.description%",
+          "enumDescriptions": [
+            "%config.displayLanguage.enum.en%",
+            "%config.displayLanguage.enum.th%",
+            "%config.displayLanguage.enum.auto%"
+          ]
+        },
         "cedtGrader.baseUrl": {
           "type": "string",
           "default": "https://cedt-grader.nattee.net",
           "scope": "application",
-          "markdownDescription": "Base URL of the cafe-grader-web server. Read from user settings only (a workspace cannot change where your password is sent)."
+          "markdownDescription": "%config.baseUrl.description%"
         },
         "cedtGrader.username": {
           "type": "string",
           "default": "",
           "scope": "application",
-          "description": "Your grader login name. The password is stored in the OS keychain (VS Code SecretStorage), never in settings."
+          "description": "%config.username.description%"
         },
         "cedtGrader.pollIntervalSeconds": {
           "type": "number",
           "default": 5,
           "minimum": 3,
-          "description": "Seconds between status checks while a submission is graded (minimum 3). Polling only runs right after a submission and stops after 3 minutes."
+          "description": "%config.pollIntervalSeconds.description%"
         },
         "cedtGrader.confirmBeforeSubmit": {
           "type": "boolean",
           "default": true,
-          "description": "Ask for confirmation before each submission."
+          "description": "%config.confirmBeforeSubmit.description%"
         },
         "cedtGrader.debugRequests": {
           "type": "boolean",
           "default": false,
-          "markdownDescription": "Log every grader request (method, path, status) and cache hit/miss to the **CEDT Grader: Requests** output channel, to check request counts. Never logs passwords or tokens."
+          "markdownDescription": "%config.debugRequests.description%"
         },
         "cedtGrader.statementBeside": {
           "type": "boolean",
           "default": true,
-          "description": "Open problem statements in an editor tab beside your code."
+          "description": "%config.statementBeside.description%"
         },
         "cedtGrader.defaultLanguage": {
           "type": "string",
           "default": "C++",
-          "description": "Language for \"New file for this problem\" when the active file's language isn't allowed and no language was used before (e.g. C++, Python, Java). Archive and other non-source languages are never chosen automatically."
+          "description": "%config.defaultLanguage.description%"
         },
         "cedtGrader.cacheMaxMB": {
           "type": "number",
           "default": 100,
           "minimum": 10,
-          "markdownDescription": "Size limit (MB) for downloaded problem statements and test cases. When it is exceeded, the least recently used files are deleted first. Files unused for 30 days are removed automatically. Use **CEDT Grader: Clear Cached Data…** to clear everything."
+          "markdownDescription": "%config.cacheMaxMB.description%"
         }
       }
     },
     "walkthroughs": [
       {
         "id": "cedtGrader.start",
-        "title": "Get started with CEDT Grader",
-        "description": "Log in, link a solution file to its problem and submit it, without leaving VS Code.",
+        "title": "%walkthrough.title%",
+        "description": "%walkthrough.description%",
         "steps": [
           {
             "id": "openPanel",
-            "title": "Open the CEDT Grader panel",
-            "description": "Everything happens in the **CEDT Grader** panel: the page-with-a-check-mark icon in the left bar.\n[Open the Panel](command:cedtGrader.focus)",
+            "title": "%walkthrough.openPanel.title%",
+            "description": "%walkthrough.openPanel.description%",
             "media": {
-              "markdown": "media/walkthrough/openPanel.md"
+              "markdown": "%walkthrough.openPanel.media%"
             },
             "completionEvents": [
               "onView:cedtGrader.panel"
@@ -296,10 +316,10 @@
           },
           {
             "id": "login",
-            "title": "Log in",
-            "description": "Use your grader username and password. Leave **Remember password on this computer** on if this is your own computer.\n[Log In](command:cedtGrader.login)",
+            "title": "%walkthrough.login.title%",
+            "description": "%walkthrough.login.description%",
             "media": {
-              "markdown": "media/walkthrough/login.md"
+              "markdown": "%walkthrough.login.media%"
             },
             "completionEvents": [
               "onContext:cedtGrader.loggedIn"
@@ -307,10 +327,10 @@
           },
           {
             "id": "openFile",
-            "title": "Open a solution file",
-            "description": "Open the folder with your solutions, then a solution file such as `00_Intro_11.cpp`.\n[Open Folder](command:workbench.action.files.openFolder)",
+            "title": "%walkthrough.openFile.title%",
+            "description": "%walkthrough.openFile.description%",
             "media": {
-              "markdown": "media/walkthrough/openFile.md"
+              "markdown": "%walkthrough.openFile.media%"
             },
             "completionEvents": [
               "onContext:cedtGrader.hasSourceFile"
@@ -318,10 +338,10 @@
           },
           {
             "id": "checkProblem",
-            "title": "Check the problem",
-            "description": "A file named like a problem is linked to it automatically. Otherwise choose the problem under **Current problem**; your choice is remembered.\n[Choose Problem](command:cedtGrader.chooseProblem)",
+            "title": "%walkthrough.checkProblem.title%",
+            "description": "%walkthrough.checkProblem.description%",
             "media": {
-              "markdown": "media/walkthrough/checkProblem.md"
+              "markdown": "%walkthrough.checkProblem.media%"
             },
             "completionEvents": [
               "onContext:cedtGrader.hasProblem"
@@ -329,10 +349,10 @@
           },
           {
             "id": "submit",
-            "title": "Submit",
-            "description": "Press **Submit to Grader** in the panel. The verdict of every test and your counted score appear when grading is done.\n[Submit Current File](command:cedtGrader.submit)",
+            "title": "%walkthrough.submit.title%",
+            "description": "%walkthrough.submit.description%",
             "media": {
-              "markdown": "media/walkthrough/submit.md"
+              "markdown": "%walkthrough.submit.media%"
             },
             "completionEvents": [
               "onContext:cedtGrader.submitted"
@@ -340,10 +360,10 @@
           },
           {
             "id": "cph",
-            "title": "Optional: install CPH",
-            "description": "Competitive Programming Helper runs test cases on your computer. With it, **Load test cases** puts the grader's test cases into CPH. Everything else works without it.\n[Show CPH](command:extension.open?%5B%22DivyanshuAgrawal.competitive-programming-helper%22%5D)",
+            "title": "%walkthrough.cph.title%",
+            "description": "%walkthrough.cph.description%",
             "media": {
-              "markdown": "media/walkthrough/cph.md"
+              "markdown": "%walkthrough.cph.media%"
             },
             "completionEvents": [
               "extensionInstalled:DivyanshuAgrawal.competitive-programming-helper"

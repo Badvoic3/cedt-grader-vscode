@@ -5,13 +5,15 @@
  * textContent / attributes only, never innerHTML. The webview has no network
  * access (CSP default-src 'none'); all actions are postMessage'd to the host.
  */
+import './lang'; // first: sets the display language before anything below builds elements
 import { G, HOW_LINKED, W, W_SOURCE } from '../src/shared/strings';
+import { dateLocale } from '../src/shared/i18n';
 import { outOfFor, scoreText } from '../src/grader/score';
-import { groupLabel, VERDICT_LEGEND } from '../src/grader/verdicts';
+import { groupLabel, verdictLegend } from '../src/grader/verdicts';
 import { menuLabelMax, middleEllipsis } from './text';
 import { VirtualList } from './virtualList';
 import { PANEL, SERVER_SCORE_CAP } from '../src/shared/constants';
-import { filterProblems, matches, SORTS, sortProblems } from './filters';
+import { filterProblems, matches, sorts, sortProblems } from './filters';
 import { installTooltips } from './tooltip';
 import type { FromWebview, HistoryEntry, ProblemFilter, ProblemView, ScoreView, SubmissionDetailView, ToWebview, VerdictView, ViewState } from '../src/shared/messages';
 
@@ -214,21 +216,21 @@ function relative(iso: string | null): string {
   const t = Date.parse(iso);
   if (Number.isNaN(t)) return iso;
   const s = Math.max(0, Math.round((Date.now() - t) / 1000));
-  if (s < 60) return 'just now';
+  if (s < 60) return W.ago.justNow;
   const m = Math.round(s / 60);
-  if (m < 60) return `${m} min ago`;
+  if (m < 60) return W.ago.minAgo(m);
   const h = Math.round(m / 60);
-  if (h < 24) return `${h} h ago`;
+  if (h < 24) return W.ago.hoursAgo(h);
   const d = Math.round(h / 24);
-  if (d < 45) return `${d} day${d === 1 ? '' : 's'} ago`;
-  return new Date(t).toLocaleDateString([], { day: 'numeric', month: 'short', year: 'numeric' });
+  if (d < 45) return W.ago.daysAgo(d);
+  return new Date(t).toLocaleDateString(dateLocale() ?? [], { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
 /** Exact local time for tooltips. */
 function exact(iso: string | null): string {
   if (!iso) return '';
   const d = new Date(iso);
-  return Number.isNaN(d.getTime()) ? iso : d.toLocaleString();
+  return Number.isNaN(d.getTime()) ? iso : d.toLocaleString(dateLocale() ?? []);
 }
 
 const seconds = (ms: number | null) => (ms === null ? '–' : `${(ms / 1000).toFixed(ms < 10_000 ? 3 : 2)} s`);
@@ -641,7 +643,7 @@ function legendButton(where: string): HTMLElement {
 function legend(): HTMLElement {
   return el('div', { class: 'legend', role: 'note' },
     el('strong', {}, W.readingTheResults),
-    ...VERDICT_LEGEND.map((c) => el('div', { class: 'row' }, el('span', { class: `tile v-${c.kind}`, 'aria-hidden': 'true' }, c.code), el('span', {}, c.word))),
+    ...verdictLegend().map((c) => el('div', { class: 'row' }, el('span', { class: `tile v-${c.kind}`, 'aria-hidden': 'true' }, c.code), el('span', {}, c.word))),
     el('div', { class: 'row' }, el('span', { class: 'tile-group', 'aria-hidden': 'true' }, el('span', { class: 'tile v-correct' }, 'P'), el('span', { class: 'tile v-correct' }, 'P'), el('span', { class: 'tile v-wrong' }, '-')), el('span', {}, W.aBoxTestsScoredTogether)),
     el('p', { class: 'small' }, W.oneTilePerTestCase),
     el('p', { class: 'small muted' }, W.hoverATileOrA),
@@ -1062,7 +1064,7 @@ function sortSelect(f: ProblemFilter): HTMLElement {
   const sel = el('select', { class: 'sort', 'aria-label': W.sortProblems, title: W.sortProblems, onchange: (e: Event) => {
     send({ type: 'setFilter', filter: { ...f, sort: (e.target as HTMLSelectElement).value as ProblemFilter['sort'] } });
   } });
-  for (const x of SORTS) sel.append(el('option', { value: x.key, selected: (f.sort ?? 'default') === x.key }, x.label));
+  for (const x of sorts()) sel.append(el('option', { value: x.key, selected: (f.sort ?? 'default') === x.key }, x.label));
   return sel;
 }
 
