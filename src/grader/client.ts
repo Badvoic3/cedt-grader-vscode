@@ -10,7 +10,6 @@ import type {
   Language,
   ListScoreInfo,
   Problem,
-  ProblemDetail,
   StoredToken,
   SubmissionBrief,
   SubmissionDetail,
@@ -332,12 +331,6 @@ export class GraderClient {
       if (err instanceof GraderError && !(err instanceof NetworkError) && !(err instanceof SessionExpiredError) && !(err instanceof AuthError)) return null;
       throw err;
     }
-  }
-
-  async getProblem(id: number): Promise<ProblemDetail> {
-    assertId(id);
-    const p = await this.authed(() => this.api.get<ApiProblem>(`/api/v1/problems/${id}`));
-    return { ...toProblem(p, null), fullScore: p.full_score ?? null, submissionIds: p.submission_ids ?? [] };
   }
 
   async listSubmissions(problemId: number): Promise<SubmissionBrief[]> {

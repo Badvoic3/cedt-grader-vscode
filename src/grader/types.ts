@@ -86,11 +86,6 @@ export function problemStatus(p: Pick<Problem, 'submissionCount' | 'bestScore' |
   return (p.bestScore ?? 0) >= SERVER_SCORE_CAP ? 'solved' : 'inprogress';
 }
 
-export interface ProblemDetail extends Problem {
-  fullScore: number | null;
-  submissionIds: number[];
-}
-
 export interface Verdict {
   /** 1-based test number. */
   index: number;

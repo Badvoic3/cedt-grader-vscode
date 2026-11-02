@@ -1,6 +1,6 @@
 # Build "CEDT Grader Submit": a VS Code extension for cedt-grader.nattee.net
 
-**Status (v0.5.0):** Phases 1–4 are done (see each phase for what changed from the original plan). Phase 5 and Phase 6 are next. `CLAUDE.md` describes the current code; this file is the spec.
+**Status (v0.5.0):** Phases 1–4 are done (see each phase for what changed from the original plan). Phase 5 is next — see **Next steps** at the end. `CLAUDE.md` describes the current code (architecture, rules, where to change things, open questions); this file is the spec.
 
 A VS Code extension (TypeScript) that lets students submit the active source file to the CEDT Grader and see the verdict inside VS Code. It is a standalone grader extension. **Competitive Programming Helper (CPH)** (`DivyanshuAgrawal.competitive-programming-helper`) is optional: everything works without it, and when it is installed the extension stays compatible with it (see "CPH is optional" below).
 
@@ -34,7 +34,7 @@ The live server has cafe-grader's `/api/v1` (JWT). Confirmed from `config/routes
 | Login | `POST /api/v1/auth/login` `{login, password}` | → `{token, expires_at, user:{id, login, full_name}}`, 12 h TTL. 401 wrong password, 429 throttled (pooled with the web login), 403 disabled/IP. Never retried automatically. |
 | Auth | `Authorization: Bearer <token>` | Token only in SecretStorage (if "remember" is on) or memory; never logged. On 401, log in again once with the stored password. |
 | Problems | `GET /api/v1/problems` | `id, name, full_name, best_score, last_score, last_result, submission_count, last_submission_id, last_submission_time, permitted_languages (null = all), has_testcase, has_attachment`. |
-| Problem | `GET /api/v1/problems/{id}` | Also `full_score`, `submission_ids` (newest first). |
+| Problem | `GET /api/v1/problems/{id}` | Also `full_score`, `submission_ids`. **Not used:** `full_score` is not the maximum (section 1c). |
 | Languages | `GET /api/v1/languages` | `id, name (internal), pretty_name, ext`. |
 | Submit | `POST /api/v1/problems/{id}/submissions` `{language_id, source, filename}` | → 201 `{id, number, status}`. 422 with `permitted_languages` = language not allowed; 403 = not allowed to submit. |
 | Poll | `GET /api/v1/submissions/{id}` | `status` (`submitted`, `evaluating`, `compilation_success` → pending; `done`, `compilation_error`, `grader_error` → graded), `points`, `grader_comment`, `compiler_message`, `evaluations`. |
@@ -53,7 +53,8 @@ From `MainController#prepare_list_information`, `app/views/main/_problem.html.ha
 - Problems whose live dataset is in "raw sum" mode show the raw best score without this cap.
 - In contest mode only submissions inside the contest window count (the API's `best_score` does not apply this filter). **Known limitation:** the extension doesn't apply it either; exams only get the warning in section 2b.
 - The API has no hint/AI cost data, so it is read from `/main/list` (green bar = adjusted score, red bar = penalty, "Full score reduced by N", "Hint: n, AI Assist: n") and labelled "from problem list".
-- Display: "Counted score" (big), best, latest, attempts, and the penalty ("-10 AI assist"). If the latest is lower, say so ("Latest: 40 — your best 70 still counts"). After each submission, say whether it improved the counted score. The problem list shows the counted score per problem. The README notes that the instructor's final grading may differ.
+- **Every score is out of 100**: the server normalizes the `sum` and `group_min` score types to 0–100 whatever the number of tests, weights or groups (`app/engine/scorer.rb`); the API's `full_score` is not the maximum. Raw-sum problems (`raw_sum` / `custom_testlib_raw`, detected from `/main/list`) show the raw score with no "/ max" and a tooltip. One rule for Current problem, problem rows, results and history; the 100 is one named constant pointing to scorer.rb.
+- Display: "Counted score" (big, "70 / 100"), best, latest, attempts, and the penalty ("-10 AI assist"). If the latest is lower, say so ("Latest: 40 — your best 70 still counts"). After each submission, say whether it improved the counted score. The problem list shows the counted score per problem. The README notes that the instructor's final grading may differ.
 
 ## 1d. Submission history and request usage
 
@@ -150,7 +151,7 @@ Contests on this grader are only used for exams, and this is an unofficial homew
 
 ### Phase 3: Problem linking and CPH integration — DONE
 
-Changed from the original plan (later requests win): test cases come from the API instead of the HTML Testcases page (item 6); CPH became optional (section 1f); the "Change" button and the purple Confirm button were removed (the dropdown and the muted "Use this" line do that); "Keep only this file" became "Unlink the other files"; "most recently edited first" became a stable path order; modal questions became inline panel questions; suggestions now have a confidence threshold and behave like links for read-only features.
+Changed from the original plan (later requests win): problem → file matching uses the same matcher as file → problem (item 18) instead of a saved-links-only reverse lookup and an exact-name search; test cases come from the API instead of the HTML Testcases page (item 6); CPH became optional (section 1f); the "Change" button and the purple Confirm button were removed (the dropdown and the muted "Use this" line do that); "Keep only this file" became "Unlink the other files"; "most recently edited first" became a stable path order; modal questions became inline panel questions; suggestions now have a confidence threshold and behave like links for read-only features.
 
 
 1. **Problem cache:** the problem list (`/api/v1/problems` + `/main/list` penalties) is fetched once per session and on Refresh; cached in memory and in workspace state with a timestamp (shown immediately after a restart, still refetched once per session). Never fetched on keystrokes or editor switches. `has_testcase` comes from it.
@@ -177,9 +178,9 @@ Changed from the original plan (later requests win): test cases come from the AP
    - Extension order: the active file's language if permitted; else the last language used for new files if permitted; else `cedtGrader.defaultLanguage` (default C++) if permitted; else a quick pick of the permitted languages.
    - Archive / binary / non-source languages (Archive, Digital, Viva Exam, Text, or anything with a binary extension) are never picked automatically; they are only offered in the quick pick. (cafe-grader marks Archive `binary: true`; the API doesn't expose the flag, so names/extensions are listed.)
    - Tests for each step of that order.
-9. **Jump to file:** "go to file" for problems with a mapped file (reverse lookup of saved mappings only, no workspace scan; one `fs.stat` per file when used; missing → offer to remove the stale mapping; several → quick pick).
-   - Without a mapping: "Find file by name" runs one `workspace.findFiles`, only when clicked.
-   - It includes only source files whose extension belongs to a language permitted for that problem (from the languages list, plus that language's other extensions such as .cc/.cxx), with a case-insensitive match on the clean problem name.
+9. **Jump to file:** "go to file" for problems with a file (files for this problem, item 17; one `fs.stat` per file when used; missing saved link → offer to remove it; several → quick pick).
+   - "Find file by name" uses the same match index as everything else (item 18): files the one matcher assigns to the problem.
+   - Only source files are looked at (extensions of known languages, never binaries).
    - It excludes the `files.exclude` and `search.exclude` settings, simple patterns from the workspace `.gitignore`, `node_modules`, `.git`, `bin/`, `build/`, `out/`, `dist/`, `target/`, `*.dSYM/`, `.cph/`, and binary extensions (.bin, .o, .out, .exe, .zip, …).
    - Exactly one result: open it and offer to link it. Several: a quick pick of relative paths, most likely first (same folder as the active file, then most recently modified).
    - Tests with a fixture tree containing .cpp, .bin and a .dSYM folder.
@@ -199,8 +200,12 @@ Changed from the original plan (later requests win): test cases come from the AP
 14. **Problem row click** opens the problem's file(s) — saved links, remembered auto-matches, file-name matches and suggestions (opening never links; a suggested file shows "Suggested · Use this" in Current problem): one → open; several → quick pick (stable path order, labeled linked / matched by file name / suggested); missing → offer to remove the stale link; none → "Link to <current file>" (only with a file open) / "Create a new file" / "Find a file by name" / "Open statement". Never links by itself; linking stays explicit (dropdown, right-click "Link to <file>").
 15. **Unlink that sticks:** "Unlink this file" removes the link and stores an explicit "not linked" state (follows renames), so auto-detection doesn't re-link it. The panel shows "Not linked to a problem" with Choose problem / Auto-detect; both clear the state.
 16. **One path normalization** for every link path (mappings, `.cedt-grader.json`, renames, reverse lookup, reconnect): NFC, "./" and ".." resolved, "/" separators, workspace-relative, case-insensitive comparison on macOS/Windows. Duplicate cleanup really rewrites `.cedt-grader.json` and reports only real changes, once.
-17. **Files for this problem** (one function for the duplicate notice, row click / go to file and the before-submit check): saved links + auto-matches remembered when an open file matched by name or CPH data (never over a manual link or "not linked"; dropped on delete or a rename to a non-matching name) + one cached `findFiles` per problem for the clean name (allowed extensions, "Find file by name" exclusions; only while the panel shows the problem; refreshed on file create/delete/rename, debounced; logged as a file search). Wording: "Another file with the same name also matches this problem." / "N files are linked to this problem"; each file with how it's linked, Open, Unlink (chosen) or "Don't match this file" (name match), and "Unlink the other files". Stable order: workspace-relative path, natural, case-insensitive; the active file is marked in place.
+17. **Files for this problem** (one function for the duplicate notice, row click / go to file, Find file by name and the before-submit check): saved links + auto-matches remembered when an open file matched by name, CPH data or a confident suggestion (never over a manual link or "not linked"; dropped on delete or a rename the matcher no longer agrees with) + the match index (item 18; one cached `findFiles` of source files, only while the panel needs it; refreshed on file create/delete/rename, debounced; logged as a file search). Wording: "Another file with the same name also matches this problem." / "N files are linked to this problem"; each file with how it's linked, Open, Unlink (chosen) or "Don't match this file" (name match), and "Unlink the other files". Stable order: workspace-relative path, natural, case-insensitive; the active file is marked in place.
 - Tests: normalization, the full matching order, ambiguous matches, stale mappings, `.prob` parsing (sanitized fixture), import never deleting existing cases, truncated cases skipped, backup created, 403 handled, clean-name copy, new file without overwrite, reverse lookup, single file / folder rename, reconnect prompt (one / several candidates), deleted → stale → expired after 30 days, CPH `.prob` moved with backup.
+18. **One matcher for both directions:** clicking a problem finds exactly the files that show that problem when opened (same normalization, confidence score, threshold, tie rule, folder/tag bonus, exclusions): a cached index runs the file → problem matcher over the workspace's source files. A single name-matched / suggested file opened from a row is a temporary link ("Suggested · Use this") until another file is active; saving it is up to the user. Several candidates or a tie: quick pick. Test: both directions agree for every fixture.
+19. **✕ in every state:** "Unlink this file" for a chosen link; "Don't match this file" for name / CPH matches, suggestions and temporary links (sticky "not linked"). The tooltip says which.
+20. **Dismiss** for the "files for this problem" notice: hidden for that problem until the set of matching files (or how they're linked) changes; stored per workspace; "Clear Cached Data" (Phase 5) resets it.
+21. **Rename file to match the problem:** shown when the file name doesn't match; proposes `<clean problem name>.<ext>` (file-name pattern setting in Phase 6), editable; `WorkspaceEdit.renameFile` so editors, links, rename handling and the CPH prompt follow and Undo works; never overwrites (suggests `<name>_2.<ext>`). Tests: link follows, conflicts, Thai/space names.
 - Also tested: path normalization (./, NFD/NFC, case), files for a problem (chosen + name-matched, same name in two folders, suggestions, "not linked", renames/deletes, one file search per problem until a file event, stable order), suggestion thresholds / ties / folder-tag bonus, the ask-once gate for writes.
 
 ### Phase 4: Sidebar GUI (primary interface) — DONE
@@ -259,7 +264,7 @@ Changed from the original plan (later requests win): History shows every submiss
 - Problem list: virtualized (no row limit; "292 problems" / "127 of 292 problems"), rows keyed by problem id and updated in place (an editor switch only touches the rows whose ✓ changed), scroll position / search / filters / sort / collapsed sections kept across re-renders, refresh and hide/show; no auto-scroll after a row click, minimal "nearest" reveal when the user opens a file. Tests: click a row near the bottom → scroll unchanged and ✓ shown.
 - Calmer dialogs: inline panel questions with plain buttons; modals only for irreversible / data-loss actions (overwrite, clear cached data, exam submit).
 - History tile tooltips (strip tiles, group boxes, per-test tiles) use the custom tooltip.
-- Scalability: languages and extensions from `GET /api/v1/languages` (table only as fallback); "out of" from `full_score`, with the server's 100 cap as one named constant; timings, limits and URLs in `src/shared/constants.ts`; user-facing text in `src/shared/strings.ts`; no course-specific names in code; "Where to change things" in `CLAUDE.md`.
+- Scalability: languages and extensions from `GET /api/v1/languages` (table only as fallback); every score out of 100 as one named constant (section 1c; `full_score` is not the maximum — an earlier instruction to use it was wrong); timings, limits and URLs in `src/shared/constants.ts`; user-facing text in `src/shared/strings.ts`; no course-specific names in code; "Where to change things" in `CLAUDE.md`.
 
 ### Phase 5: Quality and packaging — NEXT
 Already in place (keep current): tests for parsers, `GraderClient` with a fake server (login, expired session re-login, submit, poll timeout, back-off), language mapping, request counts; `README.md` with a privacy note and "Works with CPH"; `CHANGELOG.md` (from v0.5.0); `CLAUDE.md`.
@@ -274,7 +279,7 @@ Already in place (keep current): tests for parsers, `GraderClient` with a fake s
   - Command and a button in the sidebar's settings/overflow menu: "Clear Cached Data", showing the current size, with checkboxes: cached files (PDFs, test cases, submission details) [on], problem list and history [on], file-to-problem mappings incl. stale ones [off], saved login [off]. Confirm before deleting.
   - Never delete anything in the workspace except the extension's own `.bak` files, and only when selected.
   - Tests: LRU eviction, daily cleanup, selective clear.
-  - Also clears the extension's own per-workspace state: remembered auto-matches, explicit "not linked" files, recently opened, stale links.
+  - Also clears the extension's own per-workspace state: remembered auto-matches, explicit "not linked" files, dismissed notices (`cedtGrader.dismissedNotices`), recently opened, stale links.
 - Keep `CLAUDE.md`, this file, the README and `CHANGELOG.md` current.
 - **CHECKPOINT:** list what I should test manually in the F5 Extension Development Host (log in, submit a correct solution, submit a compile error, submit a wrong answer, log out, install from the .vsix) and wait for my results.
 
@@ -293,10 +298,20 @@ Already in place (keep current): tests for parsers, `GraderClient` with a fake s
    - Submit: confirm before submit, auto-open the result, save the file before submitting.
    - Verdicts: tiles or plain text (the website has the same choice).
    - Statement: beside the code or in the same column.
-   - New files: default language and file name pattern (e.g. `{name}.{ext}`).
+   - New files: default language and file name pattern (e.g. `{name}.{ext}`); "Rename file to match the problem" uses the same pattern.
    - A gear button in the panel header opening the settings filtered to `cedtGrader`.
 
-## 4. Done means
+## 4. Next steps (start here in a new session)
+
+1. Read `CLAUDE.md` (architecture, rules, "Where to change things", known limitations, **open questions**) and this file's Phase 5.
+2. Run `npm install`, `npm test`, `npm run build` — all green at v0.5.0 (312 tests).
+3. Ask the user the open questions in `CLAUDE.md` that block Phase 5: LICENSE holder, `repository` URL, source maps in the `.vsix`, ESLint or not, and whether git history should be rewritten before publishing.
+4. Build Phase 5 in this order, committing after each: (a) cache management + "Clear Cached Data" (it also resets dismissed notices, auto-matches, "not linked", stale links); (b) README install guide, troubleshooting, "Updating" / "Uninstalling"; (c) Getting Started walkthrough; (d) packaging (`npm run package` clean, LICENSE, CHANGELOG); then the Phase 5 CHECKPOINT (F5 list) and wait.
+5. Phase 6 only after the user confirms Phase 5.
+
+Layout changes need the user's approval first (Phase 4 rule); later requests win over earlier ones.
+
+## 5. Done means
 - `npm test` passes, `npm run build` passes, `.vsix` builds.
 - I can submit the active `.cpp` file in two clicks and see the score and verdict strip without opening a browser.
 - CPH still works exactly as before in the same workspace.

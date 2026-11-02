@@ -23,7 +23,7 @@ An unofficial homework tool: a standalone VS Code extension that submits the act
 - **Extension host** owns every network call, all secrets and all state. Webviews only render `ViewState` and post `FromWebview` messages.
 - **GraderClient** (`src/grader/client.ts`) is the only way to talk to the server: the JSON API is primary; the cookie web session is used only for `/main/list` (penalties, raw-sum, topic tags, exam hint).
 - **DataService** (`src/data/dataService.ts`) is the only cache between UI and client (request discipline below); the controller never calls the client for data directly.
-- **Matching** (`src/mapping/match.ts`): saved link → CPH `.prob` → exact file name → confident suggestion; links live in `.cedt-grader.json` + workspaceState (`src/mapping/store.ts`).
+- **Matching**: ONE matcher for both directions (`src/mapping/match.ts` + `src/mapping/matchIndex.ts`, see "Matching" below); links live in `.cedt-grader.json` + workspaceState (`src/mapping/store.ts`).
 - `src/grader`, `src/data` and the pure `src/mapping` helpers have no `vscode` import, so they are unit tested directly.
 
 ## Commands
@@ -76,15 +76,18 @@ npx tsx scripts/probe.ts [--list] [--problem <ID>] [--fixtures] [--submit file] 
   - `webview/virtualList.ts`: the virtualized problem list (only visible rows + buffer; rows keyed by problem id, rebuilt only when their data/✓ changed; measured heights; `revealNearest`).
   - `webview/text.ts`: `middleEllipsis` / `menuLabelMax` for right-click menu labels.
 - `src/mapping/` (Phase 3, linking):
-  - `match.ts`: `cleanName`, `normalizeName`, `resolveProblem` (saved → CPH → exact file name → suggestions; ambiguous → ask), `fileNameFor`.
+  - `match.ts`: `cleanName`, `normalizeName`, `resolveProblem` (saved → CPH → exact file name → confident suggestion; ties → ask), `scoreCandidates` / `decideSuggestion`, `fileNameFor`.
+  - `matchIndex.ts`: `matchFile` (file → problem) and `buildMatchIndex` (problem → files, the same function over all source files), `OnceCache`.
+  - `suggestionGate.ts`: `confirmSuggestion` (write actions on a suggestion ask once).
+  - `renameToProblem.ts`: "Rename file to match the problem" helpers (proposal, conflicts, validation).
   - `paths.ts`: the one path normalization for links (NFC, `./`/`..` resolved, `/` separators; `pathKey` lower-cases on macOS/Windows). Used by mappings, `.cedt-grader.json`, renames, reverse lookup, reconnect.
   - `store.ts`: workspaceState keyed by `<folder name>/<pathKey(relative path)>` (+ legacy fsPath keys read) and `.cedt-grader.json`; reverse lookup (problem → files), rename, mark deleted (stale), expire, reconnect; explicit "not linked" set (`cedtGrader.unlinked`, follows renames); remembered auto-matches (`cedtGrader.autoMatches`).
-  - `problemFiles.ts`: "files for this problem" (`mergeProblemFiles`: chosen links + remembered auto-matches + cached name search, minus "not linked" and files linked elsewhere), `linkedNotice` wording, auto-match rename/delete rules, `ProblemFileSearch` (one findFiles per problem until a file event).
+  - `problemFiles.ts`: "files for this problem" (`mergeProblemFiles`: chosen links + remembered auto-matches + match-index files, minus "not linked" and files linked elsewhere), `linkedNotice` wording, `noticeSignature` / `noticeDismissed`, `comparePaths`, auto-match rename/delete rules.
   - `mappingFile.ts`: `.cedt-grader.json` parsing (`staleSince` kept), `reverseIndex`.
   - `mappingOps.ts`: pure move logic (`planRename`, `reconnectCandidates`, `affectedByDelete`, `expired`) and `moveCphProblem`.
   - `cph.ts` / `cphImport.ts`: CPH `.prob` read / import (format below). `newFile.ts`: create without overwriting.
   - `newFileLanguage.ts`: extension order for "New file" (active file → last used → `cedtGrader.defaultLanguage` → quick pick; never archive/binary automatically).
-  - `findByName.ts`: "Find file by name" include/exclude globs, filtering (permitted source extensions, excluded folders, binaries) and ranking.
+  - `findByName.ts`: `sourceGlob` / `excludeGlob` / `filterSourceFiles` (which files the matcher looks at: source extensions, no binaries / build output / `.cph` / `node_modules` / `*.dSYM`, plus `files.exclude`, `search.exclude`, `.gitignore`) and `rankCandidates`.
 - `src/cphIntegration.ts`: optional CPH detection, test-case target choice, "Save as files" writer.
 - `test/fixtures/`: `*.synthetic.*` files are hand-built from the cafe-grader views and controllers. The others are real data captured by the probe and sanitized.
 
@@ -96,7 +99,6 @@ npx tsx scripts/probe.ts [--list] [--problem <ID>] [--fixtures] [--submit file] 
 |---|---|---|
 | Login | `POST /api/v1/auth/login` `{login,password}` | → `{token, expires_at, user}`, 12 h TTL. 401 wrong password, 429 throttled, 403 disabled/IP. |
 | Problems | `GET /api/v1/problems` | `best_score` = max over regular submissions (no penalty), `last_score`, `submission_count`, `last_submission_id`, `permitted_languages` (null = all), `has_testcase`. |
-| Problem | `GET /api/v1/problems/{id}` | + `full_score`, `submission_ids` (newest first). |
 | Languages | `GET /api/v1/languages` | `id, name` (internal), `pretty_name`, `ext`. |
 | Submit | `POST /api/v1/problems/{id}/submissions` `{language_id, source, filename}` | 201 `{id, number, status}`. 422 + `permitted_languages` = language not allowed. |
 | Poll | `GET /api/v1/submissions/{id}` | `status`: `done`/`compilation_error`/`grader_error` are final. Also `points`, `grader_comment` (`PP-T[Px]`), `compiler_message`. |
@@ -136,11 +138,12 @@ Every icon-only button (`iconButton()` in `webview/main.ts`, `btn()` in `webview
 
 ## Problem links: auto-detect, duplicates, unavailable problems
 
-- Suggestions (`scoreCandidates` / `decideSuggestion` in `src/mapping/match.ts`, thresholds `MATCH` in `src/shared/constants.ts`): score = name similarity + `folderTagBonus` when a parent folder is named like a problem tag. Exact name → "Matched by file name". Top score ≥ `suggestMinScore` and ahead by ≥ `suggestMinMargin` → "Suggested" (muted "Suggested from the file name · Use this" line stays visible). Close scores → "Several problems could match this file. Choose one." Below the threshold → "Not linked to a problem", candidates only in the picker.
-- A suggestion is treated like a link for everything read-only (score card, history, results, statement, details, files for this problem, duplicate notice, ✓ in the list), loading only that one problem. Write actions ask once inline (`confirmSuggestion` in `src/mapping/suggestionGate.ts`): Submit ("Submit to <name> (<full name>)?") and Load test cases ("Load the test cases of …?"), [yes] / [Choose another problem]; yes saves the link. New file / linking other files: unchanged. Dropdown, "Use this" and Auto-detect confirm as before.
-- Auto-detect (sparkle button): `resolveProblem` without the saved link; asks before replacing a manual link.
-- Files for a problem: `GraderController.filesForProblem()` is the only source for the duplicate notice, row click / go to file, and the before-submit "changed more recently" check. It merges saved links, auto-matches recorded when a file was open (file name / CPH / confident suggestion; never over a manual link or "not linked"; dropped on delete or a rename to a non-matching name) and a cached `workspace.findFiles` for the clean problem name (allowed extensions, "Find file by name" exclusions; runs only while the panel shows the problem; invalidated by file create/delete/rename, 1 s debounce; logged as `FILE SEARCH` in the request log).
-- Notice: same name in different folders → "Another file with the same name also matches this problem." (the files are listed below it); otherwise "N files are linked to this problem". Stable order everywhere (notice, go-to-file pick, submit check): workspace-relative path, natural, case-insensitive (`comparePaths`); the active file is only marked ("this file"), rows never move. Each file shows how it's linked with Open and Unlink (chosen) / "Don't match this file" (name or CPH match → "not linked"); "Unlink the other files". Submit asks (inline, once) when another file for the problem is newer (mtime; dirty = now). `MappingStore.cleanupDuplicates()` (startup and on saving `.cedt-grader.json`) removes legacy+new duplicate keys and duplicate/same-path JSON entries (`countDuplicateEntries`), then tells the user.
+(Matching rules and states: see "Matching" above.)
+
+- Auto-detect (sparkle button): `resolveProblem` without the saved link; asks inline before replacing a manual link; clears "not linked".
+- Files for a problem: `GraderController.filesForProblem()` is the only source for the duplicate notice, row click / go to file, Find file by name and the before-submit "changed more recently" check. It merges saved links, remembered auto-matches and the match index (see "Matching"), minus "not linked" files and files linked to another problem.
+- Notice: same name in different folders → "Another file with the same name also matches this problem." (files listed below); otherwise "N files are linked to this problem". Stable order everywhere: workspace-relative path, natural, case-insensitive (`comparePaths`); the active file is only marked ("this file"), rows never move. Each file shows how it's linked, with Open and Unlink (chosen) / "Don't match this file"; "Unlink the other files"; Dismiss. Submit asks (inline, once) when another file for the problem is newer (mtime; dirty = now).
+- `MappingStore.cleanupDuplicates()` (startup and on saving `.cedt-grader.json`) removes legacy + new duplicate keys and same-path JSON entries (one path normalization, `src/mapping/paths.ts`), rewrites the file, and reports only real changes, once.
 - Unavailable: `resolveProblem` returns `unavailable` for a saved link missing from the loaded list; `ProblemUnavailableError` (ApiClient, 404/403 on `/api/v1/problems/{id}…`, incl. submit) marks it at runtime (`unavailableIds`, cleared when the problem is back in the list). Submit disabled, history kept (stale), statement opens from cache with a "may be out of date" note.
 
 ## Problem list and verdicts (as on the website)
@@ -154,14 +157,28 @@ Every icon-only button (`iconButton()` in `webview/main.ts`, `btn()` in `webview
 - Account: `client.user.fullName` (login response or `GET /api/v1/me`, once per session after a token restore).
 - CPH tip (`cphTip` in ViewState): not installed + problem with test cases; "Not now" = this session, "Don't show again" = `cedtGrader.cphTipDismissed`.
 
-## Counted score (src/grader/score.ts)
+## Scoring (src/grader/score.ts)
 
-- `counted = max(0, min(best, 100 − min(100, hint_cost + ai_cost)))`.
-- Raw-sum datasets show the raw best, uncapped.
-- `best` is the max over regular submissions, not the latest.
-- Penalties come from `/main/list` and are labelled "from problem list". Without that page (password not remembered and the web session gone), the panel shows best scores and says so.
-- Contest-window filtering is not applied (the API doesn't apply it either).
-- The README tells students the instructor's final grading may differ.
+- **Every score is out of 100.** cafe-grader normalizes the `sum` and `group_min` score types to 0–100 whatever the number of tests, weights or groups (`app/engine/scorer.rb`). The API's `full_score` is **not** the maximum and is not used. The 100 is `SERVER_SCORE_CAP` in `src/shared/constants.ts` (comment points to scorer.rb).
+- **Raw-sum problems** (`raw_sum` / `custom_testlib_raw`; detected from the `/main/list` score column, the API has no score type): the raw score, no "/ max", uncapped, with a tooltip explaining why.
+- One display rule, `scoreText(points, rawSum)` / `outOfFor(rawSum)`: Current problem card, problem-row pills, Result and History all use it ("70 / 100" or "37" + tooltip).
+- Counted: `counted = max(0, min(best, 100 − min(100, hint_cost + ai_cost)))` (`Submission.max_score_report`); `best` = max over regular submissions, not the latest.
+- Penalties come from `/main/list` ("from problem list"). Without that page (password not remembered and the web session gone) the panel shows best scores and says so.
+- Exam (contest-window) filtering is not applied (the API doesn't apply it either). The README says the instructor's final grading may differ.
+- "Solved" (list filter) = submitted and best ≥ 100, as on the website.
+
+## Matching (one matcher, both directions)
+
+- `resolveProblem` (src/mapping/match.ts) is the only matcher: saved link → CPH `.prob` (URL or name) → exact normalized file name → confident suggestion. Normalization: zero-width removed, trim, lower case, `space - _ .` the same separator, NFC.
+- Suggestions: score = name similarity (+ `MATCH.folderTagBonus` when a parent folder is named like one of the problem's tags). Used only if ≥ `MATCH.suggestMinScore` and ahead of the next by ≥ `MATCH.suggestMinMargin`; close scores → "Several problems could match this file. Choose one."; below → "Not linked to a problem" (candidates ≥ `MATCH.pickerMinScore` only in the picker).
+- Problem → file uses the same function: `buildMatchIndex` runs `matchFile` (= `resolveProblem` without saved link / CPH) over all source files from one `workspace.findFiles` (`sourceGlob` + `excludeGlob` + `filterSourceFiles`, at most `LIMITS.indexMaxFiles`), cached in `OnceCache` until a file is created / deleted / renamed (1 s debounce) or the problem list reloads; built only while the panel needs it; logged as `FILE SEARCH`. Before opening, a candidate whose CPH data points to another problem is dropped (same answer as opening it). A test checks that both directions agree for every fixture.
+- **States** (match line under the selector): **Chosen by you** (saved link; also confirmed suggestions) · **Matched by file name** · **Matched from CPH data** · **Suggested** (muted "Suggested from the file name · Use this"; confident suggestion or a *temporary link*) · **Not linked to a problem** (explicitly unlinked, or no confident match).
+- **Temporary link:** a row click that opens a single name-matched / suggested file shows that problem for it ("Suggested · Use this") until another file becomes active; Use this / Choose another / Don't match this file decide.
+- **✕ in every state:** a chosen link → "Unlink this file"; a name / CPH match, suggestion or temporary link → "Don't match this file". Both store the sticky "not linked" state (`cedtGrader.unlinked`, follows renames); choosing a problem or Auto-detect clears it.
+- Suggestions behave like links for everything read-only (score, history, results, statement, files for this problem, notice, ✓) and load only that one problem; write actions (Submit, Load test cases) ask once inline (`confirmSuggestion`), yes saves the link.
+- Remembered auto-matches (`cedtGrader.autoMatches`): file name / CPH / suggestion of files that were open; never over a manual link or "not linked"; dropped on delete; kept on rename only if the matcher still agrees.
+- **Rename file to match the problem** (Current problem link, header right-click, command): shown when the name doesn't match (same normalization); proposes `<clean problem name>.<ext>`, editable; `WorkspaceEdit.renameFile` (editors, links, rename handling and the CPH prompt follow; Undo works); never overwrites (suggests `<name>_2.<ext>`).
+- **Files for this problem** notice: Dismiss hides it per problem until the set of files or how they are linked changes (`cedtGrader.dismissedNotices`, `noticeSignature`); Phase 5 "Clear Cached Data" must reset it.
 
 ## Hard rules
 
@@ -208,7 +225,8 @@ The sidebar (`cedtGrader` Activity Bar container, view `cedtGrader.panel`) is th
   - file name;
   - searchable picker (name or id), book icon → statement viewer;
   - wrong-language hint ("This problem doesn't accept C++. Wrong problem?" + Change);
-  - header icons, always visible: Open statement, Copy problem name, Open on the grader website, Auto-detect, Unlink this file (not for suggestions); right-click on the header offers the same;
+  - header icons, always visible: Open statement, Copy problem name, Open on the grader website, Auto-detect, ✕ (Unlink this file / Don't match this file, every state); right-click on the header offers the same plus "Rename file to match the problem";
+  - "Rename file to match the problem" link when the file name doesn't match;
   - match line under the selector ("Chosen by you" / "Matched by file name" / "Matched from CPH data"; a suggestion is a muted "Suggested from the file name · Use this"; choosing from the dropdown confirms too); notes for ambiguous / stale mappings;
   - "Not linked to a problem" (Choose problem / Auto-detect) after "Unlink this file": the file is stored as explicitly unlinked (`cedtGrader.unlinked`), so auto-detection leaves it alone until the user chooses or auto-detects;
   - "files for this problem" notice (see Problem links);
@@ -231,9 +249,10 @@ Statement viewer (`webview/statement.ts`, `webview/zoom.ts`): pinch (Ctrl+wheel)
 | Default grader URL, website paths | `src/shared/constants.ts` (`DEFAULT_BASE_URL` — also `package.json` default; `WEB_PATHS`) |
 | Timings: poll interval/timeout/back-off, GET retries, debounce, history TTL, request timeout, file-event debounce, token fallback, daily cleanup | `src/shared/constants.ts` `TIMING` (poll interval also setting `cedtGrader.pollIntervalSeconds`) |
 | Webview timings and sizes (tooltip delay, list height, scroll save, row-click window, statement state save) | `src/shared/constants.ts` `PANEL` |
-| Limits (file search sizes, remembered auto-matches, recently opened), stale-link days | `src/shared/constants.ts` `LIMITS`, `STALE_LINK_DAYS` |
+| Limits (match-index file cap, remembered auto-matches, recently opened), stale-link days | `src/shared/constants.ts` `LIMITS`, `STALE_LINK_DAYS` |
 | Suggestion confidence (threshold, tie margin, folder/tag bonus, picker cut-off) | `src/shared/constants.ts` `MATCH` |
-| Penalty cap / "solved" threshold (server literal 100) | `SERVER_SCORE_CAP` in `src/shared/constants.ts`; "out of" uses the problem's `full_score` |
+| Score maximum / penalty cap / "solved" threshold (server literal 100, scorer.rb) | `SERVER_SCORE_CAP` in `src/shared/constants.ts`; display rule `scoreText` in `src/grader/score.ts` |
+| Matching (normalization, scoring, states) | `src/mapping/match.ts`; problem → file index `src/mapping/matchIndex.ts`; which files are looked at `src/mapping/findByName.ts` |
 | Languages / extensions | from the server (`GET /api/v1/languages` `ext`); fallback table + aliases in `src/grader/languages.ts`; non-source (never auto-picked) in `src/mapping/newFileLanguage.ts`; binary extensions in `src/mapping/findByName.ts` |
 | Verdict codes, words, group text | `src/grader/verdicts.ts` (website `RESULT_CODE` order) |
 | User-facing text | `src/shared/strings.ts`: `S` host messages / questions / picks, `W` sidebar + statement webviews, `G` grader errors / connection banner / status bar / score lines, `HOW_LINKED`, `PICK_HOW`, `W_SOURCE` |
@@ -250,13 +269,23 @@ No course- or problem-specific names in code (problem names come from the server
 - Hint / AI penalties need the `/main/list` HTML page; without a web session (password not remembered and the session gone) the panel shows best scores and says so.
 - The API has no "binary language" flag: non-source languages (Archive, Digital, Viva, Text) are recognised by name / extension (`src/mapping/newFileLanguage.ts`).
 - The problem picker dropdown shows at most 50 matches ("N more. Refine the search."); the Problems list itself has no limit.
+- The match index reads at most `LIMITS.indexMaxFiles` (5 000) source files; files beyond that are only matched when opened.
+- No file-name pattern setting yet: "New file" and "Rename file to match the problem" use `<clean problem name>.<ext>` (Phase 6).
+- Undo of "Rename file to match the problem" relies on VS Code's undo for WorkspaceEdit file operations (checked by hand, not by a test).
 - The controller (vscode-dependent) has no unit tests; its rules are kept in pure, tested helpers (`problemFiles.ts`, `suggestionGate.ts`, `match.ts`, `mappingOps.ts`, `paths.ts`) and the webview is tested in jsdom.
 - No cache size limit / "Clear Cached Data" yet (Phase 5).
 - English only; texts are already in `src/shared/strings.ts`, ready for Phase 6.
+
+## Open questions (decide before or during Phase 5)
+
+- Exam time window in the counted score: keep as a limitation (recommended; the API has no contest data) or implement via contest pages?
+- Verdict codes: stay in `src/grader/verdicts.ts` (they mirror the server) or move to `src/shared/constants.ts`?
+- Git history: commits carry the author's real name and personal email; one deleted fixture (`test/fixtures/submission_edit.html`, 715fd8b → removed in 89746cd) holds an empty `int main(){return 0;}` submission. Rewrite (e.g. `git filter-repo` mailmap / path removal) before publishing? Not done without the user's OK.
+- Release metadata: LICENSE copyright holder, `repository` URL in `package.json`, keep source maps in the `.vsix` (~2 MB)?, add ESLint or keep strict `tsc` as the lint?
 
 ## Not done yet
 
 - Phase 5: install guide, walkthrough, troubleshooting, cache management (`cedtGrader.cacheMaxMB`, LRU, daily cleanup, "Clear Cached Data" incl. stale mappings), packaging polish — see spec.
 - Phase 6: Thai translation (`cedtGrader.displayLanguage`, vscode.l10n, package.nls.th.json), plain-language review, more customization — see spec.
 
-Commands (kept for keybindings; the panel is the primary interface): `cedtGrader.login`, `logout`, `submit`, `chooseProblem`, `clearMapping`, `loadTestcases`, `showLastResult`, `openStatement`, `refreshProblems`, `refreshHistory`, `showRequestLog`, `openSettings`, `focus`.
+Commands (kept for keybindings; the panel is the primary interface): `cedtGrader.login`, `logout`, `submit`, `chooseProblem`, `clearMapping`, `loadTestcases`, `showLastResult`, `openStatement`, `refreshProblems`, `refreshHistory`, `showRequestLog`, `openSettings`, `renameFileToProblem`, `focus`.

@@ -23,9 +23,9 @@ Click the **CEDT Grader** icon in the Activity Bar. The sidebar has five section
 
 Typical flow: open `sol.cpp` → pick the problem once (it is remembered) → **Submit** → confirm. That's two clicks for every later submission.
 
-**Linking files to problems.** A file is linked automatically when its name matches a problem name (`00_Intro_11.cpp` → `00_Intro_11`; case, spaces, `-`, `_` and `.` don't matter). A file named *close to* one problem gets it as a suggestion ("Suggested from the file name · **Use this**"): you see its score, history and statement right away, and submitting or loading test cases asks once first. If several problems fit about equally, or none fits well, the panel asks you to choose. Your own choice always wins and is saved in `.cedt-grader.json` and VS Code's workspace storage; a line under the problem says how it was chosen. **Unlink this file** (✕) removes the link and stops auto-detection for that file until you choose again.
+**Linking files to problems.** A file is linked automatically when its name matches a problem name (`00_Intro_11.cpp` → `00_Intro_11`; case, spaces, `-`, `_` and `.` don't matter). A file named *close to* one problem gets it as a suggestion ("Suggested from the file name · **Use this**"): you see its score, history and statement right away, and submitting or loading test cases asks once first. If several problems fit about equally, or none fits well, the panel asks you to choose. Your own choice always wins and is saved in `.cedt-grader.json` and VS Code's workspace storage; a line under the problem says how it was chosen. The ✕ next to the problem works in every case: **Unlink this file** for your own choice, **Don't match this file** for an automatic match; either way auto-detection leaves that file alone until you choose again. Clicking a problem finds the same files that would show that problem when opened (one matcher both ways). **Rename file to match the problem** renames e.g. `sol.cpp` to `00_Intro_11.cpp` (editable first, never overwrites, Undo works; the link and CPH tests follow).
 
-If two files belong to the same problem (drafts, or the same file name in two folders), the panel tells you and lists them, with Open and Unlink; before submitting it asks if the other file was changed more recently.
+If two files belong to the same problem (drafts, or the same file name in two folders), the panel tells you and lists them, with Open and Unlink (or **Dismiss** until the files change); before submitting it asks if the other file was changed more recently.
 
 Handy actions in the problem list and picker: **copy the exact problem name**, **new file for this problem** (creates `<name>.cpp` next to your file), **go to the file** for a problem (or find one by name). Questions that aren't about losing work appear right in the panel, not as pop-ups.
 
@@ -36,7 +36,7 @@ Renaming or moving a linked file in VS Code keeps the link. If you move files in
 **Also available:**
 - The status bar item (`☁ Submit to Grader`, the score after grading) opens the panel.
 - The ☁ button in the editor title bar (C, C++, Python, Java files) submits the current file.
-- Every action is a command (`CEDT Grader: …` in the Command Palette), so you can bind keyboard shortcuts: Log In, Log Out, Submit Current File, Choose Problem for This File, Clear Problem for This File, Load Test Cases, Show Last Result, Open Problem Statement, Reload Problem List, Reload Submission History, Show Panel, Open Settings, Show Request Log.
+- Every action is a command (`CEDT Grader: …` in the Command Palette), so you can bind keyboard shortcuts: Log In, Log Out, Submit Current File, Choose Problem for This File, Clear Problem for This File, Rename File to Match the Problem, Load Test Cases, Show Last Result, Open Problem Statement, Reload Problem List, Reload Submission History, Show Panel, Open Settings, Show Request Log.
 
 ## Problem statements
 
@@ -48,7 +48,7 @@ A banner at the top of the sidebar says what went wrong (no internet, server err
 
 ## Scores
 
-The panel shows the score the grader **counts**: your best submission, not your latest, out of the problem's full score. Hint and AI-assist penalties are taken off (e.g. "-10 AI assist"), as on the website's problem list. If your latest submission scored lower, the panel says so ("Latest: 40 — your best 70 still counts"). Exam (contest-window) rules are not applied.
+The panel shows the score the grader **counts**: your best submission, not your latest, out of 100 (the grader scales every normal problem to 100, whatever its number of tests). Problems that add up raw test scores ("raw sum") show the raw number with no maximum. Hint and AI-assist penalties are taken off (e.g. "-10 AI assist"), as on the website's problem list. If your latest submission scored lower, the panel says so ("Latest: 40 — your best 70 still counts"). Exam (contest-window) rules are not applied.
 
 The extension only mirrors what the grader shows. **Your instructor's final grading may differ.**
 
