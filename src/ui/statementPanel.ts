@@ -1,4 +1,5 @@
-import { G } from '../shared/strings';
+import { G, S } from '../shared/strings';
+import { currentLang } from '../shared/i18n';
 import { KEYS } from '../shared/stateKeys';
 import { randomBytes } from 'node:crypto';
 import * as cheerio from 'cheerio/slim';
@@ -64,6 +65,19 @@ export class StatementPanels implements vscode.Disposable {
   static readonly viewType = 'cedtGrader.statement';
 
   private readonly notes = new Map<number, string | null>();
+  private readonly names = new Map<number, string>();
+
+  /**
+   * The display language changed: rebuild every open tab in the new language.
+   * The statement comes from the disk cache again (no request); page and zoom are kept.
+   */
+  reloadAll(): void {
+    const media = vscode.Uri.joinPath(this.extensionUri, 'media');
+    for (const [id, panel] of this.panels) {
+      panel.title = S.statementTab(this.names.get(id) ?? `#${id}`);
+      panel.webview.html = this.html(panel.webview, media);
+    }
+  }
 
   async open(problemId: number, name: string, opts: { outdated?: string | null } = {}): Promise<void> {
     this.notes.set(problemId, opts.outdated ?? null);
@@ -74,7 +88,7 @@ export class StatementPanels implements vscode.Disposable {
     }
     const panel = vscode.window.createWebviewPanel(
       StatementPanels.viewType,
-      `Statement: ${name}`,
+      S.statementTab(name),
       { viewColumn: this.opts.beside() ? vscode.ViewColumn.Beside : vscode.ViewColumn.Active, preserveFocus: this.opts.beside() },
       this.webviewOptions(),
     );
@@ -100,11 +114,14 @@ export class StatementPanels implements vscode.Disposable {
     const media = vscode.Uri.joinPath(this.extensionUri, 'media');
     panel.iconPath = vscode.Uri.joinPath(media, 'icon.svg');
     this.panels.set(problemId, panel);
-    panel.onDidDispose(() => this.panels.delete(problemId));
+    this.names.set(problemId, name);
+    panel.onDidDispose(() => {
+      this.panels.delete(problemId);
+      this.names.delete(problemId);
+    });
     panel.webview.html = this.html(panel.webview, media);
 
-    const title = `Statement: ${name}`;
-    const base = () => ({ title, problemId, name, note: this.notes.get(problemId) ?? null });
+    const base = () => ({ title: S.statementTab(name), problemId, name, note: this.notes.get(problemId) ?? null });
     const post = (m: ToStatement) => void panel.webview.postMessage(m);
     const load = async (refresh: boolean) => {
       post({ ...base(), type: 'loading' });
@@ -140,7 +157,7 @@ export class StatementPanels implements vscode.Disposable {
       `connect-src ${webview.cspSource}`,
     ].join('; ');
     return `<!DOCTYPE html>
-<html lang="en">
+<html lang="${currentLang()}">
 <head>
 <meta charset="UTF-8">
 <meta http-equiv="Content-Security-Policy" content="${csp}">

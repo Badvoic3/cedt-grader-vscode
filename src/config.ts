@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { DEFAULT_BASE_URL } from './grader/client';
 import { CACHE } from './shared/constants';
+import type { LangSetting } from './shared/i18n';
 
 export interface GraderConfig {
   baseUrl: string;
@@ -15,6 +16,8 @@ export interface GraderConfig {
   defaultLanguage: string;
   /** Size limit of downloaded files (statements, test cases), in MB. */
   cacheMaxMB: number;
+  /** `en` (default), `th`, or `auto` (follow VS Code's display language). */
+  displayLanguage: LangSetting;
 }
 
 /**
@@ -44,6 +47,7 @@ export function readConfig(): GraderConfig {
     debugRequests: c.get<boolean>('debugRequests', false) === true,
     statementBeside: c.get<boolean>('statementBeside', true) !== false,
     defaultLanguage: String(c.get<string>('defaultLanguage', 'C++') || 'C++'),
+    displayLanguage: ((v) => (v === 'th' || v === 'auto' ? v : 'en'))(c.get<string>('displayLanguage', 'en')),
     cacheMaxMB: Math.max(CACHE.maxMbMinimum, Number(c.get('cacheMaxMB', CACHE.maxMbDefault)) || CACHE.maxMbDefault),
   };
 }

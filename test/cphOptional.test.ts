@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { chooseTestcaseTarget, CPH_EXTENSION_ID, CphPresence, saveTestcasesAsFiles, testsFolderFor } from '../src/cphIntegration';
 import { resolveProblem } from '../src/mapping/match';
 import { readCphProblem } from '../src/mapping/cph';
+import { manifest } from './helpers';
 import type { Problem } from '../src/grader';
 
 function fakeExtensions(installed: boolean) {
@@ -106,7 +107,7 @@ describe('everything else works without CPH', () => {
   });
 
   it('CPH is not a dependency or part of an extension pack', () => {
-    const pkg = JSON.parse(readFileSync(join(__dirname, '..', 'package.json'), 'utf8'));
+    const pkg = manifest();
     expect(pkg.extensionDependencies ?? []).not.toContain(CPH_EXTENSION_ID);
     expect(pkg.extensionPack ?? []).not.toContain(CPH_EXTENSION_ID);
     const titles = [pkg.displayName, pkg.description, ...pkg.contributes.commands.map((c: { title: string }) => c.title)].join(' ');

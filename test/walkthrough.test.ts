@@ -3,9 +3,10 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import type { ViewState } from '../src/shared/messages';
 import { WALKTHROUGH_CONTEXT, WALKTHROUGH_ID, walkthroughContext } from '../src/shared/walkthrough';
+import { manifest } from './helpers';
 
 const root = join(__dirname, '..');
-const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
+const pkg = manifest();
 const walkthrough = pkg.contributes.walkthroughs.find((w: { id: string }) => w.id === WALKTHROUGH_ID);
 type Step = { id: string; title: string; description: string; media: { markdown?: string }; completionEvents: string[] };
 const steps: Step[] = walkthrough?.steps ?? [];

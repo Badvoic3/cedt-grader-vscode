@@ -4,6 +4,7 @@ import { PANEL } from '../src/shared/constants';
  * extension's media folder via a blob URL, strict CSP. Zoom, fit width, page
  * navigation, text selection and search (Cmd/Ctrl+F).
  */
+import './lang'; // first: sets the display language before anything below builds elements
 import { W } from '../src/shared/strings';
 import { pdfjsLib } from './pdfjs-global';
 import { EventBus, PDFFindController, PDFLinkService, PDFViewer } from 'pdfjs-dist/web/pdf_viewer.mjs';

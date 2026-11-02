@@ -3,6 +3,7 @@ import { randomBytes } from 'node:crypto';
 import * as vscode from 'vscode';
 import type { GraderController } from '../controller';
 import { type FromWebview, isFromWebview, type ToWebview } from '../shared/messages';
+import { currentLang } from '../shared/i18n';
 
 /**
  * The "CEDT Grader" sidebar. Renders `ViewState` snapshots from the
@@ -32,6 +33,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider, vscode.Dispo
       this.controller.onState((state) => this.post({ type: 'state', state })),
     ];
     this.controller.focusTarget = (t) => setTimeout(() => this.focus(t), TIMING.focusDelayMs);
+    this.controller.onLanguageChanged = () => this.reload();
     // Nothing is fetched while the panel is hidden; pending loads run when it is shown.
     this.controller.setPanelVisible(view.visible);
     subs.push(view.onDidChangeVisibility(() => this.controller.setPanelVisible(view.visible)));
@@ -40,6 +42,12 @@ export class SidebarProvider implements vscode.WebviewViewProvider, vscode.Dispo
       this.view = undefined;
       this.controller.setPanelVisible(false);
     });
+  }
+
+  /** The display language changed: rebuild the panel (scroll, filters and open sections are kept in webview state). */
+  reload(): void {
+    if (!this.view) return;
+    this.view.webview.html = this.html(this.view.webview, vscode.Uri.joinPath(this.extensionUri, 'media'));
   }
 
   focus(target: 'login' | 'problem-search' | 'submit'): void {
@@ -174,7 +182,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider, vscode.Dispo
       `script-src 'nonce-${nonce}'`,
     ].join('; ');
     return `<!DOCTYPE html>
-<html lang="en">
+<html lang="${currentLang()}">
 <head>
 <meta charset="UTF-8">
 <meta http-equiv="Content-Security-Policy" content="${csp}">

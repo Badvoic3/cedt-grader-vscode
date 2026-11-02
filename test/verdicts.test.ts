@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { GROUP_HINT, groupLabel, parseGraderComment, VERDICT_CODES, VERDICT_LEGEND, VERDICT_STRING_RE } from '../src/grader';
+import { groupLabel, parseGraderComment, VERDICT_CODES, verdictLegend, VERDICT_STRING_RE } from '../src/grader';
+import { G } from '../src/shared/strings';
 
 /** As in cafe-grader: Evaluation::RESULT_CODE + config/locales/en.yml (grader_comment_helper.rb). */
 const EXPECTED: [string, string, string][] = [
@@ -17,7 +18,7 @@ const EXPECTED: [string, string, string][] = [
 describe('parseGraderComment: every code', () => {
   it('the 9 codes in RESULT_CODE order', () => {
     expect(VERDICT_CODES).toEqual(EXPECTED.map((e) => e[0]));
-    expect(VERDICT_LEGEND.map((l) => [l.code, l.kind, l.word])).toEqual(EXPECTED);
+    expect(verdictLegend().map((l) => [l.code, l.kind, l.word])).toEqual(EXPECTED);
   });
 
   for (const [code, kind, word] of EXPECTED) {
@@ -45,8 +46,8 @@ describe('groups', () => {
   it('box tooltip: "Group 2 of 3: 2/3 passed. Tests in a box …" (passed = P tiles)', () => {
     const v = parseGraderComment('[P-][PsP][PP]');
     const g2 = v.filter((x) => x.group === 2);
-    expect(groupLabel(2, 3, g2)).toBe(`Group 2 of 3: 2/3 passed. ${GROUP_HINT}`);
-    expect(GROUP_HINT).toBe('Tests in a box are scored together — the box earns the lowest score inside it.');
+    expect(groupLabel(2, 3, g2)).toBe(`Group 2 of 3: 2/3 passed. ${G.groupHint}`);
+    expect(G.groupHint).toBe('Tests in a box are scored together — the box earns the lowest score inside it.');
   });
 });
 

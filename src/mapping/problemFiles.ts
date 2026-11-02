@@ -1,5 +1,6 @@
 import { basename } from 'node:path';
 import { pathKey, remapPath } from './paths';
+import { S } from '../shared/strings';
 
 /**
  * "Files for this problem": the one answer used by the duplicate notice,
@@ -90,13 +91,6 @@ export function noticeDismissed(dismissed: Record<string, string>, problemId: nu
   return files.length > 1 && dismissed[String(problemId)] === noticeSignature(files, caseInsensitive);
 }
 
-/** How a file is linked, as shown in the notice. */
-export const HOW_TEXT: Readonly<Record<LinkHow, string>> = {
-  chosen: 'chosen by you',
-  filename: 'matched by file name',
-  cph: 'matched from CPH data',
-  suggested: 'suggested',
-};
 
 export interface LinkedNotice {
   text: string;
@@ -119,9 +113,9 @@ export function linkedNotice(files: ProblemFile[], currentFsPath: string, rel: (
   const others = list.filter((f) => !f.current);
   let text: string;
   // The files are listed below the sentence, so it doesn't repeat a path.
-  if (names.size === 1 && others.length === 1) text = 'Another file with the same name also matches this problem.';
-  else if (names.size === 1) text = `${others.length} other files with the same name also match this problem.`;
-  else text = `${files.length} files are linked to this problem`;
+  if (names.size === 1 && others.length === 1) text = S.notice.sameNameOne;
+  else if (names.size === 1) text = S.notice.sameNameMany(others.length);
+  else text = S.notice.linked(files.length);
   return { text, files: list };
 }
 

@@ -20,15 +20,18 @@ export function filterProblems(items: ProblemView[], f: ProblemFilter, q: string
   });
 }
 
-export const SORTS: { key: ProblemSort; label: string }[] = [
-  { key: 'default', label: W.defaultOrder },
-  { key: 'name-asc', label: W.nameAZ },
-  { key: 'name-desc', label: W.nameZA },
-  { key: 'latest', label: W.latestSubmission },
-  { key: 'score-asc', label: W.bestScoreLowToHigh },
-  { key: 'score-desc', label: W.bestScoreHighToLow },
-  { key: 'recent', label: W.recentlyOpened },
-];
+/** Sort choices, labels in the current display language. */
+export function sorts(): { key: ProblemSort; label: string }[] {
+  return [
+    { key: 'default', label: W.defaultOrder },
+    { key: 'name-asc', label: W.nameAZ },
+    { key: 'name-desc', label: W.nameZA },
+    { key: 'latest', label: W.latestSubmission },
+    { key: 'score-asc', label: W.bestScoreLowToHigh },
+    { key: 'score-desc', label: W.bestScoreHighToLow },
+    { key: 'recent', label: W.recentlyOpened },
+  ];
+}
 
 /**
  * Order for the problem list (after filtering). Stable: ties keep the

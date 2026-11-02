@@ -1,7 +1,12 @@
 /**
  * Every user-facing text in one place (host messages, inline questions,
- * quick picks: `S`; sidebar and statement webviews: `W`), ready for translation
- * (Phase 6). No `vscode` import: the webviews bundle this file too.
+ * quick picks: `S`; sidebar and statement webviews: `W`; grader errors,
+ * banner, status bar: `G`). No `vscode` import: the webviews bundle this file too.
+ *
+ * The tables below are the English texts (`EN`). The exported `S`, `W`, `G`, …
+ * are copies that `setLanguage()` (src/shared/i18n.ts) overwrites in place
+ * with another language's table, so callers always read `S.x` at call time
+ * (never copy a text into a module-level constant).
  *
  * Rules: plain language, no jargon, say what happens to the user's files.
  * Parameterised texts are functions. Product and file names stay as they are.
@@ -11,7 +16,7 @@
 export const plural = (n: number, one: string, many = `${one}s`): string => `${n} ${n === 1 ? one : many}`;
 
 /** How a file is linked to a problem (lower case, used inside sentences). */
-export const HOW_LINKED = {
+const EN_HOW_LINKED = {
   chosen: 'chosen by you',
   filename: 'matched by file name',
   cph: 'matched from CPH data',
@@ -19,7 +24,7 @@ export const HOW_LINKED = {
 } as const;
 
 /** Labels in the "open which file" pick (row click / go to file). */
-export const PICK_HOW = {
+const EN_PICK_HOW = {
   chosen: 'linked',
   filename: 'matched by file name',
   cph: 'matched from CPH data',
@@ -28,7 +33,7 @@ export const PICK_HOW = {
 
 // ===================================================================== host
 
-export const S = {
+const EN_S = {
   common: {
     ok: 'OK',
     cancel: 'Cancel',
@@ -93,6 +98,7 @@ export const S = {
     moveCphQuestion: (one: string | null, n: number) =>
       one !== null ? `Move CPH test cases to the new file too? (${one})` : `Move CPH test cases of ${n} renamed files too?`,
     moveCph: 'Move Test Cases',
+    entry: (path: string, problem: string) => `${path}, linked to ${problem}`,
     movedCph: (done: number, skipped: number) =>
       `Moved CPH test cases for ${plural(done, 'file')} (old files kept as .bak)` +
       (skipped ? `; ${skipped} skipped because the new file already has CPH tests.` : '.') +
@@ -135,6 +141,7 @@ export const S = {
     failed: (why: string) => `Could not load test cases: ${why}`,
     suggestedQ: (name: string, sub: string) => `Load the test cases of ${name}${sub ? ` (${sub})` : ''}?`,
     load: 'Load test cases',
+    progressTitle: (name: string) => `Test cases for ${name}`,
   },
 
   cache: {
@@ -179,7 +186,33 @@ export const S = {
     stoppedWaiting: 'Stopped waiting. Use "Show Last Result" to check again.',
     stillGrading: 'Still being graded. Check again in a moment.',
     chooseFirst: 'Choose a problem first.',
+    logInFirst: 'Log in first.',
+    chooseProblemForFile: 'Choose the grader problem for this file.',
+    notAccepted: (wanted: string) => `This problem doesn't accept ${wanted}.`,
+    gradingTitle: (name: string, id: number) => `Grading ${name} (#${id})`,
+    compilationError: 'Compilation error',
+    waitingStatus: (status: string) => `Waiting to be graded… (${status})`,
+    noSubmissionsYet: 'No submissions yet.',
+    anotherFile: 'another file',
+    testLabel: (n: number, word: string) => `Test ${n}: ${word}`,
   },
+
+  account: {
+    enterBoth: 'Enter your username and password.',
+  },
+
+  penaltyNote: {
+    noWebSession: 'Hint/AI penalties not loaded (password not remembered). Scores shown are best scores.',
+    unreadable: 'Could not read hint/AI penalties from the problem list. Scores shown are best scores.',
+  },
+
+  notice: {
+    sameNameOne: 'Another file with the same name also matches this problem.',
+    sameNameMany: (n: number) => `${n} other files with the same name also match this problem.`,
+    linked: (n: number) => `${n} files are linked to this problem`,
+  },
+
+  statementOutdated: 'This problem is no longer available on the grader; this saved copy may be out of date.',
 
   match: {
     severalCould: 'Several problems could match this file. Choose one.',
@@ -198,6 +231,8 @@ export const S = {
     failed: (name: string) => `Couldn't rename the file to ${name}.`,
   },
 
+  statementTab: (name: string) => `Statement: ${name}`,
+
   errors: {
     checkConnection: (msg: string) => `${msg} Check your internet connection.`,
     unexpected: (msg: string) => `Unexpected error: ${msg}`,
@@ -207,7 +242,13 @@ export const S = {
 // ================================================================ webviews
 
 /** Sidebar and statement viewer texts (webview/*.ts). */
-export const W = {
+const EN_W = {
+  ago: {
+    justNow: 'just now',
+    minAgo: (m: number) => `${m} min ago`,
+    hoursAgo: (h: number) => `${h} h ago`,
+    daysAgo: (d: number) => `${d} day${d === 1 ? '' : 's'} ago`,
+  },
   username: "Username",
   password: "Password",
   rememberPasswordOnThisComputer: " Remember password on this computer",
@@ -410,7 +451,7 @@ export const W = {
 } as const;
 
 /** Match line under the problem selector. */
-export const W_SOURCE = {
+const EN_W_SOURCE = {
   saved: 'Chosen by you',
   filename: 'Matched by file name',
   cph: 'Matched from CPH data',
@@ -420,7 +461,34 @@ export const W_SOURCE = {
 // ================================================================ grader / host modules
 
 /** Connection banner, grader errors, status bar, statement panel, score lines. */
-export const G = {
+const EN_G = {
+  /** Verdict words, as on the website (`config/locales/en.yml`), by evaluation kind. */
+  verdict: {
+    waiting: 'Judging',
+    correct: 'Correct',
+    wrong: 'Wrong Answer',
+    partial: 'Partially Correct',
+    time_limit: 'Time Limit Exceed',
+    memory_limit: 'Memory Limit Exceed',
+    crash: 'Program Crashed',
+    unknown_error: 'UNKNOWN ERROR',
+    grader_error: 'GRADER ERROR',
+  } as Record<string, string>,
+  unknownVerdict: 'Unknown',
+  testOf: (n: number, total: number, word: string) => `Test ${n} of ${total}: ${word}`,
+  groupHint: 'Tests in a box are scored together — the box earns the lowest score inside it.',
+  groupOf: (group: number, groups: number, passed: number, total: number, hint: string) => `Group ${group} of ${groups}: ${passed}/${total} passed. ${hint}`,
+  /** Penalty label "-10 AI assist". */
+  penalty: (cost: string, what: 'both' | 'ai' | 'hints' | 'other') =>
+    `-${cost} ${{ both: 'hints + AI assist', ai: 'AI assist', hints: 'hints', other: 'penalty' }[what]}`,
+  statusBar: {
+    grading: (name: string) => `Grading ${name}…`,
+    connection: (title: string) => `Grader: ${title}`,
+    chooseProblem: 'Grader: choose problem',
+    submitWithScore: (score: string) => `${score}  Submit to Grader`,
+    submit: 'Submit to Grader',
+    counted: (n: string) => `, counted ${n}`,
+  },
   rawSumTip: 'This problem adds up raw test scores (raw-sum scoring), so there is no fixed maximum.',
   cedtGraderWaitingForThe: "CEDT Grader: waiting for the verdict. Click to open the panel.",
   clickToOpenThePanel: (message: string | number) => `${message} Click to open the panel.`,
@@ -478,3 +546,48 @@ export const G = {
   thisSubmissionScoredYourBest: (v0: string | number, v1: string | number) => `This submission scored ${v0}; your best ${v1} still counts.`,
   countedScoreUnchanged: (v0: string | number) => `Counted score unchanged (${v0}).`,
 } as const;
+
+/** How the problem was chosen (`ViewState.problem.sourceLabel`). "from CPH" only when CPH data was actually used. */
+const EN_MATCH_SOURCE = {
+  saved: 'Chosen by you',
+  cph: 'Matched from CPH data',
+  filename: 'Matched by file name',
+  suggested: 'Suggested — click to confirm',
+};
+
+// ================================================================ tables
+
+/** The English texts: the reference every other language must match (same keys, same function parameters). */
+export const EN = {
+  HOW_LINKED: EN_HOW_LINKED,
+  PICK_HOW: EN_PICK_HOW,
+  S: EN_S,
+  W: EN_W,
+  W_SOURCE: EN_W_SOURCE,
+  G: EN_G,
+  MATCH_SOURCE: EN_MATCH_SOURCE,
+};
+
+/** Same shape as `EN`, with every text widened to `string` (functions keep their parameters). */
+type Widen<T> = T extends (...args: infer A) => unknown
+  ? (...args: A) => string
+  : T extends string
+    ? string
+    : { -readonly [K in keyof T]: Widen<T[K]> };
+
+/** A complete translation: tsc fails when a key is missing or a function's parameters differ. */
+export type Strings = Widen<typeof EN>;
+
+function copy<T>(v: T): T {
+  if (v === null || typeof v !== 'object') return v;
+  return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, copy(x)])) as T;
+}
+
+// Live tables (English until `setLanguage` says otherwise).
+export const HOW_LINKED: Strings['HOW_LINKED'] = copy(EN.HOW_LINKED);
+export const PICK_HOW: Strings['PICK_HOW'] = copy(EN.PICK_HOW);
+export const S: Strings['S'] = copy(EN.S);
+export const W: Strings['W'] = copy(EN.W);
+export const W_SOURCE: Strings['W_SOURCE'] = copy(EN.W_SOURCE);
+export const G: Strings['G'] = copy(EN.G);
+export const MATCH_SOURCE: Strings['MATCH_SOURCE'] = copy(EN.MATCH_SOURCE);

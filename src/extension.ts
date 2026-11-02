@@ -4,6 +4,8 @@ import { GraderController, SUBMISSION_SCHEME } from './controller';
 import { SidebarProvider } from './ui/sidebarProvider';
 import { StatementPanels } from './ui/statementPanel';
 import { GraderStatusBar } from './ui/statusBar';
+import { readConfig } from './config';
+import { resolveLang, setLanguage } from './shared/i18n';
 import { WALKTHROUGH_CONTEXT, WALKTHROUGH_ID, walkthroughContext } from './shared/walkthrough';
 
 /**
@@ -14,6 +16,8 @@ import { WALKTHROUGH_CONTEXT, WALKTHROUGH_ID, walkthroughContext } from './share
  * action (see the device-lock note in CLAUDE.md).
  */
 export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
+  // Display language first: every text read after this is in it (changes apply live, see GraderController).
+  setLanguage(resolveLang(readConfig().displayLanguage, vscode.env.language));
   const controller = new GraderController(ctx);
   const sidebar = new SidebarProvider(ctx.extensionUri, controller);
   const statusBar = new GraderStatusBar();

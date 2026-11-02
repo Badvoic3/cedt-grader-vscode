@@ -43,21 +43,20 @@ import { EXTENSION_LANGUAGE } from './grader/languages';
 import { stat as fsStat, readFile as fsReadFile, rm } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { dismissKey, type LocatedEntry, moveCphProblem, reconnectCandidates, remapPath } from './mapping/mappingOps';
-import { cleanName, fileNameFor, type MatchSource, placeholder, resolveProblem, SOURCE_LABEL } from './mapping/match';
+import { cleanName, fileNameFor, type MatchSource, placeholder, resolveProblem } from './mapping/match';
 import { MappingStore } from './mapping/store';
 import { comparePaths, linkedNotice, mergeProblemFiles, noticeDismissed, noticeSignature, type ProblemFile } from './mapping/problemFiles';
 import { pathKey } from './mapping/paths';
 import { confirmSuggestion } from './mapping/suggestionGate';
 import { freeName, invalidFileName, nameMatchesProblem, renameProposal } from './mapping/renameToProblem';
 import { CACHE, LIMITS, TIMING, WEB_PATHS } from './shared/constants';
-import { PICK_HOW, S } from './shared/strings';
+import { MATCH_SOURCE, PICK_HOW, S } from './shared/strings';
 import { KEYS } from './shared/stateKeys';
+import { dateLocale, resolveLang, setLanguage } from './shared/i18n';
 import type { HistoryEntry, ProblemFilter, ProblemView, ResultView, SubmissionDetailView, ViewState } from './shared/messages';
 
 /** Dismissed "files for this problem" notices: problem id → notice signature (workspaceState; "Clear Cached Data" resets it). */
 export const DISMISSED_NOTICES_KEY = KEYS.dismissedNotices;
-
-export const EXAM_WARNING = S.exam.warning;
 
 /** URI scheme serving the source of a past submission (for the diff view). */
 export const SUBMISSION_SCHEME = 'cedt-grader-submission';
@@ -345,6 +344,7 @@ export class GraderController implements vscode.Disposable {
   private onConfigChanged(): void {
     const prev = this.cfg;
     this.cfg = readConfig();
+    if (prev.displayLanguage !== this.cfg.displayLanguage) this.applyLanguage();
     if (this.changingUsername && prev.baseUrl === this.cfg.baseUrl) {
       this.emit();
       return;
@@ -380,6 +380,19 @@ export class GraderController implements vscode.Disposable {
   private async getPassword(): Promise<string | undefined> {
     if (!this.cfg.username) return undefined;
     return this.ctx.secrets.get(this.secretKey('password'));
+  }
+
+  /** Rebuilds the sidebar in the new language (set by the sidebar provider). */
+  onLanguageChanged: (() => void) | null = null;
+
+  /**
+   * Switch the display language live: text tables, open statement tabs,
+   * the sidebar (reloaded; scroll and filters are kept) and the status bar.
+   */
+  private applyLanguage(): void {
+    setLanguage(resolveLang(this.cfg.displayLanguage, vscode.env.language));
+    this.statements.reloadAll();
+    this.onLanguageChanged?.();
   }
 
   private emit(): void {
@@ -512,11 +525,11 @@ export class GraderController implements vscode.Disposable {
     const mismatch = problem && !unavailable ? this.languageMismatch(problem) : null;
     let reason: string | null = null;
     if (this.busy) reason = null;
-    else if (!file) reason = 'Open a source file to submit it.';
-    else if (!loggedIn && !this.hasSavedPassword) reason = 'Log in first.';
-    else if (!problem) reason = 'Choose the grader problem for this file.';
-    else if (unavailable) reason = 'This problem is no longer available on the grader.';
-    else if (mismatch) reason = `This problem doesn't accept ${mismatch.wanted}.`;
+    else if (!file) reason = S.submit.openToSubmit;
+    else if (!loggedIn && !this.hasSavedPassword) reason = S.submit.logInFirst;
+    else if (!problem) reason = S.submit.chooseProblemForFile;
+    else if (unavailable) reason = S.submit.unavailable;
+    else if (mismatch) reason = S.submit.notAccepted(mismatch.wanted);
     else if (this.languagesError) reason = this.languagesError;
 
     const enabled = !this.busy && !!file && !!problem && (loggedIn || this.hasSavedPassword) && !mismatch && !unavailable;
@@ -542,7 +555,7 @@ export class GraderController implements vscode.Disposable {
             renameTo: problem && !problem.name.startsWith('#') && !nameMatchesProblem(file.fsPath, problem.name) ? renameProposal(file.fsPath, problem.name) : null,
           }
         : null,
-      problem: problem ? { ...this.problemView(problem), source: problem.source, sourceLabel: SOURCE_LABEL[problem.source], unavailable } : null,
+      problem: problem ? { ...this.problemView(problem), source: problem.source, sourceLabel: MATCH_SOURCE[problem.source], unavailable } : null,
       // Explicitly unlinked, or no confident match (candidates are only offered in the picker).
       notLinked: !problem && !!file && (this.notLinked || (!!this.data.problemList()?.problems.length && !this.matchInfo.ambiguous)),
       prompt: this.prompt,
@@ -575,7 +588,7 @@ export class GraderController implements vscode.Disposable {
       result: file ? (this.results.get(file.fsPath) ?? null) : null,
       gradingElsewhere:
         this.busy && this.gradingFile !== null && this.gradingFile !== file?.fsPath
-          ? (this.results.get(this.gradingFile)?.problemName ?? 'another file')
+          ? (this.results.get(this.gradingFile)?.problemName ?? S.submit.anotherFile)
           : null,
       history: problem
         ? { ...this.historyView(problem), ...(unavailable ? { stale: true } : {}) }
@@ -592,8 +605,8 @@ export class GraderController implements vscode.Disposable {
           !list || list.listStatus === 'loaded'
             ? null
             : list.listStatus === 'no-web-session'
-              ? 'Hint/AI penalties not loaded (password not remembered). Scores shown are best scores.'
-              : 'Could not read hint/AI penalties from the problem list. Scores shown are best scores.',
+              ? S.penaltyNote.noWebSession
+              : S.penaltyNote.unreadable,
       },
     };
   }
@@ -649,7 +662,7 @@ export class GraderController implements vscode.Disposable {
       evaluations: evals.map((e, i) => ({
         index: i + 1,
         kind: e.result ?? 'unknown',
-        label: `Test ${i + 1}: ${resultWord(e.result)}`,
+        label: S.submit.testLabel(i + 1, resultWord(e.result)),
         score: e.score,
         timeMs: e.timeMs,
         memoryKb: e.memoryKb,
@@ -762,7 +775,7 @@ export class GraderController implements vscode.Disposable {
   async loginWith(username: string, password: string, remember: boolean): Promise<boolean> {
     username = username.trim();
     if (!username || !password) {
-      this.accountError = 'Enter your username and password.';
+      this.accountError = S.account.enterBoth;
       this.emit();
       return false;
     }
@@ -1097,7 +1110,7 @@ export class GraderController implements vscode.Disposable {
         ? found[0].uri
         : (
             await vscode.window.showQuickPick(
-              found.map((f) => ({ label: vscode.workspace.asRelativePath(f.uri), description: how[f.how], detail: S.common.edited(new Date(f.t).toLocaleString()), uri: f.uri })),
+              found.map((f) => ({ label: vscode.workspace.asRelativePath(f.uri), description: how[f.how], detail: S.common.edited(new Date(f.t).toLocaleString(dateLocale())), uri: f.uri })),
               { placeHolder: S.files.filesFor(name) },
             )
           )?.uri;
@@ -1326,7 +1339,7 @@ export class GraderController implements vscode.Disposable {
     const candidates = await reconnectCandidates(await this.mapping.allEntries(), uri.fsPath, exists, dismissed);
     if (!candidates.length) return;
     const describeEntry = (c: LocatedEntry) =>
-      `${vscode.workspace.asRelativePath(c.fsPath)}, linked to ${this.problemById(c.entry.problemId)?.name ?? c.entry.name ?? `#${c.entry.problemId}`}`;
+      S.moved.entry(vscode.workspace.asRelativePath(c.fsPath), this.problemById(c.entry.problemId)?.name ?? c.entry.name ?? `#${c.entry.problemId}`);
     let chosen: LocatedEntry | undefined;
     if (candidates.length === 1) {
       const pick = await this.askInline(S.moved.looksLike(describeEntry(candidates[0])), [
@@ -1739,7 +1752,7 @@ export class GraderController implements vscode.Disposable {
           ranked.map((f) => ({
             label: vscode.workspace.asRelativePath(f),
             description: activeDir && vscode.Uri.joinPath(vscode.Uri.file(f), '..').fsPath === activeDir ? S.files.sameFolder : undefined,
-            detail: S.common.modified(new Date(mtimes.get(f) ?? 0).toLocaleString()),
+            detail: S.common.modified(new Date(mtimes.get(f) ?? 0).toLocaleString(dateLocale())),
             f,
           })),
           { placeHolder: S.files.filesNamed(cleanName(p.name)) },
@@ -1779,7 +1792,7 @@ export class GraderController implements vscode.Disposable {
     this.emit();
     try {
       const res = await vscode.window.withProgress(
-        { location: vscode.ProgressLocation.Notification, title: `Test cases for ${problem.name}`, cancellable: true },
+        { location: vscode.ProgressLocation.Notification, title: S.testcases.progressTitle(problem.name), cancellable: true },
         async (progress, token) => {
           const abort = new AbortController();
           token.onCancellationRequested(() => abort.abort());
@@ -1991,7 +2004,7 @@ export class GraderController implements vscode.Disposable {
       if (this.client.contestPage) {
         const open = S.exam.openInBrowser;
         const anyway = S.exam.submitAnyway;
-        const pick = await vscode.window.showWarningMessage(EXAM_WARNING, { modal: true }, open, anyway);
+        const pick = await vscode.window.showWarningMessage(S.exam.warning, { modal: true }, open, anyway);
         if (pick === open) await this.openProblemInBrowser(problem.id);
         if (pick !== anyway) return;
         warned = true;
@@ -2156,7 +2169,7 @@ export class GraderController implements vscode.Disposable {
     const abort = new AbortController();
     this.pollAbort = abort;
     return vscode.window.withProgress(
-      { location: vscode.ProgressLocation.Notification, title: `Grading ${problem.name} (#${submissionId})`, cancellable: true },
+      { location: vscode.ProgressLocation.Notification, title: S.submit.gradingTitle(problem.name, submissionId), cancellable: true },
       async (progress, token) => {
         token.onCancellationRequested(() => abort.abort());
         try {
@@ -2195,7 +2208,7 @@ export class GraderController implements vscode.Disposable {
       verdicts: s.verdicts,
       compileError: s.compileError,
       compilerMessage: s.compileError ? (s.compilerMessage ?? '') : null,
-      message: graded ? (s.compileError ? 'Compilation error' : null) : `Waiting to be graded… (${s.status.replace(/_/g, ' ')})`,
+      message: graded ? (s.compileError ? S.submit.compilationError : null) : S.submit.waitingStatus(s.status.replace(/_/g, ' ')),
     });
   }
 
@@ -2208,7 +2221,7 @@ export class GraderController implements vscode.Disposable {
     if (!(await this.ensureLoggedIn())) return;
     const items = (await this.data.loadHistory(problem.id)) ?? [];
     if (!items.length) {
-      this.setResult(key, newResult(problem, 'done', 'No submissions yet.'));
+      this.setResult(key, newResult(problem, 'done', S.submit.noSubmissionsYet));
       return;
     }
     const d = await this.data.loadDetail(items[0].id);
@@ -2238,7 +2251,7 @@ export class GraderController implements vscode.Disposable {
     // A cached statement opens even when logged out (no request); otherwise the viewer explains.
     const p = this.problemById(id);
     await this.statements.open(id, p?.name ?? `#${id}`, {
-      outdated: this.unavailableIds.has(id) ? 'This problem is no longer available on the grader; this saved copy may be out of date.' : null,
+      outdated: this.unavailableIds.has(id) ? S.statementOutdated : null,
     });
   }
 

@@ -15,14 +15,14 @@ export class GraderStatusBar implements vscode.Disposable {
     const r = s.result;
     const forThisProblem = r && s.problem && r.problemId === s.problem.id;
     if (r && (r.phase === 'submitting' || r.phase === 'grading')) {
-      this.item.text = `$(sync~spin) Grading ${r.problemName}…`;
+      this.item.text = `$(sync~spin) ${G.statusBar.grading(r.problemName)}`;
       this.item.tooltip = G.cedtGraderWaitingForThe;
       this.item.backgroundColor = undefined;
       this.item.show();
       return;
     }
     if (s.connection) {
-      this.item.text = `$(warning) Grader: ${s.connection.title}`;
+      this.item.text = `$(warning) ${G.statusBar.connection(s.connection.title)}`;
       this.item.tooltip = G.clickToOpenThePanel(s.connection.message);
       this.item.backgroundColor = new vscode.ThemeColor('statusBarItem.warningBackground');
       this.item.show();
@@ -33,15 +33,15 @@ export class GraderStatusBar implements vscode.Disposable {
       return;
     }
     if (!s.problem) {
-      this.item.text = '$(cloud-upload) Grader: choose problem';
+      this.item.text = `$(cloud-upload) ${G.statusBar.chooseProblem}`;
       this.item.tooltip = G.mapThisFileToA;
     } else if (forThisProblem && r!.phase === 'done' && (r!.points !== null || r!.compileError)) {
       const score = r!.compileError ? 'CE' : `${r!.points}`;
       const counted = s.problem.score.counted;
-      this.item.text = `$(cloud-upload) ${score}  Submit to Grader`;
-      this.item.tooltip = G.lastClickToOpenThe(s.problem.name, s.problem.id, score, counted !== null ? `, counted ${counted}` : '');
+      this.item.text = `$(cloud-upload) ${G.statusBar.submitWithScore(score)}`;
+      this.item.tooltip = G.lastClickToOpenThe(s.problem.name, s.problem.id, score, counted !== null ? G.statusBar.counted(String(counted)) : '');
     } else {
-      this.item.text = '$(cloud-upload) Submit to Grader';
+      this.item.text = `$(cloud-upload) ${G.statusBar.submit}`;
       this.item.tooltip = G.openTheCedtGraderPanel(s.problem.name, s.problem.id);
     }
     this.item.backgroundColor = undefined;

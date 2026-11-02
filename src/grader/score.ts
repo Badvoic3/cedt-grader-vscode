@@ -40,9 +40,8 @@ export interface ScoreSummary {
 
 export function penaltyLabel(info: Pick<ListScoreInfo, 'cost' | 'hintCount' | 'aiCount'>): string | null {
   if (!info.cost) return null;
-  const what =
-    info.hintCount && info.aiCount ? 'hints + AI assist' : info.aiCount ? 'AI assist' : info.hintCount ? 'hints' : 'penalty';
-  return `-${fmt(info.cost)} ${what}`;
+  const what = info.hintCount && info.aiCount ? 'both' : info.aiCount ? 'ai' : info.hintCount ? 'hints' : 'other';
+  return G.penalty(fmt(info.cost), what);
 }
 
 export function summarize(p: Pick<Problem, 'bestScore' | 'lastScore' | 'submissionCount' | 'list'>): ScoreSummary {
