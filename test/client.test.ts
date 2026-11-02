@@ -56,6 +56,13 @@ describe('login', () => {
     expect(server.count('POST', '/login/login')).toBe(1); // web login once, at login time
   });
 
+  it('the first problem load reuses the /main/list page login landed on (one ~700 KB fetch, not two)', async () => {
+    const { server, client, creds } = setup();
+    await client.login(creds);
+    await client.listProblems();
+    expect(server.count('GET', '/main/list')).toBe(1);
+  });
+
   it('wrong password → AuthError, exactly one attempt', async () => {
     const { server, client } = setup();
     await expect(client.login({ username: 'student', password: 'nope' })).rejects.toMatchObject({ reason: 'wrong-password' });
