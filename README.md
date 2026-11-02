@@ -15,7 +15,7 @@ The extension comes as one file, `cedt-grader-submit-<version>.vsix`. You don't 
    - Pick the `.vsix` file. If VS Code asks to reload or restart extensions, click it.
 
    *Or, from a terminal:* `code --install-extension cedt-grader-submit-0.6.0.vsix`. On macOS, if `code` isn't found, run **Shell Command: Install 'code' command in PATH** from the Command Palette (<kbd>Cmd</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd>) first.
-3. **Check that it worked.** A **CEDT Grader** icon (a page with a check mark) appears in the left bar, and the **Get started with CEDT Grader** page opens once (open it again any time with **CEDT Grader: Get Started** or from the **⋯** menu at the top of the panel).
+3. **Check that it worked.** A **CEDT Grader** icon (a page with a check mark) appears in the left bar, and, if you installed from inside VS Code, the **Get started with CEDT Grader** page opens. If it doesn't (e.g. you installed from a terminal or while VS Code was closed), run **CEDT Grader: Get Started** from the Command Palette or the **⋯** menu at the top of the panel; you can open it again the same way any time.
 
 ### First steps
 
