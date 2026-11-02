@@ -133,6 +133,9 @@ export class SidebarProvider implements vscode.WebviewViewProvider, vscode.Dispo
       case 'keepOnlyThisFile':
         await c.keepOnlyThisFile();
         return;
+      case 'dismissLinkedNotice':
+        await c.dismissLinkedNotice();
+        return;
       case 'cphTip':
         if (m.action === 'install' || m.action === 'later' || m.action === 'never') await c.cphTip(m.action);
         return;

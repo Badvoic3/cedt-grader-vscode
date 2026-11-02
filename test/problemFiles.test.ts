@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { autoAfterDelete, autoAfterRename, type AutoMatch, linkedNotice, mergeProblemFiles } from '../src/mapping/problemFiles';
+import { autoAfterDelete, autoAfterRename, type AutoMatch, linkedNotice, mergeProblemFiles, noticeDismissed, noticeSignature } from '../src/mapping/problemFiles';
 import { OnceCache } from '../src/mapping/matchIndex';
 import { fileStem, normalizeName } from '../src/mapping/match';
 
@@ -77,6 +77,24 @@ describe('confident suggestions count like links', () => {
     ]);
     // "not linked" wins over a suggestion too
     expect(mergeProblemFiles({ ...base, auto: [sug], unlinked: [S1], includeSuggested: true })).toEqual([]);
+  });
+});
+
+describe('dismissing the notice', () => {
+  it('stays hidden for that problem until the set of files (or how they are linked) changes', () => {
+    const two = mergeProblemFiles({ ...base, chosen: [B], matched: N(A) });
+    const dismissed = { '1731': noticeSignature(two) };
+    expect(noticeDismissed(dismissed, 1731, two)).toBe(true);
+    expect(noticeDismissed(dismissed, 1731, [...two].reverse())).toBe(true); // order doesn't matter
+    expect(noticeDismissed(dismissed, 9999, two)).toBe(false); // other problems unaffected
+    // a new file appears → shown again
+    const three = mergeProblemFiles({ ...base, chosen: [B], matched: N(A, '/w/hw/da68_f2_zero_one_subset_sum.cpp') });
+    expect(noticeDismissed(dismissed, 1731, three)).toBe(false);
+    // the name match gets linked (chosen) → shown again
+    const linked = mergeProblemFiles({ ...base, chosen: [A, B] });
+    expect(noticeDismissed(dismissed, 1731, linked)).toBe(false);
+    // nothing to hide with fewer than two files
+    expect(noticeDismissed({ '1731': noticeSignature([two[0]]) }, 1731, [two[0]])).toBe(false);
   });
 });
 

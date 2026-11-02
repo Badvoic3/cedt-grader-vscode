@@ -526,6 +526,10 @@ describe.runIf(existsSync(resolve(__dirname, '../esbuild.mjs')))('sidebar webvie
     expect(sent.at(-1)).toEqual({ type: 'openLinkedFile', index: 1 });
     [...rows[1].querySelectorAll<HTMLButtonElement>('button')].find((b) => b.textContent === 'Unlink')!.click();
     expect(sent.at(-1)).toEqual({ type: 'unlinkLinkedFile', index: 1 });
+    const dismiss = [...n.querySelectorAll<HTMLButtonElement>('button')].find((b) => b.textContent === 'Dismiss')!;
+    expect(dismiss.dataset.tip).toBe('Hide this notice until the files for this problem change');
+    dismiss.click();
+    expect(sent.at(-1)).toEqual({ type: 'dismissLinkedNotice' });
     [...doc.querySelectorAll<HTMLButtonElement>('#sec-current .notice.linked button')].find((b) => b.textContent === 'Unlink the other files')!.click();
     expect(sent.at(-1)).toEqual({ type: 'keepOnlyThisFile' });
   });

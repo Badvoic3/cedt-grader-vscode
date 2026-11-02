@@ -73,6 +73,23 @@ export function mergeProblemFiles(opts: {
   return [...out.values()].sort((a, b) => comparePaths(a.fsPath, b.fsPath));
 }
 
+/**
+ * Identity of a notice: the set of files and how each is linked. A dismissed
+ * notice stays hidden while this is unchanged; a new file, a removed one or a
+ * changed link (e.g. a match that gets linked) shows it again.
+ */
+export function noticeSignature(files: ProblemFile[], caseInsensitive?: boolean): string {
+  return files
+    .map((f) => `${pathKey(f.fsPath, caseInsensitive)}|${f.how}`)
+    .sort()
+    .join('\n');
+}
+
+/** Is the notice for `problemId` dismissed for exactly this set of files? */
+export function noticeDismissed(dismissed: Record<string, string>, problemId: number, files: ProblemFile[], caseInsensitive?: boolean): boolean {
+  return files.length > 1 && dismissed[String(problemId)] === noticeSignature(files, caseInsensitive);
+}
+
 /** How a file is linked, as shown in the notice. */
 export const HOW_TEXT: Readonly<Record<LinkHow, string>> = {
   chosen: 'chosen by you',

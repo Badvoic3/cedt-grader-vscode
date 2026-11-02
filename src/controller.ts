@@ -42,12 +42,15 @@ import { stat as fsStat, readFile as fsReadFile } from 'node:fs/promises';
 import { dismissKey, type LocatedEntry, moveCphProblem, reconnectCandidates, remapPath } from './mapping/mappingOps';
 import { cleanName, fileNameFor, type MatchSource, placeholder, resolveProblem, SOURCE_LABEL } from './mapping/match';
 import { MappingStore } from './mapping/store';
-import { comparePaths, linkedNotice, mergeProblemFiles, type ProblemFile } from './mapping/problemFiles';
+import { comparePaths, linkedNotice, mergeProblemFiles, noticeDismissed, noticeSignature, type ProblemFile } from './mapping/problemFiles';
 import { pathKey } from './mapping/paths';
 import { confirmSuggestion } from './mapping/suggestionGate';
 import { LIMITS, TIMING, WEB_PATHS } from './shared/constants';
 import { PICK_HOW, S } from './shared/strings';
 import type { HistoryEntry, ProblemFilter, ProblemView, ResultView, SubmissionDetailView, ViewState } from './shared/messages';
+
+/** Dismissed "files for this problem" notices: problem id → notice signature (workspaceState; "Clear Cached Data" resets it). */
+export const DISMISSED_NOTICES_KEY = 'cedtGrader.dismissedNotices';
 
 export const EXAM_WARNING = S.exam.warning;
 
@@ -531,7 +534,8 @@ export class GraderController implements vscode.Disposable {
       notLinked: !problem && !!file && (this.notLinked || (!!this.data.problemList()?.problems.length && !this.matchInfo.ambiguous)),
       prompt: this.prompt,
       ...(() => {
-        const n = problem && file ? linkedNotice(this.linkedFiles, file.fsPath, (f) => vscode.workspace.asRelativePath(f)) : null;
+        const hidden = !!problem && noticeDismissed(this.ctx.workspaceState.get<Record<string, string>>(DISMISSED_NOTICES_KEY, {}), problem.id, this.linkedFiles);
+        const n = problem && file && !hidden ? linkedNotice(this.linkedFiles, file.fsPath, (f) => vscode.workspace.asRelativePath(f)) : null;
         return { linkedFiles: n ? n.files.map(({ path, current, how }) => ({ path, current, how })) : [], linkedNotice: n?.text ?? null };
       })(),
       cphTip:
@@ -1434,6 +1438,16 @@ export class GraderController implements vscode.Disposable {
     if (f.how === 'chosen') await this.mapping.set(uri, undefined);
     await this.mapping.dropAuto(uri);
     await this.mapping.setUnlinked(uri, true);
+  }
+
+  /** Dismiss the "files for this problem" notice until its set of files changes (per workspace). */
+  async dismissLinkedNotice(): Promise<void> {
+    const p = this.problem;
+    if (!p || this.linkedFiles.length < 2) return;
+    const all = { ...this.ctx.workspaceState.get<Record<string, string>>(DISMISSED_NOTICES_KEY, {}) };
+    all[String(p.id)] = noticeSignature(this.linkedFiles);
+    await this.ctx.workspaceState.update(DISMISSED_NOTICES_KEY, all);
+    this.emit();
   }
 
   /** Keep the active file as the only one for its problem ("Unlink the other files"). */
