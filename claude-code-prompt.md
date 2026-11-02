@@ -306,7 +306,7 @@ Already in place (keep current): tests for parsers, `GraderClient` with a fake s
 1. Read `CLAUDE.md` (architecture, rules, "Where to change things", known limitations, **open questions**) and this file's Phase 5.
 2. Run `npm install`, `npm test`, `npm run build` — all green at v0.6.0 (344 tests); `npm run package` builds the `.vsix` without warnings.
 3. Phase 5 is built ((a) cache management + "Clear Cached Data", (b) README install guide / troubleshooting / updating / uninstalling, (c) Getting Started walkthrough, (d) packaging: LICENSE, icon, repository, no source maps). Release decisions are in `CLAUDE.md`. Waiting for the user's results of the Phase 5 CHECKPOINT list; fix what they report.
-4. Before the first push: rewrite git history (decided: mailmap to a noreply email; see `CLAUDE.md`), only when the user says so.
+4. Git history was rewritten to the GitHub noreply email before the first push (see `CLAUDE.md`). Keep `git config user.email` on the noreply address.
 5. Phase 6 only after the user confirms Phase 5.
 
 Layout changes need the user's approval first (Phase 4 rule); later requests win over earlier ones.

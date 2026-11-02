@@ -307,9 +307,9 @@ No course- or problem-specific names in code (problem names come from the server
 
 ## Release decisions (Phase 5)
 
-- LICENSE: MIT, © 2026 Nutthanun Kongsorn. `repository`: https://github.com/badvoic3/cedt-grader-vscode. Icon: `media/icon.png` (128 px, rendered from `media/icon.svg`; the Activity Bar uses the SVG).
+- LICENSE: MIT, © 2026 Nutthanun Kongsorn. `repository`: https://github.com/Badvoic3/cedt-grader-vscode. Icon: `media/icon.png` (128 px, rendered from `media/icon.svg`; the Activity Bar uses the SVG).
 - No source maps in the `.vsix`. No ESLint: strict `tsc` (noUnused*) is the lint.
-- **Git history: rewrite right before the first push** (not done yet; the user decides when). Commits carry the author's real name and personal email → `git filter-repo` with a mailmap to a GitHub noreply address, and set `git config user.email` to it. The deleted fixture `test/fixtures/submission_edit.html` (715fd8b → removed in 89746cd) is sanitized (CSRF tokens `***`, user id 12345, empty `int main`), so removing it is optional.
+- **Git history: rewritten before the first push** (2026-11-02): every commit and the `v0.5.0` tag use the GitHub noreply address (`git config user.email` is set to it); the old personal email is in no object. All hashes before that date changed. The deleted fixture `test/fixtures/submission_edit.html` (added in 884623c, removed in 21d606d) is sanitized (CSRF tokens `***`, user id 12345, empty `int main`) and stays in history.
 
 ## Open questions
 

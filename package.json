@@ -8,12 +8,12 @@
   "icon": "media/icon.png",
   "repository": {
     "type": "git",
-    "url": "https://github.com/badvoic3/cedt-grader-vscode.git"
+    "url": "https://github.com/Badvoic3/cedt-grader-vscode.git"
   },
   "bugs": {
-    "url": "https://github.com/badvoic3/cedt-grader-vscode/issues"
+    "url": "https://github.com/Badvoic3/cedt-grader-vscode/issues"
   },
-  "homepage": "https://github.com/badvoic3/cedt-grader-vscode#readme",
+  "homepage": "https://github.com/Badvoic3/cedt-grader-vscode#readme",
   "private": true,
   "engines": {
     "vscode": "^1.90.0"
