@@ -134,6 +134,8 @@ export const S = {
       `${parts}.${backedUp ? ' Previous CPH file backed up (.bak).' : ''} CPH reloads tests when you switch to the file; don't run tests in CPH before that.`,
     reloadCph: 'Reload in CPH',
     failed: (why: string) => `Could not load test cases: ${why}`,
+    suggestedQ: (name: string, sub: string) => `Load the test cases of ${name}${sub ? ` (${sub})` : ''}?`,
+    load: 'Load test cases',
   },
 
   submit: {
@@ -158,6 +160,11 @@ export const S = {
     stoppedWaiting: 'Stopped waiting. Use "Show Last Result" to check again.',
     stillGrading: 'Still being graded. Check again in a moment.',
     chooseFirst: 'Choose a problem first.',
+  },
+
+  match: {
+    severalCould: 'Several problems could match this file. Choose one.',
+    severalMatch: (cph: boolean) => `Several problems match this ${cph ? "file's CPH data" : 'file name'}. Choose one.`,
   },
 
   errors: {

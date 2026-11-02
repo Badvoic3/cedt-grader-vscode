@@ -1,4 +1,5 @@
 import type { Problem } from '../grader/types';
+import { MATCH } from '../shared/constants';
 import type { CphProblem } from './cph';
 import { matchCphProblem } from './cph';
 
@@ -47,12 +48,14 @@ export interface MatchInput {
   /** Problem list; empty/undefined when not loaded yet. */
   problems: Problem[] | undefined;
   baseUrl: string;
+  /** Workspace-relative parent folder names of the file (for the folder/tag bonus). */
+  folders?: string[];
 }
 
 export type MatchResult =
   | { kind: 'match'; problem: Problem; source: MatchSource; suggestions: Problem[] }
-  /** Several problems match equally well: don't choose, ask. */
-  | { kind: 'ambiguous'; candidates: Problem[]; source: 'cph' | 'filename' }
+  /** Several problems match equally well (or suggestions too close to call): don't choose, ask. */
+  | { kind: 'ambiguous'; candidates: Problem[]; source: 'cph' | 'filename' | 'suggested' }
   /** A saved link whose problem is no longer on the grader (missing from the list). Kept, shown as unavailable. */
   | { kind: 'unavailable'; problemId: number; suggestions: Problem[] }
   | { kind: 'none'; suggestions: Problem[] };
@@ -63,7 +66,11 @@ export type MatchResult =
  *     reported as unavailable, never silently replaced),
  *  2. the CPH .prob file (grader URL or problem name),
  *  3. exact normalized match between file name and problem name,
- *  4. otherwise the closest few candidates (suggested, not saved).
+ *  4. otherwise a suggestion: the closest candidate when its score reaches
+ *     MATCH.suggestMinScore and leads the next one by MATCH.suggestMinMargin
+ *     (source 'suggested', not saved); close candidates → ambiguous
+ *     ("Several problems could match"); below the threshold → none (the
+ *     candidates are only offered in the picker).
  * More than one equally good match → ambiguous (the user is asked).
  */
 export function resolveProblem(input: MatchInput): MatchResult {
@@ -97,22 +104,56 @@ export function resolveProblem(input: MatchInput): MatchResult {
     if (hits.length > 1) return { kind: 'ambiguous', candidates: hits, source: 'filename' };
   }
 
-  return { kind: 'none', suggestions: suggest(stem, problems) };
+  const scored = scoreCandidates(stem, problems, input.folders ?? []);
+  const suggestions = scored.map((x) => x.p);
+  const decision = decideSuggestion(scored);
+  if (decision.kind === 'suggested') return { kind: 'match', problem: decision.problem, source: 'suggested', suggestions };
+  if (decision.kind === 'close') return { kind: 'ambiguous', candidates: decision.candidates, source: 'suggested' };
+  return { kind: 'none', suggestions };
 }
 
-/** The closest few problems by name similarity (token overlap and shared prefix). */
-export function suggest(stem: string, problems: Problem[], max = 5): Problem[] {
+export interface ScoredCandidate {
+  p: Problem;
+  score: number;
+}
+
+/**
+ * Candidates by match score (best first, at least MATCH.pickerMinScore):
+ * name similarity (token overlap / shared part), plus MATCH.folderTagBonus
+ * when a parent folder is named like one of the problem's tags.
+ */
+export function scoreCandidates(stem: string, problems: Problem[], folders: string[] = [], max: number = MATCH.maxCandidates): ScoredCandidate[] {
   if (!stem) return [];
   const tokens = new Set(stem.split('_').filter((t) => t.length >= 2));
-  const scored = problems
+  const dirs = folders.map(normalizeName).filter(Boolean);
+  return problems
     .map((p) => {
       const n = normalizeName(p.name);
       const f = normalizeName(p.fullName);
-      return { p, score: Math.max(similarity(stem, tokens, n), similarity(stem, tokens, f) * 0.9) };
+      let score = Math.max(similarity(stem, tokens, n), similarity(stem, tokens, f) * 0.9);
+      if (score > 0 && dirs.length && (p.tags ?? []).some((t) => dirs.includes(normalizeName(t)))) score += MATCH.folderTagBonus;
+      return { p, score: Math.min(1, score) };
     })
-    .filter((x) => x.score >= 0.34)
-    .sort((a, b) => b.score - a.score || a.p.name.localeCompare(b.p.name));
-  return scored.slice(0, max).map((x) => x.p);
+    .filter((x) => x.score >= MATCH.pickerMinScore)
+    .sort((a, b) => b.score - a.score || a.p.name.localeCompare(b.p.name))
+    .slice(0, max);
+}
+
+/** Use the top candidate only when it is confident and clearly ahead. */
+export function decideSuggestion(
+  scored: ScoredCandidate[],
+): { kind: 'suggested'; problem: Problem; score: number } | { kind: 'close'; candidates: Problem[] } | { kind: 'below' } {
+  const [top, next] = scored;
+  if (!top || top.score < MATCH.suggestMinScore) return { kind: 'below' };
+  if (next && top.score - next.score < MATCH.suggestMinMargin) {
+    return { kind: 'close', candidates: scored.filter((x) => top.score - x.score < MATCH.suggestMinMargin).map((x) => x.p) };
+  }
+  return { kind: 'suggested', problem: top.p, score: top.score };
+}
+
+/** The closest few problems by match score (picker candidates). */
+export function suggest(stem: string, problems: Problem[], max: number = MATCH.maxCandidates): Problem[] {
+  return scoreCandidates(stem, problems, [], max).map((x) => x.p);
 }
 
 function similarity(stem: string, tokens: Set<string>, name: string): number {

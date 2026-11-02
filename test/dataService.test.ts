@@ -83,6 +83,16 @@ describe('cache freshness', () => {
 });
 
 describe('switching files', () => {
+  it('a suggested file loads only its top suggestion (never several candidates)', async () => {
+    const { data, fireTimers, server } = await setup();
+    const before = server.requests.length;
+    data.focusProblem(201); // the controller focuses only the one problem it shows (link or top suggestion)
+    await fireTimers();
+    const paths = server.requests.slice(before).map((r) => r.path);
+    expect(paths.length).toBeGreaterThan(0);
+    expect(paths.every((p) => /\/problems\/201(\/|$)/.test(p))).toBe(true);
+  });
+
   it('problem detail (full score): loaded with the focused problem, once per session', async () => {
     const { data, api, fireTimers } = await setup();
     data.focusProblem(201);

@@ -11,7 +11,8 @@ import { pathKey, remapPath } from './paths';
  *  - cph / filename: remembered auto-matches (recorded when the file was open
  *    and matched by CPH data or by its name);
  *  - filename: files that would match by name but were never opened (one
- *    cached file search per problem).
+ *    cached file search per problem);
+ *  - suggested: confident suggestions remembered while open (treated like links).
  * Excluded: files explicitly "not linked", and files manually linked to a
  * different problem (a manual link always wins).
  */
@@ -54,7 +55,7 @@ export function mergeProblemFiles(opts: {
   unlinked: string[];
   /** Files with a saved link to a different problem. */
   linkedElsewhere: string[];
-  /** Include remembered suggestions (row click only; the notice and the submit check leave them out). */
+  /** Include remembered (confident) suggestions; default true: they count like links. */
   includeSuggested?: boolean;
   caseInsensitive?: boolean;
 }): ProblemFile[] {
@@ -68,7 +69,7 @@ export function mergeProblemFiles(opts: {
     if (!prev || RANK[how] < RANK[prev.how]) out.set(k, { fsPath, how });
   };
   for (const p of opts.chosen) add(p, 'chosen');
-  for (const a of opts.auto) if (a.problemId === opts.problemId && (a.how !== 'suggested' || opts.includeSuggested)) add(a.fsPath, a.how);
+  for (const a of opts.auto) if (a.problemId === opts.problemId && (a.how !== 'suggested' || opts.includeSuggested !== false)) add(a.fsPath, a.how);
   for (const p of opts.searched) add(p, 'filename');
   return [...out.values()].sort((a, b) => comparePaths(a.fsPath, b.fsPath));
 }

@@ -43,6 +43,7 @@ import { cleanName, fileNameFor, type MatchSource, placeholder, resolveProblem, 
 import { MappingStore } from './mapping/store';
 import { comparePaths, linkedNotice, mergeProblemFiles, type ProblemFile, ProblemFileSearch } from './mapping/problemFiles';
 import { pathKey } from './mapping/paths';
+import { confirmSuggestion } from './mapping/suggestionGate';
 import { LIMITS, TIMING, WEB_PATHS } from './shared/constants';
 import { PICK_HOW, S } from './shared/strings';
 import type { HistoryEntry, ProblemFilter, ProblemView, ResultView, SubmissionDetailView, ViewState } from './shared/messages';
@@ -96,7 +97,7 @@ export class GraderController implements vscode.Disposable {
   private refreshSeq = 0;
   private changingUsername = false;
   /** Matching details for the active file (picker suggestions, ambiguous candidates, stale mapping). */
-  private matchInfo: { suggestions: Problem[]; ambiguous: Problem[] | null; ambiguousSource: 'cph' | 'filename' | null } = {
+  private matchInfo: { suggestions: Problem[]; ambiguous: Problem[] | null; ambiguousSource: 'cph' | 'filename' | 'suggested' | null } = {
     suggestions: [],
     ambiguous: null,
     ambiguousSource: null,
@@ -511,19 +512,22 @@ export class GraderController implements vscode.Disposable {
         ? { path: vscode.workspace.asRelativePath(file, false), name: file.path.split('/').pop() ?? '', languageGuess: lang, supported: lang !== null }
         : null,
       problem: problem ? { ...this.problemView(problem), source: problem.source, sourceLabel: SOURCE_LABEL[problem.source], unavailable } : null,
-      notLinked: !problem && !!file && this.notLinked,
+      // Explicitly unlinked, or no confident match (candidates are only offered in the picker).
+      notLinked: !problem && !!file && (this.notLinked || (!!this.data.problemList()?.problems.length && !this.matchInfo.ambiguous)),
       prompt: this.prompt,
       ...(() => {
         const n = problem && file ? linkedNotice(this.linkedFiles, file.fsPath, (f) => vscode.workspace.asRelativePath(f)) : null;
         return { linkedFiles: n ? n.files.map(({ path, current, how }) => ({ path, current, how })) : [], linkedNotice: n?.text ?? null };
       })(),
       cphTip:
-        !this.cph.installed && !this.cphTipHidden && !this.ctx.globalState.get<boolean>(CPH_TIP_KEY, false) && !!problem?.hasTestcase && problem.source !== 'suggested',
+        !this.cph.installed && !this.cphTipHidden && !this.ctx.globalState.get<boolean>(CPH_TIP_KEY, false) && !!problem?.hasTestcase,
       matching: {
         suggestions: this.matchInfo.suggestions.map((p) => this.problemView(p)),
         ambiguous: this.matchInfo.ambiguous?.map((p) => this.problemView(p)) ?? null,
         note: this.matchInfo.ambiguous
-          ? `Several problems match this ${this.matchInfo.ambiguousSource === 'cph' ? "file's CPH data" : 'file name'}. Choose one.`
+          ? this.matchInfo.ambiguousSource === 'suggested'
+            ? S.match.severalCould
+            : S.match.severalMatch(this.matchInfo.ambiguousSource === 'cph')
           : null,
       },
       testcases: { busy: this.testcasesBusy },
@@ -862,7 +866,14 @@ export class GraderController implements vscode.Disposable {
     const cph = entry || unlinked ? null : await readCphProblem(uri.fsPath, this.cphSaveLocation());
     const m = unlinked
       ? ({ kind: 'none', suggestions: [] } as const)
-      : resolveProblem({ savedProblemId: entry?.problemId ?? null, cph, filePath: uri.fsPath, problems: list, baseUrl: this.cfg.baseUrl });
+      : resolveProblem({
+          savedProblemId: entry?.problemId ?? null,
+          cph,
+          filePath: uri.fsPath,
+          problems: list,
+          baseUrl: this.cfg.baseUrl,
+          folders: vscode.workspace.asRelativePath(vscode.Uri.joinPath(uri, '..'), false).split('/').filter((x) => x && x !== '.'),
+        });
     this.notLinked = unlinked;
     if (seq !== this.refreshSeq) return;
     let problem: (Problem & { source: MatchSource }) | null = null;
@@ -878,25 +889,25 @@ export class GraderController implements vscode.Disposable {
       this.matchInfo.ambiguous = m.candidates;
       this.matchInfo.ambiguousSource = m.source;
     } else {
+      // Below the confidence threshold: not used; candidates only in the picker ("Not linked to a problem").
       this.matchInfo.suggestions = [...m.suggestions];
-      // The closest candidate is pre-selected but marked "suggested" (submit asks first).
-      if (m.suggestions.length) problem = { ...m.suggestions[0], source: 'suggested' };
     }
+    if (m.kind === 'match' && m.source === 'suggested') this.matchInfo.suggestions = [...m.suggestions];
     // Remember automatic matches of open files (never over a manual link or "not linked").
-    if (!entry && !unlinked && m.kind === 'match' && (m.source === 'filename' || m.source === 'cph')) await this.mapping.recordAuto(uri, m.problem.id, m.source);
-    else if (!entry && !unlinked && m.kind === 'none' && m.suggestions.length) await this.mapping.recordAuto(uri, m.suggestions[0].id, 'suggested');
+    if (!entry && !unlinked && m.kind === 'match' && (m.source === 'filename' || m.source === 'cph' || m.source === 'suggested')) await this.mapping.recordAuto(uri, m.problem.id, m.source);
     else if (!entry && list?.length && m.kind !== 'match') await this.mapping.dropAuto(uri);
     await this.refreshMappedIds();
     if (seq !== this.refreshSeq) return;
     this.problem = problem;
     // Cached name search only here; a missing search runs right after the first render.
-    this.linkedFiles = problem && problem.source !== 'suggested' ? await this.filesForProblem(problem.id, 'cached') : [];
-    if (problem && problem.source !== 'suggested' && !this.fileSearch.peek(problem.id) && this.data.isVisible()) void this.refreshLinkedFiles();
-    if (problem && problem.source !== 'suggested') await this.noteOpened(problem.id);
+    // Suggestions (confident ones only) behave like links for everything read-only.
+    this.linkedFiles = problem ? await this.filesForProblem(problem.id, 'cached') : [];
+    if (problem && !this.fileSearch.peek(problem.id) && this.data.isVisible()) void this.refreshLinkedFiles();
+    if (problem) await this.noteOpened(problem.id);
     this.applyLanguageChoice();
     this.emit();
-    // A suggestion is only a guess: don't fetch its history until it is confirmed.
-    this.data.focusProblem(problem && problem.source !== 'suggested' ? problem.id : null);
+    // One problem only (the top suggestion at most, never several candidates).
+    this.data.focusProblem(problem ? problem.id : null);
     if (!entry && !this.reconnectAsked.has(uri.fsPath)) void this.offerReconnect(uri);
   }
 
@@ -909,7 +920,7 @@ export class GraderController implements vscode.Disposable {
    * Explicit "not linked" files and files linked to another problem are left out.
    * `search`: 'run' searches if not cached; 'cached' uses only a finished search.
    */
-  async filesForProblem(problemId: number, search: 'run' | 'cached' | 'none' = 'run', includeSuggested = false): Promise<ProblemFile[]> {
+  async filesForProblem(problemId: number, search: 'run' | 'cached' | 'none' = 'run', includeSuggested = true): Promise<ProblemFile[]> {
     const chosen = (await this.mapping.filesFor(problemId, this.cfg.baseUrl)).map((u) => u.fsPath);
     let searched: string[] = [];
     if (search === 'run') searched = await this.fileSearch.get(problemId);
@@ -929,7 +940,7 @@ export class GraderController implements vscode.Disposable {
   private async refreshLinkedFiles(): Promise<void> {
     const p = this.problem;
     const file = this.fileUri;
-    if (!p || !file || p.source === 'suggested' || !this.data.isVisible()) return;
+    if (!p || !file || !this.data.isVisible()) return;
     const files = await this.filesForProblem(p.id, 'run');
     if (this.problem?.id !== p.id || this.fileUri?.fsPath !== file.fsPath) return;
     this.linkedFiles = files;
@@ -1027,7 +1038,7 @@ export class GraderController implements vscode.Disposable {
   private async refreshMappedIds(): Promise<void> {
     const ids = await this.mapping.mappedProblemIds(this.cfg.baseUrl);
     const blocked = new Set(this.mapping.unlinkedPaths().map((p) => pathKey(p)));
-    for (const a of this.mapping.autoMatches()) if (a.how !== 'suggested' && !blocked.has(pathKey(a.fsPath))) ids.add(a.problemId);
+    for (const a of this.mapping.autoMatches()) if (!blocked.has(pathKey(a.fsPath))) ids.add(a.problemId);
     this.mappedIds = ids;
   }
 
@@ -1213,6 +1224,35 @@ export class GraderController implements vscode.Disposable {
     await this.mapping.setUnlinked(this.fileUri, true);
     this.problem = null;
     await this.setActiveFile(this.fileUri);
+  }
+
+  /** Full name without a repeated "name:" prefix. */
+  private subtitleOf(p: Problem): string {
+    const full = p.fullName.trim();
+    return full && full !== p.name ? (full.startsWith(`${p.name}:`) ? full.slice(p.name.length + 1).trim() : full) : '';
+  }
+
+  /**
+   * Write action on a suggested match: one inline question; "yes" saves the
+   * link (it's not asked again), "Choose another problem" opens the picker.
+   */
+  private confirmSuggestedFor(file: vscode.Uri, problem: Problem & { source: MatchSource }, question: string, yesLabel: string): Promise<boolean> {
+    return confirmSuggestion({
+      source: problem.source,
+      ask: async () => {
+        const pick = await this.askInline(question, [
+          { id: 'yes', label: yesLabel, primary: true },
+          { id: 'choose', label: S.submit.chooseAnother },
+        ]);
+        return pick === 'yes' ? 'yes' : pick === 'choose' ? 'choose' : undefined;
+      },
+      confirm: async () => {
+        await this.mapping.set(file, { problemId: problem.id, name: problem.name, baseUrl: this.cfg.baseUrl });
+        if (this.problem?.id === problem.id) this.problem = { ...this.problem, source: 'saved' };
+        this.emit();
+      },
+      chooseAnother: () => this.focusProblemPicker(),
+    });
   }
 
   /** Open the problem dropdown in the panel (e.g. "Choose another problem"). */
@@ -1478,6 +1518,8 @@ export class GraderController implements vscode.Disposable {
       void vscode.window.showInformationMessage(S.testcases.none(problem.name));
       return;
     }
+    // Writing test cases for a guess: ask once (yes confirms the link).
+    if (!(await this.confirmSuggestedFor(file, problem, S.testcases.suggestedQ(problem.name, this.subtitleOf(problem)), S.testcases.load))) return;
     if (!(await this.ensureLoggedIn())) return;
     this.testcasesBusy = true;
     this.emit();
@@ -1746,16 +1788,7 @@ export class GraderController implements vscode.Disposable {
 
       // A suggested (unconfirmed) match always asks, even with confirmations off.
       if (problem.source === 'suggested') {
-        const full = problem.fullName.trim();
-        const subtitle = full && full !== problem.name ? (full.startsWith(`${problem.name}:`) ? full.slice(problem.name.length + 1).trim() : full) : '';
-        const pick = await this.askInline(S.submit.suggestedQ(problem.name, subtitle), [
-          { id: 'submit', label: S.submit.submit, primary: true },
-          { id: 'choose', label: S.submit.chooseAnother },
-        ]);
-        if (pick === 'choose') await this.focusProblemPicker();
-        if (pick !== 'submit') return;
-        await this.mapping.set(fileUri, { problemId: problem.id, name: problem.name, baseUrl: this.cfg.baseUrl });
-        if (this.problem) this.problem = { ...this.problem, source: 'saved' };
+        if (!(await this.confirmSuggestedFor(fileUri, problem, S.submit.suggestedQ(problem.name, this.subtitleOf(problem)), S.submit.submit))) return;
         warned = true;
       }
 

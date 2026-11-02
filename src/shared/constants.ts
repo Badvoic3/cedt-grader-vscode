@@ -56,6 +56,26 @@ export const TIMING = {
 /** Links of deleted files are kept (stale) this many days, so a moved file can reconnect. */
 export const STALE_LINK_DAYS = 30;
 
+// ------------------------------------------------------------------ matching
+
+/**
+ * Suggestions (file name close to, but not exactly, a problem name).
+ * Scores are 0..1 (name similarity, + a bonus when a parent folder is named
+ * like one of the problem's tags).
+ */
+export const MATCH = {
+  /** At or above: the top candidate is used as "Suggested" (treated like a link for viewing). */
+  suggestMinScore: 0.6,
+  /** The top candidate must lead the next one by this much; otherwise "Several problems could match". */
+  suggestMinMargin: 0.08,
+  /** Candidates shown in the picker ("Suggested for this file") from this score. */
+  pickerMinScore: 0.34,
+  /** Added when a parent folder's name matches one of the problem's tags. */
+  folderTagBonus: 0.1,
+  /** Candidates listed in the picker. */
+  maxCandidates: 5,
+} as const;
+
 // ------------------------------------------------------------------ limits
 
 export const LIMITS = {

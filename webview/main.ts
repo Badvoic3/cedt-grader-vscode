@@ -522,7 +522,7 @@ function renderCurrent(s: ViewState): void {
     if (L.selectedId === null && L.items.length) select.append(el('option', { value: '', selected: true, disabled: true }, W.chooseLanguage));
     for (const l of L.items) select.append(el('option', { value: l.id, selected: l.id === L.selectedId }, l.name));
     b.append(el('div', { class: 'field' }, el('label', { class: 'field-label', for: 'lang' }, W.language), select));
-    if (p.hasTestcase && p.source !== 'suggested') {
+    if (p.hasTestcase) {
       b.append(
         button(
           s.testcases.busy ? [icon('loading', 'codicon-modifier-spin'), W.loadingTestCases] : [icon('beaker'), W.loadTestCases],
