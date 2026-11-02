@@ -15,11 +15,24 @@ export interface VerdictView {
   group?: number;
 }
 
+/** Scores as the server counts them (see src/grader/score.ts). */
+export interface ScoreView {
+  counted: number | null;
+  best: number | null;
+  latest: number | null;
+  attempts: number;
+  penaltyLabel: string | null;
+  rawSum: boolean;
+  /** 'problem-list' = hint/AI penalties read from /main/list; 'api' = API only (penalties unknown). */
+  source: 'api' | 'problem-list';
+  latestBelowCounted: boolean;
+}
+
 export interface ProblemView {
   id: number;
   name: string;
   fullName: string;
-  bestScore: number | null;
+  score: ScoreView;
 }
 
 export interface LanguageView {
@@ -35,25 +48,26 @@ export interface ResultView {
   problemName: string;
   submissionId: number | null;
   submissionUrl: string | null;
-  score: number | null;
-  /** Server hides the score (`ui.show_score` off). */
-  scoreHidden: boolean;
-  tries: number | null;
-  time: string | null;
+  /** Attempt number for this problem. */
+  number: number | null;
+  points: number | null;
   comment: string | null;
   verdicts: VerdictView[];
   compileError: boolean;
   compilerMessage: string | null;
+  /** e.g. "Counted score improved: 40 → 70." */
+  improvement: string | null;
   /** Human readable status or error text. */
   message: string | null;
 }
 
 export interface HistoryEntry {
   submissionId: number;
-  url: string;
-  score: number | null;
+  number: number | null;
+  points: number | null;
+  status: string;
   comment: string | null;
-  time: string;
+  submittedAt: string | null;
   compileError: boolean;
 }
 
@@ -63,6 +77,8 @@ export interface ViewState {
     status: 'logged-out' | 'logging-in' | 'logged-in';
     username: string;
     hasSavedPassword: boolean;
+    /** Default for the "Remember password on this computer" checkbox. */
+    rememberPassword: boolean;
     error: string | null;
   };
   file: {
@@ -72,12 +88,11 @@ export interface ViewState {
     languageGuess: string | null;
     supported: boolean;
   } | null;
-  problem: (ProblemView & { source: 'mapping' | 'cph'; statementUrl: string | null }) | null;
+  problem: (ProblemView & { source: 'mapping' | 'cph' }) | null;
   languages: {
     loading: boolean;
     items: LanguageView[];
     selectedId: number | null;
-    forced: boolean;
     error: string | null;
   };
   submit: {
@@ -91,12 +106,14 @@ export interface ViewState {
   result: ResultView | null;
   /** Problem name of a submission being graded for another file, if any. */
   gradingElsewhere: string | null;
-  history: HistoryEntry[];
+  history: { loading: boolean; items: HistoryEntry[] };
   problems: {
     loading: boolean;
     loaded: boolean;
     items: ProblemView[];
     error: string | null;
+    /** Note when hint/AI penalties could not be read from /main/list. */
+    penaltyNote: string | null;
   };
 }
 
@@ -106,7 +123,7 @@ export type ToWebview = { type: 'state'; state: ViewState } | { type: 'focus'; t
 /** Webview → host. The password is only ever carried by `login`. */
 export type FromWebview =
   | { type: 'ready' }
-  | { type: 'login'; username: string; password: string }
+  | { type: 'login'; username: string; password: string; remember: boolean }
   | { type: 'loginSaved' }
   | { type: 'logout' }
   | { type: 'submit' }

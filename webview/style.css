@@ -351,3 +351,25 @@ input::placeholder { color: var(--vscode-input-placeholderForeground); }
 @media (forced-colors: active) {
   .tile { forced-color-adjust: none; }
 }
+
+/* ------------------------------------------------------------ score card */
+
+.score-card {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--vscode-editorWidget-background, transparent);
+}
+.score-facts { display: flex; flex-wrap: wrap; gap: 4px 10px; color: var(--muted); }
+.score-facts strong { color: var(--vscode-foreground); font-variant-numeric: tabular-nums; }
+.penalty { color: var(--bad); font-weight: 600; }
+.improvement { color: var(--vscode-foreground); }
+.improvement .codicon { vertical-align: -3px; color: var(--ok); }
+.problem-name .id { font-weight: normal; font-size: 0.9em; }
+
+.login-form .check { display: flex; align-items: center; gap: 4px; color: var(--vscode-foreground); font-size: 0.95em; }
+.login-form .check input { margin: 0; }
+.login-form .hint { margin-top: -2px; }

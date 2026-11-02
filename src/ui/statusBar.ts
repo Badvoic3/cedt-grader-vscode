@@ -27,13 +27,14 @@ export class GraderStatusBar implements vscode.Disposable {
     if (!s.problem) {
       this.item.text = '$(cloud-upload) Grader: choose problem';
       this.item.tooltip = 'Map this file to a CEDT Grader problem';
-    } else if (forThisProblem && r!.phase === 'done' && (r!.score !== null || r!.compileError)) {
-      const score = r!.compileError ? 'CE' : `${r!.score}/100`;
+    } else if (forThisProblem && r!.phase === 'done' && (r!.points !== null || r!.compileError)) {
+      const score = r!.compileError ? 'CE' : `${r!.points}`;
+      const counted = s.problem.score.counted;
       this.item.text = `$(cloud-upload) ${score}  Submit to Grader`;
-      this.item.tooltip = `${s.problem.name}: last result ${score}. Click to open the panel.`;
+      this.item.tooltip = `${s.problem.name} (#${s.problem.id}): last ${score}${counted !== null ? `, counted ${counted}` : ''}. Click to open the panel.`;
     } else {
       this.item.text = '$(cloud-upload) Submit to Grader';
-      this.item.tooltip = `${s.problem.name}: open the CEDT Grader panel`;
+      this.item.tooltip = `${s.problem.name} (#${s.problem.id}): open the CEDT Grader panel`;
     }
     this.item.backgroundColor = undefined;
     this.item.show();

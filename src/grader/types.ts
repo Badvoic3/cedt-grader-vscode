@@ -1,76 +1,109 @@
-/** A problem row from `/main/list`. */
+/** A language as the API reports it (`GET /api/v1/languages`). */
+export interface Language {
+  id: number;
+  /** Display name, e.g. `C++` (API `pretty_name`). */
+  name: string;
+  /** Internal name, e.g. `cpp` (API `name`). */
+  code: string;
+  /** File extension without dot, e.g. `cpp`. */
+  ext: string;
+}
+
+/** Hint / AI-assist penalty and dataset mode, read from the `/main/list` HTML (the API lacks it). */
+export interface ListScoreInfo {
+  /** Raw max points shown by the list (`td[data-order]`). */
+  rawMax: number | null;
+  /** Adjusted score the list shows in green (null in raw-sum mode). */
+  adjusted: number | null;
+  /** Total hint + AI-assist cost ("Full score reduced by N"), 0 if none. */
+  cost: number;
+  hintCount: number;
+  aiCount: number;
+  /** Live dataset uses "raw sum" scoring: no 100 cap, no penalty. */
+  rawSum: boolean;
+}
+
 export interface Problem {
   id: number;
-  /** Short code name, e.g. `DigLo69_Exam2__1`. */
+  /** Short code name, e.g. `00_Intro_11`. */
   name: string;
   /** Human title. */
   fullName: string;
-  /** Best score so far (0–100), or null when untried / not shown. */
+  /** Max points over regular submissions (API `best_score`), null when untried. */
   bestScore: number | null;
-  /** Latest submission id shown in the row, if any. */
-  latestSubmissionId: number | null;
-  /** Relative URLs found in the row (may be absent). */
-  statementUrl?: string;
-  testcasesUrl?: string;
+  lastScore: number | null;
+  lastResult: string | null;
+  lastSubmissionId: number | null;
+  lastSubmissionTime: string | null;
+  submissionCount: number;
+  hasTestcase: boolean;
+  hasAttachment: boolean;
+  /** Allowed language ids; null = all languages. */
+  permittedLanguageIds: number[] | null;
+  /** From the HTML problem list, when it could be loaded. */
+  list: ListScoreInfo | null;
 }
 
-export interface Language {
-  id: number;
-  /** Pretty name as shown in the `<select>`, e.g. `C++`. */
-  name: string;
-  selected: boolean;
-}
-
-export interface SubmitPage {
-  problemId: number;
-  problemName: string | null;
-  problemFullName: string | null;
-  languages: Language[];
-  /** `<select>` disabled → only one language allowed, server forces it. */
-  languageForced: boolean;
-  /** Submit form present (problem open for submissions). */
-  canSubmit: boolean;
-  csrfToken: string | null;
-  /** `isContestPage()` on this page (exam warning only). */
-  contestPage: boolean;
+export interface ProblemDetail extends Problem {
+  fullScore: number | null;
+  submissionIds: number[];
 }
 
 export interface Verdict {
   /** 1-based test number. */
   index: number;
   ok: boolean;
-  /** Raw `title` text, e.g. `Test 10 of 20: Wrong Answer`. */
+  /** e.g. `Test 10 of 20: Wrong Answer`. */
   label: string;
-  /** The verdict-* class suffix, e.g. `correct`, `wrong`, `time_limit` (or `unknown`). */
+  /** cafe-grader result kind, e.g. `correct`, `wrong`, `time_limit` (or `unknown`). */
   kind: string;
-  /** Group number when the tile is inside a `.verdict-group`. */
+  /** Scoring group (1-based) for tests inside `[...]`. */
   group?: number;
 }
 
-export type SubmissionState = 'none' | 'pending' | 'graded';
+export type SubmissionApiStatus =
+  | 'submitted'
+  | 'evaluating'
+  | 'done'
+  | 'compilation_error'
+  | 'compilation_success'
+  | 'grader_error'
+  | string;
 
-export interface SubmissionStatus {
-  id: number | null;
-  state: SubmissionState;
-  /** Score as shown (e.g. 70), null when pending or hidden by the server. */
-  score: number | null;
-  tries: number | null;
-  /** Time text, e.g. `14:03:22`, if present. */
-  time: string | null;
-  /** `data-comment` of the verdict strip, or the plain grader comment without brackets. */
+export interface SubmissionResult {
+  id: number;
+  /** Attempt number for this problem (API `number`). */
+  number: number | null;
+  problemId: number;
+  status: SubmissionApiStatus;
+  state: 'pending' | 'graded';
+  points: number | null;
   comment: string | null;
-  verdicts: Verdict[];
+  compilerMessage: string | null;
   compileError: boolean;
-  /** Server-suggested refresh delay in ms (pending only). */
-  refreshDelayMs: number | null;
-  /** Poll URL rendered by the server (pending only), relative. */
-  refreshUrl: string | null;
+  verdicts: Verdict[];
+  submittedAt: string | null;
+  language: string | null;
 }
 
-export interface Evaluation {
-  num: string;
-  time: string | null;
-  memory: string | null;
-  result: string | null;
-  score: string | null;
+export interface SubmissionBrief {
+  id: number;
+  number: number | null;
+  language: string | null;
+  submittedAt: string | null;
+  points: number | null;
+  status: SubmissionApiStatus;
+  comment: string | null;
+}
+
+export interface GraderUser {
+  id: number;
+  login: string;
+  fullName: string;
+}
+
+export interface StoredToken {
+  token: string;
+  /** ISO time. */
+  expiresAt: string;
 }

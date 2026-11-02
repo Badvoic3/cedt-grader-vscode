@@ -18,20 +18,20 @@ export const EXTENSION_LANGUAGE: Readonly<Record<string, string>> = {
   '.dig': 'Digital',
 };
 
-/** Extra spellings a server might use for the same language. */
+/** Spellings a server may use for the same language (display name, internal name or extension). */
 const ALIASES: Readonly<Record<string, string[]>> = {
-  'C++': ['c++', 'cpp', 'g++'],
+  'C++': ['c++', 'cpp', 'g++', 'cc', 'cxx'],
   C: ['c', 'gcc'],
   Python: ['python', 'python3', 'py'],
   Java: ['java'],
-  Rust: ['rust'],
+  Rust: ['rust', 'rs'],
   Go: ['go', 'golang'],
   PHP: ['php'],
-  Haskell: ['haskell', 'ghc'],
-  Ruby: ['ruby'],
-  Pascal: ['pascal', 'fpc', 'freepascal'],
+  Haskell: ['haskell', 'ghc', 'hs'],
+  Ruby: ['ruby', 'rb'],
+  Pascal: ['pascal', 'fpc', 'freepascal', 'pas'],
   PostgreSQL: ['postgresql', 'postgres', 'sql'],
-  Digital: ['digital'],
+  Digital: ['digital', 'dig'],
 };
 
 export function languageForPath(filePath: string): string | null {
@@ -44,14 +44,14 @@ function norm(s: string): string {
 }
 
 /**
- * Options of the per-problem `<select>` that match a canonical language.
- * Exact alias matches win; otherwise a name that starts with the alias and
- * continues with a space/digit/paren (e.g. `Python 3`, `C++17`) is accepted,
- * but `C` never matches `C++` / `C#`.
+ * Languages matching a canonical name. Exact matches on display name,
+ * internal code or extension win; otherwise a display name that starts with
+ * an alias followed by a space/digit/paren (`Python 3`, `C++17`). `C` never
+ * matches `C++` / `C#`.
  */
 export function matchLanguages(canonical: string, options: Language[]): Language[] {
   const aliases = ALIASES[canonical] ?? [norm(canonical)];
-  const exact = options.filter((o) => aliases.includes(norm(o.name)));
+  const exact = options.filter((o) => [o.name, o.code, o.ext].some((v) => aliases.includes(norm(v ?? ''))));
   if (exact.length) return exact;
   return options.filter((o) => {
     const n = norm(o.name);
@@ -65,16 +65,13 @@ export type LanguageChoice =
   | { kind: 'not-allowed'; wanted: string; allowed: Language[] }
   | { kind: 'unknown-extension'; allowed: Language[] };
 
-export function chooseLanguage(filePath: string, options: Language[], forced = false): LanguageChoice {
-  if (forced && options.length >= 1) {
-    // Server forces its only permitted language; still verify it fits the file.
-    const wanted = languageForPath(filePath);
-    if (wanted && matchLanguages(wanted, options).length === 0) {
-      return { kind: 'not-allowed', wanted, allowed: options };
-    }
-    return { kind: 'match', language: options.find((o) => o.selected) ?? options[0] };
-  }
+/** Pick the language for `filePath` among the problem's allowed languages. */
+export function chooseLanguage(filePath: string, options: Language[]): LanguageChoice {
   const wanted = languageForPath(filePath);
+  if (options.length === 1) {
+    if (wanted && matchLanguages(wanted, options).length === 0) return { kind: 'not-allowed', wanted, allowed: options };
+    return { kind: 'match', language: options[0] };
+  }
   if (!wanted) return { kind: 'unknown-extension', allowed: options };
   const matches = matchLanguages(wanted, options);
   if (matches.length === 1) return { kind: 'match', language: matches[0] };

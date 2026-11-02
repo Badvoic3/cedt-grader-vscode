@@ -8,7 +8,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { JSDOM } from 'jsdom';
 import { beforeAll, describe, expect, it } from 'vitest';
-import type { FromWebview, ViewState } from '../src/shared/messages';
+import type { FromWebview, ScoreView, ViewState } from '../src/shared/messages';
 
 const bundle = resolve(__dirname, '../media/dist/webview.js');
 
@@ -29,39 +29,43 @@ function boot() {
   return { dom, doc: dom.window.document, sent, post, saved: () => saved };
 }
 
+const score = (counted: number | null, extra: Partial<ScoreView> = {}): ScoreView => ({
+  counted, best: counted, latest: counted, attempts: counted === null ? 0 : 1, penaltyLabel: null, rawSum: false, source: 'problem-list', latestBelowCounted: false, ...extra,
+});
+
 const base: ViewState = {
   baseUrl: 'https://cedt-grader.nattee.net',
-  account: { status: 'logged-out', username: '', hasSavedPassword: false, error: null },
+  account: { status: 'logged-out', username: '', hasSavedPassword: false, rememberPassword: true, error: null },
   file: null,
   problem: null,
-  languages: { loading: false, items: [], selectedId: null, forced: false, error: null },
-  gradingElsewhere: null,
+  languages: { loading: false, items: [], selectedId: null, error: null },
   submit: { enabled: false, busy: false, reason: 'Open a source file to submit it.', label: 'Submit to Grader' },
   result: null,
-  history: [],
-  problems: { loading: false, loaded: false, items: [], error: null },
+  gradingElsewhere: null,
+  history: { loading: false, items: [] },
+  problems: { loading: false, loaded: false, items: [], error: null, penaltyNote: null },
 };
 
 const loggedIn: ViewState = {
   ...base,
-  account: { status: 'logged-in', username: 'student', hasSavedPassword: true, error: null },
+  account: { status: 'logged-in', username: 'student', hasSavedPassword: true, rememberPassword: true, error: null },
   file: { path: 'grader/00 11 intro.cpp', name: '00 11 intro.cpp', languageGuess: 'C++', supported: true },
-  problem: { id: 1360, name: '00_Intro_11', fullName: '<img src=x onerror=alert(1)>', bestScore: 100, source: 'mapping', statementUrl: null },
-  languages: { loading: false, items: [{ id: 1, name: 'C' }, { id: 2, name: 'C++' }], selectedId: 2, forced: false, error: null },
+  problem: { id: 1360, name: '00_Intro_11', fullName: '<img src=x onerror=alert(1)>', score: score(70, { latest: 40, attempts: 3, latestBelowCounted: true, penaltyLabel: '-10 AI assist' }), source: 'mapping' },
+  languages: { loading: false, items: [{ id: 1, name: 'C' }, { id: 2, name: 'C++' }], selectedId: 2, error: null },
   submit: { enabled: true, busy: false, reason: null, label: 'Submit to Grader' },
   result: {
-    phase: 'done', problemId: 1360, problemName: '00_Intro_11', submissionId: 2460977, submissionUrl: 'https://x/submissions/2460977',
-    score: 70, scoreHidden: false, tries: 2, time: '12:43:48', comment: 'PP-T',
+    phase: 'done', problemId: 1360, problemName: '00_Intro_11', submissionId: 2460977, submissionUrl: 'https://x/submissions/2460977', number: 3,
+    points: 70, comment: 'PP-T',
     verdicts: [
       { index: 1, ok: true, kind: 'correct', label: 'Test 1 of 4: Correct' },
       { index: 2, ok: true, kind: 'correct', label: 'Test 2 of 4: Correct' },
       { index: 3, ok: false, kind: 'wrong', label: 'Test 3 of 4: Wrong Answer' },
       { index: 4, ok: false, kind: 'brand_new', label: 'Test 4 of 4: <b>Mystery</b>', group: 1 },
     ],
-    compileError: false, compilerMessage: null, message: null,
+    compileError: false, compilerMessage: null, improvement: 'Counted score improved: 40 → 70.', message: null,
   },
-  history: [{ submissionId: 2460977, url: 'https://x/submissions/2460977', score: 70, comment: 'PP-T', time: '12:43:48', compileError: false }],
-  problems: { loading: false, loaded: true, items: [{ id: 1360, name: '00_Intro_11', fullName: 'Hello', bestScore: 100 }, { id: 1271, name: '01_Expr_11', fullName: 'An Expression', bestScore: null }], error: null },
+  history: { loading: false, items: [{ submissionId: 2460977, number: 3, points: 70, status: 'done', comment: 'PP-T', submittedAt: '2026-11-02T12:43:48+07:00', compileError: false }] },
+  problems: { loading: false, loaded: true, items: [{ id: 1360, name: '00_Intro_11', fullName: 'Hello', score: score(100) }, { id: 1271, name: '01_Expr_11', fullName: 'An Expression', score: score(null) }], error: null, penaltyNote: null },
 };
 
 describe.runIf(existsSync(resolve(__dirname, '../esbuild.mjs')))('sidebar webview', () => {
@@ -79,9 +83,24 @@ describe.runIf(existsSync(resolve(__dirname, '../esbuild.mjs')))('sidebar webvie
     doc.querySelector<HTMLInputElement>('#login-user')!.value = 'student';
     doc.querySelector<HTMLInputElement>('#login-pass')!.value = 's3cret';
     doc.querySelector('form')!.dispatchEvent(new dom.window.Event('submit', { cancelable: true }));
-    expect(sent.at(-1)).toEqual({ type: 'login', username: 'student', password: 's3cret' });
+    expect(sent.at(-1)).toEqual({ type: 'login', username: 'student', password: 's3cret', remember: true });
     expect(doc.querySelector<HTMLInputElement>('#login-pass')!.value).toBe('');
     expect(JSON.stringify(saved() ?? {})).not.toContain('s3cret');
+  });
+
+  it('login form: password manager friendly, remember checkbox, Keychain tip', () => {
+    const { dom, doc, sent, post } = boot();
+    post({ ...base, account: { ...base.account, rememberPassword: false } });
+    const pass = doc.querySelector<HTMLInputElement>('#login-pass')!;
+    expect(pass.getAttribute('autocomplete')).toBe('current-password');
+    expect(doc.querySelector<HTMLInputElement>('#login-user')!.getAttribute('autocomplete')).toBe('username');
+    const remember = doc.querySelector<HTMLInputElement>('#login-remember')!;
+    expect(remember.checked).toBe(false); // follows the saved preference
+    expect(doc.body.textContent).toContain('Tip: copy it from the Passwords app once; it will be remembered securely in your Keychain.');
+    doc.querySelector<HTMLInputElement>('#login-user')!.value = 'student';
+    pass.value = 'pw';
+    doc.querySelector('form')!.dispatchEvent(new dom.window.Event('submit', { cancelable: true }));
+    expect(sent.at(-1)).toEqual({ type: 'login', username: 'student', password: 'pw', remember: false });
   });
 
   it('renders problem, languages, verdict tiles and history; grader text is escaped', () => {
@@ -96,7 +115,11 @@ describe.runIf(existsSync(resolve(__dirname, '../esbuild.mjs')))('sidebar webvie
     ]);
     expect(tiles[3].className).toContain('v-unknown');
     expect(doc.querySelector('.tile-group')).not.toBeNull();
-    expect(doc.querySelector('.score')!.textContent).toBe('70 / 100');
+    expect(doc.querySelector('#sec-result .score')!.textContent).toBe('70 points');
+    expect(doc.querySelector('#sec-current .score')!.textContent).toBe('70 / 100');
+    expect(doc.querySelector('#sec-current')!.textContent).toContain('Latest: 40 — your best 70 still counts.');
+    expect(doc.querySelector('#sec-current .penalty')!.textContent).toBe('-10 AI assist');
+    expect(doc.querySelector('#sec-result')!.textContent).toContain('Counted score improved: 40 → 70.');
     expect(doc.querySelectorAll('.history-row')).toHaveLength(1);
     expect(doc.querySelectorAll('#sec-problems .problem-row')).toHaveLength(2);
   });
@@ -155,7 +178,7 @@ describe.runIf(existsSync(resolve(__dirname, '../esbuild.mjs')))('sidebar webvie
 
   it('compile error shows the compiler message as text', () => {
     const { doc, post } = boot();
-    post({ ...loggedIn, result: { ...loggedIn.result!, score: 0, verdicts: [], compileError: true, compilerMessage: 'a.cpp:1: error: <script>' } });
+    post({ ...loggedIn, result: { ...loggedIn.result!, points: 0, verdicts: [], compileError: true, compilerMessage: 'a.cpp:1: error: <script>' } });
     expect(doc.querySelector('.compiler pre')!.textContent).toBe('a.cpp:1: error: <script>');
     expect(doc.querySelector('script')).toBeNull();
   });

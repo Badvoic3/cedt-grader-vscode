@@ -5,19 +5,22 @@ import {
   LanguageNotAllowedError,
   PollTimeoutError,
   SessionExpiredError,
+  type StoredToken,
   SubmitRejectedError,
 } from '../src/grader';
 import { FakeGrader } from './fakeServer';
-import { DURING_CONTEST, fixture } from './helpers';
 
-function setup(opts: { now?: Date; password?: string } = {}) {
+function setup(opts: { stored?: boolean; password?: string } = {}) {
   const server = new FakeGrader();
-  let clock = (opts.now ?? DURING_CONTEST).getTime();
+  let clock = Date.parse('2026-11-02T12:00:00+07:00');
   const waits: number[] = [];
   const logs: string[] = [];
+  let saved: StoredToken | undefined;
+  const creds = { username: 'student', password: opts.password ?? 'pw' };
   const client = new GraderClient({
     baseUrl: 'https://grader.test',
-    getCredentials: async () => ({ username: 'student', password: opts.password ?? 'pw' }),
+    getStoredCredentials: async () => (opts.stored === false ? undefined : creds),
+    tokenStore: { load: async () => saved, save: async (t) => void (saved = t) },
     fetch: server.fetch,
     log: (l) => logs.push(l),
     now: () => new Date(clock),
@@ -26,207 +29,211 @@ function setup(opts: { now?: Date; password?: string } = {}) {
       clock += ms;
     },
   });
-  return { server, client, waits, logs };
+  lastServer = server;
+  return { server, client, waits, logs, creds, saved: () => saved };
 }
 
 let lastServer: FakeGrader | null = null;
 afterEach(() => {
-  // Global invariants for every test: never touch /contests, never set a UA.
-  if (!lastServer) return;
-  for (const r of lastServer.requests) {
+  // Invariants for every test: never touch /contests, never set a User-Agent.
+  for (const r of lastServer?.requests ?? []) {
     expect(r.path.startsWith('/contests')).toBe(false);
     expect(Object.keys(r.headers).map((k) => k.toLowerCase())).not.toContain('user-agent');
   }
   lastServer = null;
 });
-function track<T extends { server: FakeGrader }>(x: T): T {
-  lastServer = x.server;
-  return x;
-}
 
 describe('login', () => {
-  it('logs in with CSRF token, keeps cookies, finds user id', async () => {
-    const { server, client } = track(setup());
-    await client.login();
-    expect(client.isLoggedIn).toBe(true);
-    expect(client.userId).toBe(12345);
-    const post = server.requests.find((r) => r.path === '/login/login')!;
-    expect(post.form).toEqual({ authenticity_token: 'REDACTED', login: 'student', password: 'pw', commit: 'Login' });
-    // The uuid cookie set on GET / was sent with the login POST.
-    expect(post.headers['Cookie']).toContain('uuid=device-1');
-  });
-
-  it('wrong password → AuthError, no automatic retry', async () => {
-    const { server, client } = track(setup({ password: 'wrong' }));
-    await expect(client.login()).rejects.toMatchObject({ reason: 'wrong-password' });
-    expect(server.count('POST', '/login/login')).toBe(1);
-  });
-
-  it('agreement checkbox → refuses and does not tick it', async () => {
-    const { server, client } = track(setup());
-    server.loginHtml = server.loginHtml.replace('<input type="submit"', '<input type="checkbox" name="accept_agree" value="1" /><input type="submit"');
-    await expect(client.login()).rejects.toBeInstanceOf(AuthError);
-    expect(server.count('POST', '/login/login')).toBe(0);
-  });
-
-  it('logs never contain password, token or cookies', async () => {
-    const { client, logs } = track(setup());
-    await client.login();
+  it('API login with JSON body, bearer token afterwards, web login for /main/list', async () => {
+    const { server, client, creds, saved } = setup();
+    const user = await client.login(creds);
+    expect(user).toEqual({ id: 4242, login: 'student', fullName: 'Student Name' });
+    expect(server.requests[0]).toMatchObject({ method: 'POST', path: '/api/v1/auth/login', body: { login: 'student', password: 'pw' } });
+    expect(saved()).toEqual({ token: 'tok1', expiresAt: '2099-01-01T00:00:00.000Z' });
     await client.listProblems();
-    const all = logs.join('\n');
-    expect(all).not.toMatch(/pw|REDACTED|uuid|session=/);
-    expect(logs[0]).toMatch(/^GET \/ → 200$/);
-  });
-});
-
-describe('session expiry', () => {
-  it('re-logs in once and retries', async () => {
-    const { server, client } = track(setup());
-    await client.login();
-    server.expireAllSessions();
-    const problems = await client.listProblems();
-    expect(problems).toHaveLength(3);
-    expect(server.count('POST', '/login/login')).toBe(2);
+    const r = server.requests.find((x) => x.path === '/api/v1/problems')!;
+    expect(r.headers['Authorization']).toBe('Bearer tok1');
+    expect(server.count('POST', '/login/login')).toBe(1); // web login once, at login time
   });
 
-  it('does not re-login for "two different places"', async () => {
-    const { server, client } = track(setup());
-    await client.login();
-    server.expireAllSessions('You cannot login from two different places');
-    const err = await client.listProblems().catch((e) => e);
-    expect(err).toBeInstanceOf(SessionExpiredError);
-    expect(err.retryable).toBe(false);
-    expect(err.message).toContain('two different places');
-    expect(server.count('POST', '/login/login')).toBe(1);
+  it('wrong password → AuthError, exactly one attempt', async () => {
+    const { server, client } = setup();
+    await expect(client.login({ username: 'student', password: 'nope' })).rejects.toMatchObject({ reason: 'wrong-password' });
+    expect(server.count('POST', '/api/v1/auth/login')).toBe(1);
   });
 
-  it('logs in lazily when not logged in yet', async () => {
-    const { server, client } = track(setup());
+  it('throttled → AuthError(throttled), not retried', async () => {
+    const { server, client, creds } = setup();
+    server.throttled = true;
+    await expect(client.login(creds)).rejects.toMatchObject({ reason: 'throttled' });
+    expect(server.count('POST', '/api/v1/auth/login')).toBe(1);
+  });
+
+  it('restores a stored, unexpired token without network', async () => {
+    const { server, client, creds } = setup();
+    await client.login(creds);
+    const before = server.requests.length;
+    const again = new GraderClient({ baseUrl: 'https://grader.test', fetch: server.fetch, tokenStore: { load: async () => ({ token: 'tok1', expiresAt: '2099-01-01T00:00:00Z' }), save: async () => {} } });
+    expect(await again.restore()).toBe(true);
+    expect(again.isLoggedIn).toBe(true);
+    expect(server.requests.length).toBe(before);
+  });
+
+  it('logs never contain the password or token', async () => {
+    const { client, logs, creds } = setup();
+    await client.login(creds);
     await client.listProblems();
-    expect(server.count('POST', '/login/login')).toBe(1);
+    expect(logs.join('\n')).not.toMatch(/\bpw\b|tok1|Bearer/);
+  });
+
+  it('logout clears the stored token', async () => {
+    const { client, creds, saved } = setup();
+    await client.login(creds);
+    await client.logout();
+    expect(saved()).toBeUndefined();
+    expect(client.isLoggedIn).toBe(false);
   });
 });
 
-describe('submit', () => {
-  it('submits with a fresh token and reads id + poll URL', async () => {
-    const { server, client } = track(setup());
-    const r = await client.submit(102, 2, 'int main(){}');
-    expect(r.submissionId).toBe(5003);
-    expect(r.pollUrl).toBe('/submissions/get_latest_submission_status/12345/102');
-    const post = server.requests.find((x) => x.path === '/main/submit')!;
-    expect(post.form).toEqual({
-      authenticity_token: 'REDACTED',
-      'submission[problem_id]': '102',
-      language_id: '2',
-      editor_text: 'int main(){}',
-      commit: 'Submit',
-    });
-    // The submit page was fetched right before the POST (fresh CSRF token).
-    const i = server.requests.findIndex((x) => x.path === '/main/submit');
-    expect(server.requests[i - 1].path).toBe('/submissions/direct_edit_problem/102');
+describe('token expiry', () => {
+  it('401 → silent re-login with the stored password, retried once', async () => {
+    const { server, client, creds } = setup();
+    await client.login(creds);
+    server.expireTokens();
+    const { problems } = await client.listProblems();
+    expect(problems).toHaveLength(2);
+    expect(server.count('POST', '/api/v1/auth/login')).toBe(2);
   });
 
-  it('rejects a language not in the per-problem list without POSTing', async () => {
-    const { server, client } = track(setup());
-    await expect(client.submit(102, 99, 'x')).rejects.toBeInstanceOf(LanguageNotAllowedError);
-    expect(server.count('POST', '/main/submit')).toBe(0);
+  it('401 without a stored password → SessionExpiredError (show the login form)', async () => {
+    const { server, client, creds } = setup({ stored: false });
+    await client.login(creds);
+    server.expireTokens();
+    await expect(client.getProblem(201)).rejects.toBeInstanceOf(SessionExpiredError);
+    expect(server.count('POST', '/api/v1/auth/login')).toBe(1);
   });
 
-  it('maps the server flash after a rejected submit', async () => {
-    const { server, client } = track(setup());
-    server.submitRedirect = '/main/list';
-    server.submitFlash = 'The selected language is not permitted for this problem.';
-    await expect(client.submit(102, 2, 'x')).rejects.toBeInstanceOf(LanguageNotAllowedError);
-    server.submitFlash = 'Problem p01 is currently not available for you';
-    await expect(client.submit(102, 2, 'x')).rejects.toThrow(/not available/);
-  });
-
-  it('re-logs in and resubmits once when the session expired before the POST', async () => {
-    const { server, client } = track(setup());
+  it('stored password now wrong → one failed login, no loop', async () => {
+    const { server, client } = setup({ password: 'old' });
+    server.password = 'old';
     await client.login();
-    server.expireAllSessions();
-    const r = await client.submit(102, 2, 'x');
-    expect(r.submissionId).toBe(5003);
-    expect(server.count('POST', '/main/submit')).toBe(1);
-  });
-
-  it('refuses an empty file', async () => {
-    const { client } = track(setup());
-    await expect(client.submit(102, 2, '  \n')).rejects.toBeInstanceOf(SubmitRejectedError);
+    server.password = 'new';
+    server.expireTokens();
+    await expect(client.getProblem(201)).rejects.toBeInstanceOf(AuthError);
+    expect(server.count('POST', '/api/v1/auth/login')).toBe(2);
   });
 });
 
-describe('pollLatest', () => {
-  const pending = fixture('latest_status_pending.synthetic.html');
-  const graded = fixture('latest_status_graded.synthetic.html');
+describe('problems and scores', () => {
+  it('merges API problems with /main/list penalties', async () => {
+    const { client, creds } = setup();
+    await client.login(creds);
+    const { problems, listStatus } = await client.listProblems();
+    expect(listStatus).toBe('loaded');
+    expect(problems[0]).toMatchObject({ id: 201, fullName: 'AI_Assisted', bestScore: 100, lastScore: 40, permittedLanguageIds: [2], list: { cost: 10, aiCount: 2 } });
+    expect(problems[1]).toMatchObject({ id: 204, permittedLanguageIds: null, list: { cost: 0 } });
+  });
 
-  it('polls every interval until graded', async () => {
-    const { server, client, waits } = track(setup());
-    await client.login();
-    server.pollSequence = [pending, pending, graded];
-    const updates: string[] = [];
-    const s = await client.pollLatest(102, {
-      submissionId: 5003,
-      pollUrl: '/submissions/get_latest_submission_status/12345/102',
-      intervalMs: 5000,
-      onUpdate: (u) => updates.push(u.state),
-    });
-    expect(s.score).toBe(70);
-    expect(updates).toEqual(['pending', 'pending', 'graded']);
+  it('without a web session and no stored password: API data only', async () => {
+    const { server, client, creds } = setup({ stored: false });
+    server.listHtml = '';
+    await client.login(creds);
+    server.webSessions.clear();
+    const { problems, listStatus } = await client.listProblems();
+    expect(listStatus).toBe('no-web-session');
+    expect(problems[0].list).toBeNull();
+  });
+
+  it('languages: pretty names, per-problem filtering, null = all', async () => {
+    const { client, creds } = setup();
+    await client.login(creds);
+    expect((await client.languagesFor({ permittedLanguageIds: [2] })).map((l) => l.name)).toEqual(['C++']);
+    expect(await client.languagesFor({ permittedLanguageIds: null })).toHaveLength(3);
+  });
+
+  it('isContestPage comes from the list page fetched at login (no extra request)', async () => {
+    const { server, client, creds } = setup();
+    await client.login(creds);
+    const n = server.requests.length;
+    expect(client.contestPage).toBe(false);
+    expect(server.requests.length).toBe(n);
+  });
+});
+
+describe('submit and poll', () => {
+  it('POSTs JSON {language_id, source, filename}', async () => {
+    const { server, client, creds } = setup();
+    await client.login(creds);
+    expect(await client.submit(201, 2, 'int main(){}', 'a.cpp')).toEqual({ id: 8001, number: 4 });
+    expect(server.requests.at(-1)).toMatchObject({ method: 'POST', path: '/api/v1/problems/201/submissions', body: { language_id: 2, source: 'int main(){}', filename: 'a.cpp' } });
+  });
+
+  it('422 with permitted_languages → LanguageNotAllowedError', async () => {
+    const { server, client, creds } = setup();
+    await client.login(creds);
+    server.submitError = { status: 422, body: { error: "Language 'python' is not permitted", permitted_languages: [{ id: 2, name: 'cpp' }] } };
+    await expect(client.submit(201, 6, 'x', 'a.py')).rejects.toBeInstanceOf(LanguageNotAllowedError);
+    server.submitError = { status: 403, body: { error: 'You are not allowed to submit to this problem' } };
+    await expect(client.submit(201, 2, 'x', 'a.cpp')).rejects.toBeInstanceOf(SubmitRejectedError);
+  });
+
+  it('empty file is refused locally', async () => {
+    const { client, creds } = setup();
+    await client.login(creds);
+    await expect(client.submit(201, 2, '  \n', 'a.cpp')).rejects.toThrow(/empty/);
+  });
+
+  it('polls by submission id until graded, every interval', async () => {
+    const { server, client, waits, creds } = setup();
+    await client.login(creds);
+    server.statusSequence = ['submitted', 'evaluating', 'done'];
+    const seen: string[] = [];
+    const s = await client.pollSubmission(8001, { intervalMs: 5000, onUpdate: (u) => seen.push(u.status) });
+    expect(seen).toEqual(['submitted', 'evaluating', 'done']);
     expect(waits).toEqual([5000, 5000]);
+    expect(s).toMatchObject({ state: 'graded', points: 70, number: 4, compileError: false });
+    expect(s.verdicts.map((v) => v.kind)).toEqual(['correct', 'correct', 'wrong', 'time_limit']);
   });
 
-  it('never polls faster than 3 s', async () => {
-    const { server, client, waits } = track(setup());
-    await client.login();
-    server.pollSequence = [pending, graded];
-    await client.pollLatest(102, { intervalMs: 500 });
+  it('never faster than 3 s', async () => {
+    const { server, client, waits, creds } = setup();
+    await client.login(creds);
+    server.statusSequence = ['submitted', 'done'];
+    await client.pollSubmission(8001, { intervalMs: 100 });
     expect(waits).toEqual([3000]);
   });
 
-  it('ignores an older graded submission', async () => {
-    const { server, client } = track(setup());
-    await client.login();
-    server.pollSequence = [graded.replaceAll('5003', '4000'), graded];
-    const s = await client.pollLatest(102, { submissionId: 5003 });
-    expect(s.id).toBe(5003);
-    expect(server.pollIndex).toBe(2);
+  it('compile error carries the compiler message', async () => {
+    const { server, client, creds } = setup();
+    await client.login(creds);
+    server.statusSequence = ['compilation_error'];
+    server.compilerMessage = "a.cpp:5: error: 'cout' was not declared";
+    const s = await client.pollSubmission(8001);
+    expect(s).toMatchObject({ compileError: true, points: 0, verdicts: [], compilerMessage: "a.cpp:5: error: 'cout' was not declared" });
   });
 
   it('times out after 3 minutes', async () => {
-    const { server, client } = track(setup());
-    await client.login();
-    server.pollSequence = [pending];
-    await expect(client.pollLatest(102, { intervalMs: 5000 })).rejects.toBeInstanceOf(PollTimeoutError);
-    expect(server.pollIndex).toBeLessThanOrEqual(37);
-    expect(server.pollIndex).toBeGreaterThanOrEqual(35);
+    const { server, client, creds } = setup();
+    await client.login(creds);
+    server.statusSequence = ['evaluating'];
+    await expect(client.pollSubmission(8001, { intervalMs: 5000 })).rejects.toBeInstanceOf(PollTimeoutError);
+    expect(server.statusIndex).toBeGreaterThanOrEqual(35);
+    expect(server.statusIndex).toBeLessThanOrEqual(37);
   });
 
-  it('backs off on network errors', async () => {
-    const { server, client, waits } = track(setup());
-    await client.login();
-    server.pollSequence = [graded];
+  it('backs off ×2 on network errors', async () => {
+    const { server, client, waits, creds } = setup();
+    await client.login(creds);
     server.networkFailures = 2;
-    await client.pollLatest(102, { intervalMs: 5000 });
+    await client.pollSubmission(8001, { intervalMs: 5000 });
     expect(waits).toEqual([10000, 20000]);
   });
 
-  it('builds the poll URL from the discovered user id', async () => {
-    const { server, client } = track(setup());
-    await client.login();
-    await client.pollLatest(102);
-    expect(server.requests.at(-1)!.path).toBe('/submissions/get_latest_submission_status/12345/102');
-    expect(server.requests.at(-1)!.headers['Accept']).toContain('text/vnd.turbo-stream.html');
-  });
-});
-
-describe('compiler message', () => {
-  it('POSTs with X-CSRF-Token and turbo Accept', async () => {
-    const { server, client } = track(setup());
-    const msg = await client.getCompilerMessage(5004);
-    expect(msg).toContain('was not declared');
-    const r = server.requests.find((x) => x.path === '/submissions/5004/compiler_msg')!;
-    expect(r.method).toBe('POST');
-    expect(r.headers['Accept']).toBe('text/vnd.turbo-stream.html');
+  it('history from /api/v1/problems/{id}/submissions', async () => {
+    const { client, creds } = setup();
+    await client.login(creds);
+    expect(await client.listSubmissions(201)).toEqual([
+      { id: 7001, number: 3, language: 'cpp', submittedAt: '2026-11-02T10:00:00+07:00', points: 40, status: 'done', comment: 'PP--' },
+    ]);
   });
 });

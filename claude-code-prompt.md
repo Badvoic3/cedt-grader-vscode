@@ -8,7 +8,7 @@ Work in the phases below. Use plan mode first, show me the plan, then build phas
 
 ## 1. Facts about the grader (already inspected; treat as the spec)
 
-The site runs **cafe-grader-web** (rev 4.7.3cu), an open-source Ruby on Rails app: https://github.com/nattee/cafe-grader-web. There is no JSON API; everything is HTML forms, Rails CSRF tokens and a session cookie. When something below is unclear, read the Rails routes, controllers and views in that repo instead of guessing.
+The site runs **cafe-grader-web** (rev 4.7.3cu), an open-source Ruby on Rails app: https://github.com/nattee/cafe-grader-web. The table below is the HTML-form protocol (Rails CSRF tokens and a session cookie). The server also has a JSON API (section 1b), which is now the primary path. When something below is unclear, read the Rails routes, controllers and views in that repo instead of guessing.
 
 | Step | Request | Details |
 |---|---|---|
@@ -26,6 +26,34 @@ Notes:
 - Supported languages in the web editor: C, C++, Python, Java, Rust, Go, PHP, Haskell, Ruby, Pascal, PostgreSQL, Digital. Always use the per-problem `language_id` list; map file extensions to language names (`.cpp/.cc/.cxx` → C++, `.c` → C, `.py` → Python, `.java` → Java, `.rs` → Rust, `.go` → Go, `.php` → PHP, `.hs` → Haskell, `.rb` → Ruby, `.pas` → Pascal, `.sql` → PostgreSQL), and ask with a quick-pick if ambiguous.
 - The Testcases page only works for some problems (others redirect to `/main/list`). Treat it as optional.
 - Unknown verdict tile classes (timeout, crash, etc.) must not break parsing: show the raw `title` text.
+
+## 1b. JSON API (primary path)
+
+The live server has cafe-grader's `/api/v1` (JWT). Confirmed from `config/routes.rb` and `app/controllers/api/v1/*`; `GraderClient` uses it first and keeps the HTML client only for what the API lacks.
+
+| Purpose | Request | Notes |
+|---|---|---|
+| Login | `POST /api/v1/auth/login` `{login, password}` | → `{token, expires_at, user:{id, login, full_name}}`, 12 h TTL. 401 wrong password, 429 throttled (pooled with the web login), 403 disabled/IP. Never retried automatically. |
+| Auth | `Authorization: Bearer <token>` | Token only in SecretStorage (if "remember" is on) or memory; never logged. On 401, log in again once with the stored password. |
+| Problems | `GET /api/v1/problems` | `id, name, full_name, best_score, last_score, last_result, submission_count, last_submission_id, last_submission_time, permitted_languages (null = all), has_testcase, has_attachment`. |
+| Problem | `GET /api/v1/problems/{id}` | Also `full_score`, `submission_ids` (newest first). |
+| Languages | `GET /api/v1/languages` | `id, name (internal), pretty_name, ext`. |
+| Submit | `POST /api/v1/problems/{id}/submissions` `{language_id, source, filename}` | → 201 `{id, number, status}`. 422 with `permitted_languages` = language not allowed; 403 = not allowed to submit. |
+| Poll | `GET /api/v1/submissions/{id}` | `status` (`submitted`, `evaluating`, `compilation_success` → pending; `done`, `compilation_error`, `grader_error` → graded), `points`, `grader_comment`, `compiler_message`, `evaluations`. |
+| History | `GET /api/v1/problems/{id}/submissions` | Regular submissions, newest first. |
+| Test cases | `GET /api/v1/problems/{id}/testcases`, `GET /api/v1/testcases/{id}/input`, `/sol` | Only when the user may view them (Phase 3 import). |
+
+HTML is still used for: `/main/list` (hint/AI-assist penalties, raw-sum mode, and the `isContestPage` exam hint), through a cookie web session opened at login.
+
+## 1c. The score the server counts
+
+From `MainController#prepare_list_information`, `app/views/main/_problem.html.haml`, `Submission.max_score_report`:
+- Counted score = max points over all *regular* submissions (not the latest; test drives and repaired copies are excluded).
+- With hints or AI assists: counted = max(0, min(best, 100 − hint_cost − ai_assist_cost)) (cost capped at 100).
+- Problems whose live dataset is in "raw sum" mode show the raw best score without this cap.
+- In contest mode only submissions inside the contest window count (the API's `best_score` does not apply this filter).
+- The API has no hint/AI cost data, so it is read from `/main/list` (green bar = adjusted score, red bar = penalty, "Full score reduced by N", "Hint: n, AI Assist: n") and labelled "from problem list".
+- Display: "Counted score" (big), best, latest, attempts, and the penalty ("-10 AI assist"). If the latest is lower, say so ("Latest: 40 — your best 70 still counts"). After each submission, say whether it improved the counted score. The problem list shows the counted score per problem. The README notes that the instructor's final grading may differ.
 
 ## 2. Hard rules
 
@@ -74,6 +102,10 @@ Instead of relying on the command palette, build a sidebar GUI like the CPH and 
 - Add an Activity Bar view container "CEDT Grader" with its own icon (SVG, monochrome so it follows the theme) containing one webview view, using a `WebviewViewProvider`.
 - The webview is the main interface. Sections:
   1. **Account:** login form (username + password) when logged out; username and a Log out button when logged in. The password goes straight to `context.secrets` and is never kept in webview state or logged.
+     - "Remember password on this computer" checkbox (default on). On: password in `context.secrets` (macOS Keychain). Off: only the token, in memory.
+     - When the token expires (401), log in again silently with the stored password; show the login form only if that fails. Never retry a failed login automatically.
+     - Normal password input (`autocomplete="current-password"`) so password managers can fill it, and pasting works. Hint under the field: "Tip: copy it from the Passwords app once; it will be remembered securely in your Keychain."
+     - "Log out" removes both the token and the stored password.
   2. **Current problem:** shows the active editor's file, the mapped problem (with a searchable picker from `/main/list`), a language dropdown filled from that problem's allowed languages, and a big Submit button.
   3. **Result:** live status while grading, then score, a colored verdict strip (one tile per test, tooltip with the label), compiler message if compilation failed, link to the submission, and Resubmit.
   4. **History:** the last few submissions for this problem.

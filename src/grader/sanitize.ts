@@ -57,3 +57,34 @@ export function sanitizeHtml(html: string, opts: SanitizeOptions = {}): string {
     .replace(/\b\d{10}\b/g, '0000000000');
   return out;
 }
+
+/**
+ * Strip personal data from an API JSON response before saving it as a
+ * fixture: user id → 12345, login/full name/e-mail → placeholders, source
+ * code removed, and any `personal` strings replaced.
+ */
+export function sanitizeJson(value: unknown, opts: SanitizeOptions = {}): unknown {
+  const personal = (opts.personal ?? []).filter((s) => s && s.length >= 2);
+  const scrub = (s: string) => {
+    let out = s;
+    for (const p of personal) out = out.split(p).join('student');
+    return out.replace(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g, 'student@example.com').replace(/\b\d{10}\b/g, '0000000000');
+  };
+  const walk = (v: unknown, key?: string): unknown => {
+    if (Array.isArray(v)) return v.map((x) => walk(x));
+    if (v && typeof v === 'object') {
+      const o: Record<string, unknown> = {};
+      for (const [k, x] of Object.entries(v as Record<string, unknown>)) o[k] = walk(x, k);
+      return o;
+    }
+    if (key === 'token') return 'REDACTED';
+    if (key === 'user_id' || (key === 'id' && opts.userId != null && v === opts.userId)) return Number(FAKE_USER_ID);
+    if (key === 'login') return 'student';
+    if (key === 'full_name' && personal.some((p) => String(v).includes(p))) return 'Student Name';
+    if (key === 'email') return 'student@example.com';
+    if (key === 'source') return v == null ? v : '// source removed';
+    if (typeof v === 'string') return scrub(v);
+    return v;
+  };
+  return walk(value);
+}

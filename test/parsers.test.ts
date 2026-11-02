@@ -1,189 +1,51 @@
 import { describe, expect, it } from 'vitest';
-import {
-  cleanText,
-  extractAlerts,
-  extractCsrf,
-  hasLoginForm,
-  parseCompilerMessage,
-  parseEvaluations,
-  parseLoginForm,
-  parsePollUrl,
-  parseProblemList,
-  parseSubmissionStatus,
-  parseSubmitPage,
-  parseUserId,
-  sanitizeHtml,
-} from '../src/grader';
+import { cleanText, extractAlerts, extractCsrf, hasLoginForm, parseListScores, parseLoginForm, sanitizeHtml, sanitizeJson } from '../src/grader';
 import { fixture, realFixture } from './helpers';
 
 describe('cleanText', () => {
-  it('strips zero-width spaces and collapses whitespace', () => {
-    expect(cleanText(' p01_​sum \n x ')).toBe('p01_sum x');
+  it('strips zero-width characters and collapses whitespace', () => {
+    expect(cleanText(' p01_​sum‌‍﻿ \n x ')).toBe('p01_sum x');
   });
 });
 
-describe('login page', () => {
+describe('web login page', () => {
   it('finds the form, token and alert', () => {
     const html = fixture('login_page.synthetic.html');
     expect(hasLoginForm(html)).toBe(true);
-    const f = parseLoginForm(html);
-    expect(f.present).toBe(true);
-    expect(f.token).toBe('REDACTED');
-    expect(f.hasAgreement).toBe(false);
+    expect(parseLoginForm(html)).toEqual({ present: true, token: 'REDACTED', hasAgreement: false });
     expect(extractAlerts(html)).toEqual(['Wrong password']);
+  });
+
+  const real = realFixture('login_page.html');
+  it.runIf(real)('real login page', () => {
+    const f = parseLoginForm(real!);
+    expect(f.present).toBe(true);
+    expect(f.token).toBeTruthy();
+    expect(f.hasAgreement).toBe(false);
   });
 });
 
-describe('problem list', () => {
-  const html = fixture('main_list.normal.synthetic.html');
-
-  it('parses rows into problems', () => {
-    const ps = parseProblemList(html);
-    expect(ps.map((p) => p.id)).toEqual([101, 102, 103]);
-    expect(ps[0]).toMatchObject({
-      name: 'p00_hello',
-      fullName: 'Hello_World',
-      bestScore: 100,
-      latestSubmissionId: 5001,
-      statementUrl: '/problems/101/download/statement',
-      testcasesUrl: '/testcases/show_problem/101',
-    });
-    expect(ps[1]).toMatchObject({ name: 'p01_sum', bestScore: 70, latestSubmissionId: 5002 });
-    expect(ps[2]).toMatchObject({ id: 103, name: 'p02_graph', bestScore: 0, latestSubmissionId: null });
-    expect(ps[2].testcasesUrl).toBeUndefined();
-  });
-
-  it('is not logged-out and has a csrf token and user id', () => {
-    expect(hasLoginForm(html)).toBe(false);
-    expect(extractCsrf(html)).toBe('REDACTED');
-    expect(parseUserId(html)).toBe(12345);
+describe('parseListScores (/main/list score column)', () => {
+  it('reads penalties, hint/AI counts and raw-sum mode', () => {
+    const m = parseListScores(fixture('main_list.penalties.synthetic.html'));
+    expect(m.get(201)).toEqual({ rawMax: 100, adjusted: 90, cost: 10, hintCount: 0, aiCount: 2, rawSum: false });
+    expect(m.get(202)).toEqual({ rawMax: 40, adjusted: 40, cost: 25, hintCount: 1, aiCount: 1, rawSum: false });
+    expect(m.get(203)).toEqual({ rawMax: 137.5, adjusted: null, cost: 0, hintCount: 0, aiCount: 0, rawSum: true });
+    expect(m.get(204)).toEqual({ rawMax: 70, adjusted: 70, cost: 0, hintCount: 0, aiCount: 0, rawSum: false });
   });
 
   const real = realFixture('main_list.html');
-  it.runIf(real)('parses the real (sanitized) list', () => {
-    const ps = parseProblemList(real!);
-    expect(ps.length).toBeGreaterThan(0);
-    for (const p of ps) {
-      expect(p.id).toBeGreaterThan(0);
-      expect(p.name).not.toMatch(/​/);
-    }
+  it.runIf(real)('real list: every problem row, raw max matches the green bar when no penalty', () => {
+    const m = parseListScores(real!);
+    expect(m.size).toBe(292);
+    expect(m.get(1360)).toMatchObject({ rawMax: 100, adjusted: 100, cost: 0, rawSum: false });
+    for (const v of m.values()) if (!v.rawSum && v.cost === 0 && v.adjusted !== null) expect(v.adjusted).toBe(v.rawMax);
+    expect(extractCsrf(real!)).toBeTruthy();
   });
 });
 
-describe('submit page', () => {
-  it('reads languages and form', () => {
-    const p = parseSubmitPage(fixture('direct_edit_problem.normal.synthetic.html'), 999);
-    expect(p.problemId).toBe(102);
-    expect(p.problemName).toBe('[p01_sum]');
-    expect(p.problemFullName).toBe('Sum_of_Array');
-    expect(p.canSubmit).toBe(true);
-    expect(p.languageForced).toBe(false);
-    expect(p.csrfToken).toBe('REDACTED');
-    expect(p.languages).toEqual([
-      { id: 1, name: 'C', selected: false },
-      { id: 2, name: 'C++', selected: true },
-      { id: 4, name: 'Python', selected: false },
-      { id: 5, name: 'Java', selected: false },
-    ]);
-  });
-
-  it('notices a closed problem', () => {
-    const p = parseSubmitPage(fixture('direct_edit_problem.closed.synthetic.html'), 7);
-    expect(p.canSubmit).toBe(false);
-    expect(p.languages).toEqual([]);
-    expect(p.problemId).toBe(7);
-  });
-
-  const real = realFixture('direct_edit_problem.html');
-  it.runIf(real)('parses the real (sanitized) submit page', () => {
-    const p = parseSubmitPage(real!, 1);
-    expect(p.canSubmit).toBe(true);
-    expect(p.languages.length).toBeGreaterThan(0);
-  });
-});
-
-describe('latest submission status', () => {
-  it('none', () => {
-    expect(parseSubmissionStatus(fixture('latest_status_none.synthetic.html')).state).toBe('none');
-  });
-
-  it('pending', () => {
-    const s = parseSubmissionStatus(fixture('latest_status_pending.synthetic.html'));
-    expect(s).toMatchObject({
-      id: 5003,
-      state: 'pending',
-      score: null,
-      tries: 3,
-      time: '14:03:22',
-      refreshDelayMs: 2000,
-      refreshUrl: '/submissions/get_latest_submission_status/12345/102',
-      compileError: false,
-    });
-  });
-
-  it('graded with verdict strip, groups and unknown tile classes', () => {
-    const s = parseSubmissionStatus(fixture('latest_status_graded.synthetic.html'));
-    expect(s.state).toBe('graded');
-    expect(s.id).toBe(5003);
-    expect(s.score).toBe(70);
-    expect(s.tries).toBe(3);
-    expect(s.comment).toBe('PPPPPPPPP----PP-PPT[Px]');
-    expect(s.verdicts).toHaveLength(21);
-    expect(s.verdicts[9]).toEqual({ index: 10, ok: false, label: 'Test 10 of 20: Wrong Answer', kind: 'wrong' });
-    expect(s.verdicts[18]).toMatchObject({ kind: 'time_limit', ok: false });
-    expect(s.verdicts[19]).toMatchObject({ ok: true, group: 1 });
-    // Unknown class: no crash, raw title kept.
-    expect(s.verdicts[20]).toMatchObject({ kind: 'somethingnew', ok: false, label: 'Test 21 of 21: Mystery Verdict', group: 1 });
-    expect(s.compileError).toBe(false);
-  });
-
-  it('compile error', () => {
-    const s = parseSubmissionStatus(fixture('latest_status_compile_error.synthetic.html'));
-    expect(s).toMatchObject({ id: 5004, state: 'graded', score: 0, comment: 'Compilation error', compileError: true });
-    expect(s.verdicts).toEqual([]);
-  });
-
-  it('graded even when the score row is hidden by the server', () => {
-    const html = fixture('latest_status_graded.synthetic.html').replace(/<div class="col-12">\s*<span class="mi">speed[\s\S]*?<\/div>\n<\/div>/, '</div>');
-    const s = parseSubmissionStatus(html);
-    expect(s.state).toBe('graded');
-    expect(s.score).toBeNull();
-  });
-
-  for (const name of ['latest_status_graded.turbo.html', 'latest_status_pending.turbo.html']) {
-    const real = realFixture(name);
-    it.runIf(real)(`parses real ${name}`, () => {
-      const s = parseSubmissionStatus(real!);
-      expect(s.id).toBeGreaterThan(0);
-      expect(s.state).toBe(name.includes('pending') ? 'pending' : 'graded');
-    });
-  }
-});
-
-describe('turbo modals', () => {
-  it('compiler message', () => {
-    const m = parseCompilerMessage(fixture('compiler_msg.synthetic.html'));
-    expect(m).toContain("error: 'cout' was not declared in this scope");
-    expect(m).toContain('cout << x;');
-  });
-
-  it('evaluations', () => {
-    const ev = parseEvaluations(fixture('evaluations.synthetic.html'));
-    expect(ev).toHaveLength(2);
-    expect(ev[1]).toMatchObject({ num: '2', time: '1.004s', memory: '3.52MB', result: 'T Time Limit Exceed', score: '0%' });
-  });
-});
-
-describe('poll url', () => {
-  it('reads the server-rendered poll URL', () => {
-    const html = '<a id="refresh" href="/submissions/get_latest_submission_status/77/102">r</a>';
-    expect(parsePollUrl(html)).toBe('/submissions/get_latest_submission_status/77/102');
-    expect(parseUserId(html)).toBe(77);
-  });
-});
-
-describe('sanitizeHtml', () => {
-  it('removes tokens, names, user id, emails and student ids', () => {
+describe('sanitizers', () => {
+  it('sanitizeHtml removes tokens, names, user id, e-mails and student ids', () => {
     const html = `<html><head><meta name="csrf-token" content="SECRETTOKEN123"></head><body>
       <a data-user-id="4242" href="/users/profile"><span class="mi md-18">settings</span></a>
       <a href="/main/logout"><span class="mi md-18">exit_to_app</span> Somchai Jaidee</a>
@@ -191,14 +53,16 @@ describe('sanitizeHtml', () => {
       <a href="/submissions/get_latest_submission_status/4242/9">x</a>
       Hello Somchai Jaidee (6730123421) somchai@student.chula.ac.th login 6730123421</body></html>`;
     const out = sanitizeHtml(html, { personal: ['6730123421'], userId: 4242 });
-    expect(out).not.toMatch(/SECRETTOKEN/);
-    expect(out).not.toMatch(/Somchai/);
-    expect(out).not.toMatch(/4242/);
-    expect(out).not.toMatch(/6730123421/);
-    expect(out).not.toMatch(/chula/);
+    expect(out).not.toMatch(/SECRETTOKEN|Somchai|4242|6730123421|chula/);
     expect(out).toContain('get_latest_submission_status/12345/9');
-    // Icon names are kept (they are not personal data).
     expect(out).toContain('>settings<');
-    expect(out).toContain('exit_to_app');
+  });
+
+  it('sanitizeJson scrubs user fields and source code', () => {
+    const out = sanitizeJson(
+      { id: 9, user_id: 4242, login: '6730123421', full_name: 'Somchai Jaidee', source: 'int main(){}', token: 'abc', note: 'by 6730123421' },
+      { personal: ['6730123421', 'Somchai Jaidee'], userId: 4242 },
+    );
+    expect(out).toEqual({ id: 9, user_id: 12345, login: 'student', full_name: 'Student Name', source: '// source removed', token: 'REDACTED', note: 'by student' });
   });
 });

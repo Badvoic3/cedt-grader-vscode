@@ -1,26 +1,31 @@
 /**
- * Protocol probe for cafe-grader-web (CEDT Grader).
+ * Protocol probe for cafe-grader-web (CEDT Grader). Read-only unless --submit is given.
  *
- *   npx tsx scripts/probe.ts --list
- *   npx tsx scripts/probe.ts --problem 123 [--fixtures]
- *   npx tsx scripts/probe.ts --problem 123 --submit path/to/sol.cpp [--language 2] [--fixtures]
+ *   npx tsx scripts/probe.ts [--list] [--problem <id>] [--fixtures]
+ *   npx tsx scripts/probe.ts --problem <id> --submit path/to/sol.cpp [--language <id>]
  *
  * Credentials come from `.env` (GRADER_USER, GRADER_PASS, optional GRADER_BASE_URL).
- * Never prints passwords, cookies or CSRF tokens. Prints isContestPage() for
- * the pages it reads (informational only).
+ * Never prints passwords, tokens, cookies or CSRF tokens.
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import {
+  ApiClient,
+  type ApiLanguage,
+  type ApiProblem,
+  type ApiSubmission,
   chooseLanguage,
   DEFAULT_BASE_URL,
   GraderClient,
   GraderError,
-  HttpSession,
   isContestPage,
-  parseLoginForm,
+  parseListScores,
+  Redactor,
   sanitizeHtml,
-  type SubmissionStatus,
+  sanitizeJson,
+  summarize,
+  type SubmissionResult,
+  WebSession,
 } from '../src/grader';
 
 interface Args {
@@ -29,17 +34,13 @@ interface Args {
   problem?: number;
   submit?: string;
   language?: number;
-  }
+}
 
 function parseArgs(argv: string[]): Args {
   const a: Args = { list: false, fixtures: false };
   for (let i = 0; i < argv.length; i++) {
     const k = argv[i];
-    const next = () => {
-      const v = argv[++i];
-      if (v === undefined) die(`Missing value for ${k}`);
-      return v;
-    };
+    const next = () => argv[++i] ?? die(`Missing value for ${k}`);
     if (k === '--list') a.list = true;
     else if (k === '--fixtures') a.fixtures = true;
     else if (k === '--problem') a.problem = Number(next());
@@ -60,18 +61,11 @@ function die(msg: string): never {
   process.exit(2);
 }
 
-function printContest(where: string, html: string): void {
-  console.log(`  isContestPage (${where}): ${isContestPage(html)}`);
-}
-
-function printStatus(s: SubmissionStatus): void {
-  console.log(`  submission: ${s.id ?? '-'}  state: ${s.state}  score: ${s.score ?? '-'}  tries: ${s.tries ?? '-'}  time: ${s.time ?? '-'}`);
-  if (s.comment) console.log(`  comment:    ${s.comment}`);
-  if (s.verdicts.length) {
-    console.log(`  verdicts:   ${s.verdicts.map((v) => (v.ok ? 'P' : v.kind === 'wrong' ? '-' : '!')).join('')}`);
-    for (const v of s.verdicts.filter((x) => !x.ok)) console.log(`    ${v.label}  [${v.kind}]`);
-  }
-  if (s.compileError) console.log('  compile error: yes');
+function printResult(s: SubmissionResult): void {
+  console.log(`  submission #${s.id} (attempt ${s.number ?? '?'})  status=${s.status}  state=${s.state}  points=${s.points ?? '-'}`);
+  if (s.comment) console.log(`  comment: ${s.comment}`);
+  if (s.verdicts.length) for (const v of s.verdicts.filter((x) => !x.ok)) console.log(`    ${v.label}  [${v.kind}]`);
+  if (s.compileError) console.log(`  compiler message: ${(s.compilerMessage ?? '').split('\n').length} line(s)`);
 }
 
 async function main(): Promise<void> {
@@ -83,142 +77,132 @@ async function main(): Promise<void> {
   const baseUrl = (process.env.GRADER_BASE_URL || DEFAULT_BASE_URL).replace(/\/+$/, '');
   if (!username || !password) die('Set GRADER_USER and GRADER_PASS in .env');
 
+  const log = (line: string) => console.log(`  http: ${line}`);
+  const redactor = new Redactor();
+  const api = new ApiClient(baseUrl, (i, init) => fetch(i, init), log, redactor);
   const fixtureDir = resolve('test/fixtures');
-  const personal = [username];
   const saved: string[] = [];
-  const save = (name: string, html: string, userId: number | null) => {
+  let userId: number | null = null;
+  let fullName = '';
+  const personal = () => [username, fullName, ...fullName.split(/\s+/)].filter((s) => s.length >= 2);
+  const saveJson = (name: string, data: unknown) => {
     if (!args.fixtures) return;
     mkdirSync(fixtureDir, { recursive: true });
-    writeFileSync(resolve(fixtureDir, name), sanitizeHtml(html, { personal, userId }));
+    writeFileSync(resolve(fixtureDir, name), JSON.stringify(sanitizeJson(data, { personal: personal(), userId }), null, 2) + '\n');
     saved.push(name);
   };
-
-  // Record raw poll responses so --fixtures can save a pending and a graded one.
-  const pollBodies: { pending?: string; graded?: string } = {};
-  const recordingFetch = async (input: string, init?: RequestInit) => {
-    const res = await fetch(input, init);
-    if (args.fixtures && input.includes('get_latest_submission_status') && res.status === 200) {
-      const body = await res.clone().text();
-      if (/Waiting to be graded/i.test(body)) pollBodies.pending ??= body;
-      else pollBodies.graded = body;
-    }
-    return res;
+  const saveHtml = (name: string, html: string) => {
+    if (!args.fixtures) return;
+    mkdirSync(fixtureDir, { recursive: true });
+    writeFileSync(resolve(fixtureDir, name), sanitizeHtml(html, { personal: personal(), userId }));
+    saved.push(name);
   };
 
   console.log(`Grader: ${baseUrl}`);
 
-  // 0. Login page, fetched in a throw-away session (no credentials sent).
-  const anon = new HttpSession(baseUrl);
-  const loginPage = await anon.request('/');
-  const lf = parseLoginForm(loginPage.body);
-  console.log(`Login page: form ${lf.present ? 'found' : 'NOT found'}, agreement checkbox: ${lf.hasAgreement ? 'PRESENT' : 'absent'}`);
-  if (lf.hasAgreement) {
-    console.log('  The probe cannot log in while the grader asks for this agreement; accept it once on the website.');
-  }
-  save('login_page.html', loginPage.body, null);
+  // 1. API login.
+  console.log('\n[1] API login (POST /api/v1/auth/login)');
+  const login = await api.login(username, password);
+  userId = login.user.id;
+  fullName = login.user.full_name ?? '';
+  console.log(`  ok. user id: ${String(userId).length} digits, token expires ${login.expires_at}`);
 
-  const client = new GraderClient({
-    baseUrl,
-    getCredentials: async () => ({ username, password }),
-    fetch: recordingFetch,
-    log: (line) => console.log(`  http: ${line}`),
-  });
+  // 2. /me
+  console.log('\n[2] GET /api/v1/me');
+  const me = await api.get<Record<string, unknown>>('/api/v1/me');
+  console.log(`  fields: ${Object.keys(me).join(', ')}`);
 
-  // 1. Login.
-  console.log('\n[1] Log in');
-  await client.login();
-  console.log(`  logged in. userId: ${client.userId === null ? 'not found on landing page' : `found (${String(client.userId).length} digits)`}`);
-
-  // 2. Problem list.
-  console.log('\n[2] Problem list (/main/list)');
-  const listRaw = await client.getRaw('/main/list');
-  save('main_list.html', listRaw.body, client.userId);
-  const problems = await client.listProblems();
-  console.log(`  ${problems.length} problems`);
+  // 3. Problems.
+  console.log('\n[3] GET /api/v1/problems');
+  const problems = await api.get<ApiProblem[]>('/api/v1/problems');
+  saveJson('api_problems.json', problems.slice(0, 15));
+  console.log(`  ${problems.length} problems; fields: ${Object.keys(problems[0] ?? {}).join(', ')}`);
   for (const p of args.list ? problems : problems.slice(0, 5)) {
-    console.log(`    #${p.id}  ${p.name}  —  ${p.fullName}  best=${p.bestScore ?? '-'}  latest=${p.latestSubmissionId ?? '-'}`);
+    console.log(`    #${p.id}  ${p.name}  best=${p.best_score ?? '-'} last=${p.last_score ?? '-'} n=${p.submission_count} testcases=${p.has_testcase} langs=${p.permitted_languages ? p.permitted_languages.map((l) => l.name).join('/') : 'all'}`);
   }
   if (!args.list && problems.length > 5) console.log('    … (use --list for all)');
-  printContest('problem list', listRaw.body);
 
-  // 3. JSON list availability (informational only).
+  // 4. Languages.
+  console.log('\n[4] GET /api/v1/languages');
+  const langs = await api.get<ApiLanguage[]>('/api/v1/languages');
+  saveJson('api_languages.json', langs);
+  console.log(`  ${langs.map((l) => `${l.id}=${l.pretty_name}(${l.name}, .${l.ext})`).join('  ')}`);
+
+  // 5. Web session + /main/list (penalties, exam hint).
+  console.log('\n[5] Web login + GET /main/list (hint/AI penalties, raw-sum)');
+  const web = new WebSession(baseUrl, undefined, log, redactor);
+  let listScores: ReturnType<typeof parseListScores> | null = null;
   try {
-    const j = await client.getRaw('/main/list.json', { Accept: 'application/json' });
-    const isJson = /json/.test(j.contentType);
-    let n = '?';
-    if (isJson) {
-      try {
-        n = String((JSON.parse(j.body) as unknown[]).length);
-      } catch {
-        /* ignore */
-      }
-    }
-    console.log(`\n[3] /main/list.json: HTTP ${j.status}, ${isJson ? `JSON with ${n} entries` : `not JSON (${j.contentType || 'no content-type'})`}`);
+    const html = await web.login(username, password);
+    saveHtml('main_list.html', html);
+    listScores = parseListScores(html);
+    const withPenalty = [...listScores.values()].filter((x) => x.cost > 0).length;
+    const rawSum = [...listScores.values()].filter((x) => x.rawSum).length;
+    console.log(`  ${listScores.size} rows; with penalty: ${withPenalty}; raw-sum: ${rawSum}; isContestPage: ${isContestPage(html)}`);
   } catch (e) {
-    console.log(`\n[3] /main/list.json: unavailable (${e instanceof Error ? e.message : e})`);
+    console.log(`  web list unavailable: ${e instanceof Error ? e.message : e}`);
   }
 
   if (args.problem === undefined) return finish();
   const pid = args.problem;
 
-  // 4. Submit page.
-  console.log(`\n[4] Submit page for problem #${pid}`);
-  const subRaw = await client.getRaw(`/submissions/direct_edit_problem/${pid}`);
-  save('direct_edit_problem.html', subRaw.body, client.userId);
-  const page = await client.getSubmitPage(pid);
-  console.log(`  name: ${page.problemName ?? '?'}  full: ${page.problemFullName ?? '?'}  canSubmit: ${page.canSubmit}`);
-  console.log(`  languages${page.languageForced ? ' (forced)' : ''}: ${page.languages.map((l) => `${l.id}=${l.name}${l.selected ? '*' : ''}`).join(', ') || '(none)'}`);
-  printContest('submit page', subRaw.body);
+  // 6. One problem.
+  console.log(`\n[6] GET /api/v1/problems/${pid}`);
+  const p = await api.get<ApiProblem>(`/api/v1/problems/${pid}`);
+  saveJson('api_problem.json', p);
+  const summary = summarize({
+    bestScore: p.best_score,
+    lastScore: p.last_score,
+    submissionCount: p.submission_count,
+    list: listScores?.get(pid) ?? null,
+  });
+  console.log(`  ${p.name} — ${p.full_name}; full_score=${p.full_score ?? '-'}; submissions=${p.submission_ids?.length ?? 0}`);
+  console.log(`  counted=${summary.counted ?? '-'} best=${summary.best ?? '-'} latest=${summary.latest ?? '-'} penalty=${summary.penaltyLabel ?? 'none'} (${summary.source})`);
 
-  // 5. Existing submission (fixtures only): status, edit page, compiler msg, evaluations.
-  const row = problems.find((p) => p.id === pid);
-  if (args.fixtures && row?.latestSubmissionId) {
-    console.log(`\n[5] Latest existing submission #${row.latestSubmissionId} (for fixtures)`);
-    const edit = await client.getRaw(`/submissions/${row.latestSubmissionId}/edit`);
-    save('submission_edit.html', edit.body, client.userId);
-    try {
-      const st = await client.getLatestStatus(pid);
-      printStatus(st);
-      if (pollBodies.graded) save('latest_status_graded.turbo.html', pollBodies.graded, client.userId);
-      save('compiler_msg.turbo.html', await client.postTurbo(`/submissions/${row.latestSubmissionId}/compiler_msg`), client.userId);
-      save('evaluations.turbo.html', await client.postTurbo(`/submissions/${row.latestSubmissionId}/evaluations`), client.userId);
-    } catch (e) {
-      console.log(`  status: ${e instanceof Error ? e.message : e}`);
-    }
+  console.log(`\n[7] GET /api/v1/problems/${pid}/submissions`);
+  const subs = await api.get<unknown[]>(`/api/v1/problems/${pid}/submissions`);
+  saveJson('api_submissions.json', subs.slice(0, 5));
+  console.log(`  ${subs.length} submission(s)`);
+
+  const lastId = p.submission_ids?.[0] ?? p.last_submission_id;
+  if (lastId) {
+    console.log(`\n[8] GET /api/v1/submissions/${lastId}`);
+    const s = await api.get<ApiSubmission>(`/api/v1/submissions/${lastId}`);
+    saveJson('api_submission.json', s);
+    console.log(`  status=${s.status} points=${s.points ?? '-'} comment=${s.grader_comment ?? '-'} evaluations=${s.evaluations?.length ?? 0} compiler_message=${s.compiler_message ? `${s.compiler_message.length} chars` : 'none'}`);
   }
 
-  // 6. Submit.
+  console.log(`\n[9] GET /api/v1/problems/${pid}/testcases (Phase 3 import check)`);
+  try {
+    const tcs = await api.get<unknown[]>(`/api/v1/problems/${pid}/testcases`);
+    saveJson('api_testcases.json', tcs.slice(0, 5));
+    console.log(`  ${tcs.length} testcase(s) visible`);
+  } catch (e) {
+    console.log(`  not available: ${e instanceof Error ? e.message : e}`);
+  }
+
+  // 10. Optional submit (through GraderClient, like the extension).
   if (args.submit) {
-    console.log(`\n[6] Submit ${args.submit}`);
-    const source = readFileSync(resolve(args.submit), 'utf8');
+    console.log(`\n[10] Submit ${args.submit}`);
+    const client = new GraderClient({
+      baseUrl,
+      getStoredCredentials: async () => ({ username, password }),
+      log,
+    });
+    await client.login({ username, password });
+    if (client.contestPage) console.log('  note: isContestPage = true (the extension would warn here)');
+    const all = await client.languagesFor({ permittedLanguageIds: p.permitted_languages ? p.permitted_languages.map((l) => l.id) : null });
     let languageId = args.language;
     if (languageId === undefined) {
-      const choice = chooseLanguage(args.submit, page.languages, page.languageForced);
-      if (choice.kind === 'match') languageId = choice.language.id;
-      else if (choice.kind === 'ambiguous') die(`Ambiguous language; pass --language one of ${choice.candidates.map((l) => `${l.id}=${l.name}`).join(', ')}`);
-      else if (choice.kind === 'not-allowed') die(`${choice.wanted} is not allowed for this problem (allowed: ${choice.allowed.map((l) => l.name).join(', ')})`);
-      else die('Unknown file extension; pass --language <id>');
+      const c = chooseLanguage(args.submit, all);
+      if (c.kind === 'match') languageId = c.language.id;
+      else die(`Cannot pick a language (${c.kind}); pass --language <id> from: ${all.map((l) => `${l.id}=${l.name}`).join(', ')}`);
     }
     console.log(`  language_id: ${languageId}`);
-    const result = await client.submit(pid, languageId, source, { filename: args.submit });
-    console.log(`  submitted: #${result.submissionId}  poll URL from server: ${result.pollUrl ? 'yes' : 'no (using discovered user id)'}`);
-    const final = await client.pollLatest(pid, {
-      submissionId: result.submissionId,
-      pollUrl: result.pollUrl,
-      onUpdate: (s) => console.log(`  … ${s.state}${s.score !== null ? ` score=${s.score}` : ''}`),
-    });
-    printStatus(final);
-    if (pollBodies.pending) save('latest_status_pending.turbo.html', pollBodies.pending, client.userId);
-    if (pollBodies.graded) save('latest_status_graded.turbo.html', pollBodies.graded, client.userId);
-
-    const editRaw = await client.getRaw(`/submissions/${result.submissionId}/edit`).catch(() => null);
-    if (editRaw) save('submission_edit.html', editRaw.body, client.userId);
-    if (final.compileError) {
-      const raw = await client.postTurbo(`/submissions/${result.submissionId}/compiler_msg`).catch(() => null);
-      if (raw) save('compiler_msg_error.turbo.html', raw, client.userId);
-      const msg = await client.getCompilerMessage(result.submissionId).catch((e) => `(failed: ${e.message})`);
-      console.log(`  compiler message:\n${msg.split('\n').map((l) => '    ' + l).join('\n')}`);
-    }
+    const sub = await client.submit(pid, languageId, readFileSync(resolve(args.submit), 'utf8'), args.submit.split('/').pop()!);
+    console.log(`  created #${sub.id} (attempt ${sub.number ?? '?'})`);
+    const final = await client.pollSubmission(sub.id, { onUpdate: (s) => console.log(`  … ${s.status}`) });
+    printResult(final);
   }
   return finish();
 
