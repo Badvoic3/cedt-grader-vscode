@@ -15,6 +15,15 @@ export const HOW_LINKED = {
   chosen: 'chosen by you',
   filename: 'matched by file name',
   cph: 'matched from CPH data',
+  suggested: 'suggested',
+} as const;
+
+/** Labels in the "open which file" pick (row click / go to file). */
+export const PICK_HOW = {
+  chosen: 'linked',
+  filename: 'matched by file name',
+  cph: 'matched from CPH data',
+  suggested: 'suggested',
 } as const;
 
 // ===================================================================== host

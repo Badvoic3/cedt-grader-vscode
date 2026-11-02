@@ -60,6 +60,21 @@ describe('files for a problem (one function for notice, row click, submit check)
   });
 });
 
+describe('row click also opens suggested files', () => {
+  it('suggestions count only when includeSuggested (row click), never for the notice / submit check', () => {
+    const S1 = '/w/hw/subset_sum_draft.cpp';
+    const sug = { fsPath: S1, problemId: 1731, how: 'suggested' as const, at: 1 };
+    expect(mergeProblemFiles({ ...base, chosen: [B], auto: [sug] })).toEqual([{ fsPath: B, how: 'chosen' }]);
+    expect(mergeProblemFiles({ ...base, chosen: [B], auto: [sug], searched: [A], includeSuggested: true })).toEqual([
+      { fsPath: A, how: 'filename' },
+      { fsPath: S1, how: 'suggested' },
+      { fsPath: B, how: 'chosen' },
+    ]);
+    // "not linked" wins over a suggestion too
+    expect(mergeProblemFiles({ ...base, auto: [sug], unlinked: [S1], includeSuggested: true })).toEqual([]);
+  });
+});
+
 describe('stable order', () => {
   it('switching the active file between the listed files keeps the row order identical', () => {
     const C = '/w/HW10/da68_f2_zero_one_subset_sum.cpp';

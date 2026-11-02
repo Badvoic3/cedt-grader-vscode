@@ -55,7 +55,7 @@ export class MappingStore {
   }
 
   /** Remember that an open file matched a problem automatically (never over a manual link or "not linked"). */
-  async recordAuto(uri: vscode.Uri, problemId: number, how: 'cph' | 'filename'): Promise<void> {
+  async recordAuto(uri: vscode.Uri, problemId: number, how: 'cph' | 'filename' | 'suggested'): Promise<void> {
     const k = pathKey(uri.fsPath);
     const list = this.autoMatches().filter((a) => pathKey(a.fsPath) !== k);
     list.push({ fsPath: normalizeAbsPath(uri.fsPath), problemId, how, at: Date.now() });

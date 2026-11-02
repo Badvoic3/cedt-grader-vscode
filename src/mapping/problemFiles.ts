@@ -15,7 +15,7 @@ import { pathKey, remapPath } from './paths';
  * Excluded: files explicitly "not linked", and files manually linked to a
  * different problem (a manual link always wins).
  */
-export type LinkHow = 'chosen' | 'cph' | 'filename';
+export type LinkHow = 'chosen' | 'cph' | 'filename' | 'suggested';
 
 export interface ProblemFile {
   fsPath: string;
@@ -25,12 +25,13 @@ export interface ProblemFile {
 export interface AutoMatch {
   fsPath: string;
   problemId: number;
-  how: 'cph' | 'filename';
+  /** 'suggested': the open file's closest (not exact) match; used only to open files (row click), never counted as linked. */
+  how: 'cph' | 'filename' | 'suggested';
   /** ms */
   at: number;
 }
 
-const RANK: Record<LinkHow, number> = { chosen: 0, cph: 1, filename: 2 };
+const RANK: Record<LinkHow, number> = { chosen: 0, cph: 1, filename: 2, suggested: 3 };
 
 /**
  * The one stable order for files of a problem (notice, go-to-file pick,
@@ -53,6 +54,8 @@ export function mergeProblemFiles(opts: {
   unlinked: string[];
   /** Files with a saved link to a different problem. */
   linkedElsewhere: string[];
+  /** Include remembered suggestions (row click only; the notice and the submit check leave them out). */
+  includeSuggested?: boolean;
   caseInsensitive?: boolean;
 }): ProblemFile[] {
   const ci = opts.caseInsensitive;
@@ -65,7 +68,7 @@ export function mergeProblemFiles(opts: {
     if (!prev || RANK[how] < RANK[prev.how]) out.set(k, { fsPath, how });
   };
   for (const p of opts.chosen) add(p, 'chosen');
-  for (const a of opts.auto) if (a.problemId === opts.problemId) add(a.fsPath, a.how);
+  for (const a of opts.auto) if (a.problemId === opts.problemId && (a.how !== 'suggested' || opts.includeSuggested)) add(a.fsPath, a.how);
   for (const p of opts.searched) add(p, 'filename');
   return [...out.values()].sort((a, b) => comparePaths(a.fsPath, b.fsPath));
 }
@@ -75,6 +78,7 @@ export const HOW_TEXT: Readonly<Record<LinkHow, string>> = {
   chosen: 'chosen by you',
   filename: 'matched by file name',
   cph: 'matched from CPH data',
+  suggested: 'suggested',
 };
 
 export interface LinkedNotice {
