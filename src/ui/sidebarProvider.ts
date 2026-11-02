@@ -95,6 +95,21 @@ export class SidebarProvider implements vscode.WebviewViewProvider, vscode.Dispo
       case 'compareSubmission':
         if (Number.isInteger(m.submissionId)) await c.compareSubmission(m.submissionId);
         return;
+      case 'copyName':
+        if (Number.isInteger(m.problemId)) await c.copyProblemName(m.problemId);
+        return;
+      case 'newFile':
+        if (Number.isInteger(m.problemId)) await c.newFileForProblem(m.problemId);
+        return;
+      case 'goToFile':
+        if (Number.isInteger(m.problemId)) await c.goToFile(m.problemId);
+        return;
+      case 'findFile':
+        if (Number.isInteger(m.problemId)) await c.findFileByName(m.problemId);
+        return;
+      case 'loadTestcases':
+        await c.loadTestcasesIntoCph(false);
+        return;
       case 'retry':
         await c.retry();
         return;

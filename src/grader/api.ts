@@ -162,6 +162,28 @@ export class ApiClient {
     }
   }
 
+  /**
+   * Plain-text GET (test case input / sol). Student ("preview") access cuts
+   * large files and sets `X-Testcase-Truncated: true` and `X-Testcase-Byte-Size`.
+   */
+  async getText(path: string): Promise<{ text: string; truncated: boolean; byteSize: number | null }> {
+    for (let attempt = 0; ; attempt++) {
+      const res = await this.raw('GET', path, undefined, true, undefined, true);
+      if (res.ok) {
+        const size = Number(res.headers.get('x-testcase-byte-size'));
+        return {
+          text: await res.text(),
+          truncated: (res.headers.get('x-testcase-truncated') ?? '').toLowerCase() === 'true',
+          byteSize: Number.isFinite(size) && size > 0 ? size : null,
+        };
+      }
+      if (res.status !== 429 && res.status < 500) return this.handle(res);
+      await res.body?.cancel().catch(() => {});
+      if (attempt >= GET_RETRIES) throw new ServerBusyError(`The grader returned an error (HTTP ${res.status}).`, res.status);
+      await this.sleep(2000 * 2 ** attempt);
+    }
+  }
+
   /** Create a submission; maps 403/422 to readable errors. */
   async createSubmission(problemId: number, languageId: number, source: string, filename: string): Promise<ApiCreatedSubmission> {
     const res = await this.raw('POST', `/api/v1/problems/${problemId}/submissions`, { language_id: languageId, source, filename }, true);

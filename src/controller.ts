@@ -27,7 +27,12 @@ import {
   type SubmissionDetail,
   summarize,
 } from './grader';
-import { matchCphProblem, readCphProblem } from './mapping/cph';
+import { TestcaseStore } from './data/testcaseStore';
+import { cphProbPath as cphProbPathFor, readCphProblem } from './mapping/cph';
+import { importIntoCph } from './mapping/cphImport';
+import { createFileNoOverwrite, pathExists as exists } from './mapping/newFile';
+import { dismissKey, type LocatedEntry, moveCphProblem, reconnectCandidates, remapPath } from './mapping/mappingOps';
+import { cleanName, fileNameFor, type MatchSource, placeholder, resolveProblem, SOURCE_LABEL } from './mapping/match';
 import { MappingStore } from './mapping/store';
 import type { HistoryEntry, ProblemView, ResultView, SubmissionDetailView, ViewState } from './shared/messages';
 
@@ -38,6 +43,8 @@ export const EXAM_WARNING =
 export const SUBMISSION_SCHEME = 'cedt-grader-submission';
 
 const LANGUAGE_KEY = 'cedtGrader.languageByFile';
+const DISMISSED_KEY = 'cedtGrader.dismissedReconnects';
+const CLEANUP_KEY = 'cedtGrader.lastMappingCleanup';
 const REMEMBER_KEY = 'cedtGrader.rememberPassword';
 
 type Listener = (s: ViewState) => void;
@@ -62,7 +69,7 @@ export class GraderController implements vscode.Disposable {
   private hasSavedPassword = false;
 
   private fileUri: vscode.Uri | null = null;
-  private problem: (Problem & { source: 'mapping' | 'cph' }) | null = null;
+  private problem: (Problem & { source: MatchSource }) | null = null;
   private languagesError: string | null = null;
   private selectedLanguageId: number | null = null;
   private expandedSubmission: number | null = null;
@@ -73,6 +80,19 @@ export class GraderController implements vscode.Disposable {
   private pollAbort: AbortController | null = null;
   private refreshSeq = 0;
   private changingUsername = false;
+  /** Matching details for the active file (picker suggestions, ambiguous candidates, stale mapping). */
+  private matchInfo: { suggestions: Problem[]; ambiguous: Problem[] | null; ambiguousSource: 'cph' | 'filename' | null; staleMappingId: number | null } = {
+    suggestions: [],
+    ambiguous: null,
+    ambiguousSource: null,
+    staleMappingId: null,
+  };
+  /** Problems with at least one mapped file (for "go to file"). */
+  private mappedIds = new Set<number>();
+  private testcasesBusy = false;
+  /** Files already asked about "keep the link?" this session. */
+  private readonly reconnectAsked = new Set<string>();
+  private readonly testcases: TestcaseStore;
   /** Connection banner (null = all good) and what its Retry button re-runs. */
   private connection: ConnectionProblem | null = null;
   private retryAction: (() => Promise<unknown>) | null = null;
@@ -89,7 +109,13 @@ export class GraderController implements vscode.Disposable {
       canFetch: () => this.client.isLoggedIn || this.hasSavedPassword,
       log: (l) => this.requestLog(l),
       describe: (e) => this.describe(e),
+      // Problem list survives restarts (shown at once, refetched once per session).
+      persist: {
+        load: () => ctx.workspaceState.get<{ at: number; list: import('./grader').ProblemList }>(this.problemsKey()),
+        save: (at, list) => void ctx.workspaceState.update(this.problemsKey(), { at, list }),
+      },
     });
+    this.testcases = new TestcaseStore(ctx.globalStorageUri.fsPath, () => this.client, (l) => this.requestLog(l));
     this.data.onChange = () => this.emit();
     this.data.onError = (e, key) => this.reportError(e, () => this.reloadKey(key));
     this.data.onSuccess = () => this.connectionOk();
@@ -97,6 +123,7 @@ export class GraderController implements vscode.Disposable {
       ctx.extensionUri,
       new StatementStore(ctx.globalStorageUri.fsPath, () => this.client, (l) => this.requestLog(l)),
       {
+        memento: ctx.globalState,
         beside: () => this.cfg.statementBeside,
         openInBrowser: (id) => void this.openStatementInBrowser(id),
         onError: (e) => {
@@ -118,6 +145,15 @@ export class GraderController implements vscode.Disposable {
       vscode.workspace.onDidChangeConfiguration((e) => {
         if (e.affectsConfiguration('cedtGrader')) this.onConfigChanged();
       }),
+      // Renames / moves inside VS Code (a folder rename moves every file inside it).
+      vscode.workspace.onDidRenameFiles((e) => void this.onFilesRenamed(e.files)),
+      // Deleted mapped files: mark stale (not removed), so a moved file can reconnect.
+      vscode.workspace.onDidDeleteFiles((e) => {
+        void Promise.all(e.files.map((f) => this.mapping.markDeleted(f))).then(async () => {
+          this.mappedIds = await this.mapping.mappedProblemIds(this.cfg.baseUrl);
+          this.emit();
+        });
+      }),
       vscode.workspace.onDidSaveTextDocument((d) => {
         if (d.fileName.endsWith('.cedt-grader.json')) {
           this.mapping.invalidate();
@@ -129,6 +165,7 @@ export class GraderController implements vscode.Disposable {
 
   /** Restores a stored API token (no network). Never logs in on its own. */
   async init(): Promise<void> {
+    await this.dailyCleanup();
     this.hasSavedPassword = !!(await this.getPassword());
     if (await this.client.restore()) {
       this.accountStatus = 'logged-in';
@@ -236,6 +273,10 @@ export class GraderController implements vscode.Disposable {
     this.data.clear();
   }
 
+  private problemsKey(): string {
+    return `cedtGrader.problems:${this.cfg.baseUrl}:${this.cfg.username}`;
+  }
+
   private secretKey(kind: 'password' | 'token', username = this.cfg.username): string {
     return `cedtGrader.${kind}:${this.cfg.baseUrl}:${username}`;
   }
@@ -267,7 +308,7 @@ export class GraderController implements vscode.Disposable {
   }
 
   /** The current problem with the freshest cached data. */
-  private currentProblem(): (Problem & { source: 'mapping' | 'cph' }) | null {
+  private currentProblem(): (Problem & { source: MatchSource }) | null {
     if (!this.problem) return null;
     const fresh = this.problems.find((p) => p.id === this.problem!.id);
     return fresh ? { ...fresh, source: this.problem.source } : this.problem;
@@ -343,7 +384,14 @@ export class GraderController implements vscode.Disposable {
   // ---------------------------------------------------------------- state
 
   private problemView(p: Problem): ProblemView {
-    return { id: p.id, name: p.name, fullName: p.fullName, score: summarize(p) };
+    return {
+      id: p.id,
+      name: cleanName(p.name),
+      fullName: cleanName(p.fullName),
+      score: summarize(p),
+      hasFile: this.mappedIds.has(p.id),
+      hasTestcase: p.hasTestcase,
+    };
   }
 
   state(): ViewState {
@@ -378,7 +426,17 @@ export class GraderController implements vscode.Disposable {
       file: file
         ? { path: vscode.workspace.asRelativePath(file, false), name: file.path.split('/').pop() ?? '', languageGuess: lang, supported: lang !== null }
         : null,
-      problem: problem ? { ...this.problemView(problem), source: problem.source } : null,
+      problem: problem ? { ...this.problemView(problem), source: problem.source, sourceLabel: SOURCE_LABEL[problem.source] } : null,
+      matching: {
+        suggestions: this.matchInfo.suggestions.map((p) => this.problemView(p)),
+        ambiguous: this.matchInfo.ambiguous?.map((p) => this.problemView(p)) ?? null,
+        note: this.matchInfo.ambiguous
+          ? `Several problems match this ${this.matchInfo.ambiguousSource === 'cph' ? 'CPH problem name' : 'file name'}. Choose one.`
+          : this.matchInfo.staleMappingId !== null
+            ? `The saved problem #${this.matchInfo.staleMappingId} no longer exists; the mapping is ignored.`
+            : null,
+      },
+      testcases: { busy: this.testcasesBusy },
       languages: {
         loading: languagesLoading,
         items: problem ? this.allowedLanguages(problem).map((l) => ({ id: l.id, name: l.name })) : [],
@@ -609,22 +667,147 @@ export class GraderController implements vscode.Disposable {
       this.expandedSubmission = null;
     }
 
-    let problem: (Problem & { source: 'mapping' | 'cph' }) | null = null;
+    // Matching order: saved → CPH .prob → exact file name → suggestions (never saved automatically).
     const entry = await this.mapping.get(uri, this.cfg.baseUrl);
-    if (entry) {
-      const p = this.problems.find((x) => x.id === entry.problemId);
-      problem = { ...(p ?? placeholderProblem(entry.problemId, entry.name)), source: 'mapping' };
-    } else if (this.problems.length) {
-      const saveLocation = vscode.workspace.getConfiguration('cph').get<string>('general.saveLocation') ?? '';
-      const cph = await readCphProblem(uri.fsPath, saveLocation);
-      const match = cph ? matchCphProblem(cph, this.problems, this.cfg.baseUrl) : null;
-      if (match) problem = { ...match, source: 'cph' };
-    }
+    const list = this.data.problemList()?.problems;
+    const cph = entry ? null : await readCphProblem(uri.fsPath, this.cphSaveLocation());
+    const m = resolveProblem({ savedProblemId: entry?.problemId ?? null, cph, filePath: uri.fsPath, problems: list, baseUrl: this.cfg.baseUrl });
+    const mapped = await this.mapping.mappedProblemIds(this.cfg.baseUrl);
     if (seq !== this.refreshSeq) return;
+    this.mappedIds = mapped;
+    let problem: (Problem & { source: MatchSource }) | null = null;
+    this.matchInfo = { suggestions: [], ambiguous: null, ambiguousSource: null, staleMappingId: null };
+    if (m.kind === 'match') {
+      problem = { ...(m.problem.name.startsWith('#') && entry?.name ? placeholder(m.problem.id, entry.name) : m.problem), source: m.source };
+    } else if (m.kind === 'ambiguous') {
+      this.matchInfo.ambiguous = m.candidates;
+      this.matchInfo.ambiguousSource = m.source;
+    } else {
+      this.matchInfo.suggestions = m.suggestions;
+      this.matchInfo.staleMappingId = m.staleMappingId;
+      // The closest candidate is pre-selected but marked "suggested" (submit asks first).
+      if (m.suggestions.length) problem = { ...m.suggestions[0], source: 'suggested' };
+    }
     this.problem = problem;
     this.applyLanguageChoice();
     this.emit();
-    this.data.focusProblem(problem?.id ?? null);
+    // A suggestion is only a guess: don't fetch its history until it is confirmed.
+    this.data.focusProblem(problem && problem.source !== 'suggested' ? problem.id : null);
+    if (!entry && !this.reconnectAsked.has(uri.fsPath)) void this.offerReconnect(uri);
+  }
+
+  // ------------------------------------------------------ moved files
+
+  /** Stale mappings (older than 30 days) are removed, at most once a day. */
+  private async dailyCleanup(): Promise<void> {
+    const last = this.ctx.globalState.get<number>(CLEANUP_KEY, 0);
+    if (Date.now() - last < 86_400_000) return;
+    await this.ctx.globalState.update(CLEANUP_KEY, Date.now());
+    const n = await this.mapping.expireStale();
+    if (n) this.log(`Removed ${n} mapping(s) whose file has been missing for 30 days.`);
+  }
+
+  /** Update mappings (and per-file state) for files renamed or moved inside VS Code. */
+  private async onFilesRenamed(files: readonly { oldUri: vscode.Uri; newUri: vscode.Uri }[]): Promise<void> {
+    const moved: { from: string; to: string }[] = [];
+    for (const f of files) moved.push(...(await this.mapping.rename(f.oldUri, f.newUri)));
+    // Per-file state follows the file even when it had no mapping (results, chosen language).
+    const langs = { ...this.ctx.workspaceState.get<Record<string, number>>(LANGUAGE_KEY, {}) };
+    for (const f of files) {
+      for (const key of [...this.results.keys()]) {
+        const to = remapPath(key, f.oldUri.fsPath, f.newUri.fsPath);
+        if (to) {
+          this.results.set(to, this.results.get(key)!);
+          this.results.delete(key);
+        }
+      }
+      for (const key of Object.keys(langs)) {
+        const to = remapPath(key, f.oldUri.fsPath, f.newUri.fsPath);
+        if (to) {
+          langs[to] = langs[key];
+          delete langs[key];
+        }
+      }
+      if (this.fileUri) {
+        const to = remapPath(this.fileUri.fsPath, f.oldUri.fsPath, f.newUri.fsPath);
+        if (to) this.fileUri = vscode.Uri.file(to);
+      }
+    }
+    await this.ctx.workspaceState.update(LANGUAGE_KEY, langs);
+    if (!moved.length) return;
+    this.log(`Updated ${moved.length} mapping(s) after a rename.`);
+    if (this.fileUri) await this.setActiveFile(this.fileUri);
+
+    // CPH names its file after the full source path and does not follow renames: offer once.
+    const save = this.cphSaveLocation();
+    const withCph = [];
+    for (const m of moved) if (await exists(cphProbPathFor(m.from, save))) withCph.push(m);
+    if (!withCph.length) return;
+    const yes = 'Move Test Cases';
+    const pick = await vscode.window.showInformationMessage(
+      withCph.length === 1
+        ? `Move CPH test cases to the new file too? (${vscode.workspace.asRelativePath(withCph[0].to)})`
+        : `Move CPH test cases of ${withCph.length} renamed files too?`,
+      yes,
+      'No',
+    );
+    if (pick !== yes) return;
+    let done = 0;
+    let skipped = 0;
+    for (const m of withCph) {
+      const r = await moveCphProblem(m.from, m.to, save);
+      if (r.status === 'moved') done++;
+      else if (r.status === 'target-exists') skipped++;
+    }
+    void vscode.window.showInformationMessage(
+      `Moved CPH test cases for ${done} file${done === 1 ? '' : 's'} (old files kept as .bak)` +
+        (skipped ? `; ${skipped} skipped because the new file already has CPH tests.` : '.') +
+        ' CPH shows them when you switch to the file.',
+    );
+  }
+
+  /**
+   * A file with no mapping was opened: if saved mappings point at a missing
+   * file with the same name (moved outside VS Code), ask whether to keep the link.
+   * Only the saved mappings are checked; never applied silently.
+   */
+  private async offerReconnect(uri: vscode.Uri): Promise<void> {
+    this.reconnectAsked.add(uri.fsPath);
+    const dismissed = new Set(this.ctx.workspaceState.get<string[]>(DISMISSED_KEY, []));
+    const candidates = await reconnectCandidates(await this.mapping.allEntries(), uri.fsPath, exists, dismissed);
+    if (!candidates.length) return;
+    const describeEntry = (c: LocatedEntry) =>
+      `${vscode.workspace.asRelativePath(c.fsPath)}, linked to ${this.problemById(c.entry.problemId)?.name ?? c.entry.name ?? `#${c.entry.problemId}`}`;
+    let chosen: LocatedEntry | undefined;
+    if (candidates.length === 1) {
+      const keep = 'Keep';
+      const pick = await vscode.window.showInformationMessage(`This looks like ${describeEntry(candidates[0])}. Keep the link?`, keep, 'Not this one');
+      if (pick === keep) chosen = candidates[0];
+      else if (pick) await this.dismissReconnect(candidates, uri);
+    } else {
+      const pick = await vscode.window.showQuickPick(
+        [
+          ...candidates.map((c) => ({ label: vscode.workspace.asRelativePath(c.fsPath), description: this.problemById(c.entry.problemId)?.name ?? c.entry.name, c })),
+          { label: 'Skip', description: 'none of these', c: undefined },
+        ],
+        { placeHolder: `${uri.path.split('/').pop()} may be a moved file. Keep which link?` },
+      );
+      if (pick?.c) chosen = pick.c;
+      else if (pick) await this.dismissReconnect(candidates, uri);
+    }
+    if (!chosen) return;
+    await this.mapping.reconnect(chosen, uri);
+    if (this.fileUri?.toString() === uri.toString()) await this.setActiveFile(uri);
+  }
+
+  private async dismissReconnect(candidates: LocatedEntry[], uri: vscode.Uri): Promise<void> {
+    const list = new Set(this.ctx.workspaceState.get<string[]>(DISMISSED_KEY, []));
+    for (const c of candidates) list.add(dismissKey(c.fsPath, uri.fsPath));
+    await this.ctx.workspaceState.update(DISMISSED_KEY, [...list]);
+  }
+
+  private cphSaveLocation(): string {
+    return vscode.workspace.getConfiguration('cph').get<string>('general.saveLocation') ?? '';
   }
 
   private applyLanguageChoice(): void {
@@ -677,11 +860,170 @@ export class GraderController implements vscode.Disposable {
     await this.setActiveFile(this.fileUri);
   }
 
+  /** Clear the saved mapping of the active file (auto-detection applies again). */
   async unmapCurrentFile(): Promise<void> {
     if (!this.fileUri) return;
     await this.mapping.set(this.fileUri, undefined);
     this.problem = null;
     await this.setActiveFile(this.fileUri);
+  }
+
+  // ------------------------------------------------------------ linking
+
+  /** Copy the clean problem name (zero-width characters removed): a file named like it is matched exactly. */
+  async copyProblemName(problemId: number): Promise<void> {
+    const p = this.problemById(problemId);
+    if (!p) return;
+    const name = cleanName(p.name);
+    await vscode.env.clipboard.writeText(name);
+    void vscode.window.setStatusBarMessage(`$(check) Copied "${name}"`, 2500);
+  }
+
+  /** Create `<clean name>.<ext>` next to the active file (or in the workspace root), open it and map it. */
+  async newFileForProblem(problemId: number): Promise<void> {
+    const p = this.problemById(problemId);
+    if (!p) return;
+    const folder =
+      (this.fileUri ? vscode.Uri.joinPath(this.fileUri, '..') : undefined) ?? vscode.workspace.workspaceFolders?.[0]?.uri;
+    if (!folder) {
+      void vscode.window.showInformationMessage('Open a folder first.');
+      return;
+    }
+    await this.data.languages().catch(() => undefined);
+    const ext = this.allowedLanguages(p)[0]?.ext || (this.fileUri ? /\.([^./]+)$/.exec(this.fileUri.path)?.[1] : undefined) || 'cpp';
+    const target = vscode.Uri.joinPath(folder, fileNameFor(p.name, ext));
+    const created = await createFileNoOverwrite(target.fsPath, async () => {
+      const open = 'Open Existing';
+      const overwrite = 'Overwrite';
+      const pick = await vscode.window.showWarningMessage(`${vscode.workspace.asRelativePath(target)} already exists.`, { modal: true }, open, overwrite);
+      return pick === overwrite ? 'overwrite' : pick === open ? 'open' : 'cancel';
+    });
+    if (created === 'cancel') return;
+    await this.mapping.set(target, { problemId: p.id, name: p.name, baseUrl: this.cfg.baseUrl });
+    await vscode.window.showTextDocument(target);
+  }
+
+  /** Open the file(s) mapped to a problem (saved mappings only; one stat per file). */
+  async goToFile(problemId: number): Promise<void> {
+    const files = await this.mapping.filesFor(problemId, this.cfg.baseUrl);
+    const existing: vscode.Uri[] = [];
+    const gone: vscode.Uri[] = [];
+    for (const f of files) ((await exists(f.fsPath)) ? existing : gone).push(f);
+    if (gone.length) {
+      const remove = 'Remove Mapping';
+      const pick = await vscode.window.showWarningMessage(
+        `${gone.length === 1 ? vscode.workspace.asRelativePath(gone[0]) + ' no longer exists' : `${gone.length} mapped files no longer exist`}.`,
+        remove,
+      );
+      if (pick === remove) for (const g of gone) await this.mapping.set(g, undefined);
+      this.mappedIds = await this.mapping.mappedProblemIds(this.cfg.baseUrl);
+      this.emit();
+    }
+    if (!existing.length) return;
+    const target =
+      existing.length === 1
+        ? existing[0]
+        : (await vscode.window.showQuickPick(existing.map((u) => ({ label: vscode.workspace.asRelativePath(u), uri: u })), { placeHolder: 'Files for this problem' }))?.uri;
+    if (target) await vscode.window.showTextDocument(target);
+  }
+
+  /** One workspace.findFiles for the clean name, only when asked (max 20 results). */
+  async findFileByName(problemId: number): Promise<void> {
+    const p = this.problemById(problemId);
+    if (!p) return;
+    const name = cleanName(p.name).replace(/[{}[\]*?,]/g, '?');
+    const found = await vscode.workspace.findFiles(`**/${name}.*`, '**/{node_modules,.git,.cph,build,dist,out,target,.vscode-test}/**', 20);
+    if (!found.length) {
+      void vscode.window.showInformationMessage(`No file named "${cleanName(p.name)}.*" in the workspace.`);
+      return;
+    }
+    const target =
+      found.length === 1
+        ? found[0]
+        : (await vscode.window.showQuickPick(found.map((u) => ({ label: vscode.workspace.asRelativePath(u), uri: u })), { placeHolder: `Files named ${cleanName(p.name)}` }))?.uri;
+    if (target) await vscode.window.showTextDocument(target); // the file name matches exactly → auto-linked
+  }
+
+  // ---------------------------------------------------------- test cases
+
+  /**
+   * Download the grader's test cases (one at a time, cached in globalStorage)
+   * and add them to the CPH problem file of the active source.
+   */
+  async loadTestcasesIntoCph(refresh = false): Promise<void> {
+    const problem = this.currentProblem();
+    const file = this.fileUri;
+    if (!problem || !file || this.testcasesBusy) return;
+    if (!problem.hasTestcase) {
+      void vscode.window.showInformationMessage(`${problem.name} has no test cases you can download.`);
+      return;
+    }
+    if (!(await this.ensureLoggedIn())) return;
+    this.testcasesBusy = true;
+    this.emit();
+    try {
+      const res = await vscode.window.withProgress(
+        { location: vscode.ProgressLocation.Notification, title: `Test cases for ${problem.name}`, cancellable: true },
+        async (progress, token) => {
+          const abort = new AbortController();
+          token.onCancellationRequested(() => abort.abort());
+          let last = 0;
+          return this.testcases.get(problem.id, {
+            refresh,
+            signal: abort.signal,
+            onProgress: (done, total) => {
+              progress.report({ message: `downloading ${done} / ${total}`, increment: total ? ((done - last) / total) * 100 : 0 });
+              last = done;
+            },
+          });
+        },
+      );
+      this.connectionOk();
+      if (res.status === 'not-available') {
+        void vscode.window.showInformationMessage(`The grader does not let you download the test cases of ${problem.name}.`);
+        return;
+      }
+      const { set } = res;
+      const total = set.cases.length + set.truncated.length;
+      const result = await importIntoCph({
+        srcPath: file.fsPath,
+        saveLocation: this.cphSaveLocation(),
+        problemName: cleanName(problem.name),
+        problemUrl: this.url(`/submissions/direct_edit_problem/${problem.id}`),
+        cases: set.cases,
+      });
+      const parts = [`Loaded ${set.cases.length} of ${total} test case${total === 1 ? '' : 's'} into CPH`];
+      if (set.truncated.length) parts.push(`${set.truncated.length} ${set.truncated.length === 1 ? 'was' : 'were'} too large to download`);
+      if (result.alreadyPresent) parts.push(`${result.alreadyPresent} already present`);
+      if (result.updated) parts.push(`${result.updated} updated`);
+      if (result.added) parts.push(`${result.added} added`);
+      const reload = 'Reload in CPH';
+      const refetch = 'Download Again';
+      const pick = await vscode.window.showInformationMessage(
+        `${parts.join('; ')}.${result.backupPath ? ' Previous CPH file backed up (.bak).' : ''} CPH reloads tests when you switch to the file; don't run tests in CPH before that.`,
+        reload,
+        ...(res.fromCache ? [refetch] : []),
+      );
+      if (pick === reload) await this.reloadCph(file);
+      if (pick === refetch) await this.loadTestcasesIntoCph(true);
+    } catch (err) {
+      if (classifyConnectionError(err)) this.reportError(err, () => this.loadTestcasesIntoCph(refresh));
+      else void vscode.window.showErrorMessage(`Could not load test cases: ${this.describe(err)}`);
+    } finally {
+      this.testcasesBusy = false;
+      this.emit();
+    }
+  }
+
+  /**
+   * CPH only re-reads a .prob when the active editor changes (no reload
+   * command exists). Briefly show a read-only placeholder and come back.
+   */
+  async reloadCph(file: vscode.Uri): Promise<void> {
+    const doc = await vscode.workspace.openTextDocument(vscode.Uri.from({ scheme: SUBMISSION_SCHEME, path: '/0/reloading-cph' }));
+    await vscode.window.showTextDocument(doc, { preview: true, preserveFocus: false });
+    await vscode.commands.executeCommand('workbench.action.closeActiveEditor');
+    await vscode.window.showTextDocument(file, { preview: false });
   }
 
   /** Command-palette flow: searchable QuickPick of the cached problem list. */
@@ -811,6 +1153,20 @@ export class GraderController implements vscode.Disposable {
         await this.selectLanguage(languageId);
       }
       const language = allowed.find((l) => l.id === languageId);
+
+      // A suggested (unconfirmed) match always asks, even with confirmations off.
+      if (problem.source === 'suggested') {
+        const use = 'Use This Problem and Submit';
+        const pick = await vscode.window.showWarningMessage(
+          `${problem.name} (#${problem.id}) was only suggested from the file name.`,
+          { modal: true, detail: `Submit ${fileName} to ${problem.name} (#${problem.id})? The file will be linked to this problem.` },
+          use,
+        );
+        if (pick !== use) return;
+        await this.mapping.set(fileUri, { problemId: problem.id, name: problem.name, baseUrl: this.cfg.baseUrl });
+        if (this.problem) this.problem = { ...this.problem, source: 'saved' };
+        warned = true;
+      }
 
       if (this.cfg.confirmBeforeSubmit && !warned) {
         const ok = 'Submit';
@@ -992,10 +1348,7 @@ export class GraderController implements vscode.Disposable {
       void vscode.window.showInformationMessage('Choose a problem first.');
       return;
     }
-    if (!(this.client.isLoggedIn || this.hasSavedPassword)) {
-      await this.openStatementInBrowser(id);
-      return;
-    }
+    // A cached statement opens even when logged out (no request); otherwise the viewer explains.
     const p = this.problemById(id);
     await this.statements.open(id, p?.name ?? `#${id}`);
   }
@@ -1045,24 +1398,6 @@ function vscodeLanguageId(filename: string): string {
     hs: 'haskell', rb: 'ruby', pas: 'pascal', sql: 'sql', dig: 'xml',
   };
   return map[ext] ?? 'plaintext';
-}
-
-function placeholderProblem(id: number, name: string): Problem {
-  return {
-    id,
-    name: name || `#${id}`,
-    fullName: name,
-    bestScore: null,
-    lastScore: null,
-    lastResult: null,
-    lastSubmissionId: null,
-    lastSubmissionTime: null,
-    submissionCount: 0,
-    hasTestcase: false,
-    hasAttachment: false,
-    permittedLanguageIds: null,
-    list: null,
-  };
 }
 
 function newResult(problem: Problem, phase: ResultView['phase'], message: string | null): ResultView {

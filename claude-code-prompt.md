@@ -136,10 +136,37 @@ Contests on this grader are only used for exams, and this is an unofficial homew
 - The submit command runs the `isContestPage` warning from section 2b before submitting.
 - The commands stay (so keyboard shortcuts and the command palette keep working), but the **sidebar GUI from Phase 4 is the primary interface**. Build the skeleton with the sidebar in mind: commands and the webview call the same controller.
 
-### Phase 3: Problem mapping and CPH integration
-- First inspect how CPH stores problems: look at its source (https://github.com/agrawal-d/cph) and any `.cph/*.prob` files in my workspace. Do not assume the format; confirm it.
-- Mapping order for the active file: (1) our own mapping stored in workspace state / a `.cedt-grader.json` file, (2) a problem URL or name in the CPH `.prob` file if it matches the grader, (3) a quick-pick of problems from `/main/list` (searchable by name), saved for next time.
-- Optional: when the Testcases page exists for a problem, offer a command to import its sample cases into the CPH `.prob` file so CPH can run them locally. Only write to `.prob` files in the documented format and back up the original first.
+### Phase 3: Problem linking and CPH integration
+
+1. **Problem cache:** the problem list (`/api/v1/problems` + `/main/list` penalties) is fetched once per session and on Refresh; cached in memory and in workspace state with a timestamp (shown immediately after a restart, still refetched once per session). Never fetched on keystrokes or editor switches. `has_testcase` comes from it.
+2. **Name normalization:** file names (without extension) and problem names: zero-width characters (U+200B/C/D, U+FEFF) removed, trimmed, lowercased; spaces, `-`, `_` and `.` are the same separator, repeats collapse.
+3. **Matching order** for the active file:
+   1. a mapping I saved for this file (always wins; ignored, with a note, when its problem no longer exists);
+   2. the CPH `.prob` of this source (format confirmed from agrawal-d/cph `src/types.ts` + `src/parser.ts`): a grader URL or problem name in it;
+   3. exact normalized match between file name and problem name;
+   4. otherwise the closest few candidates, shown first in the picker, the best one pre-selected as "suggested", never saved automatically.
+   - If more than one problem matches equally, don't choose; ask.
+   - Mappings live in workspace state keyed by the file's path relative to its workspace folder, plus `.cedt-grader.json` in the workspace root.
+4. **Manual control:** searchable picker (name or id); a manual choice is saved and overrides auto-detection. Clear the mapping from the panel (×) or the command "Clear Problem for This File". The panel shows how the problem was chosen ("saved", "from CPH", "from file name", "suggested") with a Change button.
+5. **Safety before submit:** the confirmation always shows the problem name and id. A "suggested" match always needs an explicit confirmation (it is then saved). The exam warning (section 2b) is not affected by mapping.
+6. **Load test cases into CPH** (replaces the earlier optional import):
+   - API (confirmed in `problems_controller.rb#testcases`, `testcases_controller.rb`): `GET /api/v1/problems/{id}/testcases` → `[{id, num, group, group_name, weight, access, input_bytes, sol_bytes}]` (403 = not allowed); `GET /api/v1/testcases/{id}/input` and `/sol` → text/plain. For students (`access: "preview"`) large files are cut off and the response has `X-Testcase-Truncated: true` and `X-Testcase-Byte-Size`. A truncated case is never imported; it is skipped and reported ("Loaded 5 of 8 test cases; 3 were too large to download").
+   - The button ("Load test cases into CPH", Current problem section) is shown only when `has_testcase` is true and the file is mapped (not merely suggested). Problems without `has_testcase` are never probed.
+   - Downloads one case at a time (input, then sol) with a progress notification; cached per problem in globalStorage, so a second import downloads nothing unless "Download Again" is chosen.
+   - CPH file: `.cph/.<basename>_<md5(full source path)>.prob` next to the source (or `cph.general.saveLocation`), JSON `{name, url, interactive, memoryLimit, timeLimit, group, tests:[{input, output, id}], srcPath, local}`, written with plain `JSON.stringify` like CPH. Existing file: backed up to `<file>.prob.bak`, my own tests kept first, grader cases appended; cases whose input+output already exist are skipped. Imported cases are marked through their `id` (7e15 + grader testcase id; CPH keeps ids when it re-saves) so a re-import updates them in place. No file: one is created with the problem name and the grader URL (`/submissions/direct_edit_problem/{id}`).
+   - Line endings normalized to `\n`; trailing newlines kept as in the file.
+   - CPH only re-reads a `.prob` when the active editor changes and has no reload command; the success message says so and offers "Reload in CPH" (briefly shows a read-only placeholder tab and returns to the file). CPH itself is never modified.
+   - Success message: loaded, skipped (truncated), already present. Errors use the connection banner.
+7. **Copy problem name:** copy icon next to the problem name (panel, picker, problem list) copies the clean name (zero-width characters removed), so a file named with it is auto-matched exactly.
+8. **New file for this problem:** creates `<clean name>.<ext>` (ext of the problem's first allowed language) in the active file's folder (or workspace root), opens it and saves the mapping. If it exists: Open Existing / Overwrite / Cancel; never overwritten silently.
+9. **Jump to file:** "go to file" for problems with a mapped file (reverse lookup of saved mappings only, no workspace scan; one `fs.stat` per file when used; missing → offer to remove the stale mapping; several → quick pick). Without a mapping: "Find file by name" runs one `workspace.findFiles` for the clean name (excluding node_modules, .git, .cph, build folders; max 20) only when clicked.
+10. **Moved / renamed files (failsafe):**
+    - Inside VS Code: `workspace.onDidRenameFiles` updates saved mappings and `.cedt-grader.json` for renamed files and folders (a folder rename moves every file inside it); how the problem was chosen is kept; per-file results and chosen language follow the file.
+    - Outside VS Code (Finder, terminal, git): when a file without a mapping is opened, saved mappings whose file is missing (checked with `fs.stat`, only for same-name candidates) and whose file name matches are offered: "This looks like <old path>, linked to <problem>. Keep the link?" (Keep / Not this one; several → pick or skip). Never applied silently; no workspace scanning. "Not this one" is remembered.
+    - Deleted files (`workspace.onDidDeleteFiles`): the mapping is marked stale (not removed), so a moved file can reconnect; stale mappings are removed after 30 days (checked at most once a day on startup) or with "Clear Cached Data" (Phase 5).
+    - CPH names its `.prob` after the full source path and does not handle renames (no rename/delete listeners in its source). After a rename inside VS Code the extension offers once: "Move CPH test cases to the new file too?" → copies the `.prob` to the name CPH expects for the new path (srcPath, and url when it held the old path, updated), keeps the old one as `.bak`, never overwrites an existing `.prob`.
+- Tests: normalization, the full matching order, ambiguous matches, stale mappings, `.prob` parsing (sanitized fixture), import never deleting existing cases, truncated cases skipped, backup created, 403 handled, clean-name copy, new file without overwrite, reverse lookup, single file / folder rename, reconnect prompt (one / several candidates), deleted → stale → expired after 30 days, CPH `.prob` moved with backup.
+- **CHECKPOINT:** F5 test list (file named like a problem, a file with a CPH .prob, a file with no match, changing the mapping, loading test cases, renames/moves).
 
 ### Phase 4: Sidebar GUI (primary interface)
 Instead of relying on the command palette, build a sidebar GUI like the CPH and Claude extensions.
@@ -162,6 +189,10 @@ Instead of relying on the command palette, build a sidebar GUI like the CPH and 
 - Keep the commands too (so keyboard shortcuts still work), but the GUI is the primary way to use the extension. Keep the status bar item as a shortcut that reveals the panel.
 - Plain TypeScript + HTML/CSS for the webview (no framework), bundled with esbuild into `media/`.
 - Notifications stay human readable (wrong password, session expired, language not allowed for this problem, network error).
+- Statement viewer fixes:
+  - Pinch zoom: trackpad pinch arrives as `wheel` events with `ctrlKey = true`; zoom the pdf.js view smoothly around the cursor (`preventDefault` so VS Code's own zoom doesn't react). Also Cmd/Ctrl + / - / 0 (reset = fit width), and the toolbar buttons.
+  - No PDF refetch when the panel is hidden and shown (retainContextWhenHidden), the tab is closed and reopened (disk cache), or VS Code restarts (panel serializer + disk cache). Verified with the debug request log.
+  - Viewer state (page, zoom, scroll) is kept: webview `getState/setState` (restart) and in globalState via the extension (tab closed and reopened).
 - Update `CLAUDE.md` and the README with the new UI.
 - Plan first and show a sketch of the panel layout, then build it. **CHECKPOINT:** explain how to test it with F5.
 
@@ -170,6 +201,12 @@ Instead of relying on the command palette, build a sidebar GUI like the CPH and 
 - `README.md` for students: install from `.vsix`, log in, map a file, submit; a note on using it together with CPH; a privacy note (password stays in the OS keychain via VS Code SecretStorage).
 - `npx @vscode/vsce package` produces a `.vsix`. Add `CHANGELOG.md` and an MIT `LICENSE`.
 - Write a `CLAUDE.md` for this repo summarising the protocol table above, the hard rules, and the build/test commands, so future sessions have context.
+- Cache management for everything the extension stores in globalStorage / workspace state (statement PDFs, test cases, submission details, history, problem list):
+  - Size limit (setting `cedtGrader.cacheMaxMB`, default 100): when exceeded, delete the least recently used files first.
+  - Auto-cleanup on startup (at most once a day): remove cached items not used for 30 days and leftover temp files / backups older than 30 days.
+  - Command and a button in the sidebar's settings/overflow menu: "Clear Cached Data", showing the current size, with checkboxes: cached files (PDFs, test cases, submission details) [on], problem list and history [on], file-to-problem mappings incl. stale ones [off], saved login [off]. Confirm before deleting.
+  - Never delete anything in the workspace except the extension's own `.bak` files, and only when selected.
+  - Tests: LRU eviction, daily cleanup, selective clear.
 - **CHECKPOINT:** list what I should test manually in the F5 Extension Development Host (log in, submit a correct solution, submit a compile error, submit a wrong answer, log out) and wait for my results.
 
 ## 4. Done means

@@ -30,10 +30,16 @@ export interface ScoreView {
 
 export interface ProblemView {
   id: number;
+  /** Clean name (zero-width characters removed). */
   name: string;
   fullName: string;
   score: ScoreView;
+  /** At least one file is mapped to this problem (enables "go to file"). */
+  hasFile: boolean;
+  hasTestcase: boolean;
 }
+
+export type MatchSourceView = 'saved' | 'cph' | 'filename' | 'suggested';
 
 export interface LanguageView {
   id: number;
@@ -115,7 +121,17 @@ export interface ViewState {
     languageGuess: string | null;
     supported: boolean;
   } | null;
-  problem: (ProblemView & { source: 'mapping' | 'cph' }) | null;
+  problem: (ProblemView & { source: MatchSourceView; sourceLabel: string }) | null;
+  /** How the active file was (or wasn't) matched. */
+  matching: {
+    /** Closest candidates, shown first in the picker (never saved automatically). */
+    suggestions: ProblemView[];
+    /** Several problems matched equally well; the user must choose. */
+    ambiguous: ProblemView[] | null;
+    /** Explanation, e.g. a saved mapping whose problem no longer exists. */
+    note: string | null;
+  };
+  testcases: { busy: boolean };
   languages: {
     loading: boolean;
     items: LanguageView[];
@@ -178,6 +194,11 @@ export type FromWebview =
   | { type: 'compareSubmission'; submissionId: number }
   | { type: 'refreshHistory' }
   | { type: 'retry' }
+  | { type: 'copyName'; problemId: number }
+  | { type: 'newFile'; problemId: number }
+  | { type: 'goToFile'; problemId: number }
+  | { type: 'findFile'; problemId: number }
+  | { type: 'loadTestcases' }
   | { type: 'showCompilerMessage' }
   | { type: 'openSettings' };
 

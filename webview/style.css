@@ -409,3 +409,13 @@ input::placeholder { color: var(--vscode-input-placeholderForeground); }
   border-color: var(--vscode-inputValidation-errorBorder, var(--err));
   background: var(--vscode-inputValidation-errorBackground, transparent);
 }
+
+/* ------------------------------------------------------------- linking */
+
+.row-actions { display: inline-flex; flex: none; opacity: 0; transition: opacity 0.1s; }
+.problem-row:hover .row-actions, .problem-row:focus-within .row-actions, .problem-row.mapped .row-actions { opacity: 1; }
+@media (hover: none) { .row-actions { opacity: 1; } }
+.picker-group { padding: 4px 4px 2px; text-transform: uppercase; font-size: 10px; letter-spacing: 0.04em; }
+.badge.source-saved { color: var(--vscode-badge-foreground); }
+.badge.source-suggested { color: var(--warn); background: transparent; border: 1px dashed currentColor; }
+.badge.source-filename, .badge.source-cph { background: transparent; color: var(--vscode-foreground); border: 1px solid var(--border); }

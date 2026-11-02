@@ -34,6 +34,15 @@ export class FakeGrader {
   description: { markdown: boolean; description: string } | 403 | 404 = 404;
   /** Make the next fetch reject like Node's fetch does (cause.code / TimeoutError). */
   rejectWith: unknown = null;
+  /** Test cases served by /api/v1/problems/:id/testcases (403 = not allowed). */
+  testcases: { id: number; num: number; input: string; sol: string; truncated?: 'input' | 'sol' }[] | 403 = [
+    { id: 21186, num: 1, input: '1 2\r\n', sol: '3\n' },
+    { id: 21187, num: 2, input: '5 5', sol: '10' },
+  ];
+  /** Order of testcase file requests, to check they are sequential. */
+  testcaseLog: string[] = [];
+  private inFlightTestcase = 0;
+  maxParallelTestcase = 0;
   listHtml = fixture('main_list.penalties.synthetic.html');
 
   problems = [
@@ -73,7 +82,7 @@ export class FakeGrader {
     return new Response(JSON.stringify(data), { status, headers: { 'content-type': 'application/json' } });
   }
 
-  private api(method: string, p: string, headers: Record<string, string>, body: Record<string, unknown>): Response {
+  private async api(method: string, p: string, headers: Record<string, string>, body: Record<string, unknown>): Promise<Response> {
     if (method === 'POST' && p === '/api/v1/auth/login') {
       if (this.throttled) return this.json(429, { error: 'Too many failed login attempts; try again later' });
       if (body.password !== this.password) return this.json(401, { error: 'Invalid login or password' });
@@ -98,6 +107,26 @@ export class FakeGrader {
     if (method === 'GET' && /^\/api\/v1\/problems\/\d+\/description$/.test(p)) {
       if (typeof this.description === 'number') return this.json(this.description, { error: 'Description not available for this problem' });
       return this.json(200, this.description);
+    }
+    if (method === 'GET' && /^\/api\/v1\/problems\/\d+\/testcases$/.test(p)) {
+      if (this.testcases === 403) return this.json(403, { error: 'You are not allowed to view testcases for this problem' });
+      return this.json(200, this.testcases.map((t) => ({ id: t.id, num: t.num, group: t.num, group_name: String(t.num), weight: 1, access: 'preview', input_bytes: t.input.length, sol_bytes: t.sol.length })));
+    }
+    const tc = /^\/api\/v1\/testcases\/(\d+)\/(input|sol)$/.exec(p);
+    if (method === 'GET' && tc && this.testcases !== 403) {
+      const t = this.testcases.find((x) => x.id === Number(tc[1]));
+      if (!t) return this.json(404, { error: 'Testcase not found' });
+      this.testcaseLog.push(`${t.id}/${tc[2]}`);
+      this.inFlightTestcase++;
+      this.maxParallelTestcase = Math.max(this.maxParallelTestcase, this.inFlightTestcase);
+      await new Promise((r) => setTimeout(r, 1));
+      this.inFlightTestcase--;
+      const cut = t.truncated === tc[2];
+      const text = tc[2] === 'input' ? t.input : t.sol;
+      return new Response(cut ? text.slice(0, 2) : text, {
+        status: 200,
+        headers: { 'content-type': 'text/plain', 'x-testcase-truncated': String(cut), 'x-testcase-byte-size': String(text.length) },
+      });
     }
     let m = /^\/api\/v1\/problems\/(\d+)$/.exec(p);
     if (method === 'GET' && m) {

@@ -8,6 +8,7 @@ import { FakeGrader } from './fakeServer';
 
 vi.mock('vscode', () => ({}));
 const { render } = await import('../src/ui/statementPanel');
+const B = { title: 't', problemId: 1, name: 'p' };
 
 async function setup() {
   const server = new FakeGrader();
@@ -65,6 +66,18 @@ describe('StatementStore (globalStorage cache)', () => {
     expect(await store.get(204, { refresh: true })).toEqual({ kind: 'none', reason: 'missing' });
   });
 
+  it('panel hidden/shown or reloaded webview ("ready" again) → served from disk, no request', async () => {
+    const { store, fetches } = await setup();
+    await store.get(206); // first open downloads
+    for (let i = 0; i < 5; i++) await store.get(206); // every later "ready"
+    expect(fetches()).toBe(1);
+  });
+
+  it('pdf message carries the saved view (page / zoom / scroll) for reopened tabs', () => {
+    const view = { page: 3, scale: '1.5', scrollTop: 120, scrollLeft: 0 };
+    expect(render(B, { kind: 'pdf', bytes: new Uint8Array([1]) }, view)).toMatchObject({ type: 'pdf', problemId: 1, view });
+  });
+
   it('concurrent opens share one request', async () => {
     const { store, fetches } = await setup();
     await Promise.all([store.get(205), store.get(205)]);
@@ -74,7 +87,7 @@ describe('StatementStore (globalStorage cache)', () => {
 
 describe('statement rendering', () => {
   it('markdown is rendered with raw HTML escaped', () => {
-    const m = render('t', { kind: 'description', markdown: true, text: '**bold** <script>alert(1)</script> <img src=x onerror=alert(1)>' });
+    const m = render(B, { kind: 'description', markdown: true, text: '**bold** <script>alert(1)</script> <img src=x onerror=alert(1)>' });
     expect(m.type).toBe('html');
     const html = (m as { html: string }).html;
     expect(html).toContain('<strong>bold</strong>');
@@ -83,7 +96,7 @@ describe('statement rendering', () => {
   });
 
   it('non-markdown (website HTML) is shown as escaped text', () => {
-    const m = render('t', { kind: 'description', markdown: false, text: '<p>Line 1</p><p>Line <b>2</b> &amp; more</p><script>x()</script>' });
+    const m = render(B, { kind: 'description', markdown: false, text: '<p>Line 1</p><p>Line <b>2</b> &amp; more</p><script>x()</script>' });
     const html = (m as { html: string }).html;
     expect(html).toMatch(/^<pre class="text">/);
     expect(html).not.toMatch(/<p>|<b>|<script/);
@@ -92,7 +105,7 @@ describe('statement rendering', () => {
   });
 
   it('hidden / missing statements give a message', () => {
-    expect(render('t', { kind: 'none', reason: 'hidden' })).toMatchObject({ type: 'message', text: expect.stringContaining('Open in Browser') });
-    expect(render('t', { kind: 'none', reason: 'missing' })).toMatchObject({ type: 'message', text: 'This problem has no statement.' });
+    expect(render(B, { kind: 'none', reason: 'hidden' })).toMatchObject({ type: 'message', text: expect.stringContaining('Open in Browser') });
+    expect(render(B, { kind: 'none', reason: 'missing' })).toMatchObject({ type: 'message', text: 'This problem has no statement.' });
   });
 });

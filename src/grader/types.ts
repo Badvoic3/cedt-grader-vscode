@@ -117,6 +117,19 @@ export interface SubmissionBrief {
   comment: string | null;
 }
 
+/** `GET /api/v1/problems/{id}/testcases` entry. */
+export interface TestcaseInfo {
+  id: number;
+  num: number;
+  group: number | null;
+  groupName: string | null;
+  weight: number | null;
+  /** `preview` for students (large files are truncated), `full` for staff. */
+  access: string;
+  inputBytes: number | null;
+  solBytes: number | null;
+}
+
 export interface GraderUser {
   id: number;
   login: string;

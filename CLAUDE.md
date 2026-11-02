@@ -33,13 +33,19 @@ Press F5 to start an Extension Development Host (`.vscode/launch.json` runs `npm
   - `cache.ts`: `RequestCache` (session / TTL / final-only entries, in-flight de-duplication).
   - `dataService.ts`: `DataService` (problems, languages, history, details; debounce, visibility, after-submit refresh, stale-on-error; reports failures to the controller's banner).
   - `statementStore.ts`: statement PDF / description cache in `globalStorage/statements/<host>/<id>.pdf|json`.
+  - `testcaseStore.ts`: grader test cases per problem in `globalStorage/testcases/<host>/<id>.json` (downloaded one at a time; truncated cases listed, never imported).
 - `src/controller.ts`: session, mapping and UI state (results per file, expanded history entry). All grader data goes through `DataService`. Commands, sidebar and status bar all go through the controller.
 - `src/shared/messages.ts`: typed `ViewState` / `ToWebview` / `FromWebview`.
 - `src/ui/sidebarProvider.ts`: `WebviewViewProvider`; CSP with nonce, `localResourceRoots: [media]`.
 - `src/ui/statusBar.ts`: status bar shortcut that reveals the panel (warning icon while the connection banner is up).
 - `src/ui/statementPanel.ts` + `webview/statement.ts`: "Statement: <problem>" editor tabs (bundled pdf.js 4.10 viewer: zoom, fit width, pages, text selection, search; description fallback rendered with markdown-it `html: false`).
 - `webview/main.ts`, `webview/style.css`: plain DOM sidebar, bundled to `media/dist/` (git-ignored).
-- `src/mapping/`: `.cedt-grader.json` + workspaceState mapping; read-only CPH `.prob` lookup.
+- `src/mapping/` (Phase 3, linking):
+  - `match.ts`: `cleanName`, `normalizeName`, `resolveProblem` (saved → CPH → exact file name → suggestions; ambiguous → ask), `fileNameFor`.
+  - `store.ts`: workspaceState keyed by `<folder name>/<relative path>` (+ legacy fsPath keys read) and `.cedt-grader.json`; reverse lookup (problem → files), rename, mark deleted (stale), expire, reconnect.
+  - `mappingFile.ts`: `.cedt-grader.json` parsing (`staleSince` kept), `reverseIndex`.
+  - `mappingOps.ts`: pure move logic (`planRename`, `reconnectCandidates`, `affectedByDelete`, `expired`) and `moveCphProblem`.
+  - `cph.ts` / `cphImport.ts`: CPH `.prob` read / import (format below). `newFile.ts`: create without overwriting.
 - `test/fixtures/`: `*.synthetic.*` files are hand-built from the cafe-grader views and controllers. The others are real data captured by the probe and sanitized.
 
 ## Protocol (cafe-grader-web @ 404d3c5; verified against the live server)
@@ -57,6 +63,7 @@ Press F5 to start an Extension Development Host (`.vscode/launch.json` runs `npm
 | History | `GET /api/v1/problems/{id}/submissions` | All regular submissions, newest first, incl. website ones. |
 | Detail | `GET /api/v1/submissions/{id}` | `source` (own only), `source_filename`, `max_runtime` ms, `peak_memory` KB, `evaluations[{testcase_id, result, score, time ms, memory KB}]`. |
 | Test cases | `GET /api/v1/problems/{id}/testcases`, `/api/v1/testcases/{id}/input`, `/sol` | Phase 3 import. |
+| Test cases | `GET /api/v1/problems/{id}/testcases` (403 = not allowed), `GET /api/v1/testcases/{id}/input`, `/sol` | text/plain; student `preview` access truncates large files: `X-Testcase-Truncated: true`, `X-Testcase-Byte-Size`. Never import a truncated case. |
 | Statement | `GET /api/v1/problems/{id}/files/pdf` | 403 = PDF hidden, 404 = none → fallback `GET /api/v1/problems/{id}/description` `{markdown, description}`. |
 
 **HTML (only what the API lacks)**, via a cookie session opened at login:
@@ -65,6 +72,15 @@ Press F5 to start an Extension Development Host (`.vscode/launch.json` runs `npm
   - the page header for `isContestPage`.
 - A POST with a bad CSRF token silently runs logged out (Rails null session).
 - The web login form's `accept_agree` checkbox is never ticked automatically.
+
+## CPH `.prob` (confirmed in agrawal-d/cph @ ef8c7a7: `src/types.ts`, `src/parser.ts`, `src/webview/editorChange.ts`)
+
+- Path: `<dir of source>/.cph/.<basename>_<md5(full source path)>.prob`, or `<cph.general.saveLocation>/<same name>`.
+- JSON `{name, url, interactive, memoryLimit, timeLimit, group, tests:[{input, output, id}], srcPath, local?, customCheckerPath?}`, written by CPH with plain `JSON.stringify`.
+- CPH re-reads a `.prob` only on `onDidChangeActiveTextEditor` (no reload command; commands: runTestCases, submitToCodeForces, compileWithoutRunning) and saves its in-memory problem back, so after writing a `.prob` the user must switch to the file before running tests ("Reload in CPH" does that by briefly showing a placeholder tab).
+- CPH has no rename/delete handling; a renamed source orphans its `.prob` (we offer to move it).
+- Our imported tests: `id = 7e15 + grader testcase id` (marker that survives CPH re-saves); backup `<file>.prob.bak`; own tests first and never removed; duplicates by input+output skipped; line endings `\n`.
+- Never modify CPH itself; only write `.prob` files in this exact format.
 
 ## Counted score (src/grader/score.ts)
 
@@ -120,11 +136,17 @@ The sidebar (`cedtGrader` Activity Bar container, view `cedtGrader.panel`) is th
   - file name;
   - searchable picker (name or id), book icon → statement viewer;
   - wrong-language hint ("This problem doesn't accept C++. Wrong problem?" + Change);
+  - match source badge (saved / from CPH / from file name / suggested) + Change, copy-name icon, notes for ambiguous / stale mappings;
+  - "Load test cases into CPH" (only when `has_testcase` and the file is mapped, not just suggested);
   - counted-score card (counted, best, latest, attempts, penalty, "your best still counts");
   - language dropdown;
   - Submit button.
 - **Result** (active file only): live status, points, verdict tiles, compiler message, improvement line, Resubmit.
 - **History** (API): every submission with relative/exact time, language, score, mini verdict strip, counted marker; expand for details (per test, runtime, memory, compiler message) and "Open this version" / "Compare with current file" (`cedt-grader-submission:` read-only documents, served from the cache).
-- **Problems:** counted score per problem.
+- **Problems:** counted score per problem; row actions (on hover/focus): copy name, go to file (mapped) or find file by name, new file for this problem, statement.
 
-Commands remain for keybindings: `cedtGrader.login`, `logout`, `submit`, `chooseProblem`, `showLastResult`, `openStatement`, `refreshProblems`, `refreshHistory`, `showRequestLog`, `focus`.
+Statement viewer (`webview/statement.ts`, `webview/zoom.ts`): pinch (Ctrl+wheel) zooms around the cursor via `PDFViewer.updateScale({origin})` with `preventDefault`; Cmd/Ctrl + / - / 0; page/zoom/scroll kept in webview state (serializer, restart) and globalState (`cedtGrader.statementView`, reopen); `retainContextWhenHidden`; `registerWebviewPanelSerializer('cedtGrader.statement')` reopens tabs after restart from the disk cache (no request).
+
+Phase 5 (not started): cache management (`cedtGrader.cacheMaxMB`, LRU, daily cleanup, "Clear Cached Data" incl. stale mappings) — see spec.
+
+Commands remain for keybindings: `cedtGrader.login`, `logout`, `submit`, `chooseProblem`, `clearMapping`, `loadTestcases`, `showLastResult`, `openStatement`, `refreshProblems`, `refreshHistory`, `showRequestLog`, `focus`.

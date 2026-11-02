@@ -56,7 +56,8 @@
     "onLanguage:c",
     "onLanguage:cpp",
     "onLanguage:python",
-    "onLanguage:java"
+    "onLanguage:java",
+    "onWebviewPanel:cedtGrader.statement"
   ],
   "contributes": {
     "viewsContainers": {
@@ -145,6 +146,18 @@
         "title": "Reload Submission History",
         "category": "CEDT Grader",
         "icon": "$(refresh)"
+      },
+      {
+        "command": "cedtGrader.clearMapping",
+        "title": "Clear Problem for This File",
+        "category": "CEDT Grader",
+        "icon": "$(close)"
+      },
+      {
+        "command": "cedtGrader.loadTestcases",
+        "title": "Load Test Cases into CPH",
+        "category": "CEDT Grader",
+        "icon": "$(beaker)"
       }
     ],
     "menus": {
