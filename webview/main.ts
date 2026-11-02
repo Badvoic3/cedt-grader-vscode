@@ -5,7 +5,8 @@
  * textContent / attributes only, never innerHTML. The webview has no network
  * access (CSP default-src 'none'); all actions are postMessage'd to the host.
  */
-import { HOW_LINKED, W, W_SOURCE } from '../src/shared/strings';
+import { G, HOW_LINKED, W, W_SOURCE } from '../src/shared/strings';
+import { outOfFor, scoreText } from '../src/grader/score';
 import { groupLabel, VERDICT_LEGEND } from '../src/grader/verdicts';
 import { menuLabelMax, middleEllipsis } from './text';
 import { VirtualList } from './virtualList';
@@ -179,17 +180,21 @@ function scoreClass(score: number | null, rawSum = false, full: number | null = 
   return 'score-partial';
 }
 
-/** "Out of" for a score: null for raw-sum; the server cap when the value is missing (older saved state). */
+/** "Out of": 100, or null for raw-sum problems (one rule: scoreText in src/grader/score.ts). */
 function outOf(s: ScoreView): number | null {
-  return s.fullScore === undefined ? (s.rawSum ? null : SERVER_SCORE_CAP) : s.fullScore;
+  return outOfFor(s.rawSum);
 }
+
+/** Is the active file's problem raw-sum? (results and history use the same display rule). */
+const activeRawSum = () => state?.problem?.score.rawSum ?? false;
 
 function scorePill(s: ScoreView): HTMLElement {
   const tip =
     s.counted === null
       ? W.notAttemptedYet
       : W.scorePillTip(fmt(s.counted), outOf(s) !== null ? fmt(outOf(s)) : null, s.penaltyLabel, s.attempts);
-  return el('span', { class: `pill score-pill ${scoreClass(s.counted, s.rawSum, outOf(s))}`, title: tip, 'aria-label': tip }, fmt(s.counted));
+  const full = s.counted !== null && s.rawSum ? `${tip} ${G.rawSumTip}` : tip;
+  return el('span', { class: `pill score-pill ${scoreClass(s.counted, s.rawSum, outOf(s))}`, title: full, 'aria-label': full }, fmt(s.counted));
 }
 
 /** Name and subtitle without repeating the name ("104_68_1_exam2_P1: Scholarship" → subtitle "Scholarship"). */
@@ -424,7 +429,10 @@ function scoreCard(sc: ScoreView): HTMLElement {
       el('span', { class: 'grow' }),
       sc.source === 'problem-list' ? el('span', { class: 'muted small', title: W.hintAiAssistPenaltiesRead }, W.fromProblemList) : null,
     ),
-    el('div', { class: `score ${scoreClass(sc.counted, sc.rawSum, outOf(sc))}` }, sc.counted === null ? W.notAttempted : outOf(sc) === null ? fmt(sc.counted) : `${fmt(sc.counted)} / ${fmt(outOf(sc))}`),
+    (() => {
+      const t = scoreText(sc.counted, sc.rawSum);
+      return el('div', { class: `score ${scoreClass(sc.counted, sc.rawSum, outOf(sc))}`, title: t.tip ?? undefined }, sc.counted === null ? W.notAttempted : t.text);
+    })(),
     el('div', { class: 'score-facts small' },
       el('span', {}, W.best, el('strong', {}, fmt(sc.best))),
       el('span', {}, W.latest, el('strong', {}, fmt(sc.latest))),
@@ -657,8 +665,9 @@ function renderResult(s: ViewState): void {
     b.append(el('div', { class: 'row status' }, icon('loading', 'codicon-modifier-spin'), ' ', r.message ?? W.grading));
   }
   if (r.phase === 'done' || ((r.phase === 'timeout' || r.phase === 'error') && r.verdicts.length)) {
-    const text = r.compileError ? W.compilationError : r.points !== null ? W.points(fmt(r.points)) : (r.message ?? W.graded);
-    b.append(el('div', { class: 'row score-row' }, el('span', { class: `score ${r.compileError ? 'score-zero' : scoreClass(r.points)}` }, text)));
+    const st = scoreText(r.points, activeRawSum());
+    const text = r.compileError ? W.compilationError : r.points !== null ? st.text : (r.message ?? W.graded);
+    b.append(el('div', { class: 'row score-row' }, el('span', { class: `score ${r.compileError ? 'score-zero' : scoreClass(r.points, activeRawSum())}`, title: r.compileError ? undefined : (st.tip ?? undefined) }, text)));
     if (r.verdicts.length) {
       b.append(verdictStrip(r.verdicts));
     } else if (r.comment && !r.compileError) b.append(plainComment(r.comment));
@@ -752,7 +761,11 @@ function historyRow(h: HistoryEntry, s: ViewState): HTMLElement {
     el('button', { class: 'history-row grow', type: 'button', 'aria-expanded': String(open), title: W.submission(h.submissionId, exact(h.submittedAt)), onclick: () => send({ type: 'toggleSubmission', submissionId: h.submissionId }) },
       icon(open ? 'chevron-down' : 'chevron-right'),
       el('span', { class: 'mono muted' }, h.number !== null ? `${h.number}.` : `#${h.submissionId}`),
-      el('span', { class: `pill ${h.compileError ? 'score-zero' : scoreClass(h.points)}` }, h.compileError ? W.ce : fmt(h.points)),
+      (() => {
+        const st = scoreText(h.points, activeRawSum());
+        const tip = h.compileError ? W.compilationError : st.tip ? `${st.text}. ${st.tip}` : st.text;
+        return el('span', { class: `pill ${h.compileError ? 'score-zero' : scoreClass(h.points, activeRawSum())}`, title: tip, 'aria-label': tip }, h.compileError ? W.ce : fmt(h.points));
+      })(),
       h.counted ? el('span', { class: 'badge counted', title: W.thisSubmissionHoldsYourCounted, 'aria-label': W.countedBestSubmission }, icon('star-full'), el('span', { class: 'counted-text' }, W.counted)) : null,
       el('span', { class: 'grow ellipsis' },
         h.verdicts.length
@@ -1071,8 +1084,8 @@ function sectionKeys(s: ViewState): Record<string, string> {
     prompt: j([s.prompt]),
     account: j([s.account, s.baseUrl, showLoginForm]),
     current: j([s.notLinked, s.linkedNotice, s.linkedFiles, s.file, s.problem, s.languages, s.submit, s.matching, s.testcases, s.cph, s.gradingElsewhere, pickerOpen, pickerOpen ? s.problems : s.problems.loaded]),
-    result: j([s.result, s.submit.enabled, s.submit.reason, legendOpen === 'result']),
-    history: j([pid, s.history, legendOpen === 'history']),
+    result: j([s.result, s.submit.enabled, s.submit.reason, legendOpen === 'result', s.problem?.score.rawSum]),
+    history: j([pid, s.history, legendOpen === 'history', s.problem?.score.rawSum]),
     problems: j([{ ...s.problems, items: s.problems.items.length }, ui.filter]),
   };
 }

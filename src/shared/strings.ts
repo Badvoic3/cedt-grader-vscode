@@ -384,6 +384,7 @@ export const W_SOURCE = {
 
 /** Connection banner, grader errors, status bar, statement panel, score lines. */
 export const G = {
+  rawSumTip: 'This problem adds up raw test scores (raw-sum scoring), so there is no fixed maximum.',
   cedtGraderWaitingForThe: "CEDT Grader: waiting for the verdict. Click to open the panel.",
   clickToOpenThePanel: (message: string | number) => `${message} Click to open the panel.`,
   mapThisFileToA: "Map this file to a CEDT Grader problem",

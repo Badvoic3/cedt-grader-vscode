@@ -471,7 +471,7 @@ export class GraderController implements vscode.Disposable {
       id: p.id,
       name: cleanName(p.name),
       fullName: cleanName(p.fullName),
-      score: summarize(p, this.data.problemDetail(p.id)?.fullScore ?? null),
+      score: summarize(p),
       hasFile: this.mappedIds.has(p.id),
       hasTestcase: p.hasTestcase,
       status: problemStatus(p),
