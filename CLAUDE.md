@@ -84,6 +84,7 @@ npx tsx scripts/probe.ts [--list] [--problem <ID>] [--fixtures] [--submit file] 
 - `src/mapping/` (Phase 3, linking):
   - `match.ts`: `cleanName`, `normalizeName`, `resolveProblem` (saved → CPH → exact file name → confident suggestion; ties → ask), `scoreCandidates` / `decideSuggestion`, `fileNameFor`.
   - `matchIndex.ts`: `matchFile` (file → problem) and `buildMatchIndex` (problem → files, the same function over all source files), `OnceCache`.
+  - `namePattern.ts`: `cedtGrader.fileNamePattern` (`{name}` / `{id}` / `{ext}`, must end with `.{ext}`; `checkPattern` → invalid falls back to `{name}.{ext}` with a warning). Used by `fileNameFor` (New file), `renameProposal` / `nameMatchesProblem`, and `resolveProblem`'s exact-name step (`namePattern`), so both matcher directions agree; changing it rebuilds the match index.
   - `suggestionGate.ts`: `confirmSuggestion` (write actions on a suggestion ask once).
   - `renameToProblem.ts`: "Rename file to match the problem" helpers (proposal, conflicts, validation).
   - `paths.ts`: the one path normalization for links (NFC, `./`/`..` resolved, `/` separators; `pathKey` lower-cases on macOS/Windows). Used by mappings, `.cedt-grader.json`, renames, reverse lookup, reconnect.
@@ -303,7 +304,6 @@ No course- or problem-specific names in code (problem names come from the server
 - The API has no "binary language" flag: non-source languages (Archive, Digital, Viva, Text) are recognised by name / extension (`src/mapping/newFileLanguage.ts`).
 - The problem picker dropdown shows at most 50 matches ("N more. Refine the search."); the Problems list itself has no limit.
 - The match index reads at most `LIMITS.indexMaxFiles` (5 000) source files; files beyond that are only matched when opened.
-- No file-name pattern setting yet: "New file" and "Rename file to match the problem" use `<clean problem name>.<ext>` (Phase 6).
 - Undo of "Rename file to match the problem" relies on VS Code's undo for WorkspaceEdit file operations (checked by hand, not by a test).
 - The controller (vscode-dependent) has no unit tests; its rules are kept in pure, tested helpers (`problemFiles.ts`, `suggestionGate.ts`, `match.ts`, `mappingOps.ts`, `paths.ts`) and the webview is tested in jsdom.
 - English only; texts are already in `src/shared/strings.ts`, ready for Phase 6.

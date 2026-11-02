@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import { DEFAULT_BASE_URL } from './grader/client';
 import { CACHE } from './shared/constants';
 import type { LangSetting } from './shared/i18n';
+import { checkPattern, type PatternCheck } from './mapping/namePattern';
 
 export interface GraderConfig {
   baseUrl: string;
@@ -20,6 +21,8 @@ export interface GraderConfig {
   saveBeforeSubmit: boolean;
   /** Open and scroll to the Result section when grading finishes (default on). */
   revealResultAfterSubmit: boolean;
+  /** File-name pattern for New file / Rename / exact matching (invalid → default, with the reason). */
+  fileNamePattern: PatternCheck;
   /** `en` (default), `th`, or `auto` (follow VS Code's display language). */
   displayLanguage: LangSetting;
 }
@@ -54,6 +57,7 @@ export function readConfig(): GraderConfig {
     displayLanguage: ((v) => (v === 'th' || v === 'auto' ? v : 'en'))(c.get<string>('displayLanguage', 'en')),
     saveBeforeSubmit: c.get<boolean>('saveBeforeSubmit', true) !== false,
     revealResultAfterSubmit: c.get<boolean>('revealResultAfterSubmit', true) !== false,
+    fileNamePattern: checkPattern(c.get<string>('fileNamePattern', '{name}.{ext}')),
     cacheMaxMB: Math.max(CACHE.maxMbMinimum, Number(c.get('cacheMaxMB', CACHE.maxMbDefault)) || CACHE.maxMbDefault),
   };
 }

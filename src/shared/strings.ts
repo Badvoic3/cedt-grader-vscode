@@ -87,6 +87,13 @@ const EN_S = {
     openSourceFirstShort: 'Open a source file first.',
     problemFor: (file: string) => `Grader problem for ${file}`,
     counted: (n: number) => ` · counted ${n}`,
+    badPattern: (why: string) => `The file-name pattern setting can't be used (${why}), so {name}.{ext} is used instead.`,
+    patternProblem: {
+      ext: 'it must end with .{ext}',
+      nameOrId: 'it needs {name} or {id}',
+      placeholder: 'only {name}, {id} and {ext} are allowed',
+      character: "it contains a character file names can't have",
+    } as Record<string, string>,
   },
 
   moved: {

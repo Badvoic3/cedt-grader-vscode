@@ -37,6 +37,7 @@
   "config.debugRequests.description": "Log every grader request (method, path, status) and cache hit/miss to the **CEDT Grader: Requests** output channel, to check request counts. Never logs passwords or tokens.",
   "config.statementBeside.description": "Open problem statements in an editor tab beside your code.",
   "config.defaultLanguage.description": "Language for \"New file for this problem\" when the active file's language isn't allowed and no language was used before (e.g. C++, Python, Java). Archive and other non-source languages are never chosen automatically.",
+  "config.fileNamePattern.description": "File name for **New file for this problem** and **Rename file to match the problem**. `{name}` = the problem name, `{id}` = the problem id, `{ext}` = the language's extension; must end with `.{ext}`. Files named this way are also matched to their problem automatically. Example: `{id}_{name}.{ext}` → `1360_00_Intro_11.cpp`.",
   "config.cacheMaxMB.description": "Size limit (MB) for downloaded problem statements and test cases. When it is exceeded, the least recently used files are deleted first. Files unused for 30 days are removed automatically. Use **CEDT Grader: Clear Cached Data…** to clear everything.",
   "walkthrough.title": "Get started with CEDT Grader",
   "walkthrough.description": "Log in, link a solution file to its problem and submit it, without leaving VS Code.",

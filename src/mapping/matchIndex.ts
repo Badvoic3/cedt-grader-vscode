@@ -24,8 +24,8 @@ export interface FileMatch {
 }
 
 /** The problem a file would show when opened (null: none, below the threshold, or a tie). */
-export function matchFile(file: SourceFile, problems: Problem[], baseUrl: string): FileMatch | null {
-  const r = resolveProblem({ savedProblemId: null, cph: null, filePath: file.fsPath, problems, baseUrl, folders: file.folders });
+export function matchFile(file: SourceFile, problems: Problem[], baseUrl: string, namePattern?: string): FileMatch | null {
+  const r = resolveProblem({ savedProblemId: null, cph: null, filePath: file.fsPath, problems, baseUrl, folders: file.folders, namePattern });
   if (r.kind !== 'match') return null;
   if (r.source !== 'filename' && r.source !== 'suggested') return null;
   return { problemId: r.problem.id, how: r.source };
@@ -37,11 +37,11 @@ export interface IndexedFile {
 }
 
 /** problem id → files, computed with `matchFile` (so both directions always agree). */
-export function buildMatchIndex(files: SourceFile[], problems: Problem[], baseUrl: string): Map<number, IndexedFile[]> {
+export function buildMatchIndex(files: SourceFile[], problems: Problem[], baseUrl: string, namePattern?: string): Map<number, IndexedFile[]> {
   const out = new Map<number, IndexedFile[]>();
   if (!problems.length) return out;
   for (const f of files) {
-    const m = matchFile(f, problems, baseUrl);
+    const m = matchFile(f, problems, baseUrl, namePattern);
     if (!m) continue;
     const list = out.get(m.problemId) ?? [];
     list.push({ fsPath: f.fsPath, how: m.how });
