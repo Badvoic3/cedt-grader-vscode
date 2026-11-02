@@ -4,30 +4,40 @@ export interface Recorded {
   method: string;
   path: string;
   headers: Record<string, string>;
-  form: Record<string, string>;
+  body: unknown;
 }
 
 /**
- * A tiny in-memory cafe-grader imitation for client tests: login with CSRF,
- * session cookie, redirects to /main/login when logged out, submit, poll.
+ * In-memory cafe-grader imitation for client tests: the JSON API (JWT) and
+ * the cookie web login + /main/list. Response shapes follow
+ * app/controllers/api/v1/* (SYNTHETIC data).
  */
 export class FakeGrader {
   requests: Recorded[] = [];
-  sessions = new Set<string>();
-  private nextSession = 1;
   password = 'pw';
-  listHtml = fixture('main_list.normal.synthetic.html');
-  submitPageHtml = fixture('direct_edit_problem.normal.synthetic.html');
-  loginHtml = fixture('login_page.synthetic.html').replace(/<div class="alert[\s\S]*?<\/div>/, '');
-  /** Alert shown when a logged-out request is bounced. */
-  bounceAlert = 'You need to log in';
-  /** Poll responses served in order (last one repeats). */
-  pollSequence: string[] = [fixture('latest_status_graded.synthetic.html')];
-  pollIndex = 0;
-  newSubmissionId = 5003;
-  submitRedirect: string | null = null;
-  submitFlash = '';
+  validTokens = new Set<string>();
+  private nextToken = 1;
+  throttled = false;
   networkFailures = 0;
+  /** Status sequence served by GET /api/v1/submissions/:id (last repeats). */
+  statusSequence: string[] = ['done'];
+  statusIndex = 0;
+  gradedPoints = 70;
+  gradedComment = 'PP-T';
+  compilerMessage: string | null = null;
+  submitError: { status: number; body: unknown } | null = null;
+  webSessions = new Set<string>();
+  listHtml = fixture('main_list.penalties.synthetic.html');
+
+  problems = [
+    { id: 201, name: 'p_ai', full_name: 'AI_​Assisted', submission_count: 3, best_score: 100, last_score: 40, last_result: 'PP--', last_submission_time: '2026-11-02T10:00:00+07:00', last_submission_id: 7001, has_testcase: true, has_attachment: false, permitted_languages: [{ id: 2, name: 'cpp', ext: 'cpp' }] },
+    { id: 204, name: 'p_plain', full_name: 'Plain', submission_count: 0, best_score: null, last_score: null, last_result: null, last_submission_time: null, last_submission_id: null, has_testcase: false, has_attachment: false, permitted_languages: null },
+  ];
+  languages = [
+    { id: 1, name: 'c', pretty_name: 'C', ext: 'c' },
+    { id: 2, name: 'cpp', pretty_name: 'C++', ext: 'cpp' },
+    { id: 6, name: 'python', pretty_name: 'Python', ext: 'py' },
+  ];
 
   fetch = async (input: string, init: RequestInit = {}): Promise<Response> => {
     if (this.networkFailures > 0) {
@@ -36,94 +46,86 @@ export class FakeGrader {
     }
     const url = new URL(input);
     const method = (init.method ?? 'GET').toUpperCase();
-    const headers = Object.fromEntries(Object.entries((init.headers ?? {}) as Record<string, string>));
-    const form: Record<string, string> = {};
-    if (init.body instanceof URLSearchParams) for (const [k, v] of init.body) form[k] = v;
-    if (init.body instanceof FormData) for (const [k, v] of init.body) form[k] = String(v);
-    this.requests.push({ method, path: url.pathname, headers, form });
-
-    const cookie = headers['Cookie'] ?? '';
-    const sid = /_cafe_grader_session=([^;]+)/.exec(cookie)?.[1];
-    const loggedIn = sid !== undefined && this.sessions.has(sid);
-    const setCookies: string[] = [];
-    if (!/uuid=/.test(cookie)) setCookies.push('uuid=device-1; path=/; HttpOnly');
-
-    const html = (body: string, status = 200) => this.respond(status, body, setCookies);
-    const redirect = (to: string) => this.respond(302, '', setCookies, to);
-    const bounce = () => {
-      this.flash = this.bounceAlert;
-      return redirect('/main/login');
-    };
-
+    const headers = { ...((init.headers ?? {}) as Record<string, string>) };
+    let body: unknown = undefined;
+    if (typeof init.body === 'string') body = JSON.parse(init.body);
+    else if (init.body instanceof URLSearchParams) body = Object.fromEntries(init.body);
+    this.requests.push({ method, path: url.pathname, headers, body });
     const p = url.pathname;
-    if (method === 'GET' && (p === '/' || p === '/main/login')) {
-      if (loggedIn && p === '/') return redirect('/main/list');
-      const alert = this.flash ? `<div class="alert alert-danger">${this.flash}</div>` : '';
-      this.flash = '';
-      return html(this.loginHtml.replace('<body>', `<body>${alert}`));
-    }
-    if (method === 'POST' && p === '/login/login') {
-      if (form.authenticity_token !== 'REDACTED') return redirect('/main/list'); // null session
-      if (this.loginHtml.includes('accept_agree') && form.accept_agree !== '1') {
-        this.flash = 'You must accept the agreement before logging in';
-        return redirect('/main/login');
-      }
-      if (form.password !== this.password) {
-        this.flash = 'Wrong password';
-        return redirect('/main/login');
-      }
-      const s = `s${this.nextSession++}`;
-      this.sessions.add(s);
-      setCookies.push(`_cafe_grader_session=${s}; path=/; HttpOnly`);
-      return redirect('/main/list');
-    }
-    if (!loggedIn) return bounce();
 
-    if (method === 'GET' && p === '/main/list') {
-      const alert = this.flash ? `<div class="alert alert-danger">${this.flash}</div>` : '';
-      this.flash = '';
-      return html(this.listHtml.replace('<div class="container-fluid">\n', `<div class="container-fluid">\n${alert}`));
-    }
-    if (method === 'GET' && /^\/submissions\/direct_edit_problem\/\d+$/.test(p)) return html(this.submitPageHtml);
-    if (method === 'POST' && p === '/main/submit') {
-      if (form.authenticity_token !== 'REDACTED') return bounce();
-      if (this.submitRedirect) {
-        this.flash = this.submitFlash;
-        return redirect(this.submitRedirect);
-      }
-      return redirect(`/submissions/${this.newSubmissionId}/edit`);
-    }
-    if (method === 'GET' && /^\/submissions\/\d+\/edit$/.test(p)) {
-      return html(
-        this.submitPageHtml.replace(
-          '</form>',
-          `</form><a id="refresh" href="/submissions/get_latest_submission_status/12345/102">r</a>`,
-        ),
-      );
-    }
-    if (method === 'GET' && p.startsWith('/submissions/get_latest_submission_status/')) {
-      const body = this.pollSequence[Math.min(this.pollIndex++, this.pollSequence.length - 1)];
-      return html(body);
-    }
-    if (method === 'POST' && /^\/submissions\/\d+\/compiler_msg$/.test(p)) {
-      if (headers['X-CSRF-Token'] !== 'REDACTED') return bounce();
-      return html(fixture('compiler_msg.synthetic.html'));
-    }
-    return html('not found', 404);
+    if (p.startsWith('/api/v1/')) return this.api(method, p, headers, body as Record<string, unknown>);
+    return this.webRoute(method, p, headers, body as Record<string, string>);
   };
 
-  private flash = '';
-
-  private respond(status: number, body: string, setCookies: string[], location?: string): Response {
-    const h = new Headers({ 'content-type': 'text/html; charset=utf-8' });
-    for (const c of setCookies) h.append('set-cookie', c);
-    if (location) h.set('location', `https://grader.test${location}`);
-    return new Response(status === 302 ? null : body, { status, headers: h });
+  private json(status: number, data: unknown): Response {
+    return new Response(JSON.stringify(data), { status, headers: { 'content-type': 'application/json' } });
   }
 
-  expireAllSessions(alert = 'Your session is expired, please login again.'): void {
-    this.sessions.clear();
-    this.bounceAlert = alert;
+  private api(method: string, p: string, headers: Record<string, string>, body: Record<string, unknown>): Response {
+    if (method === 'POST' && p === '/api/v1/auth/login') {
+      if (this.throttled) return this.json(429, { error: 'Too many failed login attempts; try again later' });
+      if (body.password !== this.password) return this.json(401, { error: 'Invalid login or password' });
+      const token = `tok${this.nextToken++}`;
+      this.validTokens.add(token);
+      return this.json(200, { token, expires_at: '2099-01-01T00:00:00Z', user: { id: 4242, login: body.login, full_name: 'Student Name' } });
+    }
+    const auth = headers['Authorization']?.split(' ').pop();
+    if (!auth) return this.json(401, { error: 'Missing authorization token' });
+    if (!this.validTokens.has(auth)) return this.json(401, { error: 'Token has expired' });
+
+    if (method === 'GET' && p === '/api/v1/problems') return this.json(200, this.problems);
+    if (method === 'GET' && p === '/api/v1/languages') return this.json(200, this.languages);
+    let m = /^\/api\/v1\/problems\/(\d+)$/.exec(p);
+    if (method === 'GET' && m) {
+      const pr = this.problems.find((x) => x.id === Number(m![1]));
+      return pr ? this.json(200, { ...pr, full_score: 100, submission_ids: pr.last_submission_id ? [pr.last_submission_id] : [] }) : this.json(404, { error: 'Problem not found' });
+    }
+    m = /^\/api\/v1\/problems\/(\d+)\/submissions$/.exec(p);
+    if (m && method === 'GET') return this.json(200, [{ id: 7001, number: 3, language: 'cpp', submitted_at: '2026-11-02T10:00:00+07:00', points: 40, status: 'done', grader_comment: 'PP--' }]);
+    if (m && method === 'POST') {
+      if (this.submitError) return this.json(this.submitError.status, this.submitError.body);
+      return this.json(201, { id: 8001, number: 4, status: 'submitted' });
+    }
+    m = /^\/api\/v1\/submissions\/(\d+)$/.exec(p);
+    if (m && method === 'GET') {
+      const status = this.statusSequence[Math.min(this.statusIndex++, this.statusSequence.length - 1)];
+      const graded = status === 'done' || status === 'compilation_error';
+      return this.json(200, {
+        id: Number(m[1]), problem_id: 201, problem_name: 'p_ai', user_id: 4242, language: 'cpp', source: 'x', source_filename: 'a.cpp',
+        submitted_at: '2026-11-02T11:00:00+07:00', number: 4, status,
+        points: graded ? (status === 'compilation_error' ? 0 : this.gradedPoints) : null,
+        grader_comment: status === 'compilation_error' ? 'Compilation error' : graded ? this.gradedComment : null,
+        compiler_message: status === 'compilation_error' ? (this.compilerMessage ?? 'a.cpp:1: error') : null,
+        max_runtime: null, peak_memory: null, evaluations: [],
+      });
+    }
+    return this.json(404, { error: 'not found' });
+  }
+
+  private webRoute(method: string, p: string, headers: Record<string, string>, form: Record<string, string>): Response {
+    const sid = /_cafe_grader_session=([^;]+)/.exec(headers['Cookie'] ?? '')?.[1];
+    const loggedIn = sid !== undefined && this.webSessions.has(sid);
+    const page = (body: string, setCookie?: string) =>
+      new Response(body, { status: 200, headers: setCookie ? { 'content-type': 'text/html', 'set-cookie': setCookie } : { 'content-type': 'text/html' } });
+    const redirect = (to: string, setCookie?: string) => {
+      const h = new Headers({ location: `https://grader.test${to}` });
+      if (setCookie) h.append('set-cookie', setCookie);
+      return new Response(null, { status: 302, headers: h });
+    };
+    const loginHtml = fixture('login_page.synthetic.html').replace(/<div class="alert[\s\S]*?<\/div>/, '');
+    if (method === 'GET' && (p === '/' || p === '/main/login')) return loggedIn && p === '/' ? redirect('/main/list') : page(loginHtml);
+    if (method === 'POST' && p === '/login/login') {
+      if (form.password !== this.password) return redirect('/main/login');
+      const s = `w${this.webSessions.size + 1}`;
+      this.webSessions.add(s);
+      return redirect('/main/list', `_cafe_grader_session=${s}; path=/`);
+    }
+    if (method === 'GET' && p === '/main/list') return loggedIn ? page(this.listHtml) : redirect('/main/login');
+    return new Response('not found', { status: 404 });
+  }
+
+  expireTokens(): void {
+    this.validTokens.clear();
   }
 
   count(method: string, path: string | RegExp): number {

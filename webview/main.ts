@@ -5,7 +5,7 @@
  * textContent / attributes only, never innerHTML. The webview has no network
  * access (CSP default-src 'none'); all actions are postMessage'd to the host.
  */
-import type { FromWebview, ProblemView, ToWebview, VerdictView, ViewState } from '../src/shared/messages';
+import type { FromWebview, ProblemView, ScoreView, ToWebview, VerdictView, ViewState } from '../src/shared/messages';
 
 interface VsCodeApi {
   postMessage(m: FromWebview): void;
@@ -53,32 +53,38 @@ function appendChildren(parent: Node & ParentNode, children: Child[]): void {
 
 const icon = (name: string, extra = '') => el('span', { class: `codicon codicon-${name} ${extra}`.trim(), 'aria-hidden': 'true' });
 
-function iconButton(name: string, title: string, onclick: () => void, extra: Attrs = {}): HTMLButtonElement {
-  return el('button', { class: 'icon-btn', title, 'aria-label': title, type: 'button', onclick, ...extra }, icon(name));
+function iconButton(name: string, title: string, onclick: () => void): HTMLButtonElement {
+  return el('button', { class: 'icon-btn', title, 'aria-label': title, type: 'button', onclick }, icon(name));
 }
 
-function button(label: Child, onclick: () => void, opts: { kind?: 'primary' | 'secondary' | 'big'; disabled?: boolean; title?: string } = {}) {
-  return el(
-    'button',
-    { class: `btn ${opts.kind ?? 'secondary'}`, type: 'button', disabled: opts.disabled, title: opts.title, onclick },
-    label,
-  );
+function button(label: Child, onclick: () => void, opts: { kind?: 'primary' | 'secondary'; disabled?: boolean; title?: string } = {}) {
+  return el('button', { class: `btn ${opts.kind ?? 'secondary'}`, type: 'button', disabled: opts.disabled, title: opts.title, onclick }, label);
 }
 
-function scoreClass(score: number | null): string {
+function fmt(n: number | null): string {
+  if (n === null) return '–';
+  return Number.isInteger(n) ? String(n) : String(Math.round(n * 100) / 100);
+}
+
+function scoreClass(score: number | null, rawSum = false): string {
   if (score === null) return 'score-none';
+  if (rawSum) return 'score-partial';
   if (score >= 100) return 'score-full';
   if (score <= 0) return 'score-zero';
   return 'score-partial';
 }
 
-function scorePill(score: number | null): HTMLElement {
-  return el('span', { class: `pill ${scoreClass(score)}`, title: score === null ? 'No score' : `Best score ${score}` }, score === null ? '–' : String(score));
+function scorePill(s: ScoreView): HTMLElement {
+  const title = s.counted === null ? 'Not attempted' : `Counted score ${fmt(s.counted)}${s.penaltyLabel ? ` (${s.penaltyLabel})` : ''}`;
+  return el('span', { class: `pill ${scoreClass(s.counted, s.rawSum)}`, title }, fmt(s.counted));
 }
 
-
-function fmtScore(n: number): string {
-  return Number.isInteger(n) ? String(n) : n.toFixed(1);
+function when(iso: string | null): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  const sameDay = d.toDateString() === new Date().toDateString();
+  return sameDay ? d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : d.toLocaleDateString([], { day: 'numeric', month: 'short' });
 }
 
 // -------------------------------------------------------------- skeleton
@@ -97,48 +103,56 @@ function section(id: string, title: string, actions: HTMLElement[] = []) {
     ui.collapsed[id] = !details.open;
     saveUi();
   });
-  // Clicking an action button must not toggle the section.
   for (const a of actions) a.addEventListener('click', (e) => e.preventDefault());
   return { details, body };
 }
 
 // Persistent inputs (kept across renders so typing is never interrupted).
-const loginUser = el('input', { type: 'text', id: 'login-user', autocomplete: 'username', spellcheck: 'false', placeholder: 'Username' });
-const loginPass = el('input', { type: 'password', id: 'login-pass', autocomplete: 'current-password', placeholder: 'Password' });
+const loginUser = el('input', { type: 'text', id: 'login-user', name: 'username', autocomplete: 'username', spellcheck: 'false', placeholder: 'Username' });
+const loginPass = el('input', { type: 'password', id: 'login-pass', name: 'password', autocomplete: 'current-password', placeholder: 'Password' });
+const loginRemember = el('input', { type: 'checkbox', id: 'login-remember', checked: true });
+let rememberInitialised = false;
 const loginForm = el(
   'form',
-  { class: 'login-form', onsubmit: (e: Event) => {
-    e.preventDefault();
-    const password = loginPass.value;
-    loginPass.value = ''; // never kept in the webview
-    send({ type: 'login', username: loginUser.value, password });
-  } },
+  {
+    class: 'login-form',
+    onsubmit: (e: Event) => {
+      e.preventDefault();
+      const password = loginPass.value;
+      loginPass.value = ''; // never kept in the webview
+      send({ type: 'login', username: loginUser.value, password, remember: loginRemember.checked });
+    },
+  },
   el('label', { for: 'login-user' }, 'Username'),
   loginUser,
   el('label', { for: 'login-pass' }, 'Password'),
   loginPass,
+  el('p', { class: 'hint' }, 'Tip: copy it from the Passwords app once; it will be remembered securely in your Keychain.'),
+  el('label', { class: 'check', for: 'login-remember' }, loginRemember, ' Remember password on this computer'),
   el('button', { class: 'btn primary', type: 'submit' }, icon('sign-in'), ' Log in'),
 );
 let showLoginForm = false;
 
-const pickerSearch = el('input', { type: 'search', class: 'picker-search', placeholder: 'Search problems…', 'aria-label': 'Search problems', spellcheck: 'false' });
+const pickerSearch = el('input', { type: 'search', class: 'picker-search', placeholder: 'Search by name or id…', 'aria-label': 'Search problems', spellcheck: 'false' });
 const pickerList = el('div', { class: 'picker-list', role: 'listbox' });
 // One persistent container: typing only re-renders the list, never moves the search box.
 const pickerBox = el('div', { class: 'picker' }, pickerSearch, pickerList);
 let pickerOpen = false;
 
-const problemFilter = el('input', { type: 'search', placeholder: 'Filter problems…', 'aria-label': 'Filter problems', spellcheck: 'false', value: ui.filter });
+const problemFilter = el('input', { type: 'search', placeholder: 'Filter by name or id…', 'aria-label': 'Filter problems', spellcheck: 'false', value: ui.filter });
 
 const sAccount = section('account', 'Account');
 const sCurrent = section('current', 'Current problem');
 const sResult = section('result', 'Result');
 const sHistory = section('history', 'History');
-const sProblems = section('problems', 'Problems', [
-  iconButton('refresh', 'Reload problem list', () => send({ type: 'refreshProblems' })),
-]);
+const sProblems = section('problems', 'Problems', [iconButton('refresh', 'Reload problem list', () => send({ type: 'refreshProblems' }))]);
 app.append(sAccount.details, sCurrent.details, sResult.details, sHistory.details, sProblems.details);
 
 let state: ViewState | null = null;
+
+function matches(p: ProblemView, q: string): boolean {
+  return !q || p.name.toLowerCase().includes(q) || p.fullName.toLowerCase().includes(q) || String(p.id) === q || `#${p.id}` === q;
+}
 
 // -------------------------------------------------------------- sections
 
@@ -146,19 +160,18 @@ function renderAccount(s: ViewState): void {
   const b = sAccount.body;
   b.replaceChildren();
   const a = s.account;
-  const host = (() => {
-    try {
-      return new URL(s.baseUrl).host;
-    } catch {
-      return s.baseUrl;
-    }
-  })();
+  let host = s.baseUrl;
+  try {
+    host = new URL(s.baseUrl).host;
+  } catch {
+    /* keep */
+  }
   if (a.status === 'logged-in') {
     b.append(
       el('div', { class: 'row account' },
         el('span', { class: 'dot ok', 'aria-hidden': 'true' }),
         el('span', { class: 'grow ellipsis', title: `${a.username} on ${host}` }, el('strong', {}, a.username), el('span', { class: 'muted' }, ` · ${host}`)),
-        button([icon('sign-out'), ' Log out'], () => send({ type: 'logout' })),
+        button([icon('sign-out'), ' Log out'], () => send({ type: 'logout' }), { title: 'Log out and forget the saved password' }),
       ),
     );
     return;
@@ -169,10 +182,7 @@ function renderAccount(s: ViewState): void {
   }
   if (a.hasSavedPassword && a.username && !showLoginForm) {
     b.append(
-      el('div', { class: 'row' },
-        el('span', { class: 'dot', 'aria-hidden': 'true' }),
-        el('span', { class: 'grow ellipsis' }, 'Saved login: ', el('strong', {}, a.username)),
-      ),
+      el('div', { class: 'row' }, el('span', { class: 'dot', 'aria-hidden': 'true' }), el('span', { class: 'grow ellipsis' }, 'Saved login: ', el('strong', {}, a.username))),
       el('div', { class: 'row gap' },
         button([icon('sign-in'), ' Log in'], () => send({ type: 'loginSaved' }), { kind: 'primary' }),
         el('button', { class: 'link', type: 'button', onclick: () => { showLoginForm = true; render(); } }, 'Use another account'),
@@ -180,21 +190,18 @@ function renderAccount(s: ViewState): void {
     );
   } else {
     if (!loginUser.value && a.username) loginUser.value = a.username;
+    if (!rememberInitialised) {
+      loginRemember.checked = a.rememberPassword;
+      rememberInitialised = true;
+    }
     b.append(loginForm);
   }
   if (a.error) b.append(el('div', { class: 'error', role: 'alert' }, icon('error'), ' ', a.error));
-  b.append(
-    el('p', { class: 'hint' },
-      icon('lock'), ' Your password is kept in the OS keychain (VS Code SecretStorage). ',
-      el('strong', {}, 'Do not log in from VS Code during an exam.'),
-    ),
-  );
 }
 
 function renderPickerList(s: ViewState): void {
-  const items = s.problems.items;
   const q = pickerSearch.value.trim().toLowerCase();
-  const hits = q ? items.filter((p) => p.name.toLowerCase().includes(q) || p.fullName.toLowerCase().includes(q)) : items;
+  const hits = s.problems.items.filter((p) => matches(p, q));
   pickerList.replaceChildren();
   if (!s.problems.loaded) {
     appendChildren(pickerList, [
@@ -209,6 +216,28 @@ function renderPickerList(s: ViewState): void {
   }
 }
 
+function scoreCard(sc: ScoreView): HTMLElement {
+  const card = el('div', { class: 'score-card' },
+    el('div', { class: 'row score-row' },
+      el('span', { class: 'muted small' }, 'Counted score'),
+      el('span', { class: 'grow' }),
+      sc.source === 'problem-list' ? el('span', { class: 'muted small', title: 'Hint/AI-assist penalties read from the problem list page' }, 'from problem list') : null,
+    ),
+    el('div', { class: `score ${scoreClass(sc.counted, sc.rawSum)}` }, sc.counted === null ? 'Not attempted' : sc.rawSum ? fmt(sc.counted) : `${fmt(sc.counted)} / 100`),
+    el('div', { class: 'score-facts small' },
+      el('span', {}, 'Best ', el('strong', {}, fmt(sc.best))),
+      el('span', {}, 'Latest ', el('strong', {}, fmt(sc.latest))),
+      el('span', {}, 'Attempts ', el('strong', {}, String(sc.attempts))),
+      sc.penaltyLabel ? el('span', { class: 'penalty' }, sc.penaltyLabel) : null,
+      sc.rawSum ? el('span', { class: 'muted' }, 'raw-sum scoring') : null,
+    ),
+  );
+  if (sc.latestBelowCounted && sc.latest !== null && sc.counted !== null) {
+    card.append(el('p', { class: 'hint' }, icon('info'), ` Latest: ${fmt(sc.latest)} — your best ${fmt(sc.counted)} still counts.`));
+  }
+  return card;
+}
+
 function renderCurrent(s: ViewState): void {
   const b = sCurrent.body;
   b.replaceChildren();
@@ -220,22 +249,27 @@ function renderCurrent(s: ViewState): void {
     el('div', { class: 'row file', title: s.file.path },
       icon(s.file.supported ? 'file-code' : 'file'),
       el('span', { class: 'grow ellipsis' }, s.file.name),
-      s.file.languageGuess ? el('span', { class: 'muted small' }, s.file.languageGuess) : el('span', { class: 'muted small' }, 'unknown type'),
+      el('span', { class: 'muted small' }, s.file.languageGuess ?? 'unknown type'),
     ),
   );
 
-  // Problem.
   const p = s.problem;
-  const current = el(
+  const combo = el(
     'button',
-    { class: 'combo', type: 'button', 'aria-expanded': String(pickerOpen), title: p ? `${p.name} — ${p.fullName}` : 'Choose problem', onclick: () => {
-      pickerOpen = !pickerOpen;
-      if (pickerOpen && !s.problems.loaded && !s.problems.loading) send({ type: 'refreshProblems' });
-      render();
-      if (pickerOpen) pickerSearch.focus();
-    } },
+    {
+      class: 'combo',
+      type: 'button',
+      'aria-expanded': String(pickerOpen),
+      title: p ? `${p.name} — ${p.fullName} (#${p.id})` : 'Choose problem',
+      onclick: () => {
+        pickerOpen = !pickerOpen;
+        if (pickerOpen && !s.problems.loaded && !s.problems.loading) send({ type: 'refreshProblems' });
+        render();
+        if (pickerOpen) pickerSearch.focus();
+      },
+    },
     p
-      ? el('span', { class: 'grow ellipsis' }, el('strong', {}, p.name), p.fullName && p.fullName !== p.name ? el('span', { class: 'muted' }, ` ${p.fullName}`) : null)
+      ? el('span', { class: 'grow ellipsis' }, el('strong', {}, p.name), el('span', { class: 'muted' }, ` #${p.id}`), p.fullName && p.fullName !== p.name ? el('span', { class: 'muted' }, ` ${p.fullName}`) : null)
       : el('span', { class: 'grow muted' }, 'Choose problem…'),
     icon(pickerOpen ? 'chevron-up' : 'chevron-down'),
   );
@@ -243,34 +277,29 @@ function renderCurrent(s: ViewState): void {
     el('div', { class: 'field' },
       el('div', { class: 'field-label' }, 'Problem',
         p && p.source === 'cph' ? el('span', { class: 'badge', title: 'Matched from the CPH problem file. Pick it again to save the mapping.' }, 'from CPH') : null,
-        p ? scorePill(p.bestScore) : null,
         el('span', { class: 'grow' }),
         p ? iconButton('link-external', 'Open problem statement', () => send({ type: 'openStatement', problemId: p.id })) : null,
         p ? iconButton('close', 'Forget the problem for this file', () => send({ type: 'unmapProblem' })) : null,
       ),
-      current,
+      combo,
       pickerOpen ? (renderPickerList(s), pickerBox) : null,
     ),
   );
 
-  // Language.
   if (p) {
+    b.append(scoreCard(p.score));
     const L = s.languages;
-    const select = el('select', { id: 'lang', disabled: L.loading || L.forced || L.items.length === 0, onchange: (e: Event) => {
-      send({ type: 'selectLanguage', languageId: Number((e.target as HTMLSelectElement).value) });
-    } });
+    const select = el('select', {
+      id: 'lang',
+      disabled: L.loading || L.items.length <= 1,
+      onchange: (e: Event) => send({ type: 'selectLanguage', languageId: Number((e.target as HTMLSelectElement).value) }),
+    });
     if (L.items.length === 0) select.append(el('option', {}, L.loading ? 'Loading…' : '—'));
     if (L.selectedId === null && L.items.length) select.append(el('option', { value: '', selected: true, disabled: true }, 'Choose language…'));
     for (const l of L.items) select.append(el('option', { value: l.id, selected: l.id === L.selectedId }, l.name));
-    b.append(
-      el('div', { class: 'field' },
-        el('label', { class: 'field-label', for: 'lang' }, 'Language', L.forced ? el('span', { class: 'muted small' }, ' (set by the problem)') : null),
-        select,
-      ),
-    );
+    b.append(el('div', { class: 'field' }, el('label', { class: 'field-label', for: 'lang' }, 'Language'), select));
   }
 
-  // Submit.
   const sub = s.submit;
   b.append(
     el('button', { class: 'btn big', type: 'button', id: 'submit-btn', disabled: !sub.enabled, onclick: () => send({ type: 'submit' }), 'aria-describedby': sub.reason ? 'submit-reason' : undefined },
@@ -278,12 +307,8 @@ function renderCurrent(s: ViewState): void {
       ` ${sub.busy ? 'Grading…' : sub.label}`,
     ),
   );
-  if (s.gradingElsewhere) {
-    b.append(el('p', { class: 'hint' }, icon('loading', 'codicon-modifier-spin'), ` Grading ${s.gradingElsewhere} for another file…`));
-  }
-  if (sub.reason) {
-    b.append(el('p', { class: 'hint', id: 'submit-reason' }, icon('info'), ' ', sub.reason));
-  }
+  if (s.gradingElsewhere) b.append(el('p', { class: 'hint' }, icon('loading', 'codicon-modifier-spin'), ` Grading ${s.gradingElsewhere} for another file…`));
+  if (sub.reason) b.append(el('p', { class: 'hint', id: 'submit-reason' }, icon('info'), ' ', sub.reason));
   if (s.languages.error && p) b.append(el('div', { class: 'error' }, icon('error'), ' ', s.languages.error));
 }
 
@@ -322,43 +347,35 @@ function renderResult(s: ViewState): void {
   b.replaceChildren();
   const r = s.result;
   if (!r) {
-    b.append(el('p', { class: 'muted' }, 'No submission yet in this session.'));
+    b.append(el('p', { class: 'muted' }, 'No submission yet for this file in this session.'));
     return;
   }
-  const head = el('div', { class: 'row result-head' },
-    el('span', { class: 'ellipsis' }, el('strong', {}, r.problemName)),
-    el('span', { class: 'grow' }),
-    r.submissionId
-      ? el('button', { class: 'link', type: 'button', title: 'Open the submission in the browser', onclick: () => send({ type: 'openSubmission', submissionId: r.submissionId! }) }, `#${r.submissionId}`, icon('link-external'))
-      : null,
+  b.append(
+    el('div', { class: 'row result-head' },
+      el('span', { class: 'ellipsis' }, el('strong', {}, r.problemName), r.number !== null ? el('span', { class: 'muted' }, ` · attempt ${r.number}`) : null),
+      el('span', { class: 'grow' }),
+      r.submissionId
+        ? el('button', { class: 'link', type: 'button', title: 'Open the submission in the browser', onclick: () => send({ type: 'openSubmission', submissionId: r.submissionId! }) }, `#${r.submissionId}`, icon('link-external'))
+        : null,
+    ),
   );
-  b.append(head);
-
   if (r.phase === 'submitting' || r.phase === 'grading') {
     b.append(el('div', { class: 'row status' }, icon('loading', 'codicon-modifier-spin'), ' ', r.message ?? 'Grading…'));
   }
   if (r.phase === 'done' || ((r.phase === 'timeout' || r.phase === 'error') && r.verdicts.length)) {
-    const scoreText = r.compileError ? 'Compilation error' : r.score !== null ? `${fmtScore(r.score)} / 100` : r.scoreHidden ? 'Graded (score hidden by the server)' : r.message ?? '';
-    b.append(
-      el('div', { class: 'row score-row' },
-        el('span', { class: `score ${r.compileError ? 'score-zero' : scoreClass(r.score)}` }, scoreText),
-        el('span', { class: 'grow' }),
-        r.tries !== null ? el('span', { class: 'muted small' }, `try ${r.tries}`) : null,
-        r.time ? el('span', { class: 'muted small' }, ` · ${r.time}`) : null,
-      ),
-    );
+    const text = r.compileError ? 'Compilation error' : r.points !== null ? `${fmt(r.points)} points` : (r.message ?? 'Graded');
+    b.append(el('div', { class: 'row score-row' }, el('span', { class: `score ${r.compileError ? 'score-zero' : scoreClass(r.points)}` }, text)));
     if (r.verdicts.length) b.append(verdictStrip(r.verdicts));
     else if (r.comment && !r.compileError) b.append(el('code', { class: 'comment' }, r.comment));
     const failed = r.verdicts.filter((v) => !v.ok);
-    if (failed.length && failed.length <= 6) {
-      b.append(el('ul', { class: 'failed' }, ...failed.map((v) => el('li', {}, v.label))));
-    }
+    if (failed.length && failed.length <= 6) b.append(el('ul', { class: 'failed' }, ...failed.map((v) => el('li', {}, v.label))));
+    if (r.improvement) b.append(el('p', { class: 'improvement' }, icon('graph-line'), ' ', r.improvement));
   }
   if (r.compileError) {
     b.append(
       el('details', { class: 'compiler', open: true },
         el('summary', {}, 'Compiler message'),
-        r.compilerMessage !== null ? el('pre', {}, r.compilerMessage || '(empty)') : el('p', { class: 'muted' }, 'Loading…'),
+        el('pre', {}, r.compilerMessage || '(empty)'),
         button([icon('go-to-file'), ' Open in editor'], () => send({ type: 'showCompilerMessage' })),
       ),
     );
@@ -375,41 +392,49 @@ function renderHistory(s: ViewState): void {
   const b = sHistory.body;
   b.replaceChildren();
   if (!s.problem) {
-    b.append(el('p', { class: 'muted' }, 'Choose a problem to see its history.'));
+    b.append(el('p', { class: 'muted' }, 'Choose a problem to see its submissions.'));
     return;
   }
-  if (!s.history.length) {
-    b.append(el('p', { class: 'muted' }, 'No submissions from VS Code yet for this problem.'));
+  const H = s.history;
+  if (!H.items.length) {
+    b.append(el('p', { class: 'muted' }, H.loading ? 'Loading…' : 'No submissions for this problem yet.'));
     return;
   }
   const list = el('div', { class: 'history' });
-  for (const h of s.history) {
+  for (const h of H.items) {
     list.append(
       el('button', { class: 'history-row', type: 'button', title: `Open submission #${h.submissionId}`, onclick: () => send({ type: 'openSubmission', submissionId: h.submissionId }) },
-        el('span', { class: 'mono muted' }, `#${h.submissionId}`),
-        el('span', { class: `pill ${h.compileError ? 'score-zero' : scoreClass(h.score)}` }, h.compileError ? 'CE' : h.score === null ? '–' : fmtScore(h.score)),
-        el('span', { class: 'mono grow ellipsis small' }, h.comment ?? ''),
-        el('span', { class: 'muted small' }, h.time),
+        el('span', { class: 'mono muted' }, h.number !== null ? `${h.number}.` : `#${h.submissionId}`),
+        el('span', { class: `pill ${h.compileError ? 'score-zero' : scoreClass(h.points)}` }, h.compileError ? 'CE' : fmt(h.points)),
+        el('span', { class: 'mono grow ellipsis small' }, h.compileError ? '' : (h.comment ?? h.status)),
+        el('span', { class: 'muted small' }, when(h.submittedAt)),
       ),
     );
   }
   b.append(list);
+  if (H.loading) b.append(el('p', { class: 'muted small' }, icon('loading', 'codicon-modifier-spin'), ' Refreshing…'));
 }
 
 function problemRow(p: ProblemView, s: ViewState, where: 'picker' | 'list'): HTMLElement {
   const mapped = s.problem?.id === p.id;
-  const row = el('div', { class: `problem-row${mapped ? ' mapped' : ''}`, role: where === 'picker' ? 'option' : undefined, 'aria-selected': where === 'picker' ? String(mapped) : undefined },
-    el('button', { class: 'problem-main', type: 'button', disabled: !s.file, title: s.file ? `Use ${p.name} for ${s.file.name}` : 'Open a source file to map a problem', onclick: () => {
-      pickerOpen = false;
-      send({ type: 'mapProblem', problemId: p.id });
-    } },
-      el('span', { class: 'problem-name ellipsis' }, mapped ? icon('check') : null, p.name),
+  return el('div', { class: `problem-row${mapped ? ' mapped' : ''}`, role: where === 'picker' ? 'option' : undefined, 'aria-selected': where === 'picker' ? String(mapped) : undefined },
+    el('button', {
+      class: 'problem-main',
+      type: 'button',
+      disabled: !s.file,
+      title: s.file ? `Use ${p.name} (#${p.id}) for ${s.file.name}` : 'Open a source file to map a problem',
+      onclick: () => {
+        pickerOpen = false;
+        pickerSearch.value = '';
+        send({ type: 'mapProblem', problemId: p.id });
+      },
+    },
+      el('span', { class: 'problem-name ellipsis' }, mapped ? icon('check') : null, p.name, el('span', { class: 'muted id' }, ` #${p.id}`)),
       p.fullName && p.fullName !== p.name ? el('span', { class: 'problem-full ellipsis muted' }, p.fullName) : null,
     ),
-    scorePill(p.bestScore),
+    scorePill(p.score),
     iconButton('link-external', `Open the statement of ${p.name}`, () => send({ type: 'openStatement', problemId: p.id })),
   );
-  return row;
 }
 
 function renderProblems(s: ViewState): void {
@@ -425,11 +450,12 @@ function renderProblems(s: ViewState): void {
   }
   b.append(problemFilter);
   const q = problemFilter.value.trim().toLowerCase();
-  const hits = q ? P.items.filter((p) => p.name.toLowerCase().includes(q) || p.fullName.toLowerCase().includes(q)) : P.items;
+  const hits = P.items.filter((p) => matches(p, q));
   const list = el('div', { class: 'problem-list' });
   for (const p of hits.slice(0, 150)) list.append(problemRow(p, s, 'list'));
   b.append(list);
-  b.append(el('p', { class: 'muted small' }, hits.length > 150 ? `Showing 150 of ${hits.length}. Refine the filter.` : `${hits.length} of ${P.items.length} problems`));
+  b.append(el('p', { class: 'muted small' }, hits.length > 150 ? `Showing 150 of ${hits.length}. Refine the filter.` : `${hits.length} of ${P.items.length} problems · scores shown are counted scores`));
+  if (P.penaltyNote) b.append(el('p', { class: 'hint' }, icon('info'), ' ', P.penaltyNote));
   if (P.loading) b.append(el('p', { class: 'muted small' }, icon('loading', 'codicon-modifier-spin'), ' Refreshing…'));
   if (P.error) b.append(el('div', { class: 'error' }, icon('error'), ' ', P.error));
 }
@@ -448,7 +474,7 @@ function render(): void {
   renderHistory(state);
   renderProblems(state);
   // Persistent inputs survive re-render; restore focus if it was on one of them.
-  if (active instanceof HTMLInputElement && document.body.contains(active)) active.focus();
+  if (active instanceof HTMLInputElement && document.body.contains(active) && document.activeElement !== active) active.focus();
 }
 
 pickerSearch.addEventListener('input', () => state && renderPickerList(state));
@@ -457,8 +483,7 @@ pickerSearch.addEventListener('keydown', (e) => {
     pickerOpen = false;
     render();
   } else if (e.key === 'Enter') {
-    const first = pickerList.querySelector<HTMLButtonElement>('.problem-main:not([disabled])');
-    first?.click();
+    pickerList.querySelector<HTMLButtonElement>('.problem-main:not([disabled])')?.click();
   }
 });
 problemFilter.addEventListener('input', () => {

@@ -1,28 +1,21 @@
-import {
-  AuthError,
-  GraderError,
-  LanguageNotAllowedError,
-  NetworkError,
-  ParseError,
-  PollTimeoutError,
-  SessionExpiredError,
-  SubmitRejectedError,
-} from './errors';
-import { HttpSession, type FetchLike, type HttpResult, type Logger } from './http';
-import {
-  extractAlerts,
-  extractCsrf,
-  hasLoginForm,
-  parseCompilerMessage,
-  parseEvaluations,
-  parseLoginForm,
-  parsePollUrl,
-  parseProblemList,
-  parseSubmissionStatus,
-  parseSubmitPage,
-  parseUserId,
-} from './parsers';
-import type { Evaluation, Problem, SubmissionStatus, SubmitPage } from './types';
+import { ApiClient, type ApiLanguage, type ApiProblem, type ApiSubmission, type ApiSubmissionBrief } from './api';
+import { isContestPage } from './contest';
+import { AuthError, GraderError, NetworkError, PollTimeoutError, SessionExpiredError } from './errors';
+import type { FetchLike, Logger } from './http';
+import { parseListScores } from './parsers';
+import { Redactor } from './redact';
+import type {
+  GraderUser,
+  Language,
+  ListScoreInfo,
+  Problem,
+  ProblemDetail,
+  StoredToken,
+  SubmissionBrief,
+  SubmissionResult,
+} from './types';
+import { parseGraderComment } from './verdicts';
+import { WebSession } from './web';
 
 export const DEFAULT_BASE_URL = 'https://cedt-grader.nattee.net';
 
@@ -31,43 +24,44 @@ export interface Credentials {
   password: string;
 }
 
+export interface TokenStore {
+  load(): Promise<StoredToken | undefined>;
+  save(t: StoredToken | undefined): Promise<void>;
+}
+
 export interface GraderClientOptions {
   baseUrl?: string;
-  /** Called on (re-)login. Return undefined to abort the login. */
-  getCredentials: () => Promise<Credentials | undefined>;
+  /**
+   * Stored credentials for a *silent* re-login after the token expires.
+   * Return undefined when the password is not remembered.
+   */
+  getStoredCredentials?: () => Promise<Credentials | undefined>;
+  /** Where the API token is kept (SecretStorage); omit to keep it in memory only. */
+  tokenStore?: TokenStore;
   fetch?: FetchLike;
   log?: Logger;
-  /** Injectable clock and sleep for tests. */
   now?: () => Date;
   sleep?: (ms: number, signal?: AbortSignal) => Promise<void>;
 }
 
-export interface SubmitOptions {
-  /** Path of the source file (for the multipart filename hint). */
-  filename?: string;
-}
-
-export interface SubmitResult {
-  submissionId: number;
-  pollUrl: string | null;
+export interface ProblemList {
+  problems: Problem[];
+  /** Penalty data from `/main/list`: 'loaded', or why it is missing. */
+  listStatus: 'loaded' | 'no-web-session' | 'failed';
 }
 
 export interface PollOptions {
-  submissionId?: number;
-  pollUrl?: string | null;
   intervalMs?: number;
   timeoutMs?: number;
   signal?: AbortSignal;
-  onUpdate?: (s: SubmissionStatus) => void;
+  onUpdate?: (s: SubmissionResult) => void;
 }
-
-/** Server alerts after which a fresh login can help. */
-const RELOGIN_ALERTS = [/you need to log in/i, /session is expired/i];
 
 const MIN_POLL_MS = 3_000;
 const DEFAULT_POLL_MS = 5_000;
 const DEFAULT_POLL_TIMEOUT_MS = 3 * 60_000;
 const MAX_BACKOFF_MS = 60_000;
+const GRADED = new Set(['done', 'compilation_error', 'grader_error']);
 
 const defaultSleep = (ms: number, signal?: AbortSignal) =>
   new Promise<void>((resolve, reject) => {
@@ -84,351 +78,271 @@ const defaultSleep = (ms: number, signal?: AbortSignal) =>
   });
 
 /**
- * Talks to a cafe-grader-web server through its HTML forms.
- * It never requests anything under `/contests` and does not pretend to be a browser.
+ * Grader access. The JSON API (`/api/v1`, JWT) is the primary path; the
+ * cookie web session is used only for `/main/list` (penalties, raw-sum mode,
+ * exam hint), which the API does not expose.
+ *
+ * Never requests anything under `/contests` and does not pretend to be a browser.
  */
 export class GraderClient {
-  readonly http: HttpSession;
   readonly baseUrl: string;
-  private loggedIn = false;
-  private loginInFlight: Promise<void> | null = null;
-  /** Discovered after login / submit; never hard-coded. */
-  userId: number | null = null;
-  /** Problems parsed from the page login landed on (/main/list), if any. */
-  landingProblems: Problem[] | null = null;
+  readonly redactor = new Redactor();
+  private readonly api: ApiClient;
+  private readonly web: WebSession;
   private readonly now: () => Date;
   private readonly sleep: NonNullable<GraderClientOptions['sleep']>;
+  private tokenExpiresAt = 0;
+  private loginInFlight: Promise<GraderUser> | null = null;
+  private languagesCache: Language[] | null = null;
+  private listHtml: string | null = null;
+  user: GraderUser | null = null;
 
-  constructor(private readonly opts: GraderClientOptions) {
+  constructor(private readonly opts: GraderClientOptions = {}) {
     this.baseUrl = (opts.baseUrl ?? DEFAULT_BASE_URL).replace(/\/+$/, '');
-    this.http = new HttpSession(this.baseUrl, opts.fetch, opts.log);
+    const log = opts.log ?? (() => {});
+    this.api = new ApiClient(this.baseUrl, opts.fetch ?? ((i, init) => fetch(i, init)), log, this.redactor);
+    this.web = new WebSession(this.baseUrl, opts.fetch, log, this.redactor);
     this.now = opts.now ?? (() => new Date());
     this.sleep = opts.sleep ?? defaultSleep;
   }
 
-  get isLoggedIn(): boolean {
-    return this.loggedIn;
-  }
-
   url(path: string): string {
-    return this.http.resolve(path);
+    return this.baseUrl + (path.startsWith('/') ? path : `/${path}`);
   }
 
-  // ---------------------------------------------------------------- login
+  get isLoggedIn(): boolean {
+    return this.api.hasToken && this.now().getTime() < this.tokenExpiresAt;
+  }
 
-  /** Log in with fresh credentials. */
-  login(): Promise<void> {
+  /** `isContestPage()` on the last `/main/list` we fetched (null if none). */
+  get contestPage(): boolean | null {
+    return this.listHtml === null ? null : isContestPage(this.listHtml);
+  }
+
+  // ---------------------------------------------------------------- auth
+
+  /** Use a stored token if it is still valid (no network). */
+  async restore(): Promise<boolean> {
+    const t = await this.opts.tokenStore?.load();
+    if (!t) return false;
+    const exp = Date.parse(t.expiresAt);
+    if (!(exp > this.now().getTime() + 60_000)) return false;
+    this.api.setToken(t.token);
+    this.tokenExpiresAt = exp;
+    return true;
+  }
+
+  /**
+   * Log in to the API (and, best effort, the website for `/main/list`).
+   * Explicit credentials come from the login form; otherwise the stored ones are used.
+   * A failed login is never retried automatically (the server throttles failures).
+   */
+  login(creds?: Credentials): Promise<GraderUser> {
     if (!this.loginInFlight) {
-      this.loginInFlight = this.doLogin().finally(() => {
+      this.loginInFlight = this.doLogin(creds).finally(() => {
         this.loginInFlight = null;
       });
     }
     return this.loginInFlight;
   }
 
-  private async doLogin(): Promise<void> {
-    const creds = await this.opts.getCredentials();
-    if (!creds || !creds.username || !creds.password) {
-      throw new AuthError('No username/password configured. Run "CEDT Grader: Log In".', 'no-credentials');
+  private async doLogin(given?: Credentials): Promise<GraderUser> {
+    const creds = given ?? (await this.opts.getStoredCredentials?.());
+    if (!creds?.username || !creds.password) {
+      throw new AuthError('Log in to CEDT Grader first.', 'no-credentials');
     }
-    this.http.redactor.add(creds.password);
-    this.loggedIn = false;
-
-    const page = await this.http.request('/');
-    const form = parseLoginForm(page.body);
-    if (!form.present) {
-      // Already logged in (session still valid): `/` redirected to the problem list.
-      if (!hasLoginForm(page.body) && /\/main\/list/.test(page.path)) {
-        this.loggedIn = true;
-        return this.afterLoggedInPage(page);
-      }
-      throw new ParseError('Could not find the login form on the grader home page.');
+    this.redactor.add(creds.password);
+    const res = await this.api.login(creds.username, creds.password);
+    this.tokenExpiresAt = Date.parse(res.expires_at) || this.now().getTime() + 11 * 3600_000;
+    this.user = { id: res.user.id, login: res.user.login, fullName: res.user.full_name };
+    await this.opts.tokenStore?.save({ token: res.token, expiresAt: new Date(this.tokenExpiresAt).toISOString() });
+    // Web session for /main/list (penalties). Its failure does not fail the login.
+    try {
+      this.listHtml = await this.web.login(creds.username, creds.password);
+    } catch (err) {
+      this.opts.log?.(`Web login skipped: ${err instanceof Error ? err.message : err}`);
     }
-    if (!form.token) throw new ParseError('Could not find the CSRF token on the login page.');
-    this.http.redactor.add(form.token);
-
-    const body = new URLSearchParams({
-      authenticity_token: form.token,
-      login: creds.username,
-      password: creds.password,
-      commit: 'Login',
-    });
-    if (form.hasAgreement) {
-      throw new AuthError('The grader asks you to accept an agreement first. Log in once through the website.', 'agreement-required');
-    }
-
-    const res = await this.http.request('/login/login', { method: 'POST', body });
-    if (hasLoginForm(res.body) || /\/main\/login$/.test(res.path)) {
-      const alerts = extractAlerts(res.body);
-      const alert = alerts[0] ?? '';
-      if (/wrong password/i.test(alert)) {
-        throw new AuthError('Wrong username or password.', 'wrong-password');
-      }
-      if (/too many failed/i.test(alert)) {
-        throw new AuthError('Too many failed login attempts. Wait a few minutes and try again.', 'throttled');
-      }
-      if (/accept the agreement/i.test(alert)) {
-        throw new AuthError('The grader requires accepting its agreement. Log in through the website.', 'agreement-required');
-      }
-      throw new AuthError(alert ? `Login failed: ${alert}` : 'Login failed.', 'unknown');
-    }
-    this.loggedIn = true;
-    return this.afterLoggedInPage(res);
+    return this.user;
   }
 
-  private afterLoggedInPage(page: HttpResult): void {
-    const uid = parseUserId(page.body);
-    if (uid !== null) this.userId = uid;
-    this.http.redactor.add(extractCsrf(page.body));
-    // Login lands on /main/list: keep its problems so callers need no second fetch.
-    this.landingProblems = /\/main\/list$/.test(page.path) ? parseProblemList(page.body) : null;
+  async logout(): Promise<void> {
+    this.api.setToken(null);
+    this.tokenExpiresAt = 0;
+    this.web.clear();
+    this.user = null;
+    this.listHtml = null;
+    this.languagesCache = null;
+    this.redactor.clear();
+    await this.opts.tokenStore?.save(undefined);
   }
 
-  /** Forget the session locally (cookies are only in memory). */
-  logout(): void {
-    this.http.clearCookies();
-    this.http.redactor.clear();
-    this.loggedIn = false;
-    this.userId = null;
-    this.landingProblems = null;
-  }
-
-  // ------------------------------------------------------- session helpers
-
-  /** Throw SessionExpiredError when a response is the login page. */
-  private checkSession(res: HttpResult): void {
-    if (!hasLoginForm(res.body) && !/\/main\/login$/.test(res.path)) return;
-    this.loggedIn = false;
-    const alert = extractAlerts(res.body)[0] ?? '';
-    const retryable = alert === '' || RELOGIN_ALERTS.some((re) => re.test(alert));
-    throw new SessionExpiredError(
-      retryable ? 'Your grader session has expired.' : `The grader logged you out: ${alert}`,
-      retryable,
-    );
-  }
-
-  /** Run `fn`; on a retryable session expiry log in once and retry once. */
-  private async withSession<T>(fn: () => Promise<T>): Promise<T> {
-    if (!this.loggedIn) await this.login();
+  /** Run an API call; on 401 log in again once with the stored password, then retry once. */
+  private async authed<T>(fn: () => Promise<T>): Promise<T> {
+    if (!this.isLoggedIn) await this.reloginOrThrow();
     try {
       return await fn();
     } catch (err) {
-      if (err instanceof SessionExpiredError && err.retryable) {
-        await this.login();
-        try {
-          return await fn();
-        } catch (err2) {
-          if (err2 instanceof SessionExpiredError) {
-            throw new SessionExpiredError('Session expired again right after logging in. Try "CEDT Grader: Log In".', false);
-          }
-          throw err2;
-        }
-      }
-      throw err;
+      if (!(err instanceof SessionExpiredError)) throw err;
+      await this.reloginOrThrow();
+      return fn();
     }
   }
 
-  private async getPage(path: string, headers?: Record<string, string>, signal?: AbortSignal): Promise<HttpResult> {
-    const res = await this.http.request(path, { headers, signal });
-    this.checkSession(res);
-    const token = extractCsrf(res.body);
-    this.http.redactor.add(token);
-    return res;
+  private async reloginOrThrow(): Promise<void> {
+    this.api.setToken(null);
+    this.tokenExpiresAt = 0;
+    const creds = await this.opts.getStoredCredentials?.();
+    if (!creds) throw new SessionExpiredError('Your grader login has expired. Please log in again.', false);
+    await this.login(creds);
   }
 
-  // ------------------------------------------------------------- reading
+  // ------------------------------------------------------------ problems
 
-  async listProblems(): Promise<Problem[]> {
-    return this.withSession(async () => {
-      const res = await this.getPage('/main/list');
-      const uid = parseUserId(res.body);
-      if (uid !== null) this.userId = uid;
-      return parseProblemList(res.body);
-    });
+  async languages(): Promise<Language[]> {
+    if (this.languagesCache) return this.languagesCache;
+    const list = await this.authed(() => this.api.get<ApiLanguage[]>('/api/v1/languages'));
+    this.languagesCache = list.map((l) => ({ id: l.id, name: l.pretty_name || l.name, code: l.name, ext: l.ext }));
+    return this.languagesCache;
   }
 
-  /** Fresh submit page (languages, CSRF token, exam hint). */
-  async getSubmitPage(problemId: number): Promise<SubmitPage> {
+  /** Languages allowed for a problem (null permitted list = all languages). */
+  async languagesFor(p: Pick<Problem, 'permittedLanguageIds'>): Promise<Language[]> {
+    const all = await this.languages();
+    return p.permittedLanguageIds === null ? all : all.filter((l) => p.permittedLanguageIds!.includes(l.id));
+  }
+
+  /** `GET /api/v1/problems`, merged with `/main/list` penalties when the web session works. */
+  async listProblems(): Promise<ProblemList> {
+    const api = await this.authed(() => this.api.get<ApiProblem[]>('/api/v1/problems'));
+    let listStatus: ProblemList['listStatus'] = 'loaded';
+    let scores: Map<number, ListScoreInfo> | null = null;
+    try {
+      scores = parseListScores(await this.fetchListPage());
+    } catch (err) {
+      listStatus = err instanceof SessionExpiredError ? 'no-web-session' : 'failed';
+      this.opts.log?.(`Problem list page unavailable: ${err instanceof Error ? err.message : err}`);
+    }
+    return { problems: api.map((p) => toProblem(p, scores?.get(p.id) ?? null)), listStatus };
+  }
+
+  private async fetchListPage(): Promise<string> {
+    if (!this.web.isLoggedIn) {
+      const creds = await this.opts.getStoredCredentials?.();
+      if (!creds) throw new SessionExpiredError('No web session.', false);
+      this.listHtml = await this.web.login(creds.username, creds.password);
+      return this.listHtml;
+    }
+    try {
+      this.listHtml = await this.web.problemListPage();
+    } catch (err) {
+      if (!(err instanceof SessionExpiredError)) throw err;
+      const creds = await this.opts.getStoredCredentials?.();
+      if (!creds) throw err;
+      this.listHtml = await this.web.login(creds.username, creds.password);
+    }
+    return this.listHtml;
+  }
+
+  async getProblem(id: number): Promise<ProblemDetail> {
+    assertId(id);
+    const p = await this.authed(() => this.api.get<ApiProblem>(`/api/v1/problems/${id}`));
+    return { ...toProblem(p, null), fullScore: p.full_score ?? null, submissionIds: p.submission_ids ?? [] };
+  }
+
+  async listSubmissions(problemId: number): Promise<SubmissionBrief[]> {
     assertId(problemId);
-    return this.withSession(() => this.fetchSubmitPage(problemId));
-  }
-
-  private async fetchSubmitPage(problemId: number): Promise<SubmitPage> {
-    const res = await this.getPage(`/submissions/direct_edit_problem/${problemId}`);
-    if (/\/main\/list$/.test(res.path)) {
-      const alert = extractAlerts(res.body)[0];
-      throw new SubmitRejectedError(alert ? alert : `Problem #${problemId} is not available for you.`);
-    }
-    const uid = parseUserId(res.body);
-    if (uid !== null) this.userId = uid;
-    return parseSubmitPage(res.body, problemId);
-  }
-
-  async getLanguages(problemId: number) {
-    return (await this.getSubmitPage(problemId)).languages;
+    const list = await this.authed(() => this.api.get<ApiSubmissionBrief[]>(`/api/v1/problems/${problemId}/submissions`));
+    return list.map((s) => ({
+      id: s.id,
+      number: s.number ?? null,
+      language: s.language ?? null,
+      submittedAt: s.submitted_at ?? null,
+      points: s.points ?? null,
+      status: s.status,
+      comment: s.grader_comment ?? null,
+    }));
   }
 
   // -------------------------------------------------------------- submit
 
-  /** Submit `source` as `languageId` for `problemId` (fetches the submit page first for a fresh CSRF token). */
-  async submit(problemId: number, languageId: number, source: string, _opts: SubmitOptions = {}): Promise<SubmitResult> {
+  async submit(problemId: number, languageId: number, source: string, filename: string): Promise<{ id: number; number: number | null }> {
     assertId(problemId);
-    if (!source.trim()) throw new SubmitRejectedError('The file is empty.');
-
-    return this.withSession(async () => {
-      const page = await this.fetchSubmitPage(problemId);
-      if (!page.canSubmit) {
-        throw new SubmitRejectedError('This problem is not open for your submissions.');
-      }
-      if (!page.languages.some((l) => l.id === languageId)) {
-        throw new LanguageNotAllowedError(
-          `That language is not allowed for this problem. Allowed: ${page.languages.map((l) => l.name).join(', ') || 'none'}.`,
-        );
-      }
-      if (!page.csrfToken) throw new ParseError('Could not find the CSRF token on the submit page.');
-
-      const form = new FormData();
-      form.set('authenticity_token', page.csrfToken);
-      form.set('submission[problem_id]', String(page.problemId));
-      form.set('language_id', String(languageId));
-      form.set('editor_text', source);
-      form.set('commit', 'Submit');
-
-      const res = await this.http.request('/main/submit', { method: 'POST', body: form, followRedirects: false });
-      const location = res.redirects[0];
-      if (!location) {
-        throw new SubmitRejectedError(`Unexpected response from the grader after submitting (HTTP ${res.status}).`);
-      }
-      const locPath = new URL(location).pathname;
-      const m = /^\/submissions\/(\d+)\/edit$/.exec(locPath);
-      if (!m) {
-        // Error → follow to read the flash alert.
-        const follow = await this.http.request(location);
-        this.checkSession(follow); // throws (retryable → resubmit once is safe: nothing was saved)
-        const alert = extractAlerts(follow.body)[0] ?? '';
-        if (/language is not permitted/i.test(alert)) throw new LanguageNotAllowedError('That language is not allowed for this problem.');
-        throw new SubmitRejectedError(alert ? `Submission rejected: ${alert}` : 'Submission rejected by the grader.');
-      }
-      const submissionId = Number(m[1]);
-
-      // The page we are redirected to renders the poll URL (with the user id).
-      let pollUrl: string | null = null;
-      try {
-        const edit = await this.http.request(locPath);
-        if (!hasLoginForm(edit.body)) {
-          pollUrl = parsePollUrl(edit.body);
-          const uid = parseUserId(edit.body);
-          if (uid !== null) this.userId = uid;
-        }
-      } catch (err) {
-        if (!(err instanceof NetworkError)) throw err;
-      }
-      return { submissionId, pollUrl };
-    });
+    if (!source.trim()) throw new GraderError('The file is empty.');
+    const r = await this.authed(() => this.api.createSubmission(problemId, languageId, source, filename));
+    return { id: r.id, number: r.number ?? null };
   }
 
-  // ---------------------------------------------------------------- poll
-
-  pollUrlFor(problemId: number): string {
-    if (this.userId === null) {
-      throw new ParseError('Could not discover your user id from the grader pages.');
-    }
-    return `/submissions/get_latest_submission_status/${this.userId}/${problemId}`;
+  async getSubmission(id: number, signal?: AbortSignal): Promise<SubmissionResult> {
+    assertId(id);
+    return toResult(await this.authed(() => this.api.get<ApiSubmission>(`/api/v1/submissions/${id}`, signal)));
   }
 
-  /** One status request. */
-  async getLatestStatus(problemId: number, pollUrl?: string | null, signal?: AbortSignal): Promise<SubmissionStatus> {
-    assertId(problemId);
-    return this.withSession(async () => {
-      const res = await this.getPage(
-        pollUrl ?? this.pollUrlFor(problemId),
-        { Accept: 'text/vnd.turbo-stream.html, text/html' },
-        signal,
-      );
-      if (/\/main\/list$/.test(res.path)) {
-        throw new SubmitRejectedError(extractAlerts(res.body)[0] ?? 'Not allowed to view this submission.');
-      }
-      return parseSubmissionStatus(res.body);
-    });
-  }
-
-  /**
-   * Poll until the submission is graded or the timeout passes.
-   * Waits max(intervalMs, server suggested delay); backs off ×2 on network errors.
-   */
-  async pollLatest(problemId: number, opts: PollOptions = {}): Promise<SubmissionStatus> {
+  /** Poll one submission until graded. Waits max(3 s, interval); ×2 back-off on network errors; 3 min cap. */
+  async pollSubmission(id: number, opts: PollOptions = {}): Promise<SubmissionResult> {
     const interval = Math.max(MIN_POLL_MS, opts.intervalMs ?? DEFAULT_POLL_MS);
     const timeout = opts.timeoutMs ?? DEFAULT_POLL_TIMEOUT_MS;
     const start = this.now().getTime();
     let backoff = interval;
-    let last: SubmissionStatus | null = null;
-    let pollUrl = opts.pollUrl ?? null;
-
+    let last: SubmissionResult | null = null;
     for (;;) {
       let wait = interval;
       try {
-        const s = await this.getLatestStatus(problemId, pollUrl, opts.signal);
+        const s = await this.getSubmission(id, opts.signal);
         last = s;
         opts.onUpdate?.(s);
-        const ours = opts.submissionId === undefined || (s.id !== null && s.id >= opts.submissionId);
-        if (ours && s.state === 'graded') return s;
-        if (s.refreshUrl) pollUrl = s.refreshUrl;
-        if (s.refreshDelayMs) wait = Math.max(interval, s.refreshDelayMs);
+        if (s.state === 'graded') return s;
         backoff = interval;
       } catch (err) {
-        if (err instanceof NetworkError) {
-          backoff = Math.min(backoff * 2, MAX_BACKOFF_MS);
-          wait = backoff;
-        } else {
-          throw err;
-        }
+        if (!(err instanceof NetworkError)) throw err;
+        backoff = Math.min(backoff * 2, MAX_BACKOFF_MS);
+        wait = backoff;
       }
       if (this.now().getTime() - start + wait > timeout) {
-        throw Object.assign(
-          new PollTimeoutError('Still not graded after 3 minutes. Use "CEDT Grader: Show Last Result" to check again.'),
-          { last },
-        );
+        throw Object.assign(new PollTimeoutError('Still not graded after 3 minutes. Check again later.'), { last });
       }
       await this.sleep(wait, opts.signal);
     }
   }
+}
 
-  // ---------------------------------------------------- turbo endpoints
+function toProblem(p: ApiProblem, list: ListScoreInfo | null): Problem {
+  return {
+    id: p.id,
+    name: clean(p.name),
+    fullName: clean(p.full_name ?? p.name),
+    bestScore: p.best_score ?? null,
+    lastScore: p.last_score ?? null,
+    lastResult: p.last_result ?? null,
+    lastSubmissionId: p.last_submission_id ?? null,
+    lastSubmissionTime: p.last_submission_time ?? null,
+    submissionCount: p.submission_count ?? 0,
+    hasTestcase: !!p.has_testcase,
+    hasAttachment: !!p.has_attachment,
+    permittedLanguageIds: p.permitted_languages ? p.permitted_languages.map((l) => l.id) : null,
+    list,
+  };
+}
 
-  /** POST a Turbo endpoint (compiler_msg / evaluations) and return the raw turbo-stream. */
-  async postTurbo(path: string): Promise<string> {
-    return this.withSession(async () => {
-      // Fresh token from a logged-in page we are allowed to see.
-      const page = await this.getPage('/main/list');
-      const token = extractCsrf(page.body);
-      if (!token) throw new ParseError('Could not find a CSRF token.');
-      const res = await this.http.request(path, {
-        method: 'POST',
-        headers: { 'X-CSRF-Token': token, Accept: 'text/vnd.turbo-stream.html' },
-        body: new URLSearchParams(),
-      });
-      this.checkSession(res);
-      if (/\/main\/list$/.test(res.path)) {
-        throw new SubmitRejectedError(extractAlerts(res.body)[0] ?? 'Not allowed to view this submission.');
-      }
-      return res.body;
-    });
-  }
+function toResult(s: ApiSubmission): SubmissionResult {
+  const compileError = s.status === 'compilation_error' || /compil(?:ation|e) error/i.test(s.grader_comment ?? '');
+  return {
+    id: s.id,
+    number: s.number ?? null,
+    problemId: s.problem_id,
+    status: s.status,
+    state: GRADED.has(s.status) ? 'graded' : 'pending',
+    points: s.points ?? null,
+    comment: s.grader_comment ?? null,
+    compilerMessage: s.compiler_message ?? null,
+    compileError,
+    verdicts: compileError ? [] : parseGraderComment(s.grader_comment),
+    submittedAt: s.submitted_at ?? null,
+    language: s.language ?? null,
+  };
+}
 
-  async getCompilerMessage(submissionId: number): Promise<string> {
-    assertId(submissionId);
-    return parseCompilerMessage(await this.postTurbo(`/submissions/${submissionId}/compiler_msg`));
-  }
-
-  async getEvaluations(submissionId: number): Promise<Evaluation[]> {
-    assertId(submissionId);
-    return parseEvaluations(await this.postTurbo(`/submissions/${submissionId}/evaluations`));
-  }
-
-  /** Raw GET of a logged-in page (used by the probe to save fixtures). */
-  async getRaw(path: string, headers?: Record<string, string>): Promise<HttpResult> {
-    return this.withSession(() => this.getPage(path, headers));
-  }
+function clean(s: string): string {
+  return (s ?? '').replace(/[​‌‍﻿]/g, '').trim();
 }
 
 function assertId(id: number): void {

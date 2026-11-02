@@ -52,7 +52,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider, vscode.Dispo
         return;
       case 'login':
         // The password is passed straight to SecretStorage and not kept anywhere else.
-        await c.loginWith(String(m.username ?? ''), String(m.password ?? ''));
+        await c.loginWith(String(m.username ?? ''), String(m.password ?? ''), m.remember !== false);
         return;
       case 'loginSaved':
         await c.login();

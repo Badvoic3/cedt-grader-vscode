@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { chooseLanguage, languageForPath, matchLanguages, type Language } from '../src/grader';
 
-const L = (id: number, name: string, selected = false): Language => ({ id, name, selected });
-const OPTS = [L(1, 'C'), L(2, 'C++', true), L(3, 'Pascal'), L(4, 'Python'), L(5, 'Java'), L(6, 'Rust'), L(7, 'Go'), L(8, 'PostgreSQL')];
+const L = (id: number, name: string, ext = '', code = ''): Language => ({ id, name, code, ext });
+const OPTS = [L(1, 'C', 'c', 'c'), L(2, 'C++', 'cpp', 'cpp'), L(3, 'Pascal', 'pas'), L(4, 'Python', 'py', 'python'), L(5, 'Java', 'java'), L(6, 'Rust', 'rs'), L(7, 'Go', 'go'), L(8, 'PostgreSQL', 'sql')];
 
 describe('languageForPath', () => {
   it.each([
@@ -64,8 +64,11 @@ describe('chooseLanguage', () => {
   it('unknown extension', () => {
     expect(chooseLanguage('a.txt', OPTS).kind).toBe('unknown-extension');
   });
-  it('forced language must still fit the file', () => {
-    expect(chooseLanguage('a.cpp', [L(2, 'C++', true)], true)).toMatchObject({ kind: 'match' });
-    expect(chooseLanguage('a.py', [L(2, 'C++', true)], true)).toMatchObject({ kind: 'not-allowed' });
+  it('single allowed language must still fit the file', () => {
+    expect(chooseLanguage('a.cpp', [L(2, 'C++', 'cpp')])).toMatchObject({ kind: 'match' });
+    expect(chooseLanguage('a.py', [L(2, 'C++', 'cpp')])).toMatchObject({ kind: 'not-allowed' });
+  });
+  it('matches on the API extension / internal name too', () => {
+    expect(matchLanguages('C++', [L(9, 'GNU G++ 17', 'cpp', 'cpp')]).map((l) => l.id)).toEqual([9]);
   });
 });
