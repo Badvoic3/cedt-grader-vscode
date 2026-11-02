@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<!-- SYNTHETIC FIXTURE: hand-built from cafe-grader-web views (app/views/layouts/_header.html.haml,
+     app/views/main/*.haml, app/views/submissions/edit.html.haml). Not captured from a real server. -->
+<html>
+<head>
+<title>Grader</title>
+<meta name="csrf-param" content="authenticity_token" />
+<meta name="csrf-token" content="REDACTED" />
+</head>
+<body>
+<nav class="navbar navbar-expand-lg bg-body-tertiary">
+  <div class="container-fluid">
+    <a class="navbar-brand" href="/main/list">Grader</a>
+    <ul class="navbar-nav">
+      <li class="nav-item"><a class="nav-link" href="/main/list">Main</a></li>
+      <li class="nav-item"><a class="nav-link" data-user-id="12345" href="/users/profile">Student Name</a></li>
+      <li class="nav-item"><a class="nav-link" href="/main/login">Log out</a></li>
+    </ul>
+    <div class="btn btn-success" id="countdown">ANALYSIS MODE</div>
+  </div>
+</nav>
+
+<script>
+const contestEndTime = Date.parse('')
+const extraTime = 0
+function checkInLoop() {
+  fetch("/contests/user_check_in", { method: "POST", headers: { "X-CSRF-Token": document.querySelector("meta[name=csrf-token]").content } })
+    .then((r) => r.json()).then((j) => { setTimeout(checkInLoop, 60000 + Math.random() * 2000 + 500) })
+}
+function updateRemainingTime() {
+  const el = document.getElementById("countdown"); if (!el || isNaN(contestEndTime)) return
+  el.textContent = Math.max(0, Math.floor((contestEndTime + extraTime * 1000 - Date.now()) / 1000)) + "s"
+}
+</script>
+<div class="container-fluid">
+<table class="table table-sm table-hover" id="main_table">
+<thead><tr><th>#</th><th>Problem</th><th>Score</th><th>Latest</th><th></th><th class="d-none">tags</th><th class="d-none">status</th></tr></thead>
+<tbody data-controller="problem-name">
+<tr>
+  <td class="text-end" data-order="1"><div>1</div></td>
+  <td>
+    <strong>Hello_&#8203;World</strong>
+    <div class="text-muted font-monospace">p00_&#8203;hello</div>
+    <a href="/problems/101/download/statement" data-turbo="false">Read</a>
+    <a href="/problems/101/download/attachment" data-turbo="false">File</a>
+    <a href="/testcases/show_problem/101" data-turbo="false">Testcases</a>
+  </td>
+  <td data-order="100"><div class="progress"><div class="progress-bar bg-success" style="width: 100%" aria-valuenow="100">100</div></div></td>
+  <td>
+    <span class="me-1 mi text-secondary">tag</span><a data-turbo="false" href="/submissions/5001">5001</a>
+    <span class="ms-2">(<a data-turbo="false" href="/submissions/prob/101">2 tries</a>)</span>
+    <span class="ms-2"><a class="" data-turbo="true" data-turbo-method="post" href="/submissions/5001/compiler_msg">compiler msg</a></span>
+  </td>
+  <td><a class="btn btn-sm btn-primary" href="/submissions/5001/edit">Edit</a></td>
+  <td class="d-none">intro</td><td class="d-none">solved</td>
+</tr>
+<tr>
+  <td class="text-end" data-order="2"><div>2</div></td>
+  <td>
+    <strong>Sum_&#8203;of_&#8203;Array</strong>
+    <div class="text-muted font-monospace">p01_&#8203;sum</div>
+    <a href="/problems/102/download/statement" data-turbo="false">Read</a>
+  </td>
+  <td data-order="70"><div class="progress"><div class="progress-bar bg-warning" style="width: 70%" aria-valuenow="70">70</div></div></td>
+  <td>
+    <span class="me-1 mi text-secondary">tag</span><a data-turbo="false" href="/submissions/5002">5002</a>
+    <span class="ms-2">(<a data-turbo="false" href="/submissions/prob/102">1 try</a>)</span>
+  </td>
+  <td><a class="btn btn-sm btn-primary" href="/submissions/5002/edit">Edit</a></td>
+  <td class="d-none"></td><td class="d-none">inprogress</td>
+</tr>
+<tr>
+  <td class="text-end" data-order="3"><div>3</div></td>
+  <td>
+    <strong>Graph_&#8203;Walk</strong>
+    <div class="text-muted font-monospace">p02_&#8203;graph</div>
+  </td>
+  <td data-order="0"><div class="progress"></div></td>
+  <td>-</td>
+  <td><a class="btn btn-sm btn-success" href="/submissions/direct_edit_problem/103">New</a></td>
+  <td class="d-none"></td><td class="d-none">untried</td>
+</tr>
+</tbody>
+</table>
+</div>
+</body>
+</html>
