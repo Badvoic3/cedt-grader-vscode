@@ -30,7 +30,7 @@ function boot() {
 }
 
 const score = (counted: number | null, extra: Partial<ScoreView> = {}): ScoreView => ({
-  counted, best: counted, latest: counted, attempts: counted === null ? 0 : 1, penaltyLabel: null, rawSum: false, fullScore: 100, source: 'problem-list', latestBelowCounted: false, ...extra,
+  counted, best: counted, latest: counted, attempts: counted === null ? 0 : 1, penaltyLabel: null, rawSum: false, outOf: 100, source: 'problem-list', latestBelowCounted: false, ...extra,
 });
 
 const base: ViewState = {
@@ -145,7 +145,7 @@ describe.runIf(existsSync(resolve(__dirname, '../esbuild.mjs')))('sidebar webvie
     ]);
     expect(tiles[3].className).toContain('v-unknown');
     expect(doc.querySelector('.tile-group')).not.toBeNull();
-    expect(doc.querySelector('#sec-result .score')!.textContent).toBe('70 points');
+    expect(doc.querySelector('#sec-result .score')!.textContent).toBe('70 / 100');
     expect(doc.querySelector('#sec-current .score')!.textContent).toBe('70 / 100');
     expect(doc.querySelector('#sec-current')!.textContent).toContain('Latest: 40 — your best 70 still counts.');
     expect(doc.querySelector('#sec-current .penalty')!.textContent).toBe('-10 AI assist');
@@ -664,6 +664,22 @@ describe.runIf(existsSync(resolve(__dirname, '../esbuild.mjs')))('sidebar webvie
       expect((saved() as { listScroll: number }).listScroll).toBe(201 * 38 - 420);
       r();
     }, 200));
+  });
+
+  it('score rule everywhere: "x / 100", raw-sum problems show the raw number with a tooltip', () => {
+    const { doc, post } = boot();
+    post(loggedIn);
+    expect(doc.querySelector('#sec-current .score')!.textContent).toBe('70 / 100');
+    expect(doc.querySelector('#sec-result .score')!.textContent).toBe('70 / 100');
+    expect(doc.querySelector('#sec-history .history-row .pill')!.getAttribute('data-tip')).toBe('70 / 100');
+    const raw = score(37, { rawSum: true, outOf: null });
+    post({ ...loggedIn, problem: { ...loggedIn.problem!, score: raw }, problems: { ...loggedIn.problems, items: [{ ...loggedIn.problems.items[0], score: raw }] } });
+    const card = doc.querySelector<HTMLElement>('#sec-current .score')!;
+    expect(card.textContent).toBe('37');
+    expect(card.dataset.tip).toMatch(/raw-sum scoring/);
+    expect(doc.querySelector('#sec-result .score')!.textContent).toBe('70'); // the result's raw points, no "/ 100"
+    expect(doc.querySelector('#sec-history .history-row .pill')!.getAttribute('data-tip')).toMatch(/^70\. .*raw-sum/);
+    expect(doc.querySelector('#sec-problems .score-pill')!.getAttribute('data-tip')).toMatch(/raw-sum scoring/);
   });
 
   it('inline prompt (no modal): text, detail and plain buttons answer by id', () => {

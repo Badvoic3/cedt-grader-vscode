@@ -30,8 +30,8 @@ export interface ScoreSummary {
   /** e.g. "-10 AI assist", "-5 hints + AI assist"; null without a penalty. */
   penaltyLabel: string | null;
   rawSum: boolean;
-  /** "out of": the problem's `full_score` (GET /api/v1/problems/{id}) when known, else the server cap; null for raw-sum. */
-  fullScore: number | null;
+  /** "Out of": always SERVER_SCORE_CAP (scores are normalized to 0–100); null for raw-sum problems. */
+  outOf: number | null;
   /** 'problem-list' when hint/AI data from /main/list was applied; 'api' when only the API was available. */
   source: 'api' | 'problem-list';
   /** Latest submission scored lower than the counted score. */
@@ -45,7 +45,7 @@ export function penaltyLabel(info: Pick<ListScoreInfo, 'cost' | 'hintCount' | 'a
   return `-${fmt(info.cost)} ${what}`;
 }
 
-export function summarize(p: Pick<Problem, 'bestScore' | 'lastScore' | 'submissionCount' | 'list'>, fullScore: number | null = null): ScoreSummary {
+export function summarize(p: Pick<Problem, 'bestScore' | 'lastScore' | 'submissionCount' | 'list'>): ScoreSummary {
   const list = p.list;
   const best = p.bestScore ?? list?.rawMax ?? null;
   const rawSum = list?.rawSum ?? false;
@@ -59,10 +59,26 @@ export function summarize(p: Pick<Problem, 'bestScore' | 'lastScore' | 'submissi
     penalty: rawSum ? 0 : cost,
     penaltyLabel: rawSum || !list ? null : penaltyLabel(list),
     rawSum,
-    fullScore: rawSum ? fullScore : (fullScore ?? SERVER_SCORE_CAP),
+    outOf: outOfFor(rawSum),
     source: list ? 'problem-list' : 'api',
     latestBelowCounted: p.lastScore !== null && counted !== null && p.lastScore < counted,
   };
+}
+
+/** "Out of" for a problem: SERVER_SCORE_CAP, or null (no maximum) for raw-sum problems. */
+export function outOfFor(rawSum: boolean): number | null {
+  return rawSum ? null : SERVER_SCORE_CAP;
+}
+
+/**
+ * The one display rule for a score (Current problem, problem rows, results,
+ * history): "70 / 100" for normal problems, the raw number for raw-sum
+ * problems (with a tooltip saying why there is no maximum).
+ */
+export function scoreText(points: number | null, rawSum: boolean): { text: string; tip: string | null } {
+  if (points === null) return { text: '–', tip: null };
+  const out = outOfFor(rawSum);
+  return out === null ? { text: fmt(points), tip: G.rawSumTip } : { text: `${fmt(points)} / ${fmt(out)}`, tip: null };
 }
 
 /** One-line verdict on whether a new submission changed the counted score. */

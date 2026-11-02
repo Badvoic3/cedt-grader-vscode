@@ -1,6 +1,6 @@
 import { SERVER_SCORE_CAP } from '../src/shared/constants';
 import { describe, expect, it } from 'vitest';
-import { countedScore, describeImprovement, penaltyLabel, summarize } from '../src/grader';
+import { countedScore, describeImprovement, penaltyLabel, scoreText, summarize } from '../src/grader';
 
 const base = { bestScore: 70, lastScore: 40, submissionCount: 3, list: null };
 
@@ -52,13 +52,25 @@ describe('describeImprovement', () => {
   });
 });
 
-describe('full score from the API', () => {
-  it('"out of" is full_score when known, the server cap (100) otherwise, none for raw-sum', () => {
-    const p = { bestScore: 40, lastScore: 40, submissionCount: 1, list: null };
-    expect(summarize(p, 50).fullScore).toBe(50);
-    expect(summarize(p).fullScore).toBe(SERVER_SCORE_CAP);
-    expect(summarize({ ...p, list: { rawMax: 40, adjusted: null, cost: 0, hintCount: 0, aiCount: 0, rawSum: true } }).fullScore).toBeNull();
-    // the counted cap stays the server literal (Submission.max_score_report), not full_score
-    expect(countedScore(150, 0)).toBe(100);
+describe('every score is out of 100 (app/engine/scorer.rb normalizes sum / group_min)', () => {
+  const p = (best: number, list: Parameters<typeof summarize>[0]['list'] = null) => ({ bestScore: best, lastScore: best, submissionCount: 1, list });
+  // The API's full_score for these problems would be 4, 10, 37 (weights) and 6 (groups): never the maximum.
+  for (const [what, best] of [['4 tests', 75], ['10 tests', 70], ['weighted tests', 64.86], ['grouped tests', 50]] as const) {
+    it(`${what}: "${best} / 100"`, () => {
+      expect(summarize(p(best)).outOf).toBe(SERVER_SCORE_CAP);
+      expect(scoreText(best, false)).toEqual({ text: `${best} / 100`, tip: null });
+    });
+  }
+  it('raw_sum: the raw score, no "/ max", with a tooltip explaining it', () => {
+    const raw = { rawMax: 37, adjusted: null, cost: 0, hintCount: 0, aiCount: 0, rawSum: true };
+    expect(summarize(p(37, raw)).outOf).toBeNull();
+    expect(summarize(p(37, raw)).counted).toBe(37); // uncapped
+    const t = scoreText(37, true);
+    expect(t.text).toBe('37');
+    expect(t.tip).toMatch(/raw-sum scoring/);
+  });
+  it('the penalty cap is the same named constant', () => {
+    expect(countedScore(150, 0)).toBe(SERVER_SCORE_CAP);
+    expect(countedScore(90, 20)).toBe(80);
   });
 });

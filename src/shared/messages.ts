@@ -18,8 +18,8 @@ export interface VerdictView {
 /** Scores as the server counts them (see src/grader/score.ts). */
 export interface ScoreView {
   counted: number | null;
-  /** "out of" (problem full_score, else the server cap 100); null for raw-sum. */
-  fullScore: number | null;
+  /** "Out of": 100 (SERVER_SCORE_CAP); null for raw-sum problems. */
+  outOf: number | null;
   best: number | null;
   latest: number | null;
   attempts: number;

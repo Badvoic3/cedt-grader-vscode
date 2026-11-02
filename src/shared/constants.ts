@@ -10,10 +10,13 @@
 export const DEFAULT_BASE_URL = 'https://cedt-grader.nattee.net';
 
 /**
- * The cap penalties are taken from. cafe-grader hard-codes 100 here
- * (`Submission.max_score_report`: `100 - min(100, hint + ai cost)`) and
- * the website calls a problem solved at best ≥ 100, whatever the
- * problem's `full_score`. Change only if the server changes.
+ * Every score is out of 100. cafe-grader normalizes the "sum" and
+ * "group_min" score types to 0–100 whatever the number of tests, weights or
+ * groups (`app/engine/scorer.rb`); the API's `full_score` is NOT the maximum.
+ * The same literal is the penalty cap (`Submission.max_score_report`:
+ * `100 - min(100, hint + ai cost)`) and the website's "solved" threshold.
+ * Raw-sum problems (`raw_sum` / `custom_testlib_raw`) have no fixed maximum
+ * and are shown without "/ 100". Change only if the server changes.
  */
 export const SERVER_SCORE_CAP = 100;
 
