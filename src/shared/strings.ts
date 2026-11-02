@@ -254,6 +254,22 @@ const EN_S = {
     whichFile: (name: string) => `Which file do you submit for ${name}?`,
     oneFile: 'The grader takes one file per submission, so only this file is sent. You can change it under Current problem.',
     onlyThisSent: (file: string) => `Only ${file} is sent (the grader takes one file).`,
+    whichRunFile: (name: string) => `Which program runs the tests for ${name}?`,
+    runFileDetail: 'Test cases belong to the program with main() (the provided driver), which includes your file.',
+    why: {
+      'named-in-run': (run: string) => `named in a comment of ${run}`,
+      student: (_run: string) => 'the included file named student.*',
+      stub: (_run: string) => 'the included file with a "your code here" comment',
+      'only-main': (_run: string) => 'the only file with main()',
+      'main-name': (_run: string) => 'the file with main() named main*',
+      chosen: (_run: string) => 'your choice',
+      'only-file': (_run: string) => 'the only source file',
+    },
+  },
+
+  runTests: {
+    noTests: 'There are no test cases to run yet. Load the test cases first.',
+    noTestsShort: 'load the test cases first',
   },
 
   attachment: {
@@ -501,6 +517,13 @@ const EN_W = {
   submits: 'Submits',
   submitFileTip: 'The grader takes one file per submission: only this file is sent',
   submitFileAsk: 'Asked on the first submit',
+  runs: 'Runs',
+  runFileTip: 'Test cases are loaded for this program, and Run tests runs it (it includes the file you submit)',
+  runFileAsk: 'Asked when loading or running tests',
+  automatic: (file: string) => `Automatic: ${file}`,
+  whyTip: (why: string) => `Found automatically: ${why}`,
+  runTests: 'Run tests',
+  runTestsTip: 'Run the loaded test cases on your computer (Competitive Programming Helper)',
   unlinkThisFolder: 'Unlink this folder',
   unlinkThisFolderTip: "Unlink this folder (auto-detect won't link its files again)",
   dontMatchThisFolder: "Don't match this folder",

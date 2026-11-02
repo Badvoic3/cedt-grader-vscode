@@ -5,11 +5,14 @@
 ### Attachments
 - **Download attachment** (the website's "File"): a cloud-download icon on the current problem and on problem rows (and in their right-click menus, plus the command "Download Problem Attachment"), only for problems that have an attachment. Downloaded only when you click, through the grader's API (`GET /api/v1/problems/{id}/files/attachment`).
 - A single file (e.g. a `.dig` or `.cpp` template) is saved next to the active file (or in the workspace root) under its own name, opened, and the panel offers to rename it to match the problem. Nothing is ever overwritten (`_2`, `_3`, …).
-- A zip package is checked completely first (no unsafe paths, at most 500 files / 50 MB, macOS `__MACOSX` junk skipped, a single top folder removed), then one question: **Extract to `<problem name>/` and link it** (folder mode) or extract under its own name only. Always a new folder.
+- A zip package is checked completely first (no unsafe paths, at most 500 files / 50 MB, macOS `__MACOSX` junk and shipped compiled programs skipped, a single top folder removed), then one question: **Extract to `<problem name>/` and link it** (folder mode) or extract under its own name only. Always a new folder.
 
 ### Folder mode
 - A problem can be linked to a **folder** instead of a single file (a package with `main.cpp` and headers): every file in the folder shows that problem. **Link the whole folder / Link only this file** switches it (folder icon on the current problem, right-click menu, command "Switch Between Linking This File and the Whole Folder").
-- The grader takes one file per submission, so Submit sends one chosen file of the folder (often the header you edit, e.g. `student.h`, not the provided `main.cpp`): asked on the first submit (no question when the folder has only one source file), changeable under **Submits**, saved with the link in `.cedt-grader.json`. Language detection, the wrong-language hint and save-before-submit apply to that file.
+- Two files are found automatically in a linked folder: the file you **submit** (the header you edit, e.g. `student.h` / `densegraph.h`, never the provided `main.cpp`) and the program that **runs** the tests (the driver with `main()`, e.g. `main.cpp` / `main_dense.cpp`). The rule matched every package on the grader. **Submits** and **Runs** dropdowns show them ("Automatic: …", with the reason in the tooltip) and let you choose others; choices are saved with the link in `.cedt-grader.json`. The grader takes one file per submission, so only the submit file is sent; language detection, the wrong-language hint and save-before-submit apply to it.
+- **Load test cases** in folder mode always goes to the run file (CPH tests of `main.cpp`, or `<folder>/tests` files), whichever file of the folder is open.
+- **Run tests** (with CPH installed): saves the folder's files, shows the run file and runs its test cases in CPH. Also works for a single linked file with CPH tests. Command "Run Tests".
+- Renaming a folder now offers to move the CPH test cases of the files inside it (CPH names them after the full path).
 - Folder links follow folder renames; the submit file follows renames inside the folder. ✕ unlinks the folder.
 
 ### Matching

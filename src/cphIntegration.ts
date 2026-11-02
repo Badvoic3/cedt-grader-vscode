@@ -10,6 +10,8 @@ import { fileNameFor } from './mapping/match';
  * an extension pack. Only this module decides whether CPH is installed.
  */
 export const CPH_EXTENSION_ID = 'DivyanshuAgrawal.competitive-programming-helper';
+/** CPH's public "Run test cases" command (no arguments: runs the active editor's file; CPH 2026.10). */
+export const CPH_RUN_COMMAND = 'cph.runTestCases';
 
 /** The bits of `vscode.extensions` we need (injected, so tests run without VS Code). */
 export interface ExtensionsApi {

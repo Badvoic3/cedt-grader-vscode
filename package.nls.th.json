@@ -18,6 +18,7 @@
   "command.clearMapping.title": "ยกเลิกโจทย์ของไฟล์นี้",
   "command.renameFileToProblem.title": "เปลี่ยนชื่อไฟล์ให้ตรงกับโจทย์",
   "command.downloadAttachment.title": "ดาวน์โหลดไฟล์แนบของโจทย์",
+  "command.runTests.title": "รันเทส",
   "command.toggleFolderMode.title": "สลับระหว่างเชื่อมไฟล์นี้กับเชื่อมทั้งโฟลเดอร์",
   "command.loadTestcases.title": "โหลด Test Case",
   "command.clearCache.title": "ล้างข้อมูลแคช…",

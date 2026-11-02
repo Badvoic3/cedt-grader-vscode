@@ -256,6 +256,22 @@ export const TH: Strings = {
       whichFile: (name) => `จะส่งไฟล์ไหนสำหรับ ${name}`,
       oneFile: 'Grader รับครั้งละหนึ่งไฟล์ จึงส่งเฉพาะไฟล์นี้ เปลี่ยนได้ที่ส่วนโจทย์ปัจจุบัน',
       onlyThisSent: (file) => `ส่งเฉพาะ ${file} (Grader รับครั้งละหนึ่งไฟล์)`,
+      whichRunFile: (name) => `โปรแกรมไหนใช้รันเทสของ ${name}`,
+      runFileDetail: 'เทสเคสเป็นของโปรแกรมที่มี main() (ไฟล์ทดสอบที่ให้มา) ซึ่ง include ไฟล์ของคุณ',
+      why: {
+        'named-in-run': (run) => `ระบุไว้ในคอมเมนต์ของ ${run}`,
+        student: (_run) => 'ไฟล์ที่ถูก include ชื่อ student.*',
+        stub: (_run) => 'ไฟล์ที่ถูก include และมีคอมเมนต์ "your code here"',
+        'only-main': (_run) => 'ไฟล์เดียวที่มี main()',
+        'main-name': (_run) => 'ไฟล์ที่มี main() และชื่อขึ้นต้นด้วย main',
+        chosen: (_run) => 'คุณเลือกเอง',
+        'only-file': (_run) => 'ไฟล์โค้ดไฟล์เดียวในโฟลเดอร์',
+      },
+    },
+
+    runTests: {
+      noTests: 'ยังไม่มีเทสเคสให้รัน โหลดเทสเคสก่อน',
+      noTestsShort: 'โหลดเทสเคสก่อน',
     },
 
     attachment: {
@@ -501,6 +517,13 @@ export const TH: Strings = {
     submits: 'ไฟล์ที่ส่ง',
     submitFileTip: 'Grader รับครั้งละหนึ่งไฟล์ จะส่งเฉพาะไฟล์นี้',
     submitFileAsk: 'จะถามตอนส่งครั้งแรก',
+    runs: 'ไฟล์ที่รัน',
+    runFileTip: 'โหลดเทสเคสให้โปรแกรมนี้ และปุ่มรันเทสจะรันโปรแกรมนี้ (ซึ่ง include ไฟล์ที่คุณส่ง)',
+    runFileAsk: 'จะถามตอนโหลดหรือรันเทส',
+    automatic: (file) => `อัตโนมัติ: ${file}`,
+    whyTip: (why) => `หาให้อัตโนมัติ: ${why}`,
+    runTests: 'รันเทส',
+    runTestsTip: 'รันเทสเคสที่โหลดไว้บนเครื่องของคุณ (Competitive Programming Helper)',
     unlinkThisFolder: 'ยกเลิกการเชื่อมโฟลเดอร์นี้',
     unlinkThisFolderTip: 'ยกเลิกการเชื่อมโฟลเดอร์นี้ (จับคู่อัตโนมัติจะไม่เชื่อมไฟล์ในโฟลเดอร์นี้อีก)',
     dontMatchThisFolder: 'ไม่ต้องจับคู่โฟลเดอร์นี้',
