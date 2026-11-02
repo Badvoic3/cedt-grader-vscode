@@ -206,6 +206,8 @@ describe.runIf(existsSync(resolve(__dirname, '../esbuild.mjs')))('sidebar webvie
     const rows = doc.querySelectorAll<HTMLButtonElement>('#sec-history .history-row');
     expect(rows[0].querySelector('.badge.counted')).not.toBeNull();
     expect(rows[1].querySelector('.badge.counted')).toBeNull();
+    // The star has the colour of the problem's counted score (70 → partial), not always green.
+    expect(rows[0].querySelector('.badge.counted')!.classList.contains('score-partial')).toBe(true);
     expect(doc.querySelectorAll('#sec-history .history-item')[0].querySelectorAll('.mini-strip .mini')).toHaveLength(2);
     expect(rows[1].textContent).toContain('CE');
     expect(rows[0].getAttribute('data-tip')).toContain('Submission #2460977');

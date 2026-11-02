@@ -385,7 +385,8 @@ input::placeholder { color: var(--vscode-input-placeholderForeground); }
 .history-item { border-radius: var(--radius); }
 .history-item.open { background: var(--vscode-list-inactiveSelectionBackground); padding-bottom: 6px; }
 .history-item.counted .history-row .pill { font-weight: 700; }
-.badge.counted { color: var(--ok); background: transparent; border: 1px solid currentColor; }
+/* Colour from the score-* class (counted score of the problem), like the score pill. */
+.badge.counted { background: transparent; border: 1px solid currentColor; }
 .nowrap { white-space: nowrap; }
 .pad-left { padding-left: 22px; }
 .mini-strip { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 1px; padding: 0 4px 3px 22px; }
