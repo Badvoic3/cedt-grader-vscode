@@ -100,6 +100,8 @@ export class GraderClient {
   private loginInFlight: Promise<GraderUser> | null = null;
   private languagesCache: Language[] | null = null;
   private listHtml: string | null = null;
+  /** When `listHtml` was fetched; the login landing page is reused for the first list load. */
+  private listHtmlAt = 0;
   user: GraderUser | null = null;
 
   constructor(private readonly opts: GraderClientOptions = {}) {
@@ -163,7 +165,7 @@ export class GraderClient {
     await this.opts.tokenStore?.save({ token: res.token, expiresAt: new Date(this.tokenExpiresAt).toISOString() });
     // Web session for /main/list (penalties). Its failure does not fail the login.
     try {
-      this.listHtml = await this.web.login(creds.username, creds.password);
+      this.setListHtml(await this.web.login(creds.username, creds.password));
     } catch (err) {
       this.opts.log?.(`Web login skipped: ${err instanceof Error ? err.message : err}`);
     }
@@ -238,22 +240,31 @@ export class GraderClient {
     return { problems: api.map((p) => toProblem(p, scores?.get(p.id) ?? null)), listStatus };
   }
 
+  private setListHtml(html: string): string {
+    this.listHtml = html;
+    this.listHtmlAt = this.now().getTime();
+    return html;
+  }
+
   private async fetchListPage(): Promise<string> {
+    // Login just landed on /main/list: reuse it instead of fetching the ~700 KB page again.
+    if (this.listHtml !== null && this.now().getTime() - this.listHtmlAt < 60_000) {
+      this.opts.log?.('cache hit  /main/list (login landing page)');
+      return this.listHtml;
+    }
     if (!this.web.isLoggedIn) {
       const creds = await this.opts.getStoredCredentials?.();
       if (!creds) throw new SessionExpiredError('No web session.', false);
-      this.listHtml = await this.web.login(creds.username, creds.password);
-      return this.listHtml;
+      return this.setListHtml(await this.web.login(creds.username, creds.password));
     }
     try {
-      this.listHtml = await this.web.problemListPage();
+      return this.setListHtml(await this.web.problemListPage());
     } catch (err) {
       if (!(err instanceof SessionExpiredError)) throw err;
       const creds = await this.opts.getStoredCredentials?.();
       if (!creds) throw err;
-      this.listHtml = await this.web.login(creds.username, creds.password);
+      return this.setListHtml(await this.web.login(creds.username, creds.password));
     }
-    return this.listHtml;
   }
 
   async getProblem(id: number): Promise<ProblemDetail> {
