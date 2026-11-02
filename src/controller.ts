@@ -1278,8 +1278,12 @@ export class GraderController implements vscode.Disposable {
    */
   async unmapCurrentFile(): Promise<void> {
     if (!this.fileUri) return;
+    // Works for every state: a chosen link is removed; a name / CPH match, a suggestion
+    // or a temporary link just becomes "not linked" (sticky; auto-detect leaves it alone).
     await this.mapping.set(this.fileUri, undefined);
+    await this.mapping.dropAuto(this.fileUri);
     await this.mapping.setUnlinked(this.fileUri, true);
+    this.tempLink = null;
     this.problem = null;
     await this.setActiveFile(this.fileUri);
   }

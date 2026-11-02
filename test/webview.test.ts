@@ -292,7 +292,7 @@ describe.runIf(existsSync(resolve(__dirname, '../esbuild.mjs')))('sidebar webvie
     expect(cur.querySelector('.combo .source-icon')).toBeNull(); // not inside the dropdown any more
     // All header icons visible again, in the original order.
     expect([...header(doc).querySelectorAll('button')].map((b) => b.getAttribute('aria-label'))).toEqual([
-      'Open statement', 'Copy problem name', 'Open on the grader website', 'Auto-detect the problem for this file again', 'Unlink this file',
+      'Open statement', 'Copy problem name', 'Open on the grader website', 'Auto-detect the problem for this file again', "Unlink this file (removes your choice; auto-detect won't link it again)",
     ]);
     expect([...cur.querySelectorAll('button')].some((b) => b.textContent === 'Change')).toBe(false); // removed: same as the dropdown
     expect(cur.querySelector('[aria-label^="More actions"]')).toBeNull(); // no "…" menu
@@ -705,13 +705,24 @@ describe.runIf(existsSync(resolve(__dirname, '../esbuild.mjs')))('sidebar webvie
     expect(doc.activeElement).toBe(doc.querySelector('.picker-search'));
   });
 
-  it('"Unlink this file" icon for any linked file (not for suggestions)', () => {
+  it('✕ in every state: "Unlink this file" for a chosen link, "Don\'t match this file" for name / CPH matches and suggestions', () => {
     const { doc, sent, post } = boot();
-    post({ ...loggedIn, problem: { ...loggedIn.problem!, source: 'filename', sourceLabel: 'Matched by file name' } });
-    header(doc).querySelector<HTMLButtonElement>('[aria-label="Unlink this file"]')!.click();
-    expect(sent.at(-1)).toEqual({ type: 'unmapProblem' });
-    post({ ...loggedIn, problem: { ...loggedIn.problem!, source: 'suggested', sourceLabel: 'Suggested — click to confirm' } });
-    expect(header(doc).querySelector('[aria-label="Unlink this file"]')).toBeNull();
+    const x = () => header(doc).querySelector<HTMLButtonElement>('.codicon-close')!.closest('button')!;
+    for (const [source, label] of [
+      ['saved', "Unlink this file (removes your choice; auto-detect won't link it again)"],
+      ['filename', "Don't match this file (auto-detect won't link it to a problem again)"],
+      ['cph', "Don't match this file (auto-detect won't link it to a problem again)"],
+      ['suggested', "Don't match this file (auto-detect won't link it to a problem again)"],
+    ] as const) {
+      post({ ...loggedIn, problem: { ...loggedIn.problem!, source, sourceLabel: source } });
+      expect(x().getAttribute('aria-label'), source).toBe(label);
+      expect(x().getAttribute('data-tip'), source).toBe(label);
+      x().click();
+      expect(sent.at(-1)).toEqual({ type: 'unmapProblem' });
+    }
+    // right-click offers the same, with the short label
+    post({ ...loggedIn, problem: { ...loggedIn.problem!, source: 'suggested', sourceLabel: 'suggested' } });
+    expect(rightClick(doc, header(doc)).at(-1)).toBe("Don't match this file");
   });
 
   it('right-click menu: long labels cut in the middle (full label in tooltip and aria-label); text fields keep the normal menu', () => {

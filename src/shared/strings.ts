@@ -223,6 +223,8 @@ export const W = {
   openOnTheGraderWebsite: "Open on the grader website",
   autoDetectTheProblemFor: "Auto-detect the problem for this file again",
   unlinkThisFile: "Unlink this file",
+  unlinkThisFileTip: "Unlink this file (removes your choice; auto-detect won't link it again)",
+  dontMatchThisFileTip: "Don't match this file (auto-detect won't link it to a problem again)",
   notLinkedToAProblem: "Not linked to a problem",
   pickTheGraderProblemFor: "Pick the grader problem for this file",
   autoDetect: "Auto-detect",

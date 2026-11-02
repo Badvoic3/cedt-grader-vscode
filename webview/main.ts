@@ -489,7 +489,8 @@ function renderCurrent(s: ViewState): void {
         p ? iconButton('copy', W.copyProblemName, () => send({ type: 'copyName', problemId: p.id })) : null,
         p ? iconButton('globe', W.openOnTheGraderWebsite, () => send({ type: 'openProblemInBrowser', problemId: p.id })) : null,
         iconButton('sparkle', W.autoDetectTheProblemFor, () => send({ type: 'autoDetect' })),
-        p && p.source !== 'suggested' ? iconButton('close', W.unlinkThisFile, () => send({ type: 'unmapProblem' })) : null,
+        // Every state: a chosen link is unlinked; a name / CPH match or a suggestion becomes "not linked".
+        p ? iconButton('close', p.source === 'saved' ? W.unlinkThisFileTip : W.dontMatchThisFileTip, () => send({ type: 'unmapProblem' })) : null,
       ),
       combo,
       pickerOpen ? (renderPickerList(s), pickerBox) : null,
@@ -825,7 +826,9 @@ function headerMenuItems(p: ViewState['problem']): MenuItem[] {
         ]
       : []),
     { icon: 'sparkle', label: W.autoDetectTheProblemFor, onclick: () => send({ type: 'autoDetect' }) },
-    ...(p && p.source !== 'suggested' ? [{ icon: 'close', label: W.unlinkThisFile, tip: W.autoDetectWonTRe, onclick: () => send({ type: 'unmapProblem' }) }] : []),
+    ...(p
+      ? [{ icon: 'close', label: p.source === 'saved' ? W.unlinkThisFile : W.donTMatchThisFile, tip: W.autoDetectWonTRe, onclick: () => send({ type: 'unmapProblem' }) }]
+      : []),
   ];
 }
 
