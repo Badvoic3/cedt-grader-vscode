@@ -9,7 +9,7 @@
 - Cache files are written atomically (no half-written statements after a crash).
 
 ### Getting started
-- A **Get started with CEDT Grader** walkthrough (opened once by VS Code after installing; again with **CEDT Grader: Get Started** or the panel's ⋯ menu): open the panel, log in, open a solution file, check the problem, submit, optional CPH. Steps tick themselves off as you do them.
+- A **Get started with CEDT Grader** walkthrough (opened by VS Code after installing from inside VS Code; any time with **CEDT Grader: Get Started** or the panel's ⋯ menu): open the panel, log in, open a solution file, check the problem, submit, optional CPH. Steps tick themselves off as you do them.
 - README: step-by-step install from a `.vsix`, first steps, updating, uninstalling, troubleshooting, cache and storage.
 
 ### Packaging

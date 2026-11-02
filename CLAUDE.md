@@ -237,7 +237,7 @@ Every icon-only button (`iconButton()` in `webview/main.ts`, `btn()` in `webview
 ## Getting Started walkthrough
 
 - `contributes.walkthroughs` `cedtGrader.start`: Open the panel (`onView:cedtGrader.panel`) → Log in (`onContext:cedtGrader.loggedIn`) → Open a solution file (`cedtGrader.hasSourceFile`) → Check the problem (`cedtGrader.hasProblem`) → Submit (`cedtGrader.submitted`, a submission was sent this session) → Optional: install CPH (`extensionInstalled:`). A test checks ids, pages, context keys and command links.
-- Opened once after install by VS Code itself (`workbench.welcomePage.walkthroughs.openOnInstall`, default on); no own "first run" flag, so it never opens twice. Reopen: `cedtGrader.openWalkthrough` ("Get Started", panel ⋯ menu).
+- Opened after install by VS Code itself (`workbench.welcomePage.walkthroughs.openOnInstall`, default on), but only for an install inside a running window (Install from VSIX…); a CLI install (`code --install-extension`) or one while VS Code is closed doesn't open it (checked by the user). Decided: no own fallback (it would need `onStartupFinished` activation in every window); the README tells users to run "Get Started". Reopen: `cedtGrader.openWalkthrough` ("Get Started", panel ⋯ menu).
 
 ## Exams / contests (section 2b; kept deliberately small)
 
