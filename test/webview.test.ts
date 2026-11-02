@@ -38,7 +38,8 @@ const base: ViewState = {
   account: { status: 'logged-out', username: '', hasSavedPassword: false, rememberPassword: true, error: null },
   file: null,
   problem: null,
-  languages: { loading: false, items: [], selectedId: null, error: null },
+  languages: { loading: false, items: [], selectedId: null, mismatch: null },
+  connection: null,
   submit: { enabled: false, busy: false, reason: 'Open a source file to submit it.', label: 'Submit to Grader' },
   result: null,
   gradingElsewhere: null,
@@ -51,7 +52,7 @@ const loggedIn: ViewState = {
   account: { status: 'logged-in', username: 'student', hasSavedPassword: true, rememberPassword: true, error: null },
   file: { path: 'grader/00 11 intro.cpp', name: '00 11 intro.cpp', languageGuess: 'C++', supported: true },
   problem: { id: 1360, name: '00_Intro_11', fullName: '<img src=x onerror=alert(1)>', score: score(70, { latest: 40, attempts: 3, latestBelowCounted: true, penaltyLabel: '-10 AI assist' }), source: 'mapping' },
-  languages: { loading: false, items: [{ id: 1, name: 'C' }, { id: 2, name: 'C++' }], selectedId: 2, error: null },
+  languages: { loading: false, items: [{ id: 1, name: 'C' }, { id: 2, name: 'C++' }], selectedId: 2, mismatch: null },
   submit: { enabled: true, busy: false, reason: null, label: 'Submit to Grader' },
   result: {
     phase: 'done', problemId: 1360, problemName: '00_Intro_11', submissionId: 2460977, submissionUrl: 'https://x/submissions/2460977', number: 3,
@@ -103,7 +104,7 @@ describe.runIf(existsSync(resolve(__dirname, '../esbuild.mjs')))('sidebar webvie
     expect(doc.querySelector<HTMLInputElement>('#login-user')!.getAttribute('autocomplete')).toBe('username');
     const remember = doc.querySelector<HTMLInputElement>('#login-remember')!;
     expect(remember.checked).toBe(false); // follows the saved preference
-    expect(doc.body.textContent).toContain('Tip: copy it from the Passwords app once; it will be remembered securely in your Keychain.');
+    expect(doc.body.textContent).not.toContain('Tip: copy it from the Passwords app');
     doc.querySelector<HTMLInputElement>('#login-user')!.value = 'student';
     pass.value = 'pw';
     doc.querySelector('form')!.dispatchEvent(new dom.window.Event('submit', { cancelable: true }));
@@ -216,6 +217,45 @@ describe.runIf(existsSync(resolve(__dirname, '../esbuild.mjs')))('sidebar webvie
     const { doc, post } = boot();
     post({ ...loggedIn, history: { ...loggedIn.history, stale: true } });
     expect(doc.querySelector('#sec-history')!.textContent).toContain('May be out of date');
+  });
+
+  it('wrong language: one notice with Change, Submit disabled with a tooltip, no duplicate message', () => {
+    const { doc, post } = boot();
+    post({
+      ...loggedIn,
+      languages: { ...loggedIn.languages, items: [{ id: 8, name: 'Digital' }], selectedId: null, mismatch: { wanted: 'C++', allowed: ['Digital'] } },
+      submit: { enabled: false, busy: false, reason: "This problem doesn't accept C++.", label: 'Submit to Grader' },
+    });
+    const text = doc.querySelector('#sec-current')!.textContent!;
+    expect(text.match(/doesn't accept C\+\+/g)).toHaveLength(1);
+    const submit = doc.querySelector<HTMLButtonElement>('#submit-btn')!;
+    expect(submit.disabled).toBe(true);
+    expect(submit.getAttribute('title')).toBe("This problem doesn't accept C++.");
+    expect(doc.querySelector('#sec-current .error')).toBeNull();
+    const change = [...doc.querySelectorAll<HTMLButtonElement>('#sec-current .notice button')].find((b) => b.textContent === 'Change')!;
+    change.click();
+    expect(doc.querySelector('.picker-search')).not.toBeNull();
+    expect(doc.activeElement).toBe(doc.querySelector('.picker-search'));
+  });
+
+  it('connection banner with Retry; hidden when the problem is gone', () => {
+    const { doc, sent, post } = boot();
+    post({ ...loggedIn, connection: { kind: 'offline', title: 'No internet connection', message: 'Check your internet connection, then press Retry.', action: 'retry' } });
+    const banner = doc.querySelector<HTMLElement>('.banner')!;
+    expect(banner.hidden).toBe(false);
+    expect(banner.textContent).toContain('No internet connection');
+    expect(banner.textContent).toContain('may be out of date');
+    banner.querySelector<HTMLButtonElement>('button')!.click();
+    expect(sent.at(-1)).toEqual({ type: 'retry' });
+    expect(doc.querySelector('#sec-problems .problem-row')).not.toBeNull(); // cached data still shown
+    post(loggedIn);
+    expect(doc.querySelector<HTMLElement>('.banner')!.hidden).toBe(true);
+  });
+
+  it('session banner offers Log in', () => {
+    const { doc, post } = boot();
+    post({ ...base, connection: { kind: 'session', title: 'Session expired', message: 'Log in again.', action: 'login' } });
+    expect(doc.querySelector('.banner button')!.textContent).toContain('Log in');
   });
 
   it('filter narrows the problem list and is remembered (UI state only)', () => {

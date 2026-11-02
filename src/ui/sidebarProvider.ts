@@ -95,6 +95,9 @@ export class SidebarProvider implements vscode.WebviewViewProvider, vscode.Dispo
       case 'compareSubmission':
         if (Number.isInteger(m.submissionId)) await c.compareSubmission(m.submissionId);
         return;
+      case 'retry':
+        await c.retry();
+        return;
       case 'refreshHistory':
         await c.refreshHistory();
         return;

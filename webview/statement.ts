@@ -1,0 +1,208 @@
+/*
+ * Read-only statement viewer: bundled pdf.js (no CDN), worker loaded from the
+ * extension's media folder via a blob URL, strict CSP. Zoom, fit width, page
+ * navigation, text selection and search (Cmd/Ctrl+F).
+ */
+import { pdfjsLib } from './pdfjs-global';
+import { EventBus, PDFFindController, PDFLinkService, PDFViewer } from 'pdfjs-dist/web/pdf_viewer.mjs';
+import type { FromStatement, ToStatement } from '../src/ui/statementPanel';
+
+declare function acquireVsCodeApi(): { postMessage(m: FromStatement): void };
+const vscode = acquireVsCodeApi();
+const send = (m: FromStatement) => vscode.postMessage(m);
+
+const app = document.getElementById('app')!;
+const body = document.body;
+
+function el<K extends keyof HTMLElementTagNameMap>(tag: K, attrs: Record<string, string> = {}, ...kids: (Node | string)[]): HTMLElementTagNameMap[K] {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v);
+  e.append(...kids);
+  return e;
+}
+const icon = (n: string) => el('span', { class: `codicon codicon-${n}`, 'aria-hidden': 'true' });
+function btn(name: string, title: string, onclick: () => void): HTMLButtonElement {
+  const b = el('button', { class: 'tb', type: 'button', title, 'aria-label': title }, icon(name));
+  b.addEventListener('click', onclick);
+  return b;
+}
+
+// ---------------------------------------------------------------- toolbar
+
+const pageInput = el('input', { class: 'page', type: 'number', min: '1', value: '1', 'aria-label': 'Page' });
+const pageCount = el('span', { class: 'muted' }, '/ –');
+const zoomLabel = el('span', { class: 'muted zoom' }, '');
+const search = el('input', { class: 'search', type: 'search', placeholder: 'Find in statement', 'aria-label': 'Find in statement' });
+const matches = el('span', { class: 'muted matches' }, '');
+const pdfTools = el('div', { class: 'group pdf-only' },
+  btn('zoom-out', 'Zoom out', () => zoom(1 / 1.15)),
+  zoomLabel,
+  btn('zoom-in', 'Zoom in', () => zoom(1.15)),
+  btn('screen-full', 'Fit width', () => viewer && (viewer.currentScaleValue = 'page-width')),
+  el('span', { class: 'sep' }),
+  btn('chevron-up', 'Previous page', () => viewer && viewer.currentPageNumber > 1 && (viewer.currentPageNumber -= 1)),
+  pageInput,
+  pageCount,
+  btn('chevron-down', 'Next page', () => viewer && viewer.currentPageNumber < viewer.pagesCount && (viewer.currentPageNumber += 1)),
+  el('span', { class: 'sep' }),
+  search,
+  btn('arrow-up', 'Previous match (Shift+Enter)', () => find(true, true)),
+  btn('arrow-down', 'Next match (Enter)', () => find(true, false)),
+  matches,
+);
+const titleEl = el('span', { class: 'title' }, '');
+const toolbar = el('div', { class: 'toolbar', role: 'toolbar' },
+  titleEl,
+  pdfTools,
+  el('span', { class: 'grow' }),
+  btn('refresh', 'Refresh (download again)', () => send({ type: 'refresh' })),
+  btn('globe', 'Open in Browser', () => send({ type: 'openInBrowser' })),
+);
+const container = el('div', { id: 'viewerContainer', tabindex: '0' }, el('div', { id: 'viewer', class: 'pdfViewer' }));
+const textView = el('div', { class: 'text-view' });
+const status = el('div', { class: 'status', role: 'status' });
+app.append(toolbar, status, container, textView);
+
+// -------------------------------------------------------------------- pdf
+
+let viewer: PDFViewer | null = null;
+let eventBus: EventBus | null = null;
+let linkService: PDFLinkService | null = null;
+let workerReady: Promise<void> | null = null;
+
+/** Start the pdf.js worker from the media folder through a blob URL (CSP: worker-src blob:). */
+function startWorker(): Promise<void> {
+  workerReady ??= (async () => {
+    const res = await fetch(body.dataset.worker!);
+    const url = URL.createObjectURL(new Blob([await res.text()], { type: 'text/javascript' }));
+    pdfjsLib.GlobalWorkerOptions.workerPort = new Worker(url, { type: 'module' });
+  })();
+  return workerReady;
+}
+
+function setupViewer(): PDFViewer {
+  if (viewer) return viewer;
+  eventBus = new EventBus();
+  linkService = new PDFLinkService({ eventBus });
+  const findController = new PDFFindController({ eventBus, linkService });
+  viewer = new PDFViewer({ container, eventBus, linkService, findController });
+  linkService.setViewer(viewer);
+  eventBus.on('pagesinit', () => {
+    viewer!.currentScaleValue = 'page-width';
+  });
+  eventBus.on('pagechanging', (e: { pageNumber: number }) => {
+    pageInput.value = String(e.pageNumber);
+  });
+  eventBus.on('scalechanging', (e: { scale: number }) => {
+    zoomLabel.textContent = `${Math.round(e.scale * 100)}%`;
+  });
+  eventBus.on('updatefindmatchescount', (e: { matchesCount: { current: number; total: number } }) => showMatches(e.matchesCount));
+  eventBus.on('updatefindcontrolstate', (e: { matchesCount?: { current: number; total: number }; state: number }) => {
+    if (e.matchesCount) showMatches(e.matchesCount);
+    if (e.state === 1 && search.value) matches.textContent = 'No matches';
+  });
+  return viewer;
+}
+
+function showMatches(c: { current: number; total: number }): void {
+  matches.textContent = c.total ? `${c.current} of ${c.total}` : search.value ? 'No matches' : '';
+}
+
+async function showPdf(data: Uint8Array): Promise<void> {
+  await startWorker();
+  const v = setupViewer();
+  const doc = await pdfjsLib.getDocument({
+    data,
+    cMapUrl: body.dataset.cmaps,
+    cMapPacked: true,
+    standardFontDataUrl: body.dataset.fonts,
+    isEvalSupported: false, // strict CSP: no eval
+  }).promise;
+  v.setDocument(doc);
+  linkService!.setDocument(doc, null);
+  pageCount.textContent = `/ ${doc.numPages}`;
+  pageInput.max = String(doc.numPages);
+}
+
+function zoom(f: number): void {
+  if (!viewer) return;
+  viewer.currentScale = Math.min(5, Math.max(0.25, viewer.currentScale * f));
+}
+
+function find(again: boolean, previous: boolean): void {
+  if (!eventBus) return;
+  eventBus.dispatch('find', {
+    source: null,
+    type: again ? 'again' : '',
+    query: search.value,
+    caseSensitive: false,
+    entireWord: false,
+    highlightAll: true,
+    findPrevious: previous,
+    matchDiacritics: false,
+  });
+}
+
+pageInput.addEventListener('change', () => {
+  const n = Number(pageInput.value);
+  if (viewer && n >= 1 && n <= viewer.pagesCount) viewer.currentPageNumber = n;
+});
+search.addEventListener('input', () => find(false, false));
+search.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    find(true, e.shiftKey);
+  } else if (e.key === 'Escape') {
+    search.value = '';
+    find(false, false);
+    container.focus();
+  }
+});
+window.addEventListener('keydown', (e) => {
+  if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'f' && body.classList.contains('mode-pdf')) {
+    e.preventDefault();
+    search.focus();
+    search.select();
+  } else if ((e.metaKey || e.ctrlKey) && (e.key === '=' || e.key === '+')) {
+    e.preventDefault();
+    zoom(1.15);
+  } else if ((e.metaKey || e.ctrlKey) && e.key === '-') {
+    e.preventDefault();
+    zoom(1 / 1.15);
+  }
+});
+
+// --------------------------------------------------------------- messages
+
+function mode(m: 'loading' | 'pdf' | 'html' | 'message'): void {
+  body.className = `mode-${m}`;
+}
+
+window.addEventListener('message', (ev: MessageEvent<ToStatement>) => {
+  const m = ev.data;
+  if (!m || typeof m !== 'object') return;
+  titleEl.textContent = m.title;
+  status.textContent = '';
+  status.classList.remove('error');
+  if (m.type === 'loading') {
+    mode('loading');
+    status.textContent = 'Loading statement…';
+  } else if (m.type === 'pdf') {
+    mode('pdf');
+    showPdf(m.data).catch((err) => {
+      mode('message');
+      status.classList.add('error');
+      status.textContent = `Could not display the PDF: ${err instanceof Error ? err.message : err}`;
+    });
+  } else if (m.type === 'html') {
+    mode('html');
+    // Rendered in the extension host with markdown-it (raw HTML disabled) or escaped text.
+    textView.innerHTML = m.html;
+  } else {
+    mode('message');
+    status.textContent = m.text;
+    status.classList.toggle('error', m.error);
+  }
+});
+
+send({ type: 'ready' });

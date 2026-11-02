@@ -19,7 +19,7 @@ Click the **CEDT Grader** icon in the Activity Bar. The sidebar has five section
 | **Current problem** | Follows the file you are editing. Pick its grader problem from the searchable list (name or id), see your **counted score**, choose a language (only languages this problem allows are shown), then press **Submit to Grader**. |
 | **Result** | Shows live status while grading, then the points, a coloured tile per test (hover a tile for its verdict), the compiler message if compilation failed, whether your counted score improved, a link to the submission, and **Resubmit**. |
 | **History** | Every submission for this problem (website ones too), with time, language, score and verdicts; the one that counts is marked. Click one for per-test results, runtime, memory and the compiler message, to **open that version** in a new editor, or to **compare it with your current file**. |
-| **Problems** | Lists all your problems with their counted score, with a filter box. Click a problem to use it for the current file. Click ↗ to open its statement. |
+| **Problems** | Lists all your problems with their counted score, with a filter box. Click a problem to use it for the current file. Click the book icon to read its statement. |
 
 Typical flow: open `sol.cpp` → pick the problem once (it is remembered) → **Submit** → confirm. That's two clicks for every later submission.
 
@@ -30,15 +30,23 @@ The mapping is saved in `.cedt-grader.json` in your workspace folder, and also i
 - The ☁ button in the editor title bar (C, C++, Python, Java files) submits the current file.
 - Every action is a command (`CEDT Grader: …` in the Command Palette), so you can bind keyboard shortcuts: Log In, Log Out, Submit Current File, Choose Problem for This File, Show Last Result, Open Problem Statement.
 
+## Problem statements
+
+Click the book icon next to the problem to open its statement in a tab beside your code (zoom, fit width, page navigation, search with Cmd/Ctrl+F). Statements are downloaded once and kept in VS Code's own storage (never in your project); the viewer's Refresh button downloads them again. Problems without a PDF show their text description. Set `cedtGrader.statementBeside` to `false` to open statements in the current editor group.
+
+## When the connection fails
+
+A banner at the top of the sidebar says what went wrong (no internet, server error, session expired, too many attempts, timeout) and offers **Retry**. Your last loaded data stays visible, marked "may be out of date". If a submission was already sent, its result loads once the connection is back.
+
 ## Scores
 
 The panel shows the score the grader **counts**: your best submission, not your latest. Hint and AI-assist penalties are taken off (e.g. "-10 AI assist"), as on the website's problem list. If your latest submission scored lower, the panel says so ("Latest: 40 — your best 70 still counts").
 
 The extension only mirrors what the grader shows. **Your instructor's final grading may differ.**
 
-## Logging in with Apple Passwords
+## Staying logged in
 
-The Passwords app can't fill VS Code directly. Copy your password from the Passwords app once and paste it into the login form. With **Remember password on this computer** on, it is kept in your Keychain, and the extension logs in again by itself when the 12-hour grader login expires.
+With **Remember password on this computer** on, your password is kept in the OS keychain (macOS Keychain), and the extension logs in again by itself when the 12-hour grader login expires. The password field accepts paste and password-manager autofill.
 
 ## Settings
 
@@ -48,6 +56,7 @@ The Passwords app can't fill VS Code directly. Copy your password from the Passw
 | `cedtGrader.username` | | Filled in when you log in from the panel. |
 | `cedtGrader.pollIntervalSeconds` | `5` | How often to check while grading (minimum 3). Polling only runs after a submission and stops after 3 minutes. |
 | `cedtGrader.confirmBeforeSubmit` | `true` | Ask before each submission. |
+| `cedtGrader.statementBeside` | `true` | Open statements beside your code. |
 | `cedtGrader.debugRequests` | `false` | Log each grader request and cache hit/miss to *Output → CEDT Grader: Requests* (no passwords or tokens). |
 
 ## Exams

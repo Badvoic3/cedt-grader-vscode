@@ -6,6 +6,7 @@ export * from './languages';
 export * from './parsers';
 export * from './score';
 export * from './verdicts';
+export * from './connection';
 export { ApiClient } from './api';
 export type { ApiProblem, ApiSubmission, ApiSubmissionBrief, ApiLanguage, ApiLoginResponse } from './api';
 export { WebSession } from './web';

@@ -23,16 +23,19 @@
   },
   "dependencies": {
     "cheerio": "^1.2.0",
+    "markdown-it": "^15.0.3",
     "tough-cookie": "^6.0.2"
   },
   "devDependencies": {
     "@types/jsdom": "^30.0.0",
+    "@types/markdown-it": "^14.2.0",
     "@types/node": "^22.20.5",
     "@types/vscode": "~1.90.0",
     "@vscode/codicons": "^0.0.46-24",
     "@vscode/vsce": "^4.1.0",
     "esbuild": "^0.28.2",
     "jsdom": "^30.1.3",
+    "pdfjs-dist": "^4.10.38",
     "tsx": "^4.23.15",
     "typescript": "^7.0.2",
     "vitest": "^5.0.5"
@@ -205,6 +208,11 @@
           "type": "boolean",
           "default": false,
           "markdownDescription": "Log every grader request (method, path, status) and cache hit/miss to the **CEDT Grader: Requests** output channel, to check request counts. Never logs passwords or tokens."
+        },
+        "cedtGrader.statementBeside": {
+          "type": "boolean",
+          "default": true,
+          "description": "Open problem statements in an editor tab beside your code."
         }
       }
     }

@@ -29,6 +29,11 @@ export class FakeGrader {
   compilerMessage: string | null = null;
   submitError: { status: number; body: unknown } | null = null;
   webSessions = new Set<string>();
+  /** Statement routes: 'pdf' → bytes, 403 hidden, 404 none. */
+  pdf: 'pdf' | 403 | 404 = 'pdf';
+  description: { markdown: boolean; description: string } | 403 | 404 = 404;
+  /** Make the next fetch reject like Node's fetch does (cause.code / TimeoutError). */
+  rejectWith: unknown = null;
   listHtml = fixture('main_list.penalties.synthetic.html');
 
   problems = [
@@ -45,6 +50,11 @@ export class FakeGrader {
     if (this.networkFailures > 0) {
       this.networkFailures--;
       throw new TypeError('fetch failed');
+    }
+    if (this.rejectWith) {
+      const e = this.rejectWith;
+      this.rejectWith = null;
+      throw e;
     }
     const url = new URL(input);
     const method = (init.method ?? 'GET').toUpperCase();
@@ -81,6 +91,14 @@ export class FakeGrader {
 
     if (method === 'GET' && p === '/api/v1/problems') return this.json(200, this.problems);
     if (method === 'GET' && p === '/api/v1/languages') return this.json(200, this.languages);
+    if (method === 'GET' && /^\/api\/v1\/problems\/\d+\/files\/pdf$/.test(p)) {
+      if (this.pdf === 'pdf') return new Response(new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x2d]), { status: 200, headers: { 'content-type': 'application/pdf' } });
+      return this.json(this.pdf, { error: this.pdf === 403 ? 'PDF statement not available for this problem' : 'PDF statement not found' });
+    }
+    if (method === 'GET' && /^\/api\/v1\/problems\/\d+\/description$/.test(p)) {
+      if (typeof this.description === 'number') return this.json(this.description, { error: 'Description not available for this problem' });
+      return this.json(200, this.description);
+    }
     let m = /^\/api\/v1\/problems\/(\d+)$/.exec(p);
     if (method === 'GET' && m) {
       const pr = this.problems.find((x) => x.id === Number(m![1]));

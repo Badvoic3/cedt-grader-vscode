@@ -1,5 +1,5 @@
 import { CookieJar } from 'tough-cookie';
-import { NetworkError } from './errors';
+import { NetworkError, networkErrorFrom } from './errors';
 import { Redactor } from './redact';
 
 export type FetchLike = (input: string, init?: RequestInit) => Promise<Response>;
@@ -81,10 +81,7 @@ export class HttpSession {
         res = await this.fetchImpl(url, { method, headers, body, redirect: 'manual', signal });
       } catch (err) {
         if (opts.signal?.aborted) throw err;
-        const msg = err instanceof Error ? err.message : String(err);
-        throw new NetworkError(
-          this.redactor.redact(`Could not reach the grader (${new URL(url).host}): ${msg}`),
-        );
+        throw networkErrorFrom(err, new URL(url).host);
       }
 
       for (const sc of getSetCookies(res.headers)) {
@@ -118,7 +115,7 @@ export class HttpSession {
 
       const text = await res.text();
       if (res.status >= 500) {
-        throw new NetworkError(`The grader returned an error (HTTP ${res.status}) for ${path}.`);
+        throw new NetworkError(`The grader returned an error (HTTP ${res.status}).`, 'server');
       }
       return {
         status: res.status,

@@ -29,7 +29,28 @@ export class SessionExpiredError extends GraderError {
 
 export class LanguageNotAllowedError extends GraderError {}
 
-export class NetworkError extends GraderError {}
+export class NetworkError extends GraderError {
+  constructor(
+    message: string,
+    /** Why the request failed, when known. */
+    readonly kind: 'offline' | 'unreachable' | 'timeout' | 'server' = 'unreachable',
+  ) {
+    super(message);
+  }
+}
+
+/** Map a fetch() rejection to a NetworkError with a kind (DNS → offline, refused/reset → unreachable, abort → timeout). */
+export function networkErrorFrom(err: unknown, host: string): NetworkError {
+  const e = err as { name?: string; message?: string; cause?: { code?: string; name?: string } };
+  const code = e?.cause?.code ?? '';
+  if (e?.name === 'TimeoutError' || e?.cause?.name === 'TimeoutError' || code === 'UND_ERR_CONNECT_TIMEOUT' || code === 'ETIMEDOUT') {
+    return new NetworkError(`The grader (${host}) did not answer in time.`, 'timeout');
+  }
+  if (['ENOTFOUND', 'EAI_AGAIN', 'ENETUNREACH', 'ENETDOWN', 'EHOSTUNREACH'].includes(code)) {
+    return new NetworkError(`No internet connection (cannot reach ${host}).`, 'offline');
+  }
+  return new NetworkError(`Cannot reach the grader server (${host}).`, 'unreachable');
+}
 
 /** HTTP 429 or 5xx after the retries were used up. Treated like being offline (cached data is shown). */
 export class ServerBusyError extends NetworkError {
@@ -37,7 +58,7 @@ export class ServerBusyError extends NetworkError {
     message: string,
     readonly status: number,
   ) {
-    super(message);
+    super(message, 'server');
   }
 }
 

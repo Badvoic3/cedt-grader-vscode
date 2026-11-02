@@ -390,3 +390,22 @@ input::placeholder { color: var(--vscode-input-placeholderForeground); }
 .evals th { text-align: left; font-weight: 600; color: var(--muted); padding: 1px 6px 1px 0; }
 .evals td { padding: 1px 6px 1px 0; white-space: nowrap; }
 .evals .num { text-align: right; font-variant-numeric: tabular-nums; }
+
+/* ---------------------------------------------------------------- banner */
+
+.banner {
+  margin: 6px 8px;
+  padding: 6px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  border-radius: var(--radius);
+  border: 1px solid var(--vscode-inputValidation-warningBorder, var(--warn));
+  background: var(--vscode-inputValidation-warningBackground, transparent);
+}
+.banner[hidden] { display: none; }
+.banner-session { border-color: var(--vscode-inputValidation-infoBorder, var(--border)); background: var(--vscode-inputValidation-infoBackground, transparent); }
+.banner-server, .banner-unreachable, .banner-offline {
+  border-color: var(--vscode-inputValidation-errorBorder, var(--err));
+  background: var(--vscode-inputValidation-errorBackground, transparent);
+}
