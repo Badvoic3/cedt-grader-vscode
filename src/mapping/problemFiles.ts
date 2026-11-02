@@ -32,6 +32,15 @@ export interface AutoMatch {
 
 const RANK: Record<LinkHow, number> = { chosen: 0, cph: 1, filename: 2 };
 
+/**
+ * The one stable order for files of a problem (notice, go-to-file pick,
+ * before-submit check): path A–Z, natural and case-insensitive. It never
+ * depends on which file is active, so rows don't move.
+ */
+export function comparePaths(a: string, b: string): number {
+  return a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }) || (a < b ? -1 : a > b ? 1 : 0);
+}
+
 export function mergeProblemFiles(opts: {
   problemId: number;
   /** Saved links for this problem. */
@@ -58,7 +67,7 @@ export function mergeProblemFiles(opts: {
   for (const p of opts.chosen) add(p, 'chosen');
   for (const a of opts.auto) if (a.problemId === opts.problemId) add(a.fsPath, a.how);
   for (const p of opts.searched) add(p, 'filename');
-  return [...out.values()].sort((a, b) => RANK[a.how] - RANK[b.how] || a.fsPath.localeCompare(b.fsPath));
+  return [...out.values()].sort((a, b) => comparePaths(a.fsPath, b.fsPath));
 }
 
 /** How a file is linked, as shown in the notice. */
@@ -83,13 +92,14 @@ export function linkedNotice(files: ProblemFile[], currentFsPath: string, rel: (
   if (files.length < 2) return null;
   const cur = pathKey(currentFsPath, caseInsensitive);
   const list = files.map((f) => ({ path: rel(f.fsPath), fsPath: f.fsPath, current: pathKey(f.fsPath, caseInsensitive) === cur, how: f.how }));
-  // The current file first, then the rest in the given order.
-  list.sort((a, b) => Number(b.current) - Number(a.current));
+  // Fixed order (workspace-relative path); the active file is only marked, never moved.
+  list.sort((a, b) => comparePaths(a.path, b.path));
   const names = new Set(files.map((f) => pathKey(basename(f.fsPath), caseInsensitive)));
   const others = list.filter((f) => !f.current);
   let text: string;
-  if (names.size === 1 && others.length === 1) text = `Another file with the same name also matches this problem: ${others[0].path}`;
-  else if (names.size === 1) text = `${others.length} other files with the same name also match this problem`;
+  // The files are listed below the sentence, so it doesn't repeat a path.
+  if (names.size === 1 && others.length === 1) text = 'Another file with the same name also matches this problem.';
+  else if (names.size === 1) text = `${others.length} other files with the same name also match this problem.`;
   else text = `${files.length} files are linked to this problem`;
   return { text, files: list };
 }

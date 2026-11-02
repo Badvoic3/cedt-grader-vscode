@@ -825,23 +825,32 @@ function linkedFilesNotice(s: ViewState): HTMLElement {
   if (linkedOpen) {
     box.append(
       el('div', { class: 'linked-list' },
-        ...s.linkedFiles.map((f, i) =>
-          el('div', { class: `linked-row${f.current ? ' current' : ''}` },
+        // Rows keep their order and height; only the "this file" mark moves.
+        ...s.linkedFiles.map((f, i) => {
+          const hide = (b: HTMLElement) => {
+            if (f.current) {
+              b.classList.add('invisible');
+              b.setAttribute('aria-hidden', 'true');
+              b.tabIndex = -1;
+            }
+            return b;
+          };
+          return el('div', { class: `linked-row${f.current ? ' current' : ''}`, 'aria-current': f.current ? 'true' : undefined },
             el('div', { class: 'row' },
               icon(f.current ? 'circle-filled' : 'file'),
               el('span', { class: 'grow ellipsis', title: f.path }, f.path),
             ),
             el('div', { class: 'row gap small' },
               el('span', { class: 'muted grow' }, f.current ? `this file · ${HOW_TEXT[f.how]}` : HOW_TEXT[f.how]),
-              f.current ? null : button('Open', () => send({ type: 'openLinkedFile', index: i }), { title: `Open ${f.path}` }),
-              f.current
-                ? null
-                : f.how === 'chosen'
+              hide(button('Open', () => send({ type: 'openLinkedFile', index: i }), { title: `Open ${f.path}` })),
+              hide(
+                f.how === 'chosen'
                   ? button('Unlink', () => send({ type: 'unlinkLinkedFile', index: i }), { title: `Remove the link of ${f.path} (the file is not deleted)` })
                   : button("Don't match this file", () => send({ type: 'unlinkLinkedFile', index: i }), { title: `Stop matching ${f.path} to this problem (the file is not changed)` }),
+              ),
             ),
-          ),
-        ),
+          );
+        }),
       ),
       el('div', { class: 'row gap' }, button('Unlink the other files', () => send({ type: 'keepOnlyThisFile' }), { title: 'Removes only the links; the files themselves are not deleted' })),
     );
@@ -945,7 +954,7 @@ function sectionKeys(s: ViewState): Record<string, string> {
     banner: j([s.connection, s.problems.loaded, s.history.items.length > 0]),
     prompt: j([s.prompt]),
     account: j([s.account, s.baseUrl, showLoginForm]),
-    current: j([openMenu, s.notLinked, s.linkedNotice, s.file, s.problem, s.languages, s.submit, s.matching, s.testcases, s.cph, s.gradingElsewhere, pickerOpen, pickerOpen ? s.problems : s.problems.loaded]),
+    current: j([openMenu, s.notLinked, s.linkedNotice, s.linkedFiles, s.file, s.problem, s.languages, s.submit, s.matching, s.testcases, s.cph, s.gradingElsewhere, pickerOpen, pickerOpen ? s.problems : s.problems.loaded]),
     result: j([s.result, s.submit.enabled, s.submit.reason, legendOpen === 'result']),
     history: j([pid, s.history, legendOpen === 'history']),
     problems: j([openMenu, s.problems, !!s.file, pid, ui.filter]),

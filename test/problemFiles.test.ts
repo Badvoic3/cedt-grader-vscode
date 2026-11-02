@@ -12,15 +12,15 @@ describe('files for a problem (one function for notice, row click, submit check)
   it('chosen + name-matched: both listed, each with how it is linked', () => {
     const files = mergeProblemFiles({ ...base, chosen: [B], auto: [auto(A)] });
     expect(files).toEqual([
+      { fsPath: A, how: 'filename' }, // path order: "data algo" before "i2cedt"
       { fsPath: B, how: 'chosen' },
-      { fsPath: A, how: 'filename' },
     ]);
   });
 
   it('a never-opened name match comes from the file search', () => {
     expect(mergeProblemFiles({ ...base, chosen: [B], searched: [A, B] })).toEqual([
-      { fsPath: B, how: 'chosen' }, // the search hit doesn't downgrade a chosen link
       { fsPath: A, how: 'filename' },
+      { fsPath: B, how: 'chosen' }, // the search hit doesn't downgrade a chosen link
     ]);
   });
 
@@ -41,23 +41,36 @@ describe('files for a problem (one function for notice, row click, submit check)
   it('the notice appears from BOTH files\' views (the reported repro)', () => {
     // i2cedt/… chosen; data algo/… matched by file name.
     const fromA = linkedNotice(mergeProblemFiles({ ...base, chosen: [B], auto: [auto(A)], searched: [A, B] }), A, rel)!;
-    expect(fromA.text).toBe('Another file with the same name also matches this problem: i2cedt/da68_f2_zero_one_subset_sum.cpp');
+    expect(fromA.text).toBe('Another file with the same name also matches this problem.');
     expect(fromA.files.map((f) => [f.path, f.current, f.how])).toEqual([
       ['data algo/da68_f2_zero_one_subset_sum.cpp', true, 'filename'],
       ['i2cedt/da68_f2_zero_one_subset_sum.cpp', false, 'chosen'],
     ]);
     // From i2cedt/… even though data algo/… was never opened (search hit only).
     const fromB = linkedNotice(mergeProblemFiles({ ...base, chosen: [B], searched: [A, B] }), B, rel)!;
-    expect(fromB.text).toBe('Another file with the same name also matches this problem: data algo/da68_f2_zero_one_subset_sum.cpp');
-    expect(fromB.files[1]).toMatchObject({ path: 'data algo/da68_f2_zero_one_subset_sum.cpp', how: 'filename' });
+    expect(fromB.text).toBe('Another file with the same name also matches this problem.');
+    expect(fromB.files[0]).toMatchObject({ path: 'data algo/da68_f2_zero_one_subset_sum.cpp', how: 'filename', current: false });
+    expect(fromB.files[1]).toMatchObject({ path: 'i2cedt/da68_f2_zero_one_subset_sum.cpp', current: true });
   });
 
   it('two name-matched files in different folders → same-name wording; different names → "N files are linked"', () => {
-    expect(linkedNotice(mergeProblemFiles({ ...base, searched: [A, B] }), A, rel)!.text).toBe(
-      'Another file with the same name also matches this problem: i2cedt/da68_f2_zero_one_subset_sum.cpp',
-    );
+    expect(linkedNotice(mergeProblemFiles({ ...base, searched: [A, B] }), A, rel)!.text).toBe('Another file with the same name also matches this problem.');
     const C = '/w/i2cedt/subset_sum_v2.cpp';
     expect(linkedNotice(mergeProblemFiles({ ...base, chosen: [C], searched: [A] }), A, rel)!.text).toBe('2 files are linked to this problem');
+  });
+});
+
+describe('stable order', () => {
+  it('switching the active file between the listed files keeps the row order identical', () => {
+    const C = '/w/HW10/da68_f2_zero_one_subset_sum.cpp';
+    const D = '/w/hw9/da68_f2_zero_one_subset_sum.cpp';
+    const files = mergeProblemFiles({ ...base, chosen: [B], auto: [auto(A)], searched: [C, D] });
+    const orders = [A, B, C, D].map((cur) => linkedNotice(files, cur, rel)!.files.map((f) => f.path));
+    for (const o of orders) expect(o).toEqual(orders[0]);
+    // natural, case-insensitive: "data algo" < "hw9" < "HW10" < "i2cedt"
+    expect(orders[0]).toEqual([rel(A), rel(D), rel(C), rel(B)]);
+    // only the "this file" mark moves
+    expect([A, B, C, D].map((cur) => linkedNotice(files, cur, rel)!.files.findIndex((f) => f.current))).toEqual([0, 3, 2, 1]);
   });
 });
 

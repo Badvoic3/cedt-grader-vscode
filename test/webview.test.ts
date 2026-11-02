@@ -496,7 +496,8 @@ describe.runIf(existsSync(resolve(__dirname, '../esbuild.mjs')))('sidebar webvie
     const rows = doc.querySelectorAll<HTMLElement>('#sec-current .notice.linked .linked-row');
     expect(rows).toHaveLength(2);
     expect(rows[0].textContent).toContain('this file · chosen by you');
-    expect(rows[0].querySelector('button')).toBeNull(); // no actions on this file
+    // this file: actions hidden but kept in place (row height doesn't change)
+    expect([...rows[0].querySelectorAll('button')].every((b) => b.classList.contains('invisible'))).toBe(true);
     [...rows[1].querySelectorAll<HTMLButtonElement>('button')].find((b) => b.textContent === 'Open')!.click();
     expect(sent.at(-1)).toEqual({ type: 'openLinkedFile', index: 1 });
     [...rows[1].querySelectorAll<HTMLButtonElement>('button')].find((b) => b.textContent === 'Unlink')!.click();
@@ -543,34 +544,39 @@ describe.runIf(existsSync(resolve(__dirname, '../esbuild.mjs')))('sidebar webvie
     expect(sent.at(-1)).toEqual({ type: 'setFilter', filter: { status: 'all', topic: null, sort: 'score-desc' } });
   });
 
-  it('same-name notice: name-matched other file offers "Don\'t match this file"', () => {
+  it('same-name notice: rows never move when the active file changes; "Don\'t match this file" for a name match', () => {
     const { doc, sent, post } = boot();
-    post({
+    const DA = 'data algo/da68_f2_zero_one_subset_sum.cpp';
+    const I2 = 'i2cedt/da68_f2_zero_one_subset_sum.cpp';
+    const view = (cur: string) => ({
       ...loggedIn,
       linkedFiles: [
-        { path: 'data algo/da68_f2_zero_one_subset_sum.cpp', current: true, how: 'filename' },
-        { path: 'i2cedt/da68_f2_zero_one_subset_sum.cpp', current: false, how: 'chosen' },
+        { path: DA, current: cur === DA, how: 'filename' as const },
+        { path: I2, current: cur === I2, how: 'chosen' as const },
       ],
-      linkedNotice: 'Another file with the same name also matches this problem: i2cedt/da68_f2_zero_one_subset_sum.cpp',
+      linkedNotice: 'Another file with the same name also matches this problem.',
     });
+    post(view(DA));
     const n = doc.querySelector('#sec-current .notice.linked')!;
-    expect(n.textContent).toContain('Another file with the same name also matches this problem: i2cedt/da68_f2_zero_one_subset_sum.cpp');
+    expect(n.textContent).toContain('Another file with the same name also matches this problem.');
+    expect(n.textContent).not.toContain(`problem: ${I2}`);
     [...n.querySelectorAll<HTMLButtonElement>('button')].find((b) => b.textContent === 'Show')!.click();
-    const rows = doc.querySelectorAll<HTMLElement>('#sec-current .linked-row');
+    const paths = () => [...doc.querySelectorAll('#sec-current .linked-row .ellipsis')].map((e) => e.textContent);
+    const marked = () => [...doc.querySelectorAll('#sec-current .linked-row')].findIndex((r) => r.classList.contains('current'));
+    expect(paths()).toEqual([DA, I2]);
+    expect(marked()).toBe(0);
+    let rows = doc.querySelectorAll<HTMLElement>('#sec-current .linked-row');
     expect(rows[0].textContent).toContain('this file · matched by file name');
     expect(rows[1].textContent).toContain('chosen by you');
-    post({
-      ...loggedIn,
-      linkedFiles: [
-        { path: 'i2cedt/da68_f2_zero_one_subset_sum.cpp', current: true, how: 'chosen' },
-        { path: 'data algo/da68_f2_zero_one_subset_sum.cpp', current: false, how: 'filename' },
-      ],
-      linkedNotice: 'Another file with the same name also matches this problem: data algo/da68_f2_zero_one_subset_sum.cpp',
-    });
-    const row = doc.querySelectorAll<HTMLElement>('#sec-current .linked-row')[1];
-    expect(row.textContent).toContain('matched by file name');
-    [...row.querySelectorAll<HTMLButtonElement>('button')].find((b) => b.textContent === "Don't match this file")!.click();
-    expect(sent.at(-1)).toEqual({ type: 'unlinkLinkedFile', index: 1 });
+    expect(rows[0].querySelectorAll('button').length).toBe(rows[1].querySelectorAll('button').length); // same height
+    post(view(I2)); // clicked Open on the other file
+    expect(paths()).toEqual([DA, I2]); // same order
+    expect(marked()).toBe(1); // the mark moved instead
+    rows = doc.querySelectorAll<HTMLElement>('#sec-current .linked-row');
+    const open = [...rows[1].querySelectorAll<HTMLButtonElement>('button')].find((b) => b.textContent === 'Open')!;
+    expect(open.classList.contains('invisible')).toBe(true);
+    [...rows[0].querySelectorAll<HTMLButtonElement>('button')].find((b) => b.textContent === "Don't match this file")!.click();
+    expect(sent.at(-1)).toEqual({ type: 'unlinkLinkedFile', index: 0 });
   });
 
   it('inline prompt (no modal): text, detail and plain buttons answer by id', () => {
