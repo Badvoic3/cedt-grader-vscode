@@ -15,5 +15,5 @@
     "resolveJsonModule": true,
     "isolatedModules": true
   },
-  "include": ["src", "scripts", "test", "*.mjs", "*.mts", "*.ts"]
+  "include": ["src", "scripts", "test", "webview", "*.mjs", "*.mts", "*.ts"]
 }

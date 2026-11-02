@@ -111,6 +111,8 @@ export class GraderClient {
   private loginInFlight: Promise<ContestDetection> | null = null;
   /** Discovered after login / submit; never hard-coded. */
   userId: number | null = null;
+  /** Problems parsed from the page login landed on (/main/list), if any. */
+  landingProblems: Problem[] | null = null;
   /** Detection from the most recent logged-in page we saw. */
   lastContest: ContestDetection | null = null;
   private readonly now: () => Date;
@@ -208,6 +210,10 @@ export class GraderClient {
     this.http.redactor.add(token);
     const det = detectContest(page.body, this.now());
     this.lastContest = det;
+    // Login lands on /main/list: keep its problems so callers need no second fetch.
+    this.landingProblems = /\/main\/list$/.test(page.path)
+      ? parseProblemList(page.body).map((p) => ({ ...p, contest: mustBlock(det) }))
+      : null;
     return det;
   }
 
@@ -218,6 +224,7 @@ export class GraderClient {
     this.loggedIn = false;
     this.userId = null;
     this.lastContest = null;
+    this.landingProblems = null;
   }
 
   // ------------------------------------------------------- session helpers

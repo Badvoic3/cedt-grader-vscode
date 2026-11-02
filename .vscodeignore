@@ -1,0 +1,9 @@
+**
+!dist/extension.js
+!media/icon.svg
+!media/dist/**
+media/dist/*.map
+!package.json
+!README.md
+!CHANGELOG.md
+!LICENSE
