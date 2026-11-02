@@ -2,14 +2,15 @@ import type { Problem } from '../grader/types';
 import type { CphProblem } from './cph';
 import { matchCphProblem } from './cph';
 
-/** How the current file's problem was chosen (shown next to the problem name). */
+/** How the current file's problem was chosen (an icon next to the problem name). */
 export type MatchSource = 'saved' | 'cph' | 'filename' | 'suggested';
 
+/** Tooltip of that icon. "from CPH" only when CPH data was actually used. */
 export const SOURCE_LABEL: Readonly<Record<MatchSource, string>> = {
-  saved: 'saved',
-  cph: 'from CPH',
-  filename: 'from file name',
-  suggested: 'suggested',
+  saved: 'Chosen by you',
+  cph: 'Matched from CPH data',
+  filename: 'Matched by file name',
+  suggested: 'Suggested — click to confirm',
 };
 
 /** Zero-width characters the grader's problem list contains (`_&ZeroWidthSpace;`). */

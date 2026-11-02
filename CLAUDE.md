@@ -1,6 +1,6 @@
 # CLAUDE.md — CEDT Grader Submit (VS Code extension)
 
-An unofficial homework tool: a VS Code extension that submits the active file to a **cafe-grader-web** server (default `https://cedt-grader.nattee.net`) and shows the verdict and the *counted* score in a sidebar. It must coexist with CPH (`DivyanshuAgrawal.competitive-programming-helper`). The full spec is in `claude-code-prompt.md`.
+An unofficial homework tool: a standalone VS Code extension that submits the active file to a **cafe-grader-web** server (default `https://cedt-grader.nattee.net`) and shows the verdict and the *counted* score in a sidebar. CPH (`DivyanshuAgrawal.competitive-programming-helper`) is **optional**: everything works without it; when installed we stay compatible (`src/cphIntegration.ts`). The full spec is in `claude-code-prompt.md`.
 
 ## Commands
 
@@ -46,6 +46,7 @@ Press F5 to start an Extension Development Host (`.vscode/launch.json` runs `npm
   - `mappingFile.ts`: `.cedt-grader.json` parsing (`staleSince` kept), `reverseIndex`.
   - `mappingOps.ts`: pure move logic (`planRename`, `reconnectCandidates`, `affectedByDelete`, `expired`) and `moveCphProblem`.
   - `cph.ts` / `cphImport.ts`: CPH `.prob` read / import (format below). `newFile.ts`: create without overwriting.
+- `src/cphIntegration.ts`: optional CPH detection, test-case target choice, "Save as files" writer.
 - `test/fixtures/`: `*.synthetic.*` files are hand-built from the cafe-grader views and controllers. The others are real data captured by the probe and sanitized.
 
 ## Protocol (cafe-grader-web @ 404d3c5; verified against the live server)
@@ -72,6 +73,18 @@ Press F5 to start an Extension Development Host (`.vscode/launch.json` runs `npm
   - the page header for `isContestPage`.
 - A POST with a bad CSRF token silently runs logged out (Rails null session).
 - The web login form's `accept_agree` checkbox is never ticked automatically.
+
+## CPH is optional
+
+- Detection only in `src/cphIntegration.ts` (`CphPresence`: `vscode.extensions.getExtension(id)`, re-checked on `extensions.onDidChange`). Never add CPH to `extensionDependencies` / `extensionPack` (a test checks).
+- Grader, data, sidebar and statement code must not import CPH modules (a test scans `src/grader`, `src/data`, `src/ui`, `webview`).
+- Reading `.prob` files for matching only when they exist.
+- "Load test cases": CPH installed → CPH `.prob` ("Saved to CPH" + "Reload in CPH"); not installed → ask once per workspace: "Save as files" (`<source dir>/<clean problem name>/tests/<n>.in|out`, folder creation confirmed, existing files never overwritten) or "Install CPH" (`extension.open`).
+- No "CPH" in display name, description, command titles or main UI text; only where it's used.
+
+## Accessibility
+
+Every icon-only button (`iconButton()` in `webview/main.ts`, `btn()` in `webview/statementToolbar.ts`) has `title` and an identical `aria-label`; disabled buttons explain why in the tooltip (`iconButton(..., { disabledReason })`, `button(..., { title })`). `test/webview.test.ts` ("accessibility") and `test/statementToolbar.test.ts` fail otherwise.
 
 ## CPH `.prob` (confirmed in agrawal-d/cph @ ef8c7a7: `src/types.ts`, `src/parser.ts`, `src/webview/editorChange.ts`)
 
@@ -136,8 +149,8 @@ The sidebar (`cedtGrader` Activity Bar container, view `cedtGrader.panel`) is th
   - file name;
   - searchable picker (name or id), book icon → statement viewer;
   - wrong-language hint ("This problem doesn't accept C++. Wrong problem?" + Change);
-  - match source badge (saved / from CPH / from file name / suggested) + Change, copy-name icon, notes for ambiguous / stale mappings;
-  - "Load test cases into CPH" (only when `has_testcase` and the file is mapped, not just suggested);
+  - match-source icon next to the problem name (tooltips "Chosen by you" / "Matched by file name" / "Matched from CPH data" / "Suggested — click to confirm"; only suggested is highlighted, with Confirm), Change, copy-name icon, notes for ambiguous / stale mappings;
+  - "Load test cases" (only when `has_testcase` and the file is mapped, not just suggested; CPH or files);
   - counted-score card (counted, best, latest, attempts, penalty, "your best still counts");
   - language dropdown;
   - Submit button.

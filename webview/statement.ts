@@ -6,6 +6,7 @@
 import { pdfjsLib } from './pdfjs-global';
 import { EventBus, PDFFindController, PDFLinkService, PDFViewer } from 'pdfjs-dist/web/pdf_viewer.mjs';
 import type { FromStatement, StatementViewState, ToStatement } from '../src/ui/statementPanel';
+import { buildToolbar, el } from './statementToolbar';
 import { clampScale, handleZoomWheel, zoomKey } from './zoom';
 
 interface Persisted extends StatementViewState {
@@ -21,50 +22,18 @@ const send = (m: FromStatement) => vscode.postMessage(m);
 const app = document.getElementById('app')!;
 const body = document.body;
 
-function el<K extends keyof HTMLElementTagNameMap>(tag: K, attrs: Record<string, string> = {}, ...kids: (Node | string)[]): HTMLElementTagNameMap[K] {
-  const e = document.createElement(tag);
-  for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v);
-  e.append(...kids);
-  return e;
-}
-const icon = (n: string) => el('span', { class: `codicon codicon-${n}`, 'aria-hidden': 'true' });
-function btn(name: string, title: string, onclick: () => void): HTMLButtonElement {
-  const b = el('button', { class: 'tb', type: 'button', title, 'aria-label': title }, icon(name));
-  b.addEventListener('click', onclick);
-  return b;
-}
-
-// ---------------------------------------------------------------- toolbar
-
-const pageInput = el('input', { class: 'page', type: 'number', min: '1', value: '1', 'aria-label': 'Page' });
-const pageCount = el('span', { class: 'muted' }, '/ –');
-const zoomLabel = el('span', { class: 'muted zoom' }, '');
-const search = el('input', { class: 'search', type: 'search', placeholder: 'Find in statement', 'aria-label': 'Find in statement' });
-const matches = el('span', { class: 'muted matches' }, '');
-const pdfTools = el('div', { class: 'group pdf-only' },
-  btn('zoom-out', 'Zoom out (Cmd/Ctrl -)', () => zoom(1 / 1.15)),
-  zoomLabel,
-  btn('zoom-in', 'Zoom in (Cmd/Ctrl +)', () => zoom(1.15)),
-  btn('screen-full', 'Fit width (Cmd/Ctrl 0)', () => viewer && (viewer.currentScaleValue = 'page-width')),
-  el('span', { class: 'sep' }),
-  btn('chevron-up', 'Previous page', () => viewer && viewer.currentPageNumber > 1 && (viewer.currentPageNumber -= 1)),
-  pageInput,
-  pageCount,
-  btn('chevron-down', 'Next page', () => viewer && viewer.currentPageNumber < viewer.pagesCount && (viewer.currentPageNumber += 1)),
-  el('span', { class: 'sep' }),
-  search,
-  btn('arrow-up', 'Previous match (Shift+Enter)', () => find(true, true)),
-  btn('arrow-down', 'Next match (Enter)', () => find(true, false)),
-  matches,
-);
-const titleEl = el('span', { class: 'title' }, '');
-const toolbar = el('div', { class: 'toolbar', role: 'toolbar' },
-  titleEl,
-  pdfTools,
-  el('span', { class: 'grow' }),
-  btn('refresh', 'Refresh (download again)', () => send({ type: 'refresh' })),
-  btn('globe', 'Open in Browser', () => send({ type: 'openInBrowser' })),
-);
+const tb = buildToolbar({
+  zoomOut: () => zoom(1 / 1.15),
+  zoomIn: () => zoom(1.15),
+  fitWidth: () => viewer && (viewer.currentScaleValue = 'page-width'),
+  prevPage: () => viewer && viewer.currentPageNumber > 1 && (viewer.currentPageNumber -= 1),
+  nextPage: () => viewer && viewer.currentPageNumber < viewer.pagesCount && (viewer.currentPageNumber += 1),
+  prevMatch: () => find(true, true),
+  nextMatch: () => find(true, false),
+  refresh: () => send({ type: 'refresh' }),
+  openInBrowser: () => send({ type: 'openInBrowser' }),
+});
+const { toolbar, pageInput, pageCount, zoomLabel, search, matches, titleEl } = tb;
 const container = el('div', { id: 'viewerContainer', tabindex: '0' }, el('div', { id: 'viewer', class: 'pdfViewer' }));
 const textView = el('div', { class: 'text-view' });
 const status = el('div', { class: 'status', role: 'status' });

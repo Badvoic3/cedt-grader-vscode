@@ -1,8 +1,8 @@
 # CEDT Grader Submit
 
-Submit the file you are editing to **CEDT Grader** ([cedt-grader.nattee.net](https://cedt-grader.nattee.net), a [cafe-grader-web](https://github.com/nattee/cafe-grader-web) server) and see the score and per-test verdicts inside VS Code. You don't need to open a browser.
+Submit the file you are editing to **CEDT Grader** ([cedt-grader.nattee.net](https://cedt-grader.nattee.net), a [cafe-grader-web](https://github.com/nattee/cafe-grader-web) server) and see your score, per-test verdicts, submission history and the problem statement inside VS Code, without opening a browser.
 
-It works alongside **Competitive Programming Helper (CPH)**: test locally with CPH, then submit with this extension.
+It works on its own. If you also use Competitive Programming Helper, see [Works with CPH](#works-with-cph).
 
 ## Install
 
@@ -23,13 +23,13 @@ Click the **CEDT Grader** icon in the Activity Bar. The sidebar has five section
 
 Typical flow: open `sol.cpp` → pick the problem once (it is remembered) → **Submit** → confirm. That's two clicks for every later submission.
 
-**Linking files to problems.** A file is linked automatically when its name matches a problem name (`00_Intro_11.cpp` → `00_Intro_11`; case, spaces, `-`, `_` and `.` don't matter) or when its CPH problem refers to the grader problem. Otherwise the closest problems are suggested (marked "suggested"; submitting asks first). Your own choice always wins and is saved in `.cedt-grader.json` and VS Code's workspace storage. The panel shows how the problem was chosen, with a **Change** button.
+**Linking files to problems.** A file is linked automatically when its name matches a problem name (`00_Intro_11.cpp` → `00_Intro_11`; case, spaces, `-`, `_` and `.` don't matter). Otherwise the closest problem is suggested: it is highlighted with a **Confirm** button, and submitting asks first. Your own choice always wins and is saved in `.cedt-grader.json` and VS Code's workspace storage. A small icon next to the problem name tells you how it was chosen (hover it); **Change** picks another one.
 
 Handy actions in the problem list and picker: **copy the exact problem name**, **new file for this problem** (creates `<name>.cpp` next to your file), **go to the file** linked to a problem (or find one by name).
 
-Renaming or moving a linked file in VS Code keeps the link (and can move its CPH tests along). If you move files in Finder or git, the extension asks whether to keep the old link when you open the file.
+Renaming or moving a linked file in VS Code keeps the link. If you move files in Finder or git, the extension asks whether to keep the old link when you open the file.
 
-**Test cases.** For problems that provide them, **Load test cases into CPH** downloads the grader's test cases and adds them to the file's CPH problem (your own CPH tests are kept; the old file is backed up; large cases the grader only shows in part are skipped). Switch to the file once so CPH shows them.
+**Test cases.** For problems that provide them, **Load test cases** downloads the grader's test cases (large cases the grader only shows in part are skipped). Without CPH they can be saved as files: `<problem name>/tests/1.in`, `1.out`, … next to your source (the extension asks before creating the folder and never overwrites your files). With CPH installed they go into CPH instead (see below).
 
 **Also available:**
 - The status bar item (`☁ Submit to Grader`, the score after grading) opens the panel.
@@ -69,10 +69,16 @@ With **Remember password on this computer** on, your password is kept in the OS 
 
 This is an unofficial homework tool. If a problem looks like part of an exam, the extension warns you before submitting. Ask your instructor before using it in any exam.
 
-## Using it with CPH
+## Works with CPH
 
-- This extension only *reads* CPH's `.cph/*.prob` files to suggest a problem. It never changes how CPH runs or stores tests.
-- Both extensions add a button to the editor title bar. CPH's runs your tests locally; ours (☁) submits to the grader.
+[Competitive Programming Helper](https://marketplace.visualstudio.com/items?itemName=DivyanshuAgrawal.competitive-programming-helper) is optional. If it is installed:
+
+- **Matching:** a file whose CPH problem refers to a grader problem (by URL or name) is linked automatically ("Matched from CPH data").
+- **Load test cases** saves the grader's cases into the file's CPH problem ("Saved to CPH"): your own CPH tests stay first, the old CPH file is backed up (`.bak`), and loading again doesn't duplicate anything. CPH only re-reads tests when you switch to the file, so use **Reload in CPH** (or switch tabs) before running them.
+- **Renames:** after renaming a file in VS Code, the extension offers to move its CPH tests to the new name (CPH itself doesn't follow renames).
+- Both extensions add a button to the editor title bar: CPH's runs your tests locally; ours (☁) submits to the grader.
+
+The extension never changes CPH itself and doesn't require it. Disabling CPH switches "Load test cases" to saving files.
 
 ## Privacy
 

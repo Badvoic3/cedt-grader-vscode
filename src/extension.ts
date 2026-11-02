@@ -50,7 +50,7 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
     vscode.commands.registerCommand('cedtGrader.refreshProblems', () => controller.refreshProblems(true)),
     vscode.commands.registerCommand('cedtGrader.refreshHistory', () => controller.refreshHistory()),
     vscode.commands.registerCommand('cedtGrader.clearMapping', () => controller.unmapCurrentFile()),
-    vscode.commands.registerCommand('cedtGrader.loadTestcases', () => controller.loadTestcasesIntoCph(false)),
+    vscode.commands.registerCommand('cedtGrader.loadTestcases', () => controller.loadTestcases(false)),
     vscode.commands.registerCommand('cedtGrader.showRequestLog', () => controller.showRequestLog()),
     // Read-only documents with the source of past submissions (for "Compare with current file").
     // Statement tabs reopen after a restart, from the disk cache (no request).

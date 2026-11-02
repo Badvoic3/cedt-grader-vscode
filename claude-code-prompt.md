@@ -1,6 +1,6 @@
 # Build "CEDT Grader Submit": a VS Code extension for cedt-grader.nattee.net
 
-You are working in an empty git repo. Build a VS Code extension (TypeScript) that lets students submit the active source file to the CEDT Grader and see the verdict inside VS Code. It must work alongside the existing **Competitive Programming Helper (CPH)** extension (`DivyanshuAgrawal.competitive-programming-helper`), not replace it.
+You are working in an empty git repo. Build a VS Code extension (TypeScript) that lets students submit the active source file to the CEDT Grader and see the verdict inside VS Code. It is a standalone grader extension. **Competitive Programming Helper (CPH)** (`DivyanshuAgrawal.competitive-programming-helper`) is optional: everything works without it, and when it is installed the extension stays compatible with it (see "CPH is optional" below).
 
 Work in the phases below. Use plan mode first, show me the plan, then build phase by phase. Commit after each phase with a clear message. Stop and ask me at every **CHECKPOINT**.
 
@@ -100,6 +100,21 @@ Connection errors:
 - The status bar item shows a warning icon while in the error state.
 - Tests for each error type → message.
 
+## 1f. CPH is optional; accessibility
+
+CPH is optional (still compatible):
+- Everything works with CPH not installed: login, problems, linking, submit, results, history, statement viewer.
+- Detect CPH with `vscode.extensions.getExtension('DivyanshuAgrawal.competitive-programming-helper')` (undefined when not installed or disabled); re-check on `vscode.extensions.onDidChange`.
+- Reading `.cph/*.prob` for matching happens only if the files exist (works with or without CPH installed, costs nothing otherwise).
+- "Load test cases" (renamed from "Load test cases into CPH"): with CPH installed, write into CPH's `.prob` as before ("Saved to CPH"). Without it, offer "Save as files" (writes `<problem>/tests/<n>.in` and `<n>.out` next to the source; asks before creating the folder; existing files are never overwritten) or "Install CPH" (opens its Marketplace page). The "Save as files" choice is remembered per workspace.
+- "CPH" is not in the display name, description, command titles or main UI text; it is mentioned only where it is actually used ("Saved to CPH", "Install CPH to run these tests in VS Code", "Matched from CPH data").
+- CPH is never declared as a dependency or in an extension pack.
+- Tests: all features with CPH absent (getExtension → undefined), test-case import to files, CPH-present path unchanged.
+
+How the problem was chosen: a small icon next to the problem name with a tooltip: "Chosen by you", "Matched by file name", "Matched from CPH data" (only when CPH data was actually used), "Suggested — click to confirm". Only "Suggested" stands out (warning color and a Confirm button); the others are subtle.
+
+Tooltips and accessibility: every icon-only button (sidebar, problem picker, history, results, statement viewer, error banner) has a tooltip (`title`) and the same `aria-label` (e.g. "Copy problem name", "Open statement", "Go to linked file", "Refresh history", "Remove link", "Open in browser", "Compare with current file"). Disabled buttons explain why in the tooltip. A test fails if any icon button lacks them.
+
 ## 2. Hard rules
 
 - **Never** hard-code, log, print or commit credentials, cookies or CSRF tokens. Store the password in VS Code `context.secrets`; the username can be a setting.
@@ -147,11 +162,11 @@ Contests on this grader are only used for exams, and this is an unofficial homew
    4. otherwise the closest few candidates, shown first in the picker, the best one pre-selected as "suggested", never saved automatically.
    - If more than one problem matches equally, don't choose; ask.
    - Mappings live in workspace state keyed by the file's path relative to its workspace folder, plus `.cedt-grader.json` in the workspace root.
-4. **Manual control:** searchable picker (name or id); a manual choice is saved and overrides auto-detection. Clear the mapping from the panel (×) or the command "Clear Problem for This File". The panel shows how the problem was chosen ("saved", "from CPH", "from file name", "suggested") with a Change button.
+4. **Manual control:** searchable picker (name or id); a manual choice is saved and overrides auto-detection. Clear the mapping from the panel ("Remove link") or the command "Clear Problem for This File". An icon next to the problem name shows how it was chosen (section 1f), with a Change button; a suggestion has a Confirm button.
 5. **Safety before submit:** the confirmation always shows the problem name and id. A "suggested" match always needs an explicit confirmation (it is then saved). The exam warning (section 2b) is not affected by mapping.
-6. **Load test cases into CPH** (replaces the earlier optional import):
+6. **Load test cases** (replaces the earlier optional import; CPH optional, see section 1f):
    - API (confirmed in `problems_controller.rb#testcases`, `testcases_controller.rb`): `GET /api/v1/problems/{id}/testcases` → `[{id, num, group, group_name, weight, access, input_bytes, sol_bytes}]` (403 = not allowed); `GET /api/v1/testcases/{id}/input` and `/sol` → text/plain. For students (`access: "preview"`) large files are cut off and the response has `X-Testcase-Truncated: true` and `X-Testcase-Byte-Size`. A truncated case is never imported; it is skipped and reported ("Loaded 5 of 8 test cases; 3 were too large to download").
-   - The button ("Load test cases into CPH", Current problem section) is shown only when `has_testcase` is true and the file is mapped (not merely suggested). Problems without `has_testcase` are never probed.
+   - The button ("Load test cases", Current problem section) is shown only when `has_testcase` is true and the file is mapped (not merely suggested). Problems without `has_testcase` are never probed.
    - Downloads one case at a time (input, then sol) with a progress notification; cached per problem in globalStorage, so a second import downloads nothing unless "Download Again" is chosen.
    - CPH file: `.cph/.<basename>_<md5(full source path)>.prob` next to the source (or `cph.general.saveLocation`), JSON `{name, url, interactive, memoryLimit, timeLimit, group, tests:[{input, output, id}], srcPath, local}`, written with plain `JSON.stringify` like CPH. Existing file: backed up to `<file>.prob.bak`, my own tests kept first, grader cases appended; cases whose input+output already exist are skipped. Imported cases are marked through their `id` (7e15 + grader testcase id; CPH keeps ids when it re-saves) so a re-import updates them in place. No file: one is created with the problem name and the grader URL (`/submissions/direct_edit_problem/{id}`).
    - Line endings normalized to `\n`; trailing newlines kept as in the file.

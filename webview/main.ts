@@ -53,8 +53,13 @@ function appendChildren(parent: Node & ParentNode, children: Child[]): void {
 
 const icon = (name: string, extra = '') => el('span', { class: `codicon codicon-${name} ${extra}`.trim(), 'aria-hidden': 'true' });
 
-function iconButton(name: string, title: string, onclick: () => void): HTMLButtonElement {
-  return el('button', { class: 'icon-btn', title, 'aria-label': title, type: 'button', onclick }, icon(name));
+/**
+ * Icon-only button: always a tooltip (`title`) and the same `aria-label`.
+ * When disabled, the tooltip says why.
+ */
+function iconButton(name: string, label: string, onclick: () => void, opts: { disabledReason?: string | null } = {}): HTMLButtonElement {
+  const text = opts.disabledReason ? `${label} (${opts.disabledReason})` : label;
+  return el('button', { class: 'icon-btn', title: text, 'aria-label': text, type: 'button', disabled: !!opts.disabledReason, onclick }, icon(name));
 }
 
 function button(label: Child, onclick: () => void, opts: { kind?: 'primary' | 'secondary'; disabled?: boolean; title?: string } = {}) {
@@ -161,8 +166,8 @@ const problemFilter = el('input', { type: 'search', placeholder: 'Filter by name
 const sAccount = section('account', 'Account');
 const sCurrent = section('current', 'Current problem');
 const sResult = section('result', 'Result');
-const sHistory = section('history', 'History', [iconButton('refresh', 'Reload submission history', () => send({ type: 'refreshHistory' }))]);
-const sProblems = section('problems', 'Problems', [iconButton('refresh', 'Reload problem list', () => send({ type: 'refreshProblems' }))]);
+const sHistory = section('history', 'History', [iconButton('refresh', 'Refresh history', () => send({ type: 'refreshHistory' }))]);
+const sProblems = section('problems', 'Problems', [iconButton('refresh', 'Refresh problem list', () => send({ type: 'refreshProblems' }))]);
 const banner = el('div', { class: 'banner', role: 'alert', hidden: true });
 app.append(banner, sAccount.details, sCurrent.details, sResult.details, sHistory.details, sProblems.details);
 
@@ -319,6 +324,7 @@ function renderCurrent(s: ViewState): void {
       title: p ? `${p.name} — ${p.fullName} (#${p.id})` : 'Choose problem',
       onclick: () => (pickerOpen ? closePicker() : openPicker()),
     },
+    p ? sourceIcon(p.source, p.sourceLabel) : null,
     p
       ? el('span', { class: 'grow ellipsis' }, el('strong', {}, p.name), el('span', { class: 'muted' }, ` #${p.id}`), p.fullName && p.fullName !== p.name ? el('span', { class: 'muted' }, ` ${p.fullName}`) : null)
       : el('span', { class: 'grow muted' }, 'Choose problem…'),
@@ -327,17 +333,22 @@ function renderCurrent(s: ViewState): void {
   b.append(
     el('div', { class: 'field' },
       el('div', { class: 'field-label' }, 'Problem',
-        p ? el('span', { class: `badge source-${p.source}`, title: SOURCE_TITLE[p.source] }, p.sourceLabel) : null,
         el('span', { class: 'grow' }),
-        p ? el('button', { class: 'link small', type: 'button', onclick: () => openPicker() }, 'Change') : null,
-        p ? iconButton('copy', 'Copy the problem name', () => send({ type: 'copyName', problemId: p.id })) : null,
-        p ? iconButton('book', 'Open the problem statement in VS Code', () => send({ type: 'openStatement', problemId: p.id })) : null,
-        p && p.source === 'saved' ? iconButton('close', 'Clear the saved problem for this file', () => send({ type: 'unmapProblem' })) : null,
+        p ? el('button', { class: 'link small', type: 'button', title: 'Choose another problem for this file', onclick: () => openPicker() }, 'Change') : null,
+        p ? iconButton('copy', 'Copy problem name', () => send({ type: 'copyName', problemId: p.id })) : null,
+        p ? iconButton('book', 'Open statement', () => send({ type: 'openStatement', problemId: p.id })) : null,
+        p && p.source === 'saved' ? iconButton('close', 'Remove link', () => send({ type: 'unmapProblem' })) : null,
       ),
       combo,
       pickerOpen ? (renderPickerList(s), pickerBox) : null,
       s.matching.note ? el('p', { class: 'hint' }, icon('info'), ' ', s.matching.note) : null,
-      p?.source === 'suggested' ? el('p', { class: 'hint' }, icon('lightbulb'), ' Suggested from the file name. Pick it (or another one) to confirm.') : null,
+      p?.source === 'suggested'
+        ? el('div', { class: 'row suggested' },
+            icon('lightbulb'),
+            el('span', { class: 'grow small' }, 'Suggested from the file name'),
+            button('Confirm', () => send({ type: 'confirmProblem', problemId: p.id }), { kind: 'primary', title: `Link this file to ${p.name} (#${p.id})` }),
+          )
+        : null,
     ),
   );
 
@@ -347,6 +358,7 @@ function renderCurrent(s: ViewState): void {
     const select = el('select', {
       id: 'lang',
       disabled: L.loading || L.items.length <= 1,
+      title: L.loading ? 'Loading languages…' : L.items.length <= 1 ? 'This problem allows only one language' : 'Language for this submission',
       onchange: (e: Event) => send({ type: 'selectLanguage', languageId: Number((e.target as HTMLSelectElement).value) }),
     });
     if (L.items.length === 0) select.append(el('option', {}, L.loading ? 'Loading…' : '—'));
@@ -356,9 +368,16 @@ function renderCurrent(s: ViewState): void {
     if (p.hasTestcase && p.source !== 'suggested') {
       b.append(
         button(
-          s.testcases.busy ? [icon('loading', 'codicon-modifier-spin'), ' Loading test cases…'] : [icon('beaker'), ' Load test cases into CPH'],
+          s.testcases.busy ? [icon('loading', 'codicon-modifier-spin'), ' Loading test cases…'] : [icon('beaker'), ' Load test cases'],
           () => send({ type: 'loadTestcases' }),
-          { disabled: s.testcases.busy, title: "Download the grader's test cases and add them to this file's CPH problem" },
+          {
+            disabled: s.testcases.busy,
+            title: s.testcases.busy
+              ? 'Downloading test cases…'
+              : s.cph.installed
+                ? "Download the grader's test cases into CPH"
+                : "Download the grader's test cases (CPH isn't installed: save them as .in/.out files)",
+          },
         ),
       );
     }
@@ -504,9 +523,9 @@ function detailBox(d: SubmissionDetailView): HTMLElement {
   if (d.compilerMessage) box.append(el('details', { class: 'compiler' }, el('summary', {}, 'Compiler message'), el('pre', {}, d.compilerMessage)));
   box.append(
     el('div', { class: 'row gap' },
-      button([icon('go-to-file'), ' Open this version'], () => send({ type: 'openSubmissionSource', submissionId: d.submissionId }), { disabled: !d.hasSource, title: d.hasSource ? 'Open the submitted source in a new untitled editor' : 'Source not available' }),
-      button([icon('diff'), ' Compare with current file'], () => send({ type: 'compareSubmission', submissionId: d.submissionId }), { disabled: !d.hasSource }),
-      el('button', { class: 'link', type: 'button', onclick: () => send({ type: 'openSubmission', submissionId: d.submissionId }) }, 'Website', icon('link-external')),
+      button([icon('go-to-file'), ' Open this version'], () => send({ type: 'openSubmissionSource', submissionId: d.submissionId }), { disabled: !d.hasSource, title: d.hasSource ? 'Open the submitted source in a new untitled editor' : 'The grader does not return the source of this submission' }),
+      button([icon('diff'), ' Compare with current file'], () => send({ type: 'compareSubmission', submissionId: d.submissionId }), { disabled: !d.hasSource, title: d.hasSource ? 'Compare with current file' : 'The grader does not return the source of this submission' }),
+      el('button', { class: 'link', type: 'button', title: 'Open in browser', onclick: () => send({ type: 'openSubmission', submissionId: d.submissionId }) }, 'Website', icon('link-external')),
     ),
   );
   return box;
@@ -576,22 +595,22 @@ function problemRow(p: ProblemView, s: ViewState, where: 'picker' | 'list'): HTM
     ),
     scorePill(p.score),
     el('span', { class: 'row-actions' },
-      iconButton('copy', `Copy "${p.name}"`, () => send({ type: 'copyName', problemId: p.id })),
+      iconButton('copy', 'Copy problem name', () => send({ type: 'copyName', problemId: p.id })),
       p.hasFile
-        ? iconButton('go-to-file', `Go to the file for ${p.name}`, () => send({ type: 'goToFile', problemId: p.id }))
-        : iconButton('search', `Find a file named ${p.name}.*`, () => send({ type: 'findFile', problemId: p.id })),
-      iconButton('new-file', `New file for ${p.name}`, () => send({ type: 'newFile', problemId: p.id })),
-      iconButton('book', `Open the statement of ${p.name}`, () => send({ type: 'openStatement', problemId: p.id })),
+        ? iconButton('go-to-file', 'Go to linked file', () => send({ type: 'goToFile', problemId: p.id }))
+        : iconButton('search', 'Find file by name', () => send({ type: 'findFile', problemId: p.id })),
+      iconButton('new-file', 'New file for this problem', () => send({ type: 'newFile', problemId: p.id })),
+      iconButton('book', 'Open statement', () => send({ type: 'openStatement', problemId: p.id })),
     ),
   );
 }
 
-const SOURCE_TITLE: Record<string, string> = {
-  saved: 'You chose this problem for the file (saved).',
-  cph: "Matched from this file's CPH problem.",
-  filename: 'The file name matches the problem name exactly.',
-  suggested: 'Closest name match; not saved. Pick it to confirm.',
-};
+const SOURCE_ICON: Record<string, string> = { saved: 'pinned', filename: 'file', cph: 'beaker', suggested: 'lightbulb' };
+
+/** Small icon next to the problem name saying how it was chosen (tooltip = label). Only "suggested" stands out. */
+function sourceIcon(source: string, label: string): HTMLElement {
+  return el('span', { class: `source-icon source-${source}`, title: label, 'aria-label': label, role: 'img' }, icon(SOURCE_ICON[source] ?? 'info'));
+}
 
 function renderProblems(s: ViewState): void {
   const b = sProblems.body;
