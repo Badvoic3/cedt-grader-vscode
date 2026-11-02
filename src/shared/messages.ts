@@ -40,6 +40,8 @@ export interface ProblemView {
   /** At least one file is mapped to this problem (enables "go to file"). */
   hasFile: boolean;
   hasTestcase: boolean;
+  /** The problem has an attachment (the website's "File": a template file or a zip package). */
+  hasAttachment: boolean;
   /** As on the website: solved (best ≥ 100) / inprogress / untried. */
   status: 'solved' | 'inprogress' | 'untried';
   tags: string[];
@@ -59,7 +61,7 @@ export interface ProblemFilter {
   sort?: ProblemSort;
 }
 
-export type MatchSourceView = 'saved' | 'cph' | 'filename' | 'suggested';
+export type MatchSourceView = 'saved' | 'cph' | 'filename' | 'folder' | 'suggested';
 
 export interface LanguageView {
   id: number;
@@ -150,9 +152,20 @@ export interface ViewState {
   problem: (ProblemView & { source: MatchSourceView; sourceLabel: string; unavailable: boolean }) | null;
   /** All files linked to the current problem when there are several (duplicate notice). */
   /** Files for the current problem (2+ → notice); current file first. */
-  linkedFiles: { path: string; current: boolean; how: 'chosen' | 'cph' | 'filename' | 'suggested' }[];
+  linkedFiles: { path: string; current: boolean; how: 'chosen' | 'cph' | 'filename' | 'folder' | 'suggested' }[];
   /** "Another file with the same name also matches…" / "N files are linked to this problem". */
   linkedNotice: string | null;
+  /**
+   * Folder mode: the active file is in a folder linked to the problem. `path`
+   * is the folder (workspace-relative, ending in "/"); Submit sends
+   * `submitFile` only (null: asked on the first submit); `candidates` are the
+   * folder's source files.
+   */
+  folder: { path: string; submitFile: string | null; candidates: string[] } | null;
+  /** "Link the whole folder" / "Link only this file" (null: no problem or file); `disabledReason` when it can't be switched on. */
+  folderMode: { on: boolean; disabledReason: string | null } | null;
+  /** Attachment download in progress (problem id). */
+  attachment: { busy: number | null };
   /** Show the dismissible "install CPH" tip. */
   cphTip: boolean;
   /** The file was explicitly unlinked: "Not linked to a problem" (auto-detection off). */
@@ -252,6 +265,9 @@ export type FromWebview =
   | { type: 'keepOnlyThisFile' }
   | { type: 'dismissLinkedNotice' }
   | { type: 'renameFileToProblem' }
+  | { type: 'downloadAttachment'; problemId: number }
+  | { type: 'toggleFolderMode' }
+  | { type: 'setSubmitFile'; file: string }
   | { type: 'cphTip'; action: 'install' | 'later' | 'never' }
   | { type: 'showCompilerMessage' }
   | { type: 'openSettings' }

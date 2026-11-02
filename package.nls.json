@@ -17,6 +17,8 @@
   "command.refreshHistory.title": "Reload Submission History",
   "command.clearMapping.title": "Clear Problem for This File",
   "command.renameFileToProblem.title": "Rename File to Match the Problem",
+  "command.downloadAttachment.title": "Download Problem Attachment",
+  "command.toggleFolderMode.title": "Switch Between Linking This File and the Whole Folder",
   "command.loadTestcases.title": "Load Test Cases",
   "command.clearCache.title": "Clear Cached Data…",
   "command.openWalkthrough.title": "Get Started",

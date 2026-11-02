@@ -5,7 +5,7 @@ import { matchCphProblem } from './cph';
 import { applyPattern, DEFAULT_NAME_PATTERN, isDefaultPattern, stemFor } from './namePattern';
 
 /** How the current file's problem was chosen (an icon next to the problem name). */
-export type MatchSource = 'saved' | 'cph' | 'filename' | 'suggested';
+export type MatchSource = 'saved' | 'cph' | 'filename' | 'folder' | 'suggested';
 
 /** Zero-width characters the grader's problem list contains (`_&ZeroWidthSpace;`). */
 const ZERO_WIDTH = /[​‌‍﻿]/g;
@@ -50,7 +50,7 @@ export interface MatchInput {
 export type MatchResult =
   | { kind: 'match'; problem: Problem; source: MatchSource; suggestions: Problem[] }
   /** Several problems match equally well (or suggestions too close to call): don't choose, ask. */
-  | { kind: 'ambiguous'; candidates: Problem[]; source: 'cph' | 'filename' | 'suggested' }
+  | { kind: 'ambiguous'; candidates: Problem[]; source: 'cph' | 'filename' | 'folder' | 'suggested' }
   /** A saved link whose problem is no longer on the grader (missing from the list). Kept, shown as unavailable. */
   | { kind: 'unavailable'; problemId: number; suggestions: Problem[] }
   | { kind: 'none'; suggestions: Problem[] };
@@ -61,12 +61,18 @@ export type MatchResult =
  *     reported as unavailable, never silently replaced),
  *  2. the CPH .prob file (grader URL or problem name),
  *  3. exact normalized match between file name and problem name,
- *  4. otherwise a suggestion: the closest candidate when its score reaches
+ *  4. exact normalized match between the name of the folder the file is in
+ *     and a problem name (source 'folder'), so every file of a package folder
+ *     named like a problem belongs to it,
+ *  5. otherwise a suggestion: the closest candidate when its score reaches
  *     MATCH.suggestMinScore and leads the next one by MATCH.suggestMinMargin
  *     (source 'suggested', not saved); close candidates → ambiguous
- *     ("Several problems could match"); below the threshold → none (the
- *     candidates are only offered in the picker).
+ *     ("Several problems could match"); below the threshold → the same rules
+ *     for the folder's name; still nothing → none (the candidates are only
+ *     offered in the picker).
  * More than one equally good match → ambiguous (the user is asked).
+ * The folder is the file's parent inside the workspace (`folders`, relative):
+ * a file at the top of a workspace folder has none.
  */
 export function resolveProblem(input: MatchInput): MatchResult {
   const problems = input.problems ?? [];
@@ -92,24 +98,38 @@ export function resolveProblem(input: MatchInput): MatchResult {
   }
 
   const stem = normalizeName(fileStem(input.filePath));
-  if (stem) {
-    let hits = problems.filter((p) => normalizeName(p.name) === stem);
-    if (!hits.length) hits = problems.filter((p) => normalizeName(p.fullName) === stem);
-    // A name made by the file-name pattern ("{id}_{name}.{ext}" → "1360_00_Intro_11") is exact too.
-    const pattern = input.namePattern;
-    if (!hits.length && !isDefaultPattern(pattern)) {
-      hits = problems.filter((p) => normalizeName(stemFor(pattern!, { id: p.id, cleanName: cleanName(p.name) })) === stem);
-    }
-    if (hits.length === 1) return { kind: 'match', problem: hits[0], source: 'filename', suggestions: [] };
-    if (hits.length > 1) return { kind: 'ambiguous', candidates: hits, source: 'filename' };
-  }
+  const fileHits = exactHits(stem, problems, input.namePattern);
+  if (fileHits.length === 1) return { kind: 'match', problem: fileHits[0], source: 'filename', suggestions: [] };
+  if (fileHits.length > 1) return { kind: 'ambiguous', candidates: fileHits, source: 'filename' };
 
-  const scored = scoreCandidates(stem, problems, input.folders ?? []);
-  const suggestions = scored.map((x) => x.p);
+  const folders = input.folders ?? [];
+  const folder = normalizeName(folders[folders.length - 1] ?? '');
+  const folderHits = exactHits(folder, problems, input.namePattern);
+  if (folderHits.length === 1) return { kind: 'match', problem: folderHits[0], source: 'folder', suggestions: [] };
+  if (folderHits.length > 1) return { kind: 'ambiguous', candidates: folderHits, source: 'folder' };
+
+  const scored = scoreCandidates(stem, problems, folders);
   const decision = decideSuggestion(scored);
-  if (decision.kind === 'suggested') return { kind: 'match', problem: decision.problem, source: 'suggested', suggestions };
+  if (decision.kind === 'suggested') return { kind: 'match', problem: decision.problem, source: 'suggested', suggestions: scored.map((x) => x.p) };
   if (decision.kind === 'close') return { kind: 'ambiguous', candidates: decision.candidates, source: 'suggested' };
-  return { kind: 'none', suggestions };
+  // The file name says nothing: the same rules for the folder's name.
+  const byFolder = scoreCandidates(folder, problems, folders);
+  const folderDecision = decideSuggestion(byFolder);
+  if (folderDecision.kind === 'suggested') return { kind: 'match', problem: folderDecision.problem, source: 'suggested', suggestions: byFolder.map((x) => x.p) };
+  if (folderDecision.kind === 'close') return { kind: 'ambiguous', candidates: folderDecision.candidates, source: 'suggested' };
+  return { kind: 'none', suggestions: (scored.length ? scored : byFolder).map((x) => x.p) };
+}
+
+/** Problems whose name (or full name, or file-name pattern stem) normalizes to `stem`. */
+function exactHits(stem: string, problems: Problem[], pattern: string | undefined): Problem[] {
+  if (!stem) return [];
+  let hits = problems.filter((p) => normalizeName(p.name) === stem);
+  if (!hits.length) hits = problems.filter((p) => normalizeName(p.fullName) === stem);
+  // A name made by the file-name pattern ("{id}_{name}.{ext}" → "1360_00_Intro_11") is exact too.
+  if (!hits.length && !isDefaultPattern(pattern)) {
+    hits = problems.filter((p) => normalizeName(stemFor(pattern!, { id: p.id, cleanName: cleanName(p.name) })) === stem);
+  }
+  return hits;
 }
 
 export interface ScoredCandidate {
@@ -183,6 +203,11 @@ export function placeholder(id: number, name = ''): Problem {
     tags: [],
     list: null,
   };
+}
+
+/** A safe folder name for a problem (folder mode, extracted attachments): the file-name pattern without `.{ext}`. */
+export function folderNameFor(problemName: string, pattern: string = DEFAULT_NAME_PATTERN, problemId = 0): string {
+  return stemFor(isDefaultPattern(pattern) ? DEFAULT_NAME_PATTERN : pattern, { id: problemId, cleanName: cleanName(problemName) }).normalize('NFC');
 }
 
 /**

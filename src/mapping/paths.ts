@@ -54,3 +54,13 @@ export function remapPath(p: string, oldPath: string, newPath: string, caseInsen
   const joiner = newPath.includes('\\') && !newPath.includes('/') ? '\\' : '/';
   return rest ? `${newPath.replace(/[\\/]+$/, '')}${joiner}${rest}` : newPath;
 }
+
+/** Is `p` inside the folder `folder` (not the folder itself)? Compared with `pathKey`. */
+export function isInside(p: string, folder: string, caseInsensitive = CASE_INSENSITIVE_FS): boolean {
+  return pathKey(p, caseInsensitive) !== pathKey(folder, caseInsensitive) && remapPath(p, folder, folder, caseInsensitive) !== null;
+}
+
+/** `p` itself or inside `folder`. */
+export function isAtOrInside(p: string, folder: string, caseInsensitive = CASE_INSENSITIVE_FS): boolean {
+  return remapPath(p, folder, folder, caseInsensitive) !== null;
+}

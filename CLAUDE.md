@@ -58,10 +58,11 @@ npx tsx scripts/probe.ts [--list] [--problem <ID>] [--fixtures] [--submit file] 
   - `contest.ts`: `isContestPage`.
   - `connection.ts`: `classifyConnectionError` (banner kinds/messages), `describeSubmitFailure`.
   - `sanitize.ts`: HTML/JSON fixture scrubbing.
+  - `attachment.ts`: `parseContentDisposition` (`filename*` UTF-8 first, base name only, unusable → null), `Attachment`.
   - `redact.ts`: strips secrets from logs.
 - `src/data/`: the one shared cache layer (no `vscode` import; request counts are unit tested).
   - `cache.ts`: `RequestCache` (session / TTL / final-only entries, in-flight de-duplication).
-  - `dataService.ts`: `DataService` (problems, languages, history, details; debounce, visibility, after-submit refresh, stale-on-error; reports failures to the controller's banner).
+  - `dataService.ts`: `DataService` (problems, languages, history, details; debounce, visibility, after-submit refresh, stale-on-error; reports failures to the controller's banner). `downloadAttachment` (on click only, never cached, in-flight dedup; errors go to the caller).
   - `statementStore.ts`: statement PDF / description cache in `globalStorage/statements/<host>/<id>.pdf|json`.
   - `testcaseStore.ts`: grader test cases per problem in `globalStorage/testcases/<host>/<id>.json` (downloaded one at a time; truncated cases listed, never imported).
   - `cacheFiles.ts`: downloaded-file housekeeping (see "Cache and storage"): `scanCache`, `touch` (LRU marker = mtime), `writeAtomic`, `pickLru` / `pickExpired`, `enforceLimit`, `cleanupCache`, `clearCacheFiles`.
@@ -94,6 +95,7 @@ npx tsx scripts/probe.ts [--list] [--problem <ID>] [--fixtures] [--submit file] 
   - `mappingFile.ts`: `.cedt-grader.json` parsing (`staleSince` kept), `reverseIndex`.
   - `mappingOps.ts`: pure move logic (`planRename`, `reconnectCandidates`, `affectedByDelete`, `expired`) and `moveCphProblem`.
   - `cph.ts` / `cphImport.ts`: CPH `.prob` read / import (format below). `newFile.ts`: create without overwriting.
+  - `attachment.ts`: attachments (fflate `unzipSync`): `attachmentKind` (zip = name/type says zip AND `PK\3\4` bytes), `planZip` (all checks in memory before writing: `entryPath` rejects absolute / drive / `..` / reserved characters, duplicate paths (pathKey) rejected, `__MACOSX` / `.DS_Store` / `._*` skipped, `ATTACHMENT.maxEntries` / `maxTotalBytes` on declared and real sizes, one shared top folder stripped), `submitCandidates`, `fileToOpen` (`int main` first), `freeFolderName` (`_2`), `writeExtracted` (new folder only, `wx`, stays inside), `writeNewFile` (`wx`).
   - `newFileLanguage.ts`: extension order for "New file" (active file → last used → `cedtGrader.defaultLanguage` → quick pick; never archive/binary automatically).
   - `findByName.ts`: `sourceGlob` / `excludeGlob` / `filterSourceFiles` (which files the matcher looks at: source extensions, no binaries / build output / `.cph` / `node_modules` / `*.dSYM`, plus `files.exclude`, `search.exclude`, `.gitignore`) and `rankCandidates`.
 - `src/cphIntegration.ts`: optional CPH detection, test-case target choice, "Save as files" writer.
@@ -114,6 +116,7 @@ npx tsx scripts/probe.ts [--list] [--problem <ID>] [--fixtures] [--submit file] 
 | Detail | `GET /api/v1/submissions/{id}` | `source` (own only), `source_filename`, `max_runtime` ms, `peak_memory` KB, `evaluations[{testcase_id, result, score, time ms, memory KB}]`. |
 | Test cases | `GET /api/v1/problems/{id}/testcases` (403 = not allowed), `GET /api/v1/testcases/{id}/input`, `/sol` | text/plain; student `preview` access truncates large files: `X-Testcase-Truncated: true`, `X-Testcase-Byte-Size`. Never import a truncated case. |
 | Statement | `GET /api/v1/problems/{id}/files/pdf` | 403 = PDF hidden, 404 = none → fallback `GET /api/v1/problems/{id}/description` `{markdown, description}`. |
+| Attachment | `GET /api/v1/problems/{id}/files/attachment` | The website's "File" (`has_attachment`). `send_data` with the stored `Content-Type` and `Content-Disposition: attachment; filename="…"; filename*=UTF-8''…`. 404 = none. Seen live: `.dig` (`application/xml`), `.cpp` (`text/x-c++src`), `.zip` packages (`application/zip`: flat or one top folder, `__MACOSX` junk, `.cbp`, sometimes binaries/PDFs; stored/deflate). Only on click; capped at 20 MB. Probe: `--problem <id> --attachment` (headers + zip entry names, never the body). |
 | Me | `GET /api/v1/me` | `full_name` for the Account section, once per session after a token restore. |
 
 **HTML (only what the API lacks)**, via a cookie session opened at login:
@@ -143,6 +146,15 @@ Every icon-only button (`iconButton()` in `webview/main.ts`, `btn()` in `webview
 - CPH has no rename/delete handling; a renamed source orphans its `.prob` (we offer to move it).
 - Our imported tests: `id = 7e15 + grader testcase id` (marker that survives CPH re-saves); backup `<file>.prob.bak`; own tests first and never removed; duplicates by input+output skipped; line endings `\n`.
 - Never modify CPH itself; only write `.prob` files in this exact format.
+
+## Folder mode and attachments
+
+- **Folder link:** a `.cedt-grader.json` / workspaceState entry keyed by the folder's path with `folder: true` and optional `submitFile` (relative to the folder, `/` separators; parse drops one outside the folder). `MappingStore.resolve(uri)`: the file's own entry wins, else `nearestFolderLink` (deepest non-stale folder entry above it); a "not linked" file or folder → none. `linksFor` marks folder links; `filesFor` / `mappedProblemIds` include them. Old versions see a "file" entry nobody opens (harmless).
+- **Renames / deletes:** `planRename` / `affectedByDelete` already remap the folder path (folder rename moves the link). `submitFileAfterMove` (rename inside → new relative path; moved out → cleared) and `submitFileDeleted` (cleared → asked again) in `MappingStore.rename` / `markDeleted`.
+- **Submit target** (`GraderController.targetUri()`): folder mode → `<folder>/<submitFile>` (saved choice, else the only source file, else null = ask on submit: inline buttons up to `ATTACHMENT.maxInlineChoices`, else QuickPick; saved with the link); otherwise the active file. Language guess / mismatch / per-file language, results, reveal, last result, compare and save-before-submit all use the target. The API takes one `source` + `filename`, so only that file is sent (said in the card and the confirm question).
+- **Switch** (`toggleFolderMode`: header icon `folder`/`file`, header menu, command `cedtGrader.toggleFolderMode`): file → folder links the active file's parent (never a workspace root or a folder outside the workspace: disabled reason) with `submitFile` = the active file, removes file links to the same problem inside it, asks before replacing another problem's folder link; folder → file removes the folder link and links the submit file (else the active file).
+- **Files for this problem** (`mergeProblemFiles`): files matched by their folder name (`how: 'folder'`) and chosen folder links are ONE item each (`folder: true`, fsPath = folder); files inside a folder item are covered by it (unless chosen on their own); "not linked" and links elsewhere block by prefix. A folder item opens its stand-in file (`folderItemFile`: submit file, else `int main`, else first source); the newer-file check treats the current folder as "this one".
+- **Download** (`downloadAttachment`: header icon `cloud-download` and row icon/menu only when `hasAttachment`, command `cedtGrader.downloadAttachment`): target folder like New file. Single file: own name (fallback `fileNameFor`), `freeName` + `wx`, opened, linked when it has a source extension, then inline "Rename it to <proposal>?" (WorkspaceEdit rename, Undo works). Zip: `planZip` first (errors inline, nothing written), then ONE inline question = folder-creation confirm + link question: **Extract to `<folderNameFor(problem)>/` and link it** (folder mode; `submitFile` set when there is one source file) / **Extract to `<top folder or zip stem>/` only** / Cancel; `freeFolderName`, then reveal in Explorer and open the `int main` file.
 
 ## Problem links: auto-detect, duplicates, unavailable problems
 
@@ -177,12 +189,12 @@ Every icon-only button (`iconButton()` in `webview/main.ts`, `btn()` in `webview
 
 ## Matching (one matcher, both directions)
 
-- `resolveProblem` (src/mapping/match.ts) is the only matcher: saved link → CPH `.prob` (URL or name) → exact normalized file name → confident suggestion. Normalization: zero-width removed, trim, lower case, `space - _ .` the same separator, NFC.
+- `resolveProblem` (src/mapping/match.ts) is the only matcher: saved link (the file's own, else its nearest folder link) → CPH `.prob` (URL or name) → exact normalized file name → **exact name of the folder the file is in** (`folders.at(-1)`, workspace-relative; name / full name / name pattern; source `'folder'`) → confident suggestion from the file name → the same suggestion rules for the folder name. Normalization: zero-width removed, trim, lower case, `space - _ .` the same separator, NFC. A file at the top of a workspace folder has no folder step.
 - Suggestions: score = name similarity (+ `MATCH.folderTagBonus` when a parent folder is named like one of the problem's tags). Used only if ≥ `MATCH.suggestMinScore` and ahead of the next by ≥ `MATCH.suggestMinMargin`; close scores → "Several problems could match this file. Choose one."; below → "Not linked to a problem" (candidates ≥ `MATCH.pickerMinScore` only in the picker).
 - Problem → file uses the same function: `buildMatchIndex` runs `matchFile` (= `resolveProblem` without saved link / CPH) over all source files from one `workspace.findFiles` (`sourceGlob` + `excludeGlob` + `filterSourceFiles`, at most `LIMITS.indexMaxFiles`), cached in `OnceCache` until a file is created / deleted / renamed (1 s debounce) or the problem list reloads; built only while the panel needs it; logged as `FILE SEARCH`. Before opening, a candidate whose CPH data points to another problem is dropped (same answer as opening it). A test checks that both directions agree for every fixture.
-- **States** (match line under the selector): **Chosen by you** (saved link; also confirmed suggestions) · **Matched by file name** · **Matched from CPH data** · **Suggested** (muted "Suggested from the file name · Use this"; confident suggestion or a *temporary link*) · **Not linked to a problem** (explicitly unlinked, or no confident match).
+- **States** (match line under the selector): **Chosen by you** (saved link; also confirmed suggestions) · **Folder linked by you: `pkg/`** (folder mode) · **Matched by file name** · **Matched by folder name** · **Matched from CPH data** · **Suggested** (muted "Suggested from the file name · Use this"; confident suggestion or a *temporary link*) · **Not linked to a problem** (explicitly unlinked, or no confident match).
 - **Temporary link:** a row click that opens a single name-matched / suggested file shows that problem for it ("Suggested · Use this") until another file becomes active; Use this / Choose another / Don't match this file decide.
-- **✕ in every state:** a chosen link → "Unlink this file"; a name / CPH match, suggestion or temporary link → "Don't match this file". Both store the sticky "not linked" state (`cedtGrader.unlinked`, follows renames); choosing a problem or Auto-detect clears it.
+- **✕ in every state:** a chosen link → "Unlink this file"; a name / CPH match, suggestion or temporary link → "Don't match this file"; folder mode → "Unlink this folder"; matched by folder name → "Don't match this folder". All store the sticky "not linked" state (`cedtGrader.unlinked`, follows renames; a folder entry covers every file below it); choosing a problem or Auto-detect clears it (Auto-detect also for folders above the file).
 - Suggestions behave like links for everything read-only (score, history, results, statement, files for this problem, notice, ✓) and load only that one problem; write actions (Submit, Load test cases) ask once inline (`confirmSuggestion`), yes saves the link.
 - Remembered auto-matches (`cedtGrader.autoMatches`): file name / CPH / suggestion of files that were open; never over a manual link or "not linked"; dropped on delete; kept on rename only if the matcher still agrees.
 - **Rename file to match the problem** (Current problem link, header right-click, command): shown when the name doesn't match (same normalization); proposes `<clean problem name>.<ext>`, editable; `WorkspaceEdit.renameFile` (editors, links, rename handling and the CPH prompt follow; Undo works); never overwrites (suggests `<name>_2.<ext>`).
@@ -216,7 +228,7 @@ Every icon-only button (`iconButton()` in `webview/main.ts`, `btn()` in `webview
   - The statement CSP adds `worker-src blob:` (pdf.js worker fetched from `media/dist/pdfjs` and started from a blob URL), `connect-src` for the extension's own resources, and `'unsafe-inline'` styles (pdf.js sets inline styles). `isEvalSupported: false`.
 - **Messages appear once:** connection problems go to the banner only (sections show "may be out of date", no inline error, no toast). Other errors are inline; a toast is shown only when the sidebar is hidden. A language mismatch is one hint + a disabled Submit with a tooltip.
 - **Offline:** no retry loops. Polling stops after 2 consecutive network errors and resumes on Retry or the next successful request (`pendingPoll`). Submit failures say whether anything was sent (`describeSubmitFailure`).
-- **Dependencies:** keep them minimal. Runtime: `cheerio/slim`, `tough-cookie`, `markdown-it`, Node fetch. Bundled at build time: `pdfjs-dist`, `@vscode/codicons`. Dev: esbuild, TypeScript, vitest, jsdom, tsx, vsce.
+- **Dependencies:** keep them minimal. Runtime: `cheerio/slim`, `tough-cookie`, `markdown-it`, `fflate` (zip attachments; chosen by the user over a hand-written reader), Node fetch. Bundled at build time: `pdfjs-dist`, `@vscode/codicons`. Dev: esbuild, TypeScript, vitest, jsdom, tsx, vsce.
 
 ## Cache and storage
 
@@ -226,7 +238,7 @@ Every icon-only button (`iconButton()` in `webview/main.ts`, `btn()` in `webview
 | workspaceState / globalState | keys in `src/shared/stateKeys.ts` (problem list, links, "not linked", auto-matches, notices, recently opened, statement view, backups, …) |
 | SecretStorage | password and token (only with "Remember") |
 | memory | history and submission details (`RequestCache`; never on disk) |
-| workspace | `.cedt-grader.json`, `.cph/*.prob.bak` (written by test-case import / CPH move; recorded in `cedtGrader.backups`) |
+| workspace | `.cedt-grader.json`, `.cph/*.prob.bak` (written by test-case import / CPH move; recorded in `cedtGrader.backups`), downloaded attachments (only on click, never overwriting; not cache: never cleaned up) |
 
 - Size limit `cedtGrader.cacheMaxMB` (default 100, min 10): after every write (`onWrite` → `cacheWritten`, one run at a time, the new file kept) the least recently used files go first. Stores `touch()` files on every cache hit; writes are atomic (`*.tmp` + rename).
 - Daily (`dailyCleanup`, at most once a day): stale links > 30 days, files unused 30 days, `*.tmp` older than 30 days, size limit, statement view state of statements no longer cached. Never touches the workspace.
@@ -258,7 +270,7 @@ The sidebar (`cedtGrader` Activity Bar container, view `cedtGrader.panel`) is th
   - file name;
   - searchable picker (name or id), book icon → statement viewer;
   - wrong-language hint ("This problem doesn't accept C++. Wrong problem?" + Change);
-  - header icons, always visible: Open statement, Copy problem name, Open on the grader website, Auto-detect, ✕ (Unlink this file / Don't match this file, every state); right-click on the header offers the same plus "Rename file to match the problem";
+  - header icons, always visible: Open statement, Copy problem name, Open on the grader website, Download attachment (only with `hasAttachment`; disabled "Downloading…"), Link the whole folder / Link only this file (disabled reason at the workspace root), Auto-detect, ✕ (Unlink this file / folder, Don't match this file / folder, every state); right-click on the header offers the same plus "Rename file to match the problem" (not in folder mode or for a folder-name match);
   - "Rename file to match the problem" link when the file name doesn't match;
   - match line under the selector ("Chosen by you" / "Matched by file name" / "Matched from CPH data"; a suggestion is a muted "Suggested from the file name · Use this"; choosing from the dropdown confirms too); notes for ambiguous / stale mappings;
   - "Not linked to a problem" (Choose problem / Auto-detect) after "Unlink this file": the file is stored as explicitly unlinked (`cedtGrader.unlinked`), so auto-detection leaves it alone until the user chooses or auto-detects;
@@ -266,10 +278,11 @@ The sidebar (`cedtGrader` Activity Bar container, view `cedtGrader.panel`) is th
   - "Load test cases" (when `has_testcase`; for a suggestion it asks once first; CPH or files);
   - counted-score card (counted, best, latest, attempts, penalty, "your best still counts");
   - language dropdown;
+  - folder mode: **Submits** dropdown (the folder's source files; "Asked on the first submit" until chosen) + "only this file is sent";
   - Submit button.
 - **Result** (active file only): live status, points, verdict tiles, compiler message, improvement line, Resubmit.
 - **History** (API): every submission with relative/exact time, language, score, mini verdict strip, counted marker; expand for details (per test, runtime, memory, compiler message) and "Open this version" / "Compare with current file" (`cedt-grader-submission:` read-only documents, served from the cache).
-- **Problems:** counted score per problem; virtualized, every problem reachable by scrolling; count "292 problems" / "127 of 292 problems". The list element is persistent: scroll position survives re-renders, data refresh and hide/show (`listScroll` in webview state); an editor switch only updates rows whose ✓ changed. No scroll after a row click; when the user opens a file themselves the active row is revealed with a minimal ("nearest") scroll. Row click opens the problem's file(s) via `filesForProblem(…, includeSuggested)` — saved links, remembered auto-matches, name matches and suggestions (opening never links) — (several → pick in path order labeled linked / matched by file name / suggested; missing → offer to remove the stale link; none → Link to <current file> / Create a new file / Find a file by name / Open statement; never links by itself). Row icons on hover / keyboard focus: copy name, go to file or find file by name, new file, statement. Right-click on a row: the same plus "Link to <file>" and "Open on the grader website". Row tooltip: bold "name #id" + full name only.
+- **Problems:** counted score per problem; virtualized, every problem reachable by scrolling; count "292 problems" / "127 of 292 problems". The list element is persistent: scroll position survives re-renders, data refresh and hide/show (`listScroll` in webview state); an editor switch only updates rows whose ✓ changed. No scroll after a row click; when the user opens a file themselves the active row is revealed with a minimal ("nearest") scroll. Row click opens the problem's file(s) via `filesForProblem(…, includeSuggested)` — saved links, remembered auto-matches, name matches and suggestions (opening never links) — (several → pick in path order labeled linked / matched by file name / suggested; missing → offer to remove the stale link; none → Link to <current file> / Create a new file / Find a file by name / Open statement; never links by itself). Row icons on hover / keyboard focus: copy name, go to file or find file by name, new file, download attachment (only with `hasAttachment`), statement. Right-click on a row: the same plus "Link to <file>" and "Open on the grader website". Row tooltip: bold "name #id" + full name only.
 - **Inline questions** (`askInline` → `ViewState.prompt`, plain buttons under the banner; cancelled on file switch): submit confirmation, suggested-match submit, newer linked file, auto-detect result, unlink other files, reconnect after a move, stale link. Native modal dialogs only for what can't be undone or loses data: overwrite a file, Clear Cached Data, the exam warning.
 - **Context menus** (`withContextMenu` in `webview/main.ts`): always in addition to visible icons, never instead. Long labels are cut in the middle (`webview/text.ts`), full label in tooltip + aria-label.
 
@@ -294,6 +307,7 @@ Statement viewer (`webview/statement.ts`, `webview/zoom.ts`): pinch (Ctrl+wheel)
 | Path normalization for links | `src/mapping/paths.ts` |
 | "Files for this problem" rules and notice wording | `src/mapping/problemFiles.ts` |
 | Folders never searched | `EXCLUDED_DIRS` in `src/mapping/findByName.ts` |
+| Attachment caps (download size, zip entries / total size, inline submit-file buttons) | `ATTACHMENT` in `src/shared/constants.ts`; extraction rules `src/mapping/attachment.ts` |
 | Settings | `package.json` `contributes.configuration` + `src/config.ts` |
 
 No course- or problem-specific names in code (problem names come from the server; `test/scalability.test.ts` checks).
@@ -305,6 +319,10 @@ No course- or problem-specific names in code (problem names come from the server
 - The API has no "binary language" flag: non-source languages (Archive, Digital, Viva, Text) are recognised by name / extension (`src/mapping/newFileLanguage.ts`).
 - The problem picker dropdown shows at most 50 matches ("N more. Refine the search."); the Problems list itself has no limit.
 - The match index reads at most `LIMITS.indexMaxFiles` (5 000) source files; files beyond that are only matched when opened.
+- Folder mode submits ONE file (the API takes one `source`); the grader compiles it with its own driver. That the server accepts a header such as `student.h` with language C++ was not verified by a real submit (no test submissions on the live server).
+- The folder-name step looks at the file's immediate parent folder only (a package with sub-folders: files in sub-folders match by their own folder, or via a folder link). A folder link's source-file list reads at most `ATTACHMENT.maxEntries` entries.
+- `.h` maps to C++ (C when a problem takes C only); `.hpp/.hh/.hxx` to C++ (fallback table; the server lists only `.cpp`).
+- Zip extraction supports what fflate supports (stored / deflate; no encryption, no zip64 beyond fflate's support); entries are written as plain files (a symlink entry becomes a small text file).
 - Undo of "Rename file to match the problem" relies on VS Code's undo for WorkspaceEdit file operations (checked by hand, not by a test).
 - The controller (vscode-dependent) has no unit tests; its rules are kept in pure, tested helpers (`problemFiles.ts`, `suggestionGate.ts`, `match.ts`, `mappingOps.ts`, `paths.ts`) and the webview is tested in jsdom.
 - English only; texts are already in `src/shared/strings.ts`, ready for Phase 6.
@@ -332,4 +350,4 @@ No course- or problem-specific names in code (problem names come from the server
 
 - Phase 6: done (v0.7.0, confirmed 2026-11-03, released on GitHub). Marketplace publishing waits for the user's publisher account (see Releasing).
 
-Commands (kept for keybindings; the panel is the primary interface): `cedtGrader.login`, `logout`, `submit`, `chooseProblem`, `clearMapping`, `loadTestcases`, `showLastResult`, `openStatement`, `refreshProblems`, `refreshHistory`, `showRequestLog`, `clearCache`, `openWalkthrough`, `openSettings`, `renameFileToProblem`, `focus`.
+Commands (kept for keybindings; the panel is the primary interface): `cedtGrader.login`, `logout`, `submit`, `chooseProblem`, `clearMapping`, `loadTestcases`, `showLastResult`, `openStatement`, `refreshProblems`, `refreshHistory`, `showRequestLog`, `clearCache`, `openWalkthrough`, `openSettings`, `renameFileToProblem`, `downloadAttachment`, `toggleFolderMode`, `focus`.

@@ -12,6 +12,13 @@ export interface MappingEntry {
   baseUrl?: string;
   /** Set when the mapped file was deleted / went missing; removed after 30 days (see mappingOps). */
   staleSince?: string;
+  /**
+   * Folder mode: the key is a folder and every file inside it belongs to the
+   * problem (a file's own link still wins). Submit sends `submitFile` only.
+   */
+  folder?: true;
+  /** Folder mode: the file Submit sends, relative to the folder ("/" separators); asked once when missing. */
+  submitFile?: string;
 }
 
 export interface MappingFileData {
@@ -49,6 +56,10 @@ export function parseMappingFile(text: string): MappingFileData {
         name: typeof e.name === 'string' ? e.name : '',
         ...(typeof e.baseUrl === 'string' ? { baseUrl: e.baseUrl } : {}),
         ...(typeof e.staleSince === 'string' ? { staleSince: e.staleSince } : {}),
+        ...(e.folder === true ? { folder: true as const } : {}),
+        ...(e.folder === true && typeof e.submitFile === 'string' && normalizeRelPath(e.submitFile) && !normalizeRelPath(e.submitFile).startsWith('..')
+          ? { submitFile: normalizeRelPath(e.submitFile) }
+          : {}),
       };
     }
   }
