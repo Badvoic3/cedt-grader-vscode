@@ -1,3 +1,4 @@
+import { G } from '../shared/strings';
 import { SERVER_SCORE_CAP } from '../shared/constants';
 import type { ListScoreInfo, Problem } from './types';
 
@@ -67,10 +68,10 @@ export function summarize(p: Pick<Problem, 'bestScore' | 'lastScore' | 'submissi
 /** One-line verdict on whether a new submission changed the counted score. */
 export function describeImprovement(before: number | null, after: number | null, points: number | null): string | null {
   if (after === null || points === null) return null;
-  if (before === null) return `First counted score: ${fmt(after)}.`;
-  if (after > before) return `Counted score improved: ${fmt(before)} → ${fmt(after)}.`;
-  if (points < after) return `This submission scored ${fmt(points)}; your best ${fmt(after)} still counts.`;
-  return `Counted score unchanged (${fmt(after)}).`;
+  if (before === null) return G.firstCountedScore(fmt(after));
+  if (after > before) return G.countedScoreImproved(fmt(before), fmt(after));
+  if (points < after) return G.thisSubmissionScoredYourBest(fmt(points), fmt(after));
+  return G.countedScoreUnchanged(fmt(after));
 }
 
 export function fmt(n: number): string {

@@ -5,6 +5,7 @@
  * textContent / attributes only, never innerHTML. The webview has no network
  * access (CSP default-src 'none'); all actions are postMessage'd to the host.
  */
+import { HOW_LINKED, W, W_SOURCE } from '../src/shared/strings';
 import { groupLabel, VERDICT_LEGEND } from '../src/grader/verdicts';
 import { menuLabelMax, middleEllipsis } from './text';
 import { VirtualList } from './virtualList';
@@ -186,8 +187,8 @@ function outOf(s: ScoreView): number | null {
 function scorePill(s: ScoreView): HTMLElement {
   const tip =
     s.counted === null
-      ? 'Not attempted yet'
-      : `Counted score: ${fmt(s.counted)}${outOf(s) !== null ? ` / ${fmt(outOf(s))}` : ''} (your best submission${s.penaltyLabel ? `, ${s.penaltyLabel}` : ''}) · ${s.attempts} attempt${s.attempts === 1 ? '' : 's'}`;
+      ? W.notAttemptedYet
+      : W.scorePillTip(fmt(s.counted), outOf(s) !== null ? fmt(outOf(s)) : null, s.penaltyLabel, s.attempts);
   return el('span', { class: `pill score-pill ${scoreClass(s.counted, s.rawSum, outOf(s))}`, title: tip, 'aria-label': tip }, fmt(s.counted));
 }
 
@@ -249,8 +250,8 @@ function section(id: string, title: string, actions: HTMLElement[] = []) {
 }
 
 // Persistent inputs (kept across renders so typing is never interrupted).
-const loginUser = el('input', { type: 'text', id: 'login-user', name: 'username', autocomplete: 'username', spellcheck: 'false', placeholder: 'Username' });
-const loginPass = el('input', { type: 'password', id: 'login-pass', name: 'password', autocomplete: 'current-password', placeholder: 'Password' });
+const loginUser = el('input', { type: 'text', id: 'login-user', name: 'username', autocomplete: 'username', spellcheck: 'false', placeholder: W.username });
+const loginPass = el('input', { type: 'password', id: 'login-pass', name: 'password', autocomplete: 'current-password', placeholder: W.password });
 const loginRemember = el('input', { type: 'checkbox', id: 'login-remember', checked: true });
 let rememberInitialised = false;
 const loginForm = el(
@@ -264,34 +265,34 @@ const loginForm = el(
       send({ type: 'login', username: loginUser.value, password, remember: loginRemember.checked });
     },
   },
-  el('label', { for: 'login-user' }, 'Username'),
+  el('label', { for: 'login-user' }, W.username),
   loginUser,
-  el('label', { for: 'login-pass' }, 'Password'),
+  el('label', { for: 'login-pass' }, W.password),
   loginPass,
-  el('label', { class: 'check', for: 'login-remember' }, loginRemember, ' Remember password on this computer'),
-  el('button', { class: 'btn primary', type: 'submit' }, icon('sign-in'), ' Log in'),
+  el('label', { class: 'check', for: 'login-remember' }, loginRemember, W.rememberPasswordOnThisComputer),
+  el('button', { class: 'btn primary', type: 'submit' }, icon('sign-in'), W.logIn),
 );
 let showLoginForm = false;
 
-const pickerSearch = el('input', { type: 'search', class: 'picker-search', placeholder: 'Search by name or id…', 'aria-label': 'Search problems', spellcheck: 'false' });
+const pickerSearch = el('input', { type: 'search', class: 'picker-search', placeholder: W.searchByNameOrId, 'aria-label': W.searchProblems, spellcheck: 'false' });
 const pickerList = el('div', { class: 'picker-list', role: 'listbox' });
 // One persistent container: typing only re-renders the list, never moves the search box.
 const pickerBox = el('div', { class: 'picker' }, pickerSearch, pickerList);
 let pickerOpen = false;
 
-const problemFilter = el('input', { type: 'search', placeholder: 'Filter by name or id…', 'aria-label': 'Filter problems', spellcheck: 'false', value: ui.filter });
+const problemFilter = el('input', { type: 'search', placeholder: W.filterByNameOrId, 'aria-label': W.filterProblems, spellcheck: 'false', value: ui.filter });
 
-const sAccount = section('account', 'Account');
-const sCurrent = section('current', 'Current problem');
-const sResult = section('result', 'Result');
-const sHistory = section('history', 'History', [
-  iconButton('question', 'Reading the results', () => {
+const sAccount = section('account', W.sectionAccount);
+const sCurrent = section('current', W.sectionCurrent);
+const sResult = section('result', W.sectionResult);
+const sHistory = section('history', W.sectionHistory, [
+  iconButton('question', W.readingTheResults, () => {
     legendOpen = legendOpen === 'history' ? null : 'history';
     forceRender();
   }),
-  iconButton('refresh', 'Refresh history', () => send({ type: 'refreshHistory' })),
+  iconButton('refresh', W.refreshHistory, () => send({ type: 'refreshHistory' })),
 ]);
-const sProblems = section('problems', 'Problems', [iconButton('refresh', 'Refresh problem list', () => send({ type: 'refreshProblems' }))]);
+const sProblems = section('problems', W.sectionProblems, [iconButton('refresh', W.refreshProblemList, () => send({ type: 'refreshProblems' }))]);
 const banner = el('div', { class: 'banner', role: 'alert', hidden: true });
 const promptBar = el('div', { class: 'prompt', role: 'status', hidden: true });
 app.append(banner, promptBar, sAccount.details, sCurrent.details, sResult.details, sHistory.details, sProblems.details);
@@ -321,10 +322,10 @@ function renderBanner(s: ViewState): void {
     el('div', { class: 'row' },
       icon(c.kind === 'session' ? 'account' : c.kind === 'offline' ? 'debug-disconnect' : 'warning'),
       el('strong', { class: 'grow' }, c.title),
-      button(c.action === 'login' ? [icon('sign-in'), ' Log in'] : [icon('refresh'), ' Retry'], () => send({ type: 'retry' }), { kind: 'primary' }),
+      button(c.action === 'login' ? [icon('sign-in'), W.logIn] : [icon('refresh'), W.retry], () => send({ type: 'retry' }), { kind: 'primary' }),
     ),
     el('p', {}, c.message),
-    (s.problems.loaded || s.history.items.length > 0) && el('p', { class: 'small muted' }, 'Showing saved data below; it may be out of date.'),
+    (s.problems.loaded || s.history.items.length > 0) && el('p', { class: 'small muted' }, W.showingSavedDataBelowIt),
   ]);
 }
 
@@ -347,25 +348,25 @@ function renderAccount(s: ViewState): void {
     b.append(
       el('div', { class: 'row account' },
         el('span', { class: 'dot ok', 'aria-hidden': 'true' }),
-        el('span', { class: 'grow account-name', title: `${a.fullName ? `${a.fullName} (${a.username})` : a.username} on ${host}` },
+        el('span', { class: 'grow account-name', title: W.userOnHost(a.fullName ? `${a.fullName} (${a.username})` : a.username, host) },
           el('strong', { class: 'ellipsis' }, a.fullName || a.username),
           el('span', { class: 'muted small ellipsis' }, a.fullName ? `${a.username} · ${host}` : host),
         ),
-        button([icon('sign-out'), ' Log out'], () => send({ type: 'logout' }), { title: 'Log out and forget the saved password' }),
+        button([icon('sign-out'), W.logOut], () => send({ type: 'logout' }), { title: W.logOutAndForgetThe }),
       ),
     );
     return;
   }
   if (a.status === 'logging-in') {
-    b.append(el('div', { class: 'row muted' }, icon('loading', 'codicon-modifier-spin'), ` Logging in to ${host}…`));
+    b.append(el('div', { class: 'row muted' }, icon('loading', 'codicon-modifier-spin'), W.loggingInTo(host)));
     return;
   }
   if (a.hasSavedPassword && a.username && !showLoginForm) {
     b.append(
-      el('div', { class: 'row' }, el('span', { class: 'dot', 'aria-hidden': 'true' }), el('span', { class: 'grow ellipsis' }, 'Saved login: ', el('strong', {}, a.username))),
+      el('div', { class: 'row' }, el('span', { class: 'dot', 'aria-hidden': 'true' }), el('span', { class: 'grow ellipsis' }, W.savedLogin, el('strong', {}, a.username))),
       el('div', { class: 'row gap' },
-        button([icon('sign-in'), ' Log in'], () => send({ type: 'loginSaved' }), { kind: 'primary' }),
-        el('button', { class: 'link', type: 'button', onclick: () => { showLoginForm = true; render(); } }, 'Use another account'),
+        button([icon('sign-in'), W.logIn], () => send({ type: 'loginSaved' }), { kind: 'primary' }),
+        el('button', { class: 'link', type: 'button', onclick: () => { showLoginForm = true; render(); } }, W.useAnotherAccount),
       ),
     );
   } else {
@@ -399,41 +400,41 @@ function renderPickerList(s: ViewState): void {
   pickerList.replaceChildren();
   if (!s.problems.loaded) {
     appendChildren(pickerList, [
-      el('div', { class: 'muted pad' }, s.problems.loading ? 'Loading problems…' : 'Problem list not loaded. '),
-      !s.problems.loading && button('Load problems', () => send({ type: 'refreshProblems' })),
+      el('div', { class: 'muted pad' }, s.problems.loading ? W.loadingProblems : W.problemListNotLoaded),
+      !s.problems.loading && button(W.loadProblems, () => send({ type: 'refreshProblems' })),
     ]);
   } else if (hits.length === 0) {
-    pickerList.append(el('div', { class: 'muted pad' }, 'No matching problems.'));
+    pickerList.append(el('div', { class: 'muted pad' }, W.noMatchingProblems));
   } else {
     const top = !q ? (s.matching.ambiguous ?? s.matching.suggestions) : [];
     if (top.length) {
-      pickerList.append(el('div', { class: 'picker-group muted small' }, s.matching.ambiguous ? 'Matches for this file' : 'Suggested for this file'));
+      pickerList.append(el('div', { class: 'picker-group muted small' }, s.matching.ambiguous ? W.matchesForThisFile : W.suggestedForThisFile));
       for (const p of top) pickerList.append(problemRow(p, s, 'picker'));
-      pickerList.append(el('div', { class: 'picker-group muted small' }, 'All problems'));
+      pickerList.append(el('div', { class: 'picker-group muted small' }, W.allProblems));
     }
     for (const p of hits.slice(0, 50)) pickerList.append(problemRow(p, s, 'picker'));
-    if (hits.length > 50) pickerList.append(el('div', { class: 'muted pad' }, `${hits.length - 50} more. Refine the search.`));
+    if (hits.length > 50) pickerList.append(el('div', { class: 'muted pad' }, W.moreRefineTheSearch(hits.length - 50)));
   }
 }
 
 function scoreCard(sc: ScoreView): HTMLElement {
   const card = el('div', { class: 'score-card' },
     el('div', { class: 'row score-row' },
-      el('span', { class: 'muted small' }, 'Counted score'),
+      el('span', { class: 'muted small' }, W.countedScore),
       el('span', { class: 'grow' }),
-      sc.source === 'problem-list' ? el('span', { class: 'muted small', title: 'Hint/AI-assist penalties read from the problem list page' }, 'from problem list') : null,
+      sc.source === 'problem-list' ? el('span', { class: 'muted small', title: W.hintAiAssistPenaltiesRead }, W.fromProblemList) : null,
     ),
-    el('div', { class: `score ${scoreClass(sc.counted, sc.rawSum, outOf(sc))}` }, sc.counted === null ? 'Not attempted' : outOf(sc) === null ? fmt(sc.counted) : `${fmt(sc.counted)} / ${fmt(outOf(sc))}`),
+    el('div', { class: `score ${scoreClass(sc.counted, sc.rawSum, outOf(sc))}` }, sc.counted === null ? W.notAttempted : outOf(sc) === null ? fmt(sc.counted) : `${fmt(sc.counted)} / ${fmt(outOf(sc))}`),
     el('div', { class: 'score-facts small' },
-      el('span', {}, 'Best ', el('strong', {}, fmt(sc.best))),
-      el('span', {}, 'Latest ', el('strong', {}, fmt(sc.latest))),
-      el('span', {}, 'Attempts ', el('strong', {}, String(sc.attempts))),
+      el('span', {}, W.best, el('strong', {}, fmt(sc.best))),
+      el('span', {}, W.latest, el('strong', {}, fmt(sc.latest))),
+      el('span', {}, W.attempts, el('strong', {}, String(sc.attempts))),
       sc.penaltyLabel ? el('span', { class: 'penalty' }, sc.penaltyLabel) : null,
-      sc.rawSum ? el('span', { class: 'muted' }, 'raw-sum scoring') : null,
+      sc.rawSum ? el('span', { class: 'muted' }, W.rawSumScoring) : null,
     ),
   );
   if (sc.latestBelowCounted && sc.latest !== null && sc.counted !== null) {
-    card.append(el('p', { class: 'hint' }, icon('info'), ` Latest: ${fmt(sc.latest)} — your best ${fmt(sc.counted)} still counts.`));
+    card.append(el('p', { class: 'hint' }, icon('info'), W.latestYourBestStillCounts(fmt(sc.latest), fmt(sc.counted))));
   }
   return card;
 }
@@ -442,14 +443,14 @@ function renderCurrent(s: ViewState): void {
   const b = sCurrent.body;
   b.replaceChildren();
   if (!s.file) {
-    b.append(el('p', { class: 'muted' }, icon('file'), ' Open a source file to submit it.'));
+    b.append(el('p', { class: 'muted' }, icon('file'), W.openSourceToSubmit));
     return;
   }
   b.append(
     el('div', { class: 'row file', title: s.file.path },
       icon(s.file.supported ? 'file-code' : 'file'),
       el('span', { class: 'grow ellipsis' }, s.file.name),
-      el('span', { class: 'muted small' }, s.file.languageGuess ?? 'unknown type'),
+      el('span', { class: 'muted small' }, s.file.languageGuess ?? W.unknownType),
     ),
   );
 
@@ -460,7 +461,7 @@ function renderCurrent(s: ViewState): void {
       class: 'combo',
       type: 'button',
       'aria-expanded': String(pickerOpen),
-      title: p ? `${p.name} (#${p.id}) — choose another problem` : 'Choose problem',
+      title: p ? W.chooseAnotherProblem(p.name, p.id) : W.chooseProblem,
       onclick: () => (pickerOpen ? closePicker() : openPicker()),
     },
     p
@@ -468,38 +469,38 @@ function renderCurrent(s: ViewState): void {
           el('span', { class: 'ellipsis' }, el('strong', {}, p.name), el('span', { class: 'muted' }, ` #${p.id}`)),
           titleParts(p).subtitle ? el('span', { class: 'ellipsis muted small' }, titleParts(p).subtitle!) : null,
         )
-      : el('span', { class: 'grow muted' }, 'Choose problem…'),
+      : el('span', { class: 'grow muted' }, W.chooseProblemEllipsis),
     icon(pickerOpen ? 'chevron-up' : 'chevron-down'),
   );
   b.append(
     withContextMenu(el('div', { class: 'field problem-field' },
-      el('div', { class: 'field-label' }, 'Problem',
+      el('div', { class: 'field-label' }, W.problem,
         el('span', { class: 'grow' }),
         // All actions visible (as before the "…" menu); right-click offers the same.
-        p ? iconButton('book', 'Open statement', () => send({ type: 'openStatement', problemId: p.id })) : null,
-        p ? iconButton('copy', 'Copy problem name', () => send({ type: 'copyName', problemId: p.id })) : null,
-        p ? iconButton('globe', 'Open on the grader website', () => send({ type: 'openProblemInBrowser', problemId: p.id })) : null,
-        iconButton('sparkle', 'Auto-detect the problem for this file again', () => send({ type: 'autoDetect' })),
-        p && p.source !== 'suggested' ? iconButton('close', 'Unlink this file', () => send({ type: 'unmapProblem' })) : null,
+        p ? iconButton('book', W.openStatement, () => send({ type: 'openStatement', problemId: p.id })) : null,
+        p ? iconButton('copy', W.copyProblemName, () => send({ type: 'copyName', problemId: p.id })) : null,
+        p ? iconButton('globe', W.openOnTheGraderWebsite, () => send({ type: 'openProblemInBrowser', problemId: p.id })) : null,
+        iconButton('sparkle', W.autoDetectTheProblemFor, () => send({ type: 'autoDetect' })),
+        p && p.source !== 'suggested' ? iconButton('close', W.unlinkThisFile, () => send({ type: 'unmapProblem' })) : null,
       ),
       combo,
       pickerOpen ? (renderPickerList(s), pickerBox) : null,
       p ? sourceLine(p.source, p.id, p.name) : null,
       !p && s.notLinked
         ? el('div', { class: 'notice' },
-            el('div', { class: 'row' }, icon('debug-disconnect'), el('span', { class: 'grow' }, 'Not linked to a problem')),
+            el('div', { class: 'row' }, icon('debug-disconnect'), el('span', { class: 'grow' }, W.notLinkedToAProblem)),
             el('div', { class: 'row gap' },
-              button('Choose problem', () => openPicker(), { kind: 'primary', title: 'Pick the grader problem for this file' }),
-              button('Auto-detect', () => send({ type: 'autoDetect' }), { title: 'Match this file to a problem again (file name, CPH data)' }),
+              button(W.chooseProblem, () => openPicker(), { kind: 'primary', title: W.pickTheGraderProblemFor }),
+              button(W.autoDetect, () => send({ type: 'autoDetect' }), { title: W.matchThisFileToA }),
             ),
           )
         : null,
       p?.unavailable
         ? el('div', { class: 'notice warn', role: 'alert' },
-            el('div', { class: 'row' }, icon('warning'), el('span', { class: 'grow' }, 'This problem is no longer available on the grader.')),
+            el('div', { class: 'row' }, icon('warning'), el('span', { class: 'grow' }, W.problemUnavailableMsg)),
             el('div', { class: 'row gap' },
-              button('Change problem', () => openPicker(), { title: 'Link this file to another problem' }),
-              button('Remove link', () => send({ type: 'unmapProblem' }), { title: 'Forget the link for this file' }),
+              button(W.changeProblem, () => openPicker(), { title: W.linkThisFileToAnother }),
+              button(W.removeLink, () => send({ type: 'unmapProblem' }), { title: W.forgetTheLinkForThis }),
             ),
           )
         : null,
@@ -514,25 +515,25 @@ function renderCurrent(s: ViewState): void {
     const select = el('select', {
       id: 'lang',
       disabled: L.loading || L.items.length <= 1,
-      title: L.loading ? 'Loading languages…' : L.items.length <= 1 ? 'This problem allows only one language' : 'Language for this submission',
+      title: L.loading ? W.loadingLanguages : L.items.length <= 1 ? W.thisProblemAllowsOnlyOne : W.languageForThisSubmission,
       onchange: (e: Event) => send({ type: 'selectLanguage', languageId: Number((e.target as HTMLSelectElement).value) }),
     });
-    if (L.items.length === 0) select.append(el('option', {}, L.loading ? 'Loading…' : '—'));
-    if (L.selectedId === null && L.items.length) select.append(el('option', { value: '', selected: true, disabled: true }, 'Choose language…'));
+    if (L.items.length === 0) select.append(el('option', {}, L.loading ? W.loading : '—'));
+    if (L.selectedId === null && L.items.length) select.append(el('option', { value: '', selected: true, disabled: true }, W.chooseLanguage));
     for (const l of L.items) select.append(el('option', { value: l.id, selected: l.id === L.selectedId }, l.name));
-    b.append(el('div', { class: 'field' }, el('label', { class: 'field-label', for: 'lang' }, 'Language'), select));
+    b.append(el('div', { class: 'field' }, el('label', { class: 'field-label', for: 'lang' }, W.language), select));
     if (p.hasTestcase && p.source !== 'suggested') {
       b.append(
         button(
-          s.testcases.busy ? [icon('loading', 'codicon-modifier-spin'), ' Loading test cases…'] : [icon('beaker'), ' Load test cases'],
+          s.testcases.busy ? [icon('loading', 'codicon-modifier-spin'), W.loadingTestCases] : [icon('beaker'), W.loadTestCases],
           () => send({ type: 'loadTestcases' }),
           {
             disabled: s.testcases.busy,
             title: s.testcases.busy
-              ? 'Downloading test cases…'
+              ? W.downloadingTestCases
               : s.cph.installed
-                ? "Download the grader's test cases into CPH"
-                : "Download the grader's test cases (CPH isn't installed: save them as .in/.out files)",
+                ? W.downloadIntoCph
+                : W.downloadAsFiles,
           },
         ),
       );
@@ -545,10 +546,10 @@ function renderCurrent(s: ViewState): void {
       el('div', { class: 'notice warn', role: 'status' },
         el('div', { class: 'row' },
           icon('warning'),
-          el('span', { class: 'grow' }, `This problem doesn't accept ${mm.wanted}. Wrong problem?`),
-          button('Change', () => openPicker()),
+          el('span', { class: 'grow' }, W.thisProblemDoesnTAccept(mm.wanted)),
+          button(W.change, () => openPicker()),
         ),
-        el('p', { class: 'small muted' }, `Accepted: ${mm.allowed.join(', ')}`),
+        el('p', { class: 'small muted' }, W.accepted(mm.allowed.join(', '))),
       ),
     );
   }
@@ -556,11 +557,11 @@ function renderCurrent(s: ViewState): void {
   if (s.cphTip) {
     b.append(
       el('div', { class: 'notice tip', role: 'note' },
-        el('div', { class: 'row' }, icon('lightbulb'), el('span', { class: 'grow small' }, 'Want to run test cases inside VS Code? Install the Competitive Programming Helper (CPH) extension.')),
+        el('div', { class: 'row' }, icon('lightbulb'), el('span', { class: 'grow small' }, W.wantToRunTestCases)),
         el('div', { class: 'row gap' },
-          button('Install', () => send({ type: 'cphTip', action: 'install' }), { kind: 'primary', title: "Open CPH's page in the Extensions view" }),
-          button('Not now', () => send({ type: 'cphTip', action: 'later' }), { title: 'Hide until VS Code restarts' }),
-          el('button', { class: 'link small', type: 'button', title: "Don't show this tip again", onclick: () => send({ type: 'cphTip', action: 'never' }) }, "Don't show again"),
+          button(W.install, () => send({ type: 'cphTip', action: 'install' }), { kind: 'primary', title: W.openCphSPageIn }),
+          button(W.notNow, () => send({ type: 'cphTip', action: 'later' }), { title: W.hideUntilVsCodeRestarts }),
+          el('button', { class: 'link small', type: 'button', title: W.donTShowThisTip, onclick: () => send({ type: 'cphTip', action: 'never' }) }, W.donTShowAgain),
         ),
       ),
     );
@@ -573,7 +574,7 @@ function renderCurrent(s: ViewState): void {
       ` ${sub.busy ? 'Grading…' : sub.label}`,
     ),
   );
-  if (s.gradingElsewhere) b.append(el('p', { class: 'hint' }, icon('loading', 'codicon-modifier-spin'), ` Grading ${s.gradingElsewhere} for another file…`));
+  if (s.gradingElsewhere) b.append(el('p', { class: 'hint' }, icon('loading', 'codicon-modifier-spin'), W.gradingForAnotherFile(s.gradingElsewhere)));
   // One message: the mismatch notice already explains a disabled Submit.
   if (sub.reason && !mm) b.append(el('p', { class: 'hint', id: 'submit-reason' }, icon('info'), ' ', sub.reason));
 }
@@ -589,7 +590,7 @@ function verdictTile(v: VerdictView): HTMLElement {
 
 /** One tile per test, in order; `[...]` groups drawn as a box (as on the website). */
 function verdictStrip(verdicts: VerdictView[]): HTMLElement {
-  const strip = el('div', { class: 'strip', role: 'group', 'aria-label': 'Verdict per test' });
+  const strip = el('div', { class: 'strip', role: 'group', 'aria-label': W.verdictPerTest });
   const groupCount = new Set(verdicts.filter((v) => v.group !== undefined).map((v) => v.group)).size;
   let i = 0;
   while (i < verdicts.length) {
@@ -615,7 +616,7 @@ function plainComment(comment: string): HTMLElement {
 let legendOpen: string | null = null;
 /** "?" button with the "Reading the results" popover (like the website's legend). */
 function legendButton(where: string): HTMLElement {
-  const btn = iconButton('question', 'Reading the results', () => {
+  const btn = iconButton('question', W.readingTheResults, () => {
     legendOpen = legendOpen === where ? null : where;
     forceRender();
   });
@@ -624,11 +625,11 @@ function legendButton(where: string): HTMLElement {
 }
 function legend(): HTMLElement {
   return el('div', { class: 'legend', role: 'note' },
-    el('strong', {}, 'Reading the results'),
+    el('strong', {}, W.readingTheResults),
     ...VERDICT_LEGEND.map((c) => el('div', { class: 'row' }, el('span', { class: `tile v-${c.kind}`, 'aria-hidden': 'true' }, c.code), el('span', {}, c.word))),
-    el('div', { class: 'row' }, el('span', { class: 'tile-group', 'aria-hidden': 'true' }, el('span', { class: 'tile v-correct' }, 'P'), el('span', { class: 'tile v-correct' }, 'P'), el('span', { class: 'tile v-wrong' }, '-')), el('span', {}, 'a box = tests scored together')),
-    el('p', { class: 'small' }, 'One tile per test case, in order. A box earns the lowest score inside it: one failing tile fails the whole box.'),
-    el('p', { class: 'small muted' }, 'Hover a tile or a box for details.'),
+    el('div', { class: 'row' }, el('span', { class: 'tile-group', 'aria-hidden': 'true' }, el('span', { class: 'tile v-correct' }, 'P'), el('span', { class: 'tile v-correct' }, 'P'), el('span', { class: 'tile v-wrong' }, '-')), el('span', {}, W.aBoxTestsScoredTogether)),
+    el('p', { class: 'small' }, W.oneTilePerTestCase),
+    el('p', { class: 'small muted' }, W.hoverATileOrA),
   );
 }
 
@@ -637,15 +638,15 @@ function renderResult(s: ViewState): void {
   b.replaceChildren();
   const r = s.result;
   if (!r) {
-    b.append(el('p', { class: 'muted' }, 'No submission yet for this file in this session.'));
+    b.append(el('p', { class: 'muted' }, W.noSubmissionYetForThis));
     return;
   }
   b.append(
     el('div', { class: 'row result-head' },
-      r.number !== null ? el('span', { class: 'muted' }, `Attempt ${r.number}`) : null,
+      r.number !== null ? el('span', { class: 'muted' }, W.attempt(r.number)) : null,
       r.number !== null && r.submissionId ? el('span', { class: 'muted' }, '·') : null,
       r.submissionId
-        ? el('button', { class: 'link', type: 'button', title: 'Open on the grader website', onclick: () => send({ type: 'openSubmission', submissionId: r.submissionId! }) }, `#${r.submissionId}`, icon('link-external'))
+        ? el('button', { class: 'link', type: 'button', title: W.openOnTheGraderWebsite, onclick: () => send({ type: 'openSubmission', submissionId: r.submissionId! }) }, `#${r.submissionId}`, icon('link-external'))
         : null,
       el('span', { class: 'grow' }),
       r.verdicts.length ? legendButton('result') : null,
@@ -653,10 +654,10 @@ function renderResult(s: ViewState): void {
   );
   if (legendOpen === 'result' && r.verdicts.length) b.append(legend());
   if (r.phase === 'submitting' || r.phase === 'grading') {
-    b.append(el('div', { class: 'row status' }, icon('loading', 'codicon-modifier-spin'), ' ', r.message ?? 'Grading…'));
+    b.append(el('div', { class: 'row status' }, icon('loading', 'codicon-modifier-spin'), ' ', r.message ?? W.grading));
   }
   if (r.phase === 'done' || ((r.phase === 'timeout' || r.phase === 'error') && r.verdicts.length)) {
-    const text = r.compileError ? 'Compilation error' : r.points !== null ? `${fmt(r.points)} points` : (r.message ?? 'Graded');
+    const text = r.compileError ? W.compilationError : r.points !== null ? W.points(fmt(r.points)) : (r.message ?? W.graded);
     b.append(el('div', { class: 'row score-row' }, el('span', { class: `score ${r.compileError ? 'score-zero' : scoreClass(r.points)}` }, text)));
     if (r.verdicts.length) {
       b.append(verdictStrip(r.verdicts));
@@ -668,9 +669,9 @@ function renderResult(s: ViewState): void {
   if (r.compileError) {
     b.append(
       el('details', { class: 'compiler', open: true },
-        el('summary', {}, 'Compiler message'),
-        el('pre', {}, r.compilerMessage || '(empty)'),
-        button([icon('go-to-file'), ' Open in editor'], () => send({ type: 'showCompilerMessage' })),
+        el('summary', {}, W.compilerMessage),
+        el('pre', {}, r.compilerMessage || W.empty),
+        button([icon('go-to-file'), W.openInEditor], () => send({ type: 'showCompilerMessage' })),
       ),
     );
   }
@@ -678,14 +679,14 @@ function renderResult(s: ViewState): void {
     b.append(el('div', { class: r.phase === 'error' ? 'error' : 'notice' }, icon(r.phase === 'error' ? 'error' : 'clock'), ' ', r.message ?? ''));
   }
   if (r.phase !== 'submitting' && r.phase !== 'grading') {
-    b.append(el('div', { class: 'row gap' }, button([icon('debug-restart'), ' Resubmit'], () => send({ type: 'resubmit' }), { disabled: !s.submit.enabled, title: s.submit.reason ?? 'Submit the current file again' })));
+    b.append(el('div', { class: 'row gap' }, button([icon('debug-restart'), W.resubmit], () => send({ type: 'resubmit' }), { disabled: !s.submit.enabled, title: s.submit.reason ?? W.submitTheCurrentFileAgain })));
   }
 }
 
 /** Compact strip for history rows: every test (no cut-off), wraps on its own line, groups kept as boxes. */
 function miniStrip(verdicts: VerdictView[]): HTMLElement {
   const passed = verdicts.filter((v) => v.ok).length;
-  const strip = el('div', { class: 'mini-strip', role: 'img', 'aria-label': `${passed} of ${verdicts.length} tests passed` });
+  const strip = el('div', { class: 'mini-strip', role: 'img', 'aria-label': W.ofTestsPassed(passed, verdicts.length) });
   const mini = (v: VerdictView) => el('span', { class: `mini v-${v.kind in VERDICT_LETTER ? v.kind : 'unknown'}`, title: v.label });
   const groupCount = new Set(verdicts.filter((v) => v.group !== undefined).map((v) => v.group)).size;
   let i = 0;
@@ -707,14 +708,14 @@ function detailBox(d: SubmissionDetailView): HTMLElement {
   const box = el('div', { class: 'detail' });
   box.append(
     el('div', { class: 'score-facts small' },
-      el('span', {}, 'Max time ', el('strong', {}, seconds(d.maxRuntimeMs))),
-      el('span', {}, 'Peak memory ', el('strong', {}, megabytes(d.peakMemoryKb))),
+      el('span', {}, W.maxTime, el('strong', {}, seconds(d.maxRuntimeMs))),
+      el('span', {}, W.peakMemory, el('strong', {}, megabytes(d.peakMemoryKb))),
       d.sourceFilename ? el('span', { class: 'mono' }, d.sourceFilename) : null,
     ),
   );
   if (d.evaluations.length) {
     const table = el('table', { class: 'evals' },
-      el('thead', {}, el('tr', {}, el('th', {}, '#'), el('th', {}, 'Result'), el('th', {}, 'Score'), el('th', {}, 'Time'), el('th', {}, 'Memory'))),
+      el('thead', {}, el('tr', {}, el('th', {}, '#'), el('th', {}, W.result), el('th', {}, W.score), el('th', {}, W.time), el('th', {}, W.memory))),
     );
     const body = el('tbody');
     for (const e of d.evaluations) {
@@ -731,12 +732,12 @@ function detailBox(d: SubmissionDetailView): HTMLElement {
     table.append(body);
     box.append(el('div', { class: 'evals-wrap' }, table));
   }
-  if (d.compilerMessage) box.append(el('details', { class: 'compiler' }, el('summary', {}, 'Compiler message'), el('pre', {}, d.compilerMessage)));
+  if (d.compilerMessage) box.append(el('details', { class: 'compiler' }, el('summary', {}, W.compilerMessage), el('pre', {}, d.compilerMessage)));
   box.append(
     el('div', { class: 'row gap' },
-      button([icon('go-to-file'), ' Open this version'], () => send({ type: 'openSubmissionSource', submissionId: d.submissionId }), { disabled: !d.hasSource, title: d.hasSource ? 'Open the submitted source in a new untitled editor' : 'The grader does not return the source of this submission' }),
-      button([icon('diff'), ' Compare with current file'], () => send({ type: 'compareSubmission', submissionId: d.submissionId }), { disabled: !d.hasSource, title: d.hasSource ? 'Compare with current file' : 'The grader does not return the source of this submission' }),
-      el('button', { class: 'link', type: 'button', title: 'Open in browser', onclick: () => send({ type: 'openSubmission', submissionId: d.submissionId }) }, 'Website', icon('link-external')),
+      button([icon('go-to-file'), W.openThisVersion], () => send({ type: 'openSubmissionSource', submissionId: d.submissionId }), { disabled: !d.hasSource, title: d.hasSource ? W.openTheSubmittedSourceIn : W.theGraderDoesNotReturn }),
+      button([icon('diff'), W.compareWithCurrentFile], () => send({ type: 'compareSubmission', submissionId: d.submissionId }), { disabled: !d.hasSource, title: d.hasSource ? W.compareWithCurrentFileTip : W.theGraderDoesNotReturn }),
+      el('button', { class: 'link', type: 'button', title: W.openInBrowser, onclick: () => send({ type: 'openSubmission', submissionId: d.submissionId }) }, W.website, icon('link-external')),
     ),
   );
   return box;
@@ -748,23 +749,23 @@ function historyRow(h: HistoryEntry, s: ViewState): HTMLElement {
   const row = el('div', { class: `history-item${open ? ' open' : ''}${h.counted ? ' counted' : ''}` });
   appendChildren(row, [
     el('div', { class: 'row history-line' },
-    el('button', { class: 'history-row grow', type: 'button', 'aria-expanded': String(open), title: `Submission #${h.submissionId} · ${exact(h.submittedAt)}`, onclick: () => send({ type: 'toggleSubmission', submissionId: h.submissionId }) },
+    el('button', { class: 'history-row grow', type: 'button', 'aria-expanded': String(open), title: W.submission(h.submissionId, exact(h.submittedAt)), onclick: () => send({ type: 'toggleSubmission', submissionId: h.submissionId }) },
       icon(open ? 'chevron-down' : 'chevron-right'),
       el('span', { class: 'mono muted' }, h.number !== null ? `${h.number}.` : `#${h.submissionId}`),
-      el('span', { class: `pill ${h.compileError ? 'score-zero' : scoreClass(h.points)}` }, h.compileError ? 'CE' : fmt(h.points)),
-      h.counted ? el('span', { class: 'badge counted', title: 'This submission holds your counted (best) score', 'aria-label': 'Counted (best) submission' }, icon('star-full'), el('span', { class: 'counted-text' }, 'counted')) : null,
+      el('span', { class: `pill ${h.compileError ? 'score-zero' : scoreClass(h.points)}` }, h.compileError ? W.ce : fmt(h.points)),
+      h.counted ? el('span', { class: 'badge counted', title: W.thisSubmissionHoldsYourCounted, 'aria-label': W.countedBestSubmission }, icon('star-full'), el('span', { class: 'counted-text' }, W.counted)) : null,
       el('span', { class: 'grow ellipsis' },
         h.verdicts.length
-          ? el('span', { class: 'muted small', title: `${h.verdicts.filter((v) => v.ok).length} of ${h.verdicts.length} tests passed` }, `${h.verdicts.filter((v) => v.ok).length}/${h.verdicts.length}`)
+          ? el('span', { class: 'muted small', title: W.ofTestsPassedShort(h.verdicts.filter((v) => v.ok).length, h.verdicts.length) }, `${h.verdicts.filter((v) => v.ok).length}/${h.verdicts.length}`)
           : h.compileError
-            ? el('span', { class: 'muted small' }, 'compile error')
+            ? el('span', { class: 'muted small' }, W.compileError)
             : h.comment
               ? el('span', { class: 'mono small' }, `[${h.comment}]`)
               : el('span', { class: 'muted small' }, h.status.replace(/_/g, ' ')),
       ),
       el('span', { class: 'muted small nowrap', title: exact(h.submittedAt) }, relative(h.submittedAt)),
     ),
-    iconButton('globe', 'Open on the grader website', () => send({ type: 'openSubmission', submissionId: h.submissionId })),
+    iconButton('globe', W.openOnTheGraderWebsite, () => send({ type: 'openSubmission', submissionId: h.submissionId })),
     ),
     h.verdicts.length ? miniStrip(h.verdicts) : null,
   ]);
@@ -773,7 +774,7 @@ function historyRow(h: HistoryEntry, s: ViewState): HTMLElement {
       el('div', { class: 'row small muted pad-left' }, h.language ?? '', h.language ? ' · ' : '', exact(h.submittedAt), ` · #${h.submissionId}`),
     );
     if (ex!.detail) row.append(detailBox(ex!.detail));
-    else if (ex!.loading) row.append(el('p', { class: 'muted small pad-left' }, icon('loading', 'codicon-modifier-spin'), ' Loading details…'));
+    else if (ex!.loading) row.append(el('p', { class: 'muted small pad-left' }, icon('loading', 'codicon-modifier-spin'), W.loadingDetails));
     else if (ex!.error) row.append(el('div', { class: 'error pad-left' }, icon('error'), ' ', ex!.error));
   }
   return row;
@@ -783,20 +784,20 @@ function renderHistory(s: ViewState): void {
   const b = sHistory.body;
   b.replaceChildren();
   if (!s.problem) {
-    b.append(el('p', { class: 'muted' }, 'Choose a problem to see its submissions.'));
+    b.append(el('p', { class: 'muted' }, W.chooseAProblemToSee));
     return;
   }
   const H = s.history;
   if (legendOpen === 'history') b.append(legend());
-  if (H.stale) b.append(el('p', { class: 'hint' }, icon('warning'), ' May be out of date (could not reach the grader).'));
+  if (H.stale) b.append(el('p', { class: 'hint' }, icon('warning'), W.mayBeOutOfDate));
   if (!H.items.length) {
-    b.append(el('p', { class: 'muted' }, H.loading ? 'Loading…' : H.error ? '' : 'No submissions for this problem yet.'));
+    b.append(el('p', { class: 'muted' }, H.loading ? W.loading : H.error ? '' : W.noSubmissionsForThisProblem));
   } else {
     const list = el('div', { class: 'history' });
     for (const h of H.items) list.append(historyRow(h, s));
-    b.append(list, el('p', { class: 'muted small' }, `${H.items.length} submission${H.items.length === 1 ? '' : 's'}`));
+    b.append(list, el('p', { class: 'muted small' }, W.nSubmissions(H.items.length, H.items.length === 1 ? '' : 's')));
   }
-  if (H.loading && H.items.length) b.append(el('p', { class: 'muted small' }, icon('loading', 'codicon-modifier-spin'), ' Refreshing…'));
+  if (H.loading && H.items.length) b.append(el('p', { class: 'muted small' }, icon('loading', 'codicon-modifier-spin'), W.refreshing));
   if (H.error) b.append(el('div', { class: 'error' }, icon('error'), ' ', H.error));
 }
 
@@ -805,13 +806,13 @@ function headerMenuItems(p: ViewState['problem']): MenuItem[] {
   return [
     ...(p
       ? [
-          { icon: 'book', label: 'Open statement', onclick: () => send({ type: 'openStatement', problemId: p.id }) },
-          { icon: 'copy', label: 'Copy problem name', onclick: () => send({ type: 'copyName', problemId: p.id }) },
-          { icon: 'globe', label: 'Open on the grader website', onclick: () => send({ type: 'openProblemInBrowser', problemId: p.id }) },
+          { icon: 'book', label: W.openStatement, onclick: () => send({ type: 'openStatement', problemId: p.id }) },
+          { icon: 'copy', label: W.copyProblemName, onclick: () => send({ type: 'copyName', problemId: p.id }) },
+          { icon: 'globe', label: W.openOnTheGraderWebsite, onclick: () => send({ type: 'openProblemInBrowser', problemId: p.id }) },
         ]
       : []),
-    { icon: 'sparkle', label: 'Auto-detect the problem for this file again', onclick: () => send({ type: 'autoDetect' }) },
-    ...(p && p.source !== 'suggested' ? [{ icon: 'close', label: 'Unlink this file', tip: "Auto-detect won't re-link it", onclick: () => send({ type: 'unmapProblem' }) }] : []),
+    { icon: 'sparkle', label: W.autoDetectTheProblemFor, onclick: () => send({ type: 'autoDetect' }) },
+    ...(p && p.source !== 'suggested' ? [{ icon: 'close', label: W.unlinkThisFile, tip: W.autoDetectWonTRe, onclick: () => send({ type: 'unmapProblem' }) }] : []),
   ];
 }
 
@@ -819,14 +820,14 @@ function headerMenuItems(p: ViewState['problem']): MenuItem[] {
 function rowMenuItems(p: ProblemView, s: ViewState): MenuItem[] {
   const fileName = s.file?.name;
   return [
-    ...(fileName ? [{ icon: 'link', label: `Link to ${fileName}`, tip: `Use ${p.name} for ${fileName}`, onclick: () => send({ type: 'mapProblem', problemId: p.id }) }] : []),
-    { icon: 'copy', label: 'Copy problem name', onclick: () => send({ type: 'copyName', problemId: p.id }) },
+    ...(fileName ? [{ icon: 'link', label: W.linkTo(fileName), tip: W.useFor(p.name, fileName), onclick: () => send({ type: 'mapProblem', problemId: p.id }) }] : []),
+    { icon: 'copy', label: W.copyProblemName, onclick: () => send({ type: 'copyName', problemId: p.id }) },
     p.hasFile
-      ? { icon: 'go-to-file', label: 'Go to linked file', onclick: () => send({ type: 'goToFile', problemId: p.id }) }
-      : { icon: 'search', label: 'Find file by name', onclick: () => send({ type: 'findFile', problemId: p.id }) },
-    { icon: 'new-file', label: 'New file for this problem', onclick: () => send({ type: 'newFile', problemId: p.id }) },
-    { icon: 'book', label: 'Open statement', onclick: () => send({ type: 'openStatement', problemId: p.id }) },
-    { icon: 'globe', label: 'Open on the grader website', onclick: () => send({ type: 'openProblemInBrowser', problemId: p.id }) },
+      ? { icon: 'go-to-file', label: W.goToLinkedFile, onclick: () => send({ type: 'goToFile', problemId: p.id }) }
+      : { icon: 'search', label: W.findFileByName, onclick: () => send({ type: 'findFile', problemId: p.id }) },
+    { icon: 'new-file', label: W.newFileForThisProblem, onclick: () => send({ type: 'newFile', problemId: p.id }) },
+    { icon: 'book', label: W.openStatement, onclick: () => send({ type: 'openStatement', problemId: p.id }) },
+    { icon: 'globe', label: W.openOnTheGraderWebsite, onclick: () => send({ type: 'openProblemInBrowser', problemId: p.id }) },
   ];
 }
 
@@ -858,19 +859,19 @@ function problemRow(p: ProblemView, s: ViewState, where: 'picker' | 'list'): HTM
   );
   // Tooltip: just the names (bold "name #id", the title below).
   main.dataset.tipTitle = `${p.name} #${p.id}`;
-  main.dataset.tip = main.disabled ? `${sub ? `${sub} · ` : ''}Open a source file to link a problem` : (sub ?? '');
+  main.dataset.tip = main.disabled ? W.openSourceToLink(sub ? `${sub} · ` : '') : (sub ?? '');
   // Icons as before the "…" menu (shown on hover / keyboard focus); right-click offers the same and more.
   return withContextMenu(
     el('div', { class: `problem-row${mapped ? ' mapped' : ''}`, role: where === 'picker' ? 'option' : undefined, 'aria-selected': where === 'picker' ? String(mapped) : undefined },
       main,
       scorePill(p.score),
       el('span', { class: 'row-actions' },
-        iconButton('copy', 'Copy problem name', () => send({ type: 'copyName', problemId: p.id })),
+        iconButton('copy', W.copyProblemName, () => send({ type: 'copyName', problemId: p.id })),
         p.hasFile
-          ? iconButton('go-to-file', 'Go to linked file', () => send({ type: 'goToFile', problemId: p.id }))
-          : iconButton('search', 'Find file by name', () => send({ type: 'findFile', problemId: p.id })),
-        iconButton('new-file', 'New file for this problem', () => send({ type: 'newFile', problemId: p.id })),
-        iconButton('book', 'Open statement', () => send({ type: 'openStatement', problemId: p.id })),
+          ? iconButton('go-to-file', W.goToLinkedFile, () => send({ type: 'goToFile', problemId: p.id }))
+          : iconButton('search', W.findFileByName, () => send({ type: 'findFile', problemId: p.id })),
+        iconButton('new-file', W.newFileForThisProblem, () => send({ type: 'newFile', problemId: p.id })),
+        iconButton('book', W.openStatement, () => send({ type: 'openStatement', problemId: p.id })),
       ),
     ),
     () => rowMenuItems(p, state ?? s),
@@ -878,14 +879,14 @@ function problemRow(p: ProblemView, s: ViewState, where: 'picker' | 'list'): HTM
 }
 
 let linkedOpen = false;
-const HOW_TEXT: Record<string, string> = { chosen: 'chosen by you', filename: 'matched by file name', cph: 'matched from CPH data', suggested: 'suggested' };
+const HOW_TEXT: Record<string, string> = HOW_LINKED;
 function linkedFilesNotice(s: ViewState): HTMLElement {
   const box = el('div', { class: 'notice linked' });
   box.append(
     el('div', { class: 'row' },
       icon('files'),
-      el('span', { class: 'grow small' }, s.linkedNotice ?? `${s.linkedFiles.length} files are linked to this problem`),
-      el('button', { class: 'link small', type: 'button', 'aria-expanded': String(linkedOpen), title: linkedOpen ? 'Hide the list' : 'Show the files', onclick: () => { linkedOpen = !linkedOpen; forceRender(); } }, linkedOpen ? 'Hide' : 'Show'),
+      el('span', { class: 'grow small' }, s.linkedNotice ?? W.filesAreLinkedToThis(s.linkedFiles.length)),
+      el('button', { class: 'link small', type: 'button', 'aria-expanded': String(linkedOpen), title: linkedOpen ? W.hideTheList : W.showTheFiles, onclick: () => { linkedOpen = !linkedOpen; forceRender(); } }, linkedOpen ? W.hide : W.show),
     ),
   );
   if (linkedOpen) {
@@ -907,34 +908,34 @@ function linkedFilesNotice(s: ViewState): HTMLElement {
               el('span', { class: 'grow ellipsis', title: f.path }, f.path),
             ),
             el('div', { class: 'row gap small' },
-              el('span', { class: 'muted grow' }, f.current ? `this file · ${HOW_TEXT[f.how]}` : HOW_TEXT[f.how]),
-              hide(button('Open', () => send({ type: 'openLinkedFile', index: i }), { title: `Open ${f.path}` })),
+              el('span', { class: 'muted grow' }, f.current ? W.thisFile(HOW_TEXT[f.how]) : HOW_TEXT[f.how]),
+              hide(button(W.open, () => send({ type: 'openLinkedFile', index: i }), { title: W.openPath(f.path) })),
               hide(
                 f.how === 'chosen'
-                  ? button('Unlink', () => send({ type: 'unlinkLinkedFile', index: i }), { title: `Remove the link of ${f.path} (the file is not deleted)` })
-                  : button("Don't match this file", () => send({ type: 'unlinkLinkedFile', index: i }), { title: `Stop matching ${f.path} to this problem (the file is not changed)` }),
+                  ? button(W.unlink, () => send({ type: 'unlinkLinkedFile', index: i }), { title: W.removeTheLinkOfThe(f.path) })
+                  : button(W.donTMatchThisFile, () => send({ type: 'unlinkLinkedFile', index: i }), { title: W.stopMatchingToThisProblem(f.path) }),
               ),
             ),
           );
         }),
       ),
-      el('div', { class: 'row gap' }, button('Unlink the other files', () => send({ type: 'keepOnlyThisFile' }), { title: 'Removes only the links; the files themselves are not deleted' })),
+      el('div', { class: 'row gap' }, button(W.unlinkTheOtherFiles, () => send({ type: 'keepOnlyThisFile' }), { title: W.removesOnlyTheLinksThe })),
     );
   }
   return box;
 }
 
 const SOURCE_ICON: Record<string, string> = { saved: 'pinned', filename: 'file', cph: 'beaker', suggested: 'lightbulb' };
-const SOURCE_TEXT: Record<string, string> = { saved: 'Chosen by you', filename: 'Matched by file name', cph: 'Matched from CPH data', suggested: 'Suggested' };
+const SOURCE_TEXT: Record<string, string> = W_SOURCE;
 
 /** "How matched" line under the problem selector (text, not icon-only). Only "Suggested" stands out, with Confirm. */
 function sourceLine(source: string, problemId: number, name: string): HTMLElement {
   if (source === 'suggested') {
     return el('div', { class: 'row source-line source-suggested small muted' },
       icon('lightbulb'),
-      el('span', {}, 'Suggested from the file name'),
+      el('span', {}, W.suggestedFromTheFileName),
       el('span', {}, '·'),
-      el('button', { class: 'link small', type: 'button', title: `Link this file to ${name} (#${problemId})`, onclick: () => send({ type: 'confirmProblem', problemId }) }, 'Use this'),
+      el('button', { class: 'link small', type: 'button', title: W.linkThisFileTo(name, problemId), onclick: () => send({ type: 'confirmProblem', problemId }) }, W.useThis),
     );
   }
   return el('div', { class: `row source-line source-${source} small muted` }, icon(SOURCE_ICON[source] ?? 'info'), el('span', {}, SOURCE_TEXT[source] ?? source));
@@ -993,9 +994,9 @@ function renderProblems(s: ViewState): void {
   b.replaceChildren();
   const P = s.problems;
   if (!P.loaded) {
-    if (P.loading) b.append(el('p', { class: 'muted' }, icon('loading', 'codicon-modifier-spin'), ' Loading problems…'));
-    else if (s.account.status !== 'logged-in' && !s.account.hasSavedPassword) b.append(el('p', { class: 'muted' }, 'Log in to see your problems.'));
-    else b.append(button([icon('refresh'), ' Load problems'], () => send({ type: 'refreshProblems' })));
+    if (P.loading) b.append(el('p', { class: 'muted' }, icon('loading', 'codicon-modifier-spin'), W.loadingProblemsIcon));
+    else if (s.account.status !== 'logged-in' && !s.account.hasSavedPassword) b.append(el('p', { class: 'muted' }, W.logInToSeeYour));
+    else b.append(button([icon('refresh'), W.loadProblemsIcon], () => send({ type: 'refreshProblems' })));
     if (P.error) b.append(el('div', { class: 'error' }, icon('error'), ' ', P.error));
     return;
   }
@@ -1007,22 +1008,22 @@ function renderProblems(s: ViewState): void {
   // The same viewport element is re-inserted: put the scroll position back.
   if (keepScroll && problemList.scrollTop !== keepScroll) problemList.scrollTop = keepScroll;
   listRestored = true;
-  b.append(el('p', { class: 'muted small list-count' }, hits.length === P.items.length ? `${P.items.length} problems` : `${hits.length} of ${P.items.length} problems`));
+  b.append(el('p', { class: 'muted small list-count' }, hits.length === P.items.length ? W.nProblems(P.items.length) : W.nOfProblems(hits.length, P.items.length)));
   if (P.penaltyNote) b.append(el('p', { class: 'hint' }, icon('info'), ' ', P.penaltyNote));
-  if (P.stale) b.append(el('p', { class: 'hint' }, icon('warning'), ' May be out of date (could not reach the grader).'));
-  if (P.loading) b.append(el('p', { class: 'muted small' }, icon('loading', 'codicon-modifier-spin'), ' Refreshing…'));
+  if (P.stale) b.append(el('p', { class: 'hint' }, icon('warning'), W.mayBeOutOfDate));
+  if (P.loading) b.append(el('p', { class: 'muted small' }, icon('loading', 'codicon-modifier-spin'), W.refreshing));
   if (P.error) b.append(el('div', { class: 'error' }, icon('error'), ' ', P.error));
 }
 
 const STATUS_FILTERS: { key: ProblemFilter['status']; label: string; tip: string }[] = [
-  { key: 'all', label: 'All', tip: 'All problems' },
-  { key: 'unsolved', label: 'Unsolved', tip: 'Not tried yet or not 100 yet' },
-  { key: 'inprogress', label: 'In progress', tip: 'Submitted, best score below 100' },
-  { key: 'solved', label: 'Solved', tip: 'Best score 100 or more' },
+  { key: 'all', label: W.all, tip: W.allProblems },
+  { key: 'unsolved', label: W.unsolved, tip: W.notTriedYetOrNot },
+  { key: 'inprogress', label: W.inProgress, tip: W.submittedBestScoreBelow100 },
+  { key: 'solved', label: W.solved, tip: W.bestScore100OrMore },
 ];
 
 function statusFilter(f: ProblemFilter): HTMLElement {
-  return el('div', { class: 'segmented', role: 'radiogroup', 'aria-label': 'Filter problems by status' },
+  return el('div', { class: 'segmented', role: 'radiogroup', 'aria-label': W.filterProblemsByStatus },
     ...STATUS_FILTERS.map((x) =>
       el('button', {
         class: `seg${f.status === x.key ? ' active' : ''}`, type: 'button', role: 'radio', 'aria-checked': String(f.status === x.key), title: x.tip,
@@ -1033,7 +1034,7 @@ function statusFilter(f: ProblemFilter): HTMLElement {
 }
 
 function sortSelect(f: ProblemFilter): HTMLElement {
-  const sel = el('select', { class: 'sort', 'aria-label': 'Sort problems', title: 'Sort problems', onchange: (e: Event) => {
+  const sel = el('select', { class: 'sort', 'aria-label': W.sortProblems, title: W.sortProblems, onchange: (e: Event) => {
     send({ type: 'setFilter', filter: { ...f, sort: (e.target as HTMLSelectElement).value as ProblemFilter['sort'] } });
   } });
   for (const x of SORTS) sel.append(el('option', { value: x.key, selected: (f.sort ?? 'default') === x.key }, x.label));
@@ -1041,11 +1042,11 @@ function sortSelect(f: ProblemFilter): HTMLElement {
 }
 
 function topicFilter(f: ProblemFilter, topics: { name: string; description: string | null }[]): HTMLElement {
-  return el('div', { class: 'topics', role: 'group', 'aria-label': 'Filter problems by topic' },
+  return el('div', { class: 'topics', role: 'group', 'aria-label': W.filterProblemsByTopic },
     ...topics.map((t) =>
       el('button', {
         class: `topic${f.topic === t.name ? ' active' : ''}`, type: 'button', 'aria-pressed': String(f.topic === t.name),
-        title: `${t.description ? `${t.description}. ` : ''}${f.topic === t.name ? 'Click again to show all topics' : `Show only ${t.name} problems`}`,
+        title: W.topicTip(t.description, t.name, f.topic === t.name),
         onclick: () => send({ type: 'setFilter', filter: { ...f, topic: f.topic === t.name ? null : t.name } }),
       }, t.name),
     ),
@@ -1078,7 +1079,7 @@ function sectionKeys(s: ViewState): Record<string, string> {
 
 function render(): void {
   if (!state) {
-    sAccount.body.replaceChildren(el('p', { class: 'muted' }, 'Loading…'));
+    sAccount.body.replaceChildren(el('p', { class: 'muted' }, W.loading));
     return;
   }
   const active = document.activeElement;

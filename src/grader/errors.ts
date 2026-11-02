@@ -1,3 +1,4 @@
+import { G } from '../shared/strings';
 /** Base class; messages are always human readable and never contain secrets. */
 export class GraderError extends Error {
   constructor(message: string) {
@@ -57,12 +58,12 @@ export function networkErrorFrom(err: unknown, host: string): NetworkError {
   const e = err as { name?: string; message?: string; cause?: { code?: string; name?: string } };
   const code = e?.cause?.code ?? '';
   if (e?.name === 'TimeoutError' || e?.cause?.name === 'TimeoutError' || code === 'UND_ERR_CONNECT_TIMEOUT' || code === 'ETIMEDOUT') {
-    return new NetworkError(`The grader (${host}) did not answer in time.`, 'timeout');
+    return new NetworkError(G.timeoutHost(host), 'timeout');
   }
   if (['ENOTFOUND', 'EAI_AGAIN', 'ENETUNREACH', 'ENETDOWN', 'EHOSTUNREACH'].includes(code)) {
-    return new NetworkError(`No internet connection (cannot reach ${host}).`, 'offline');
+    return new NetworkError(G.noInternetConnectionCannotReach(host), 'offline');
   }
-  return new NetworkError(`Cannot reach the grader server (${host}).`, 'unreachable');
+  return new NetworkError(G.cannotReachTheGraderServer(host), 'unreachable');
 }
 
 /** HTTP 429 or 5xx after the retries were used up. Treated like being offline (cached data is shown). */

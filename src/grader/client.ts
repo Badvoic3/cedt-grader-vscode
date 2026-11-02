@@ -1,3 +1,4 @@
+import { G } from '../shared/strings';
 import { ApiClient, type ApiLanguage, type ApiProblem, type ApiSubmission, type ApiSubmissionBrief } from './api';
 import { isContestPage } from './contest';
 import { AuthError, GraderError, NetworkError, PollTimeoutError, SessionExpiredError } from './errors';
@@ -163,7 +164,7 @@ export class GraderClient {
   private async doLogin(given?: Credentials): Promise<GraderUser> {
     const creds = given ?? (await this.opts.getStoredCredentials?.());
     if (!creds?.username || !creds.password) {
-      throw new AuthError('Log in to CEDT Grader first.', 'no-credentials');
+      throw new AuthError(G.logInToCedtGrader, 'no-credentials');
     }
     this.redactor.add(creds.password);
     const res = await this.api.login(creds.username, creds.password);
@@ -206,7 +207,7 @@ export class GraderClient {
     this.api.setToken(null);
     this.tokenExpiresAt = 0;
     const creds = await this.opts.getStoredCredentials?.();
-    if (!creds) throw new SessionExpiredError('Your grader login has expired. Please log in again.', false);
+    if (!creds) throw new SessionExpiredError(G.yourGraderLoginHasExpired, false);
     await this.login(creds);
   }
 
@@ -264,7 +265,7 @@ export class GraderClient {
     }
     if (!this.web.isLoggedIn) {
       const creds = await this.opts.getStoredCredentials?.();
-      if (!creds) throw new SessionExpiredError('No web session.', false);
+      if (!creds) throw new SessionExpiredError(G.noWebSession, false);
       return this.setListHtml(await this.web.login(creds.username, creds.password));
     }
     try {
@@ -357,7 +358,7 @@ export class GraderClient {
 
   async submit(problemId: number, languageId: number, source: string, filename: string): Promise<{ id: number; number: number | null }> {
     assertId(problemId);
-    if (!source.trim()) throw new GraderError('The file is empty.');
+    if (!source.trim()) throw new GraderError(G.theFileIsEmpty);
     const r = await this.authed(() => this.api.createSubmission(problemId, languageId, source, filename));
     return { id: r.id, number: r.number ?? null };
   }
@@ -394,7 +395,7 @@ export class GraderClient {
         wait = backoff;
       }
       if (this.now().getTime() - start + wait > timeout) {
-        throw Object.assign(new PollTimeoutError('Still not graded after 3 minutes. Check again later.'), { last });
+        throw Object.assign(new PollTimeoutError(G.stillNotGradedAfter3), { last });
       }
       await this.sleep(wait, opts.signal);
     }
@@ -454,5 +455,5 @@ function clean(s: string): string {
 }
 
 function assertId(id: number): void {
-  if (!Number.isInteger(id) || id <= 0) throw new GraderError(`Invalid id: ${id}`);
+  if (!Number.isInteger(id) || id <= 0) throw new GraderError(G.invalidId(id));
 }

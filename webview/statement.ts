@@ -3,6 +3,7 @@
  * extension's media folder via a blob URL, strict CSP. Zoom, fit width, page
  * navigation, text selection and search (Cmd/Ctrl+F).
  */
+import { W } from '../src/shared/strings';
 import { pdfjsLib } from './pdfjs-global';
 import { EventBus, PDFFindController, PDFLinkService, PDFViewer } from 'pdfjs-dist/web/pdf_viewer.mjs';
 import type { FromStatement, StatementViewState, ToStatement } from '../src/ui/statementPanel';
@@ -108,13 +109,13 @@ function setupViewer(): PDFViewer {
   eventBus.on('updatefindmatchescount', (e: { matchesCount: { current: number; total: number } }) => showMatches(e.matchesCount));
   eventBus.on('updatefindcontrolstate', (e: { matchesCount?: { current: number; total: number }; state: number }) => {
     if (e.matchesCount) showMatches(e.matchesCount);
-    if (e.state === 1 && search.value) matches.textContent = 'No matches';
+    if (e.state === 1 && search.value) matches.textContent = W.noMatches;
   });
   return viewer;
 }
 
 function showMatches(c: { current: number; total: number }): void {
-  matches.textContent = c.total ? `${c.current} of ${c.total}` : search.value ? 'No matches' : '';
+  matches.textContent = c.total ? W.matchOf(c.current, c.total) : search.value ? W.noMatches : '';
 }
 
 async function showPdf(data: Uint8Array): Promise<void> {
@@ -207,14 +208,14 @@ window.addEventListener('message', (ev: MessageEvent<ToStatement>) => {
   status.classList.remove('error');
   if (m.type === 'loading') {
     mode('loading');
-    status.textContent = 'Loading statement…';
+    status.textContent = W.loadingStatement;
   } else if (m.type === 'pdf') {
     mode('pdf');
     restoreView = m.view ?? (persisted && persisted.problemId === m.problemId ? persisted : null);
     showPdf(m.data).catch((err) => {
       mode('message');
       status.classList.add('error');
-      status.textContent = `Could not display the PDF: ${err instanceof Error ? err.message : err}`;
+      status.textContent = W.couldNotDisplayThePdf(err instanceof Error ? err.message : err);
     });
   } else if (m.type === 'html') {
     mode('html');
