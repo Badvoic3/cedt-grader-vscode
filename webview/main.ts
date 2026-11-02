@@ -903,6 +903,7 @@ function linkedFilesNotice(s: ViewState): HTMLElement {
       icon('files'),
       el('span', { class: 'grow small' }, s.linkedNotice ?? W.filesAreLinkedToThis(s.linkedFiles.length)),
       el('button', { class: 'link small', type: 'button', 'aria-expanded': String(linkedOpen), title: linkedOpen ? W.hideTheList : W.showTheFiles, onclick: () => { linkedOpen = !linkedOpen; forceRender(); } }, linkedOpen ? W.hide : W.show),
+      el('button', { class: 'link small', type: 'button', title: W.dismissNoticeTip, onclick: () => send({ type: 'dismissLinkedNotice' }) }, W.dismiss),
     ),
   );
   if (linkedOpen) {

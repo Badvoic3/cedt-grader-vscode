@@ -304,6 +304,8 @@ export const W = {
   openSourceToLink: (v0: string | number) => `${v0}Open a source file to link a problem`,
   filesAreLinkedToThis: (n: string | number) => `${n} files are linked to this problem`,
   hideTheList: "Hide the list",
+  dismiss: 'Dismiss',
+  dismissNoticeTip: 'Hide this notice until the files for this problem change',
   showTheFiles: "Show the files",
   hide: "Hide",
   show: "Show",

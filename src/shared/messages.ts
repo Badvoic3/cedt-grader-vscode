@@ -245,6 +245,7 @@ export type FromWebview =
   | { type: 'problemRowClick'; problemId: number }
   | { type: 'openLinkedFile'; index: number }
   | { type: 'keepOnlyThisFile' }
+  | { type: 'dismissLinkedNotice' }
   | { type: 'cphTip'; action: 'install' | 'later' | 'never' }
   | { type: 'showCompilerMessage' }
   | { type: 'openSettings' };
