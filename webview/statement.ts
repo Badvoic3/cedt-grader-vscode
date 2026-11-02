@@ -5,10 +5,17 @@
  */
 import { pdfjsLib } from './pdfjs-global';
 import { EventBus, PDFFindController, PDFLinkService, PDFViewer } from 'pdfjs-dist/web/pdf_viewer.mjs';
-import type { FromStatement, ToStatement } from '../src/ui/statementPanel';
+import type { FromStatement, StatementViewState, ToStatement } from '../src/ui/statementPanel';
+import { clampScale, handleZoomWheel, zoomKey } from './zoom';
 
-declare function acquireVsCodeApi(): { postMessage(m: FromStatement): void };
+interface Persisted extends StatementViewState {
+  problemId: number;
+  name: string;
+}
+declare function acquireVsCodeApi(): { postMessage(m: FromStatement): void; getState(): Persisted | undefined; setState(s: Persisted): void };
 const vscode = acquireVsCodeApi();
+/** Restored by VS Code when the tab is revived after a restart (used by the panel serializer too). */
+let persisted: Persisted | undefined = vscode.getState();
 const send = (m: FromStatement) => vscode.postMessage(m);
 
 const app = document.getElementById('app')!;
@@ -35,10 +42,10 @@ const zoomLabel = el('span', { class: 'muted zoom' }, '');
 const search = el('input', { class: 'search', type: 'search', placeholder: 'Find in statement', 'aria-label': 'Find in statement' });
 const matches = el('span', { class: 'muted matches' }, '');
 const pdfTools = el('div', { class: 'group pdf-only' },
-  btn('zoom-out', 'Zoom out', () => zoom(1 / 1.15)),
+  btn('zoom-out', 'Zoom out (Cmd/Ctrl -)', () => zoom(1 / 1.15)),
   zoomLabel,
-  btn('zoom-in', 'Zoom in', () => zoom(1.15)),
-  btn('screen-full', 'Fit width', () => viewer && (viewer.currentScaleValue = 'page-width')),
+  btn('zoom-in', 'Zoom in (Cmd/Ctrl +)', () => zoom(1.15)),
+  btn('screen-full', 'Fit width (Cmd/Ctrl 0)', () => viewer && (viewer.currentScaleValue = 'page-width')),
   el('span', { class: 'sep' }),
   btn('chevron-up', 'Previous page', () => viewer && viewer.currentPageNumber > 1 && (viewer.currentPageNumber -= 1)),
   pageInput,
@@ -69,6 +76,27 @@ let viewer: PDFViewer | null = null;
 let eventBus: EventBus | null = null;
 let linkService: PDFLinkService | null = null;
 let workerReady: Promise<void> | null = null;
+/** View to restore once pages are laid out (after reopen / restart). */
+let restoreView: StatementViewState | null = null;
+let saveTimer: ReturnType<typeof setTimeout> | null = null;
+
+/** Remember page, zoom and scroll: in the webview (restart) and in the extension (tab closed and reopened). */
+function saveView(): void {
+  if (!viewer || !persisted) return;
+  if (saveTimer) clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => {
+    if (!viewer || !persisted) return;
+    const v: StatementViewState = {
+      page: viewer.currentPageNumber,
+      scale: String(viewer.currentScaleValue),
+      scrollTop: container.scrollTop,
+      scrollLeft: container.scrollLeft,
+    };
+    persisted = { ...persisted, ...v };
+    vscode.setState(persisted);
+    send({ type: 'viewState', state: v });
+  }, 400);
+}
 
 /** Start the pdf.js worker from the media folder through a blob URL (CSP: worker-src blob:). */
 function startWorker(): Promise<void> {
@@ -88,8 +116,16 @@ function setupViewer(): PDFViewer {
   viewer = new PDFViewer({ container, eventBus, linkService, findController });
   linkService.setViewer(viewer);
   eventBus.on('pagesinit', () => {
-    viewer!.currentScaleValue = 'page-width';
+    const st = restoreView;
+    restoreView = null;
+    viewer!.currentScaleValue = st?.scale ?? 'page-width';
+    if (st) {
+      viewer!.currentPageNumber = Math.min(Math.max(1, st.page), viewer!.pagesCount);
+      requestAnimationFrame(() => container.scrollTo(st.scrollLeft, st.scrollTop));
+    }
   });
+  eventBus.on('scalechanging', () => saveView());
+  eventBus.on('pagechanging', () => saveView());
   eventBus.on('pagechanging', (e: { pageNumber: number }) => {
     pageInput.value = String(e.pageNumber);
   });
@@ -124,10 +160,17 @@ async function showPdf(data: Uint8Array): Promise<void> {
   pageInput.max = String(doc.numPages);
 }
 
-function zoom(f: number): void {
+function zoom(f: number, origin?: [number, number]): void {
   if (!viewer) return;
-  viewer.currentScale = Math.min(5, Math.max(0.25, viewer.currentScale * f));
+  const target = clampScale(viewer.currentScale * f);
+  if (target === viewer.currentScale) return;
+  // updateScale keeps the point under the cursor in place (pdf.js ≥ 4).
+  viewer.updateScale({ scaleFactor: target / viewer.currentScale, origin, drawingDelay: origin ? 300 : 0 });
 }
+
+// Pinch (Ctrl+wheel) zooms around the cursor; preventDefault stops VS Code's own zoom.
+container.addEventListener('wheel', (e) => handleZoomWheel(e, (f, o) => zoom(f, o)), { passive: false });
+container.addEventListener('scroll', () => saveView(), { passive: true });
 
 function find(again: boolean, previous: boolean): void {
   if (!eventBus) return;
@@ -163,12 +206,13 @@ window.addEventListener('keydown', (e) => {
     e.preventDefault();
     search.focus();
     search.select();
-  } else if ((e.metaKey || e.ctrlKey) && (e.key === '=' || e.key === '+')) {
+  } else if (body.classList.contains('mode-pdf')) {
+    const k = zoomKey(e);
+    if (!k) return;
     e.preventDefault();
-    zoom(1.15);
-  } else if ((e.metaKey || e.ctrlKey) && e.key === '-') {
-    e.preventDefault();
-    zoom(1 / 1.15);
+    if (k === 'in') zoom(1.15);
+    else if (k === 'out') zoom(1 / 1.15);
+    else if (viewer) viewer.currentScaleValue = 'page-width';
   }
 });
 
@@ -182,6 +226,8 @@ window.addEventListener('message', (ev: MessageEvent<ToStatement>) => {
   const m = ev.data;
   if (!m || typeof m !== 'object') return;
   titleEl.textContent = m.title;
+  if (!persisted || persisted.problemId !== m.problemId) persisted = { problemId: m.problemId, name: m.name, page: 1, scale: 'page-width', scrollTop: 0, scrollLeft: 0 };
+  vscode.setState(persisted);
   status.textContent = '';
   status.classList.remove('error');
   if (m.type === 'loading') {
@@ -189,6 +235,7 @@ window.addEventListener('message', (ev: MessageEvent<ToStatement>) => {
     status.textContent = 'Loading statement…';
   } else if (m.type === 'pdf') {
     mode('pdf');
+    restoreView = m.view ?? (persisted && persisted.problemId === m.problemId ? persisted : null);
     showPdf(m.data).catch((err) => {
       mode('message');
       status.classList.add('error');
@@ -206,3 +253,5 @@ window.addEventListener('message', (ev: MessageEvent<ToStatement>) => {
 });
 
 send({ type: 'ready' });
+
+window.addEventListener('beforeunload', () => saveView());

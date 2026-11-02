@@ -1,0 +1,1 @@
+{"name": "Local: test", "url": "/home/student/project/test.cpp", "tests": [{"id": 1783135237575, "input": "A B\nC D\nE F\nG H\n2", "output": "ACEG\n1"}, {"id": 1783142430155, "input": "A B\nA B\nA B\nA B\n2", "output": "ABAB\nBABA\n2"}], "interactive": false, "memoryLimit": 1024, "timeLimit": 3000, "srcPath": "/home/student/project/test.cpp", "group": "local", "local": true}

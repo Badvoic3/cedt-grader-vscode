@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { GraderController, SUBMISSION_SCHEME } from './controller';
 import { SidebarProvider } from './ui/sidebarProvider';
+import { StatementPanels } from './ui/statementPanel';
 import { GraderStatusBar } from './ui/statusBar';
 
 /**
@@ -48,8 +49,14 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
     vscode.commands.registerCommand('cedtGrader.openStatement', () => controller.openStatement()),
     vscode.commands.registerCommand('cedtGrader.refreshProblems', () => controller.refreshProblems(true)),
     vscode.commands.registerCommand('cedtGrader.refreshHistory', () => controller.refreshHistory()),
+    vscode.commands.registerCommand('cedtGrader.clearMapping', () => controller.unmapCurrentFile()),
+    vscode.commands.registerCommand('cedtGrader.loadTestcases', () => controller.loadTestcasesIntoCph(false)),
     vscode.commands.registerCommand('cedtGrader.showRequestLog', () => controller.showRequestLog()),
     // Read-only documents with the source of past submissions (for "Compare with current file").
+    // Statement tabs reopen after a restart, from the disk cache (no request).
+    vscode.window.registerWebviewPanelSerializer(StatementPanels.viewType, {
+      deserializeWebviewPanel: async (panel, state) => controller.statements.revive(panel, state as { problemId?: number; name?: string }),
+    }),
     vscode.workspace.registerTextDocumentContentProvider(SUBMISSION_SCHEME, {
       provideTextDocumentContent: (uri) => controller.submissionSource(uri),
     }),

@@ -44,6 +44,11 @@ export interface DataServiceOptions {
   clearTimer?: (handle: unknown) => void;
   log?: (line: string) => void;
   describe?: (err: unknown) => string;
+  /**
+   * Persisted problem list (workspace state, with its timestamp). It is shown
+   * immediately on startup but still counts as stale, so the session fetches once.
+   */
+  persist?: { load(): { at: number; list: ProblemList } | undefined; save(at: number, list: ProblemList): void };
 }
 
 export class DataService {
@@ -71,7 +76,20 @@ export class DataService {
     this.cache = new RequestCache(opts.now ?? (() => Date.now()), this.log);
     this.setTimer = opts.setTimer ?? ((fn, ms) => setTimeout(fn, ms));
     this.clearTimer = opts.clearTimer ?? ((h) => clearTimeout(h as ReturnType<typeof setTimeout>));
+    this.restorePersisted();
   }
+
+  /** Seed the cache with the saved list (marked stale: the first load of the session fetches). */
+  private restorePersisted(): void {
+    const saved = this.opts.persist?.load();
+    if (!saved) return;
+    this.cache.set('problems', saved.list);
+    this.cache.invalidate('problems');
+    this.persistedAt = saved.at;
+  }
+
+  /** When the shown problem list was fetched (persisted or this session). */
+  persistedAt: number | null = null;
 
   // ------------------------------------------------------------- reading
 
@@ -139,7 +157,10 @@ export class DataService {
     this.pendingProblems = false;
     const fresh = !force && this.cache.isFresh('problems', SESSION);
     const list = await this.run('problems', () => this.cache.get('problems', SESSION, () => this.opts.client().listProblems(), force));
-    if (list && !fresh) this.onProblemsLoaded();
+    if (list && !fresh) {
+      this.savePersisted();
+      this.onProblemsLoaded();
+    }
     return list;
   }
 
@@ -182,6 +203,7 @@ export class DataService {
         this.cache.get('problems', SESSION, () => this.opts.client().listProblems({ penalties: false, previous }), true),
       ),
     ]);
+    this.savePersisted();
   }
 
   /** Replace one problem in the cached list (e.g. after a fresh per-problem fetch). */
@@ -192,8 +214,17 @@ export class DataService {
     this.onChange();
   }
 
+  private savePersisted(): void {
+    const e = this.cache.peek<ProblemList>('problems');
+    if (e && e.at !== Number.NEGATIVE_INFINITY) {
+      this.persistedAt = e.at;
+      this.opts.persist?.save(e.at, e.value);
+    }
+  }
+
   clear(): void {
     if (this.timer !== null) this.clearTimer(this.timer);
+    this.persistedAt = null;
     this.timer = null;
     this.cache.clear();
     this.states.clear();

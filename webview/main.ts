@@ -261,6 +261,12 @@ function renderPickerList(s: ViewState): void {
   } else if (hits.length === 0) {
     pickerList.append(el('div', { class: 'muted pad' }, 'No matching problems.'));
   } else {
+    const top = !q ? (s.matching.ambiguous ?? s.matching.suggestions) : [];
+    if (top.length) {
+      pickerList.append(el('div', { class: 'picker-group muted small' }, s.matching.ambiguous ? 'Matches for this file' : 'Suggested for this file'));
+      for (const p of top) pickerList.append(problemRow(p, s, 'picker'));
+      pickerList.append(el('div', { class: 'picker-group muted small' }, 'All problems'));
+    }
     for (const p of hits.slice(0, 50)) pickerList.append(problemRow(p, s, 'picker'));
     if (hits.length > 50) pickerList.append(el('div', { class: 'muted pad' }, `${hits.length - 50} more. Refine the search.`));
   }
@@ -321,13 +327,17 @@ function renderCurrent(s: ViewState): void {
   b.append(
     el('div', { class: 'field' },
       el('div', { class: 'field-label' }, 'Problem',
-        p && p.source === 'cph' ? el('span', { class: 'badge', title: 'Matched from the CPH problem file. Pick it again to save the mapping.' }, 'from CPH') : null,
+        p ? el('span', { class: `badge source-${p.source}`, title: SOURCE_TITLE[p.source] }, p.sourceLabel) : null,
         el('span', { class: 'grow' }),
+        p ? el('button', { class: 'link small', type: 'button', onclick: () => openPicker() }, 'Change') : null,
+        p ? iconButton('copy', 'Copy the problem name', () => send({ type: 'copyName', problemId: p.id })) : null,
         p ? iconButton('book', 'Open the problem statement in VS Code', () => send({ type: 'openStatement', problemId: p.id })) : null,
-        p ? iconButton('close', 'Forget the problem for this file', () => send({ type: 'unmapProblem' })) : null,
+        p && p.source === 'saved' ? iconButton('close', 'Clear the saved problem for this file', () => send({ type: 'unmapProblem' })) : null,
       ),
       combo,
       pickerOpen ? (renderPickerList(s), pickerBox) : null,
+      s.matching.note ? el('p', { class: 'hint' }, icon('info'), ' ', s.matching.note) : null,
+      p?.source === 'suggested' ? el('p', { class: 'hint' }, icon('lightbulb'), ' Suggested from the file name. Pick it (or another one) to confirm.') : null,
     ),
   );
 
@@ -343,6 +353,15 @@ function renderCurrent(s: ViewState): void {
     if (L.selectedId === null && L.items.length) select.append(el('option', { value: '', selected: true, disabled: true }, 'Choose language…'));
     for (const l of L.items) select.append(el('option', { value: l.id, selected: l.id === L.selectedId }, l.name));
     b.append(el('div', { class: 'field' }, el('label', { class: 'field-label', for: 'lang' }, 'Language'), select));
+    if (p.hasTestcase && p.source !== 'suggested') {
+      b.append(
+        button(
+          s.testcases.busy ? [icon('loading', 'codicon-modifier-spin'), ' Loading test cases…'] : [icon('beaker'), ' Load test cases into CPH'],
+          () => send({ type: 'loadTestcases' }),
+          { disabled: s.testcases.busy, title: "Download the grader's test cases and add them to this file's CPH problem" },
+        ),
+      );
+    }
   }
 
   const mm = p ? s.languages.mismatch : null;
@@ -556,9 +575,23 @@ function problemRow(p: ProblemView, s: ViewState, where: 'picker' | 'list'): HTM
       p.fullName && p.fullName !== p.name ? el('span', { class: 'problem-full ellipsis muted' }, p.fullName) : null,
     ),
     scorePill(p.score),
-    iconButton('book', `Open the statement of ${p.name}`, () => send({ type: 'openStatement', problemId: p.id })),
+    el('span', { class: 'row-actions' },
+      iconButton('copy', `Copy "${p.name}"`, () => send({ type: 'copyName', problemId: p.id })),
+      p.hasFile
+        ? iconButton('go-to-file', `Go to the file for ${p.name}`, () => send({ type: 'goToFile', problemId: p.id }))
+        : iconButton('search', `Find a file named ${p.name}.*`, () => send({ type: 'findFile', problemId: p.id })),
+      iconButton('new-file', `New file for ${p.name}`, () => send({ type: 'newFile', problemId: p.id })),
+      iconButton('book', `Open the statement of ${p.name}`, () => send({ type: 'openStatement', problemId: p.id })),
+    ),
   );
 }
+
+const SOURCE_TITLE: Record<string, string> = {
+  saved: 'You chose this problem for the file (saved).',
+  cph: "Matched from this file's CPH problem.",
+  filename: 'The file name matches the problem name exactly.',
+  suggested: 'Closest name match; not saved. Pick it to confirm.',
+};
 
 function renderProblems(s: ViewState): void {
   const b = sProblems.body;

@@ -13,6 +13,7 @@ import type {
   StoredToken,
   SubmissionBrief,
   SubmissionDetail,
+  TestcaseInfo,
 } from './types';
 import { parseGraderComment } from './verdicts';
 import { WebSession } from './web';
@@ -267,6 +268,37 @@ export class GraderClient {
       if (!creds) throw err;
       return this.setListHtml(await this.web.login(creds.username, creds.password));
     }
+  }
+
+  /** `GET /api/v1/problems/{id}/testcases`; null when not allowed (403) or not found. */
+  async listTestcases(problemId: number): Promise<TestcaseInfo[] | null> {
+    assertId(problemId);
+    try {
+      const list = await this.authed(() =>
+        this.api.get<{ id: number; num: number; group: number | null; group_name: string | null; weight: number | null; access: string; input_bytes: number | null; sol_bytes: number | null }[]>(
+          `/api/v1/problems/${problemId}/testcases`,
+        ),
+      );
+      return list.map((t) => ({
+        id: t.id,
+        num: t.num,
+        group: t.group ?? null,
+        groupName: t.group_name ?? null,
+        weight: t.weight ?? null,
+        access: t.access,
+        inputBytes: t.input_bytes ?? null,
+        solBytes: t.sol_bytes ?? null,
+      }));
+    } catch (err) {
+      if (err instanceof GraderError && !(err instanceof NetworkError) && !(err instanceof SessionExpiredError) && !(err instanceof AuthError)) return null;
+      throw err;
+    }
+  }
+
+  /** `GET /api/v1/testcases/{id}/input|sol` as text, with the preview truncation flag. */
+  async getTestcaseFile(testcaseId: number, which: 'input' | 'sol'): Promise<{ text: string; truncated: boolean; byteSize: number | null }> {
+    assertId(testcaseId);
+    return this.authed(() => this.api.getText(`/api/v1/testcases/${testcaseId}/${which}`));
   }
 
   /** `GET /api/v1/problems/{id}/files/pdf`: 403 = PDF hidden for this problem, 404 = none. */

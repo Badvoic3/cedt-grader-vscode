@@ -38,6 +38,8 @@ const base: ViewState = {
   account: { status: 'logged-out', username: '', hasSavedPassword: false, rememberPassword: true, error: null },
   file: null,
   problem: null,
+  matching: { suggestions: [], ambiguous: null, note: null },
+  testcases: { busy: false },
   languages: { loading: false, items: [], selectedId: null, mismatch: null },
   connection: null,
   submit: { enabled: false, busy: false, reason: 'Open a source file to submit it.', label: 'Submit to Grader' },
@@ -51,7 +53,7 @@ const loggedIn: ViewState = {
   ...base,
   account: { status: 'logged-in', username: 'student', hasSavedPassword: true, rememberPassword: true, error: null },
   file: { path: 'grader/00 11 intro.cpp', name: '00 11 intro.cpp', languageGuess: 'C++', supported: true },
-  problem: { id: 1360, name: '00_Intro_11', fullName: '<img src=x onerror=alert(1)>', score: score(70, { latest: 40, attempts: 3, latestBelowCounted: true, penaltyLabel: '-10 AI assist' }), source: 'mapping' },
+  problem: { id: 1360, name: '00_Intro_11', fullName: '<img src=x onerror=alert(1)>', score: score(70, { latest: 40, attempts: 3, latestBelowCounted: true, penaltyLabel: '-10 AI assist' }), source: 'saved', sourceLabel: 'saved', hasFile: true, hasTestcase: true },
   languages: { loading: false, items: [{ id: 1, name: 'C' }, { id: 2, name: 'C++' }], selectedId: 2, mismatch: null },
   submit: { enabled: true, busy: false, reason: null, label: 'Submit to Grader' },
   result: {
@@ -73,7 +75,7 @@ const loggedIn: ViewState = {
       { submissionId: 2460900, number: 2, points: 0, status: 'compilation_error', comment: 'Compilation error', submittedAt: '2026-11-02T12:30:00+07:00', language: 'C++', compileError: true, counted: false, verdicts: [] },
     ],
   },
-  problems: { loading: false, loaded: true, items: [{ id: 1360, name: '00_Intro_11', fullName: 'Hello', score: score(100) }, { id: 1271, name: '01_Expr_11', fullName: 'An Expression', score: score(null) }], error: null, penaltyNote: null, stale: false },
+  problems: { loading: false, loaded: true, items: [{ id: 1360, name: '00_Intro_11', fullName: 'Hello', score: score(100), hasFile: true, hasTestcase: true }, { id: 1271, name: '01_Expr_11', fullName: 'An Expression', score: score(null), hasFile: false, hasTestcase: false }], error: null, penaltyNote: null, stale: false },
 };
 
 describe.runIf(existsSync(resolve(__dirname, '../esbuild.mjs')))('sidebar webview', () => {
@@ -256,6 +258,46 @@ describe.runIf(existsSync(resolve(__dirname, '../esbuild.mjs')))('sidebar webvie
     const { doc, post } = boot();
     post({ ...base, connection: { kind: 'session', title: 'Session expired', message: 'Log in again.', action: 'login' } });
     expect(doc.querySelector('.banner button')!.textContent).toContain('Log in');
+  });
+
+  it('Phase 3: source badge, Change, copy, test-case button, row actions', () => {
+    const { doc, sent, post } = boot();
+    post(loggedIn);
+    const cur = doc.querySelector('#sec-current')!;
+    expect(cur.querySelector('.badge.source-saved')!.textContent).toBe('saved');
+    [...cur.querySelectorAll<HTMLButtonElement>('button')].find((b) => b.getAttribute('aria-label') === 'Copy the problem name')!.click();
+    expect(sent.at(-1)).toEqual({ type: 'copyName', problemId: 1360 });
+    [...cur.querySelectorAll<HTMLButtonElement>('button')].find((b) => b.textContent?.includes('Load test cases into CPH'))!.click();
+    expect(sent.at(-1)).toEqual({ type: 'loadTestcases' });
+    [...cur.querySelectorAll<HTMLButtonElement>('button.link')].find((b) => b.textContent === 'Change')!.click();
+    expect(doc.activeElement).toBe(doc.querySelector('.picker-search'));
+    const rows = doc.querySelectorAll('#sec-problems .problem-row');
+    const label = (r: Element) => [...r.querySelectorAll('.row-actions button')].map((b) => b.getAttribute('aria-label'));
+    expect(label(rows[0])).toContain('Go to the file for 00_Intro_11'); // has a mapped file
+    expect(label(rows[1])).toContain('Find a file named 01_Expr_11.*'); // no mapped file
+    rows[1].querySelector<HTMLButtonElement>('[aria-label="New file for 01_Expr_11"]')!.click();
+    expect(sent.at(-1)).toEqual({ type: 'newFile', problemId: 1271 });
+  });
+
+  it('Phase 3: suggested match is labelled, no test-case button, picker lists suggestions first', () => {
+    const { doc, post } = boot();
+    const sug = { id: 1271, name: '01_Expr_11', fullName: 'An Expression', score: score(null), hasFile: false, hasTestcase: true };
+    post({ ...loggedIn, problem: { ...sug, source: 'suggested', sourceLabel: 'suggested' }, matching: { suggestions: [sug], ambiguous: null, note: null } });
+    expect(doc.querySelector('#sec-current .badge.source-suggested')).not.toBeNull();
+    expect(doc.querySelector('#sec-current')!.textContent).toContain('Suggested from the file name');
+    expect([...doc.querySelectorAll('#sec-current button')].some((b) => b.textContent?.includes('Load test cases'))).toBe(false);
+    doc.querySelector<HTMLButtonElement>('#sec-current .combo')!.click();
+    expect(doc.querySelector('.picker-group')!.textContent).toBe('Suggested for this file');
+  });
+
+  it('Phase 3: ambiguous match shows the note and the candidates', () => {
+    const { doc, post } = boot();
+    const a = { id: 1, name: 'dup', fullName: 'Dup A', score: score(null), hasFile: false, hasTestcase: false };
+    const b = { ...a, id: 2, fullName: 'Dup B' };
+    post({ ...loggedIn, problem: null, matching: { suggestions: [], ambiguous: [a, b], note: 'Several problems match this file name. Choose one.' } });
+    expect(doc.querySelector('#sec-current')!.textContent).toContain('Several problems match this file name');
+    doc.querySelector<HTMLButtonElement>('#sec-current .combo')!.click();
+    expect(doc.querySelector('.picker-group')!.textContent).toBe('Matches for this file');
   });
 
   it('filter narrows the problem list and is remembered (UI state only)', () => {

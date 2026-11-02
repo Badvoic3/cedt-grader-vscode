@@ -8,6 +8,8 @@ export interface MappingEntry {
   /** Problem short name at the time of mapping (for humans reading the file). */
   name: string;
   baseUrl?: string;
+  /** Set when the mapped file was deleted / went missing; removed after 30 days (see mappingOps). */
+  staleSince?: string;
 }
 
 export interface MappingFileData {
@@ -39,6 +41,7 @@ export function parseMappingFile(text: string): MappingFileData {
         problemId: e.problemId,
         name: typeof e.name === 'string' ? e.name : '',
         ...(typeof e.baseUrl === 'string' ? { baseUrl: e.baseUrl } : {}),
+        ...(typeof e.staleSince === 'string' ? { staleSince: e.staleSince } : {}),
       };
     }
   }
@@ -58,7 +61,17 @@ export function normalizeRel(p: string): string {
 /** Entry for `rel`, ignoring entries made for a different grader server. */
 export function lookup(d: MappingFileData, rel: string, baseUrl: string): MappingEntry | undefined {
   const e = d.files[normalizeRel(rel)];
-  if (!e) return undefined;
+  if (!e || e.staleSince) return undefined;
   if (e.baseUrl && e.baseUrl !== baseUrl) return undefined;
   return e;
+}
+
+/** Reverse lookup problem id → relative paths (for "go to file"; no workspace scan). */
+export function reverseIndex(d: MappingFileData, baseUrl: string): Map<number, string[]> {
+  const out = new Map<number, string[]>();
+  for (const [rel, e] of Object.entries(d.files)) {
+    if ((e.baseUrl && e.baseUrl !== baseUrl) || e.staleSince) continue;
+    out.set(e.problemId, [...(out.get(e.problemId) ?? []), rel]);
+  }
+  return out;
 }

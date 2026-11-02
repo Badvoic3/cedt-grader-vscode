@@ -23,7 +23,13 @@ Click the **CEDT Grader** icon in the Activity Bar. The sidebar has five section
 
 Typical flow: open `sol.cpp` → pick the problem once (it is remembered) → **Submit** → confirm. That's two clicks for every later submission.
 
-The mapping is saved in `.cedt-grader.json` in your workspace folder, and also in VS Code's workspace storage. If CPH has a problem file for your source whose name or URL matches a grader problem, that problem is suggested automatically.
+**Linking files to problems.** A file is linked automatically when its name matches a problem name (`00_Intro_11.cpp` → `00_Intro_11`; case, spaces, `-`, `_` and `.` don't matter) or when its CPH problem refers to the grader problem. Otherwise the closest problems are suggested (marked "suggested"; submitting asks first). Your own choice always wins and is saved in `.cedt-grader.json` and VS Code's workspace storage. The panel shows how the problem was chosen, with a **Change** button.
+
+Handy actions in the problem list and picker: **copy the exact problem name**, **new file for this problem** (creates `<name>.cpp` next to your file), **go to the file** linked to a problem (or find one by name).
+
+Renaming or moving a linked file in VS Code keeps the link (and can move its CPH tests along). If you move files in Finder or git, the extension asks whether to keep the old link when you open the file.
+
+**Test cases.** For problems that provide them, **Load test cases into CPH** downloads the grader's test cases and adds them to the file's CPH problem (your own CPH tests are kept; the old file is backed up; large cases the grader only shows in part are skipped). Switch to the file once so CPH shows them.
 
 **Also available:**
 - The status bar item (`☁ Submit to Grader`, the score after grading) opens the panel.
@@ -32,7 +38,7 @@ The mapping is saved in `.cedt-grader.json` in your workspace folder, and also i
 
 ## Problem statements
 
-Click the book icon next to the problem to open its statement in a tab beside your code (zoom, fit width, page navigation, search with Cmd/Ctrl+F). Statements are downloaded once and kept in VS Code's own storage (never in your project); the viewer's Refresh button downloads them again. Problems without a PDF show their text description. Set `cedtGrader.statementBeside` to `false` to open statements in the current editor group.
+Click the book icon next to the problem to open its statement in a tab beside your code (pinch or Cmd/Ctrl +/- to zoom, Cmd/Ctrl 0 to fit width, page navigation, search with Cmd/Ctrl+F). The tab remembers its page and zoom and reopens after a restart. Statements are downloaded once and kept in VS Code's own storage (never in your project); the viewer's Refresh button downloads them again. Problems without a PDF show their text description. Set `cedtGrader.statementBeside` to `false` to open statements in the current editor group.
 
 ## When the connection fails
 

@@ -4,15 +4,36 @@ import MarkdownIt from 'markdown-it';
 import * as vscode from 'vscode';
 import type { Statement, StatementStore } from '../data/statementStore';
 
+/** Page, zoom and scroll of a statement tab. */
+export interface StatementViewState {
+  page: number;
+  /** pdf.js scale value: a number as string, or 'page-width'. */
+  scale: string;
+  scrollTop: number;
+  scrollLeft: number;
+}
+
+interface Base {
+  title: string;
+  problemId: number;
+  name: string;
+}
+
 /** Host → statement webview. */
 export type ToStatement =
-  | { type: 'loading'; title: string }
-  | { type: 'pdf'; title: string; data: Uint8Array }
-  | { type: 'html'; title: string; html: string }
-  | { type: 'message'; title: string; text: string; error: boolean };
+  | (Base & { type: 'loading' })
+  | (Base & { type: 'pdf'; data: Uint8Array; view: StatementViewState | null })
+  | (Base & { type: 'html'; html: string })
+  | (Base & { type: 'message'; text: string; error: boolean });
 
 /** Statement webview → host. */
-export type FromStatement = { type: 'ready' } | { type: 'refresh' } | { type: 'openInBrowser' };
+export type FromStatement =
+  | { type: 'ready' }
+  | { type: 'refresh' }
+  | { type: 'openInBrowser' }
+  | { type: 'viewState'; state: StatementViewState };
+
+const VIEW_KEY = 'cedtGrader.statementView';
 
 /** Raw HTML is disabled: markdown-it escapes it, so the output is safe to insert. */
 const md = new MarkdownIt({ html: false, linkify: true, breaks: false });
@@ -28,11 +49,15 @@ export class StatementPanels implements vscode.Disposable {
     private readonly extensionUri: vscode.Uri,
     private readonly store: StatementStore,
     private readonly opts: {
+      /** globalState, for page/zoom/scroll when a tab is closed and reopened. */
+      memento: { get<T>(key: string, fallback: T): T; update(key: string, value: unknown): Thenable<void> };
       beside: () => boolean;
       openInBrowser: (problemId: number) => void;
       onError: (err: unknown) => string;
     },
   ) {}
+
+  static readonly viewType = 'cedtGrader.statement';
 
   async open(problemId: number, name: string): Promise<void> {
     const existing = this.panels.get(problemId);
@@ -40,32 +65,57 @@ export class StatementPanels implements vscode.Disposable {
       existing.reveal();
       return;
     }
-    const media = vscode.Uri.joinPath(this.extensionUri, 'media');
     const panel = vscode.window.createWebviewPanel(
-      'cedtGrader.statement',
+      StatementPanels.viewType,
       `Statement: ${name}`,
       { viewColumn: this.opts.beside() ? vscode.ViewColumn.Beside : vscode.ViewColumn.Active, preserveFocus: this.opts.beside() },
-      { enableScripts: true, localResourceRoots: [media], retainContextWhenHidden: true, enableFindWidget: false },
+      this.webviewOptions(),
     );
+    this.attach(panel, problemId, name);
+  }
+
+  /** Restore a statement tab after VS Code restarts (panel serializer). Reads the disk cache: no request. */
+  revive(panel: vscode.WebviewPanel, state: { problemId?: number; name?: string } | undefined): void {
+    if (!state?.problemId || this.panels.has(state.problemId)) {
+      panel.dispose();
+      return;
+    }
+    panel.webview.options = this.webviewOptions();
+    this.attach(panel, state.problemId, state.name ?? `#${state.problemId}`);
+  }
+
+  private webviewOptions(): vscode.WebviewPanelOptions & vscode.WebviewOptions {
+    // retainContextWhenHidden: hiding / showing the tab keeps the rendered PDF (no reload, no request).
+    return { enableScripts: true, localResourceRoots: [vscode.Uri.joinPath(this.extensionUri, 'media')], retainContextWhenHidden: true, enableFindWidget: false };
+  }
+
+  private attach(panel: vscode.WebviewPanel, problemId: number, name: string): void {
+    const media = vscode.Uri.joinPath(this.extensionUri, 'media');
     panel.iconPath = vscode.Uri.joinPath(media, 'icon.svg');
     this.panels.set(problemId, panel);
     panel.onDidDispose(() => this.panels.delete(problemId));
     panel.webview.html = this.html(panel.webview, media);
 
     const title = `Statement: ${name}`;
+    const base = { title, problemId, name };
     const post = (m: ToStatement) => void panel.webview.postMessage(m);
     const load = async (refresh: boolean) => {
-      post({ type: 'loading', title });
+      post({ ...base, type: 'loading' });
       try {
-        post(render(title, await this.store.get(problemId, { refresh })));
+        const view = this.opts.memento.get<Record<string, StatementViewState>>(VIEW_KEY, {})[problemId] ?? null;
+        post(render(base, await this.store.get(problemId, { refresh }), view));
       } catch (err) {
-        post({ type: 'message', title, text: this.opts.onError(err), error: true });
+        post({ ...base, type: 'message', text: this.opts.onError(err), error: true });
       }
     };
     panel.webview.onDidReceiveMessage((m: FromStatement) => {
       if (m?.type === 'ready') void load(false);
       else if (m?.type === 'refresh') void load(true);
       else if (m?.type === 'openInBrowser') this.opts.openInBrowser(problemId);
+      else if (m?.type === 'viewState') {
+        const all = { ...this.opts.memento.get<Record<string, StatementViewState>>(VIEW_KEY, {}), [problemId]: m.state };
+        void this.opts.memento.update(VIEW_KEY, all);
+      }
     });
   }
 
@@ -107,17 +157,17 @@ export class StatementPanels implements vscode.Disposable {
 }
 
 /** Turn a cached statement into a webview message. Descriptions are rendered safely in the host. */
-export function render(title: string, st: Statement): ToStatement {
-  if (st.kind === 'pdf') return { type: 'pdf', title, data: st.bytes };
+export function render(base: Base, st: Statement, view: StatementViewState | null = null): ToStatement {
+  if (st.kind === 'pdf') return { ...base, type: 'pdf', data: st.bytes, view };
   if (st.kind === 'description') {
-    if (st.markdown) return { type: 'html', title, html: md.render(st.text) };
+    if (st.markdown) return { ...base, type: 'html', html: md.render(st.text) };
     // Non-markdown descriptions are HTML written for the website: show their text only.
     const $ = cheerio.load(st.text.replace(/<br\s*\/?>/gi, '\n').replace(/<\/(p|div|li|h\d|tr)>/gi, '$&\n'));
-    return { type: 'html', title, html: `<pre class="text">${md.utils.escapeHtml($.root().text().trim())}</pre>` };
+    return { ...base, type: 'html', html: `<pre class="text">${md.utils.escapeHtml($.root().text().trim())}</pre>` };
   }
   return {
+    ...base,
     type: 'message',
-    title,
     error: false,
     text: st.reason === 'hidden' ? 'The statement is not available in VS Code for this problem. Use "Open in Browser".' : 'This problem has no statement.',
   };
