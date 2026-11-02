@@ -310,6 +310,11 @@
           "default": "C++",
           "description": "%config.defaultLanguage.description%"
         },
+        "cedtGrader.fileNamePattern": {
+          "type": "string",
+          "default": "{name}.{ext}",
+          "markdownDescription": "%config.fileNamePattern.description%"
+        },
         "cedtGrader.cacheMaxMB": {
           "type": "number",
           "default": 100,

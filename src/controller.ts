@@ -246,6 +246,7 @@ export class GraderController implements vscode.Disposable {
     await this.ctx.workspaceState.update(`${KEYS.problemsPrefix}:${this.cfg.baseUrl}:${this.cfg.username}`, undefined);
     await this.dailyCleanup();
     await this.cleanupDuplicateLinks();
+    this.warnBadPattern();
     this.hasSavedPassword = !!(await this.getPassword());
     if (await this.client.restore()) {
       this.accountStatus = 'logged-in';
@@ -346,6 +347,12 @@ export class GraderController implements vscode.Disposable {
     const prev = this.cfg;
     this.cfg = readConfig();
     if (prev.displayLanguage !== this.cfg.displayLanguage) this.applyLanguage();
+    if (prev.fileNamePattern.pattern !== this.cfg.fileNamePattern.pattern || prev.fileNamePattern.problem !== this.cfg.fileNamePattern.problem) {
+      // The matcher uses the pattern: rebuild the index and re-match the open file.
+      this.matchIndex.invalidate();
+      this.warnBadPattern();
+      if (this.fileUri) void this.setActiveFile(this.fileUri);
+    }
     if (this.changingUsername && prev.baseUrl === this.cfg.baseUrl) {
       this.emit();
       return;
@@ -381,6 +388,16 @@ export class GraderController implements vscode.Disposable {
   private async getPassword(): Promise<string | undefined> {
     if (!this.cfg.username) return undefined;
     return this.ctx.secrets.get(this.secretKey('password'));
+  }
+
+  /** An invalid `cedtGrader.fileNamePattern` falls back to `{name}.{ext}`; say why (on start and when the setting changes). */
+  private warnBadPattern(): void {
+    const why = this.cfg.fileNamePattern.problem;
+    if (!why) return;
+    const open = S.common.openSetting;
+    void vscode.window.showWarningMessage(S.files.badPattern(S.files.patternProblem[why]), open).then((p) => {
+      if (p === open) void vscode.commands.executeCommand('workbench.action.openSettings', 'cedtGrader.fileNamePattern');
+    });
   }
 
   /** Rebuilds the sidebar in the new language (set by the sidebar provider). */
@@ -553,7 +570,7 @@ export class GraderController implements vscode.Disposable {
             name: file.path.split('/').pop() ?? '',
             languageGuess: lang,
             supported: lang !== null,
-            renameTo: problem && !problem.name.startsWith('#') && !nameMatchesProblem(file.fsPath, problem.name) ? renameProposal(file.fsPath, problem.name) : null,
+            renameTo: problem && !problem.name.startsWith('#') && !nameMatchesProblem(file.fsPath, problem.name, this.cfg.fileNamePattern.pattern, problem.id) ? renameProposal(file.fsPath, problem.name, this.cfg.fileNamePattern.pattern, problem.id) : null,
           }
         : null,
       problem: problem ? { ...this.problemView(problem), source: problem.source, sourceLabel: MATCH_SOURCE[problem.source], unavailable } : null,
@@ -920,6 +937,7 @@ export class GraderController implements vscode.Disposable {
           problems: list,
           baseUrl: this.cfg.baseUrl,
           folders: vscode.workspace.asRelativePath(vscode.Uri.joinPath(uri, '..'), false).split('/').filter((x) => x && x !== '.'),
+          namePattern: this.cfg.fileNamePattern.pattern,
         });
     this.notLinked = unlinked;
     if (seq !== this.refreshSeq) return;
@@ -1053,7 +1071,7 @@ export class GraderController implements vscode.Disposable {
     const exts = this.allSourceExts();
     const found = await vscode.workspace.findFiles(sourceGlob(exts), excludeGlob([cfg('files'), cfg('search')], gitignore), LIMITS.indexMaxFiles);
     const files = filterSourceFiles(found.map((u) => u.fsPath), exts).map((f) => this.sourceFile(f));
-    const index = buildMatchIndex(files, problems, this.cfg.baseUrl);
+    const index = buildMatchIndex(files, problems, this.cfg.baseUrl, this.cfg.fileNamePattern.pattern);
     const matched = [...index.values()].reduce((n, l) => n + l.length, 0);
     this.requestLog(`FILE SEARCH source files: ${files.length} → ${matched} matched to ${index.size} problems (${Date.now() - t0} ms)`);
     return index;
@@ -1062,7 +1080,7 @@ export class GraderController implements vscode.Disposable {
   /** Does the one matcher (without saved links) give `problemId` for this path? */
   private matcherSays(fsPath: string, problemId: number): boolean {
     const problems = this.data.problemList()?.problems ?? [];
-    return matchFile(this.sourceFile(fsPath), problems, this.cfg.baseUrl)?.problemId === problemId;
+    return matchFile(this.sourceFile(fsPath), problems, this.cfg.baseUrl, this.cfg.fileNamePattern.pattern)?.problemId === problemId;
   }
 
   /** Existing files for a problem, in the stable path order; missing saved links reported, missing auto-matches dropped. */
@@ -1076,7 +1094,7 @@ export class GraderController implements vscode.Disposable {
       if (st && f.how !== 'chosen' && f.how !== 'cph') {
         const cph = await readCphProblem(f.fsPath, this.cphSaveLocation());
         if (cph) {
-          const r = resolveProblem({ savedProblemId: null, cph, filePath: f.fsPath, problems: this.data.problemList()?.problems, baseUrl: this.cfg.baseUrl, folders: this.sourceFile(f.fsPath).folders });
+          const r = resolveProblem({ savedProblemId: null, cph, filePath: f.fsPath, problems: this.data.problemList()?.problems, baseUrl: this.cfg.baseUrl, folders: this.sourceFile(f.fsPath).folders, namePattern: this.cfg.fileNamePattern.pattern });
           if (r.kind === 'match' && r.problem.id !== problemId) continue;
         }
       }
@@ -1532,7 +1550,7 @@ export class GraderController implements vscode.Disposable {
       if (!this.data.problemList()) return;
     }
     const cph = await readCphProblem(uri.fsPath, this.cphSaveLocation());
-    const m = resolveProblem({ savedProblemId: null, cph, filePath: uri.fsPath, problems: this.data.problemList()!.problems, baseUrl: this.cfg.baseUrl });
+    const m = resolveProblem({ savedProblemId: null, cph, filePath: uri.fsPath, problems: this.data.problemList()!.problems, baseUrl: this.cfg.baseUrl, namePattern: this.cfg.fileNamePattern.pattern });
     const how = S.autoDetect.how;
     if (entry && m.kind === 'match' && m.problem.id !== entry.problemId) {
       const pick = await this.askInline(S.autoDetect.found(m.problem.name, how[m.source] ?? how.suggested), [
@@ -1610,7 +1628,7 @@ export class GraderController implements vscode.Disposable {
       const target = vscode.Uri.joinPath(dir, name);
       return pathKey(target.fsPath) !== pathKey(file.fsPath) && (await exists(target.fsPath));
     };
-    const proposal = renameProposal(file.fsPath, problem.name);
+    const proposal = renameProposal(file.fsPath, problem.name, this.cfg.fileNamePattern.pattern, problem.id);
     const first = await freeName(proposal, taken); // never overwrite: "<name>_2.<ext>" if taken
     const stemLen = first.lastIndexOf('.') > 0 ? first.lastIndexOf('.') : first.length;
     const name = await vscode.window.showInputBox({
@@ -1705,7 +1723,7 @@ export class GraderController implements vscode.Disposable {
         : (await vscode.window.showQuickPick(choice.options.map((l) => ({ label: l.name, description: l.ext ? `.${l.ext}` : undefined, l })), { placeHolder: S.files.newFileLanguage(p.name) }))?.l;
     if (!language) return;
     await this.ctx.globalState.update(NEWFILE_LANG_KEY, language.id);
-    const target = vscode.Uri.joinPath(folder, fileNameFor(p.name, language.ext && language.ext !== 'null' ? language.ext : 'txt'));
+    const target = vscode.Uri.joinPath(folder, fileNameFor(p.name, language.ext && language.ext !== 'null' ? language.ext : 'txt', this.cfg.fileNamePattern.pattern, p.id));
     const created = await createFileNoOverwrite(target.fsPath, async () => {
       const open = S.files.openExisting;
       const overwrite = S.files.overwrite;

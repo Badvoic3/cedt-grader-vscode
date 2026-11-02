@@ -11,6 +11,9 @@
 - **Save before submit** (`cedtGrader.saveBeforeSubmit`, on): the file is saved after you confirm, so the grader gets what is on disk; if saving fails nothing is sent.
 - **Show the result** (`cedtGrader.revealResultAfterSubmit`, on): when grading finishes, the Result section opens and scrolls into view; keyboard focus stays in the editor.
 
+### Files
+- **File-name pattern** (`cedtGrader.fileNamePattern`, default `{name}.{ext}`): names for "New file for this problem" and "Rename file to match the problem", e.g. `{id}_{name}.{ext}`. Files named this way are matched to their problem automatically (both directions). An invalid pattern falls back to the default with a warning.
+
 ### Help
 - **Troubleshooting** link (connection banner, login errors, panel ⋯ menu, command) opens the README's troubleshooting section on GitHub, in the display language.
 

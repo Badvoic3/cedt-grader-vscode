@@ -123,6 +123,7 @@ With **Remember password on this computer** on, your password is kept in the OS 
 | `cedtGrader.revealResultAfterSubmit` | `true` | When grading finishes, open the **Result** section and scroll it into view. Keyboard focus stays in your editor. |
 | `cedtGrader.statementBeside` | `true` | Open statements beside your code. |
 | `cedtGrader.defaultLanguage` | `C++` | Language for **New file for this problem** when your current file's language isn't allowed. |
+| `cedtGrader.fileNamePattern` | `{name}.{ext}` | File name for **New file for this problem** and **Rename file to match the problem**: `{name}` = problem name, `{id}` = problem id, `{ext}` = extension; must end with `.{ext}`. Files named this way are matched automatically, e.g. `{id}_{name}.{ext}` → `1360_00_Intro_11.cpp`. |
 | `cedtGrader.cacheMaxMB` | `100` | Size limit for downloaded statements and test cases (see [Cache and storage](#cache-and-storage)). |
 | `cedtGrader.debugRequests` | `false` | Log each grader request and cache hit/miss to *Output → CEDT Grader: Requests* (no passwords or tokens). |
 

@@ -1,5 +1,6 @@
 import { extname } from 'node:path';
 import { cleanName, fileNameFor, fileStem, normalizeName } from './match';
+import { isDefaultPattern, stemFor } from './namePattern';
 
 /**
  * "Rename file to match the problem" (no `vscode` import, unit tested).
@@ -8,15 +9,17 @@ import { cleanName, fileNameFor, fileStem, normalizeName } from './match';
  * all follow, and Undo works.
  */
 
-/** Does the file name already match the problem (same normalization as the matcher)? */
-export function nameMatchesProblem(fsPath: string, problemName: string): boolean {
-  return normalizeName(fileStem(fsPath).normalize('NFC')) === normalizeName(cleanName(problemName).normalize('NFC'));
+/** Does the file name already match the problem (same normalization as the matcher; the plain name or the file-name pattern)? */
+export function nameMatchesProblem(fsPath: string, problemName: string, pattern?: string, problemId = 0): boolean {
+  const stem = normalizeName(fileStem(fsPath).normalize('NFC'));
+  if (stem === normalizeName(cleanName(problemName).normalize('NFC'))) return true;
+  return !isDefaultPattern(pattern) && stem === normalizeName(stemFor(pattern!, { id: problemId, cleanName: cleanName(problemName) }).normalize('NFC'));
 }
 
-/** Proposed new name: "<clean problem name>.<current extension>" (Unicode NFC). */
-export function renameProposal(fsPath: string, problemName: string): string {
+/** Proposed new name by the file-name pattern (default "<clean problem name>.<current extension>", Unicode NFC). */
+export function renameProposal(fsPath: string, problemName: string, pattern?: string, problemId = 0): string {
   const ext = extname(fsPath).replace(/^\./, '');
-  const name = fileNameFor(problemName, ext || 'txt').normalize('NFC');
+  const name = fileNameFor(problemName, ext || 'txt', pattern, problemId).normalize('NFC');
   return ext ? name : name.replace(/\.txt$/, '');
 }
 

@@ -89,6 +89,13 @@ export const TH: Strings = {
       openSourceFirstShort: 'เปิดไฟล์ source ก่อน',
       problemFor: (file) => `โจทย์ใน Grader ของ ${file}`,
       counted: (n) => ` · คะแนนที่ได้ ${n}`,
+      badPattern: (why) => `ใช้รูปแบบชื่อไฟล์ที่ตั้งไว้ไม่ได้ (${why}) จึงใช้ {name}.{ext} แทน`,
+      patternProblem: {
+        ext: 'ต้องลงท้ายด้วย .{ext}',
+        nameOrId: 'ต้องมี {name} หรือ {id}',
+        placeholder: 'ใช้ได้เฉพาะ {name}, {id} และ {ext}',
+        character: 'มีตัวอักษรที่ใช้ในชื่อไฟล์ไม่ได้',
+      },
     },
 
     moved: {

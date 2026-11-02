@@ -2,6 +2,7 @@ import type { Problem } from '../grader/types';
 import { MATCH } from '../shared/constants';
 import type { CphProblem } from './cph';
 import { matchCphProblem } from './cph';
+import { applyPattern, DEFAULT_NAME_PATTERN, isDefaultPattern, stemFor } from './namePattern';
 
 /** How the current file's problem was chosen (an icon next to the problem name). */
 export type MatchSource = 'saved' | 'cph' | 'filename' | 'suggested';
@@ -42,6 +43,8 @@ export interface MatchInput {
   baseUrl: string;
   /** Workspace-relative parent folder names of the file (for the folder/tag bonus). */
   folders?: string[];
+  /** File-name pattern (`cedtGrader.fileNamePattern`, validated); a file named by it is an exact match too. */
+  namePattern?: string;
 }
 
 export type MatchResult =
@@ -92,6 +95,11 @@ export function resolveProblem(input: MatchInput): MatchResult {
   if (stem) {
     let hits = problems.filter((p) => normalizeName(p.name) === stem);
     if (!hits.length) hits = problems.filter((p) => normalizeName(p.fullName) === stem);
+    // A name made by the file-name pattern ("{id}_{name}.{ext}" → "1360_00_Intro_11") is exact too.
+    const pattern = input.namePattern;
+    if (!hits.length && !isDefaultPattern(pattern)) {
+      hits = problems.filter((p) => normalizeName(stemFor(pattern!, { id: p.id, cleanName: cleanName(p.name) })) === stem);
+    }
     if (hits.length === 1) return { kind: 'match', problem: hits[0], source: 'filename', suggestions: [] };
     if (hits.length > 1) return { kind: 'ambiguous', candidates: hits, source: 'filename' };
   }
@@ -177,8 +185,10 @@ export function placeholder(id: number, name = ''): Problem {
   };
 }
 
-/** A safe file name from a problem name (clean name, path separators and reserved characters replaced). */
-export function fileNameFor(problemName: string, ext: string): string {
-  const safe = cleanName(problemName).replace(/[\\/:*?"<>|\u0000-\u001f]/g, '_').replace(/\s+$/g, '') || 'problem';
-  return `${safe}.${ext.replace(/^\./, '')}`;
+/**
+ * A safe file name for a problem (clean name, path separators and reserved
+ * characters replaced), by the file-name pattern (default `{name}.{ext}`).
+ */
+export function fileNameFor(problemName: string, ext: string, pattern: string = DEFAULT_NAME_PATTERN, problemId = 0): string {
+  return applyPattern(isDefaultPattern(pattern) ? DEFAULT_NAME_PATTERN : pattern, { id: problemId, cleanName: cleanName(problemName) }, ext);
 }
