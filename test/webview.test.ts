@@ -81,6 +81,12 @@ const loggedIn: ViewState = {
   problems: { loading: false, loaded: true, items: [{ id: 1360, name: '00_Intro_11', fullName: 'Hello', score: score(100), hasFile: true, hasTestcase: true, status: 'solved', tags: ['ComProg'], lastSubmissionTime: '2026-11-01T10:00:00Z', lastOpened: 5 }, { id: 1271, name: '01_Expr_11', fullName: 'An Expression', score: score(null), hasFile: false, hasTestcase: false, status: 'untried', tags: [], lastSubmissionTime: null, lastOpened: null }], error: null, penaltyNote: null, stale: false, filter: { status: 'all', topic: null }, topics: [] },
 };
 
+/** Open the "…" menu with this aria-label and click the item with this text. */
+function menuPick(doc: Document, menuLabel: string, item: string): void {
+  doc.querySelector<HTMLButtonElement>(`[aria-label="${menuLabel}"]`)!.click();
+  [...doc.querySelectorAll<HTMLButtonElement>('.menu .menu-item')].find((b) => b.textContent === item)!.click();
+}
+
 describe.runIf(existsSync(resolve(__dirname, '../esbuild.mjs')))('sidebar webview', () => {
   it('starts with "ready" and shows the login form when logged out', () => {
     const { doc, sent, post } = boot();
@@ -214,7 +220,7 @@ describe.runIf(existsSync(resolve(__dirname, '../esbuild.mjs')))('sidebar webvie
     expect(sent.at(-1)).toEqual({ type: 'openSubmissionSource', submissionId: 2460977 });
     compareBtn.click();
     expect(sent.at(-1)).toEqual({ type: 'compareSubmission', submissionId: 2460977 });
-    doc.querySelector<HTMLButtonElement>('#sec-history summary .icon-btn')!.click();
+    doc.querySelector<HTMLButtonElement>('#sec-history summary [aria-label="Refresh history"]')!.click();
     expect(sent.at(-1)).toEqual({ type: 'refreshHistory' });
   });
 
@@ -269,11 +275,13 @@ describe.runIf(existsSync(resolve(__dirname, '../esbuild.mjs')))('sidebar webvie
     const cur = doc.querySelector('#sec-current')!;
     expect(cur.querySelector('.source-line.source-saved')!.textContent).toBe('Chosen by you');
     expect(cur.querySelector('.combo .source-icon')).toBeNull(); // not inside the dropdown any more
-    [...cur.querySelectorAll<HTMLButtonElement>('button')].find((b) => b.getAttribute('aria-label') === 'Copy problem name')!.click();
+    expect(cur.querySelector('[aria-label="Open statement"]')).not.toBeNull(); // the only visible header action
+    expect([...cur.querySelectorAll('button')].some((b) => b.textContent === 'Change')).toBe(false); // removed: same as the dropdown
+    menuPick(doc, 'More actions for this problem', 'Copy problem name');
     expect(sent.at(-1)).toEqual({ type: 'copyName', problemId: 1360 });
     [...cur.querySelectorAll<HTMLButtonElement>('button')].find((b) => b.textContent?.includes('Load test cases'))!.click();
     expect(sent.at(-1)).toEqual({ type: 'loadTestcases' });
-    [...cur.querySelectorAll<HTMLButtonElement>('button.link')].find((b) => b.textContent === 'Change')!.click();
+    doc.querySelector<HTMLButtonElement>('#sec-current .combo')!.click();
     expect(doc.activeElement).toBe(doc.querySelector('.picker-search'));
     const rows = doc.querySelectorAll('#sec-problems .problem-row');
     const label = (r: Element) => [...r.querySelectorAll('.row-actions button')].map((b) => b.getAttribute('aria-label'));
@@ -503,11 +511,12 @@ describe.runIf(existsSync(resolve(__dirname, '../esbuild.mjs')))('sidebar webvie
   it('open on website (problem and each submission), auto-detect, sort menu', () => {
     const { dom, doc, sent, post } = boot();
     post(loggedIn);
-    doc.querySelector<HTMLButtonElement>('#sec-current [aria-label="Open on the grader website"]')!.click();
+    menuPick(doc, 'More actions for this problem', 'Open on the grader website');
     expect(sent.at(-1)).toEqual({ type: 'openProblemInBrowser', problemId: 1360 });
+    expect(doc.querySelector('.menu')).toBeNull(); // closes after choosing
     doc.querySelector<HTMLButtonElement>('#sec-history [aria-label="Open on the grader website"]')!.click();
     expect(sent.at(-1)).toEqual({ type: 'openSubmission', submissionId: 2460977 });
-    doc.querySelector<HTMLButtonElement>('#sec-current [aria-label="Auto-detect the problem for this file again"]')!.click();
+    menuPick(doc, 'More actions for this problem', 'Auto-detect the problem');
     expect(sent.at(-1)).toEqual({ type: 'autoDetect' });
     const sel = doc.querySelector<HTMLSelectElement>('#sec-problems select.sort')!;
     sel.value = 'score-desc';

@@ -71,6 +71,64 @@ function button(label: Child, onclick: () => void, opts: { kind?: 'primary' | 's
   return el('button', { class: `btn ${opts.kind ?? 'secondary'}`, type: 'button', disabled: opts.disabled, title: opts.title, onclick }, label);
 }
 
+export interface MenuItem {
+  icon: string;
+  label: string;
+  tip?: string;
+  onclick: () => void;
+  disabledReason?: string | null;
+}
+
+/** Which "…" menu is open (one at a time); kept across re-renders. */
+let openMenu: string | null = null;
+
+/**
+ * "…" menu for secondary actions. Opens below the button, closes on outside
+ * click, Escape or after choosing an item.
+ */
+function menuButton(id: string, label: string, items: MenuItem[]): HTMLElement {
+  const wrap = el('span', { class: 'menu-wrap' });
+  const btn = iconButton('ellipsis', label, () => {
+    openMenu = openMenu === id ? null : id;
+    forceRender();
+    if (openMenu === id) document.querySelector<HTMLButtonElement>(`[data-menu="${id}"] .menu-item:not([disabled])`)?.focus();
+  });
+  btn.setAttribute('aria-haspopup', 'menu');
+  btn.setAttribute('aria-expanded', String(openMenu === id));
+  wrap.append(btn);
+  if (openMenu === id) {
+    wrap.append(
+      el('div', { class: 'menu', role: 'menu', 'data-menu': id },
+        ...items.map((it) =>
+          el('button', {
+            class: 'menu-item', type: 'button', role: 'menuitem', disabled: !!it.disabledReason,
+            title: it.disabledReason ? `${it.tip ?? it.label} (${it.disabledReason})` : it.tip ?? undefined,
+            onclick: () => {
+              openMenu = null;
+              forceRender();
+              it.onclick();
+            },
+          }, icon(it.icon), el('span', {}, it.label)),
+        ),
+      ),
+    );
+  }
+  return wrap;
+}
+
+document.addEventListener('mousedown', (e) => {
+  if (openMenu && !(e.target as Element).closest?.('.menu-wrap')) {
+    openMenu = null;
+    forceRender();
+  }
+});
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && openMenu) {
+    openMenu = null;
+    forceRender();
+  }
+});
+
 function fmt(n: number | null): string {
   if (n === null) return '–';
   return Number.isInteger(n) ? String(n) : String(Math.round(n * 100) / 100);
@@ -185,7 +243,13 @@ const problemFilter = el('input', { type: 'search', placeholder: 'Filter by name
 const sAccount = section('account', 'Account');
 const sCurrent = section('current', 'Current problem');
 const sResult = section('result', 'Result');
-const sHistory = section('history', 'History', [iconButton('refresh', 'Refresh history', () => send({ type: 'refreshHistory' }))]);
+const sHistory = section('history', 'History', [
+  iconButton('question', 'Reading the results', () => {
+    legendOpen = legendOpen === 'history' ? null : 'history';
+    forceRender();
+  }),
+  iconButton('refresh', 'Refresh history', () => send({ type: 'refreshHistory' })),
+]);
 const sProblems = section('problems', 'Problems', [iconButton('refresh', 'Refresh problem list', () => send({ type: 'refreshProblems' }))]);
 const banner = el('div', { class: 'banner', role: 'alert', hidden: true });
 app.append(banner, sAccount.details, sCurrent.details, sResult.details, sHistory.details, sProblems.details);
@@ -355,12 +419,17 @@ function renderCurrent(s: ViewState): void {
     el('div', { class: 'field' },
       el('div', { class: 'field-label' }, 'Problem',
         el('span', { class: 'grow' }),
-        p ? el('button', { class: 'link small', type: 'button', title: 'Choose another problem for this file', onclick: () => openPicker() }, 'Change') : null,
-        p ? iconButton('copy', 'Copy problem name', () => send({ type: 'copyName', problemId: p.id })) : null,
         p ? iconButton('book', 'Open statement', () => send({ type: 'openStatement', problemId: p.id })) : null,
-        p ? iconButton('globe', 'Open on the grader website', () => send({ type: 'openProblemInBrowser', problemId: p.id })) : null,
-        iconButton('sparkle', 'Auto-detect the problem for this file again', () => send({ type: 'autoDetect' })),
-        p && p.source === 'saved' ? iconButton('close', 'Remove link', () => send({ type: 'unmapProblem' })) : null,
+        menuButton('problem', 'More actions for this problem', [
+          ...(p
+            ? [
+                { icon: 'copy', label: 'Copy problem name', onclick: () => send({ type: 'copyName', problemId: p.id }) },
+                { icon: 'globe', label: 'Open on the grader website', onclick: () => send({ type: 'openProblemInBrowser', problemId: p.id }) },
+              ]
+            : []),
+          { icon: 'sparkle', label: 'Auto-detect the problem', tip: 'Match this file to a problem again (file name, CPH data)', onclick: () => send({ type: 'autoDetect' }) },
+          ...(p && p.source === 'saved' ? [{ icon: 'close', label: 'Remove link', tip: 'Forget the problem chosen for this file', onclick: () => send({ type: 'unmapProblem' }) }] : []),
+        ]),
       ),
       combo,
       pickerOpen ? (renderPickerList(s), pickerBox) : null,
@@ -513,13 +582,16 @@ function renderResult(s: ViewState): void {
   }
   b.append(
     el('div', { class: 'row result-head' },
-      el('span', { class: 'ellipsis' }, el('strong', {}, r.problemName), r.number !== null ? el('span', { class: 'muted' }, ` · attempt ${r.number}`) : null),
-      el('span', { class: 'grow' }),
+      r.number !== null ? el('span', { class: 'muted' }, `Attempt ${r.number}`) : null,
+      r.number !== null && r.submissionId ? el('span', { class: 'muted' }, '·') : null,
       r.submissionId
-        ? el('button', { class: 'link', type: 'button', title: 'Open the submission in the browser', onclick: () => send({ type: 'openSubmission', submissionId: r.submissionId! }) }, `#${r.submissionId}`, icon('link-external'))
+        ? el('button', { class: 'link', type: 'button', title: 'Open on the grader website', onclick: () => send({ type: 'openSubmission', submissionId: r.submissionId! }) }, `#${r.submissionId}`, icon('link-external'))
         : null,
+      el('span', { class: 'grow' }),
+      r.verdicts.length ? legendButton('result') : null,
     ),
   );
+  if (legendOpen === 'result' && r.verdicts.length) b.append(legend());
   if (r.phase === 'submitting' || r.phase === 'grading') {
     b.append(el('div', { class: 'row status' }, icon('loading', 'codicon-modifier-spin'), ' ', r.message ?? 'Grading…'));
   }
@@ -527,8 +599,7 @@ function renderResult(s: ViewState): void {
     const text = r.compileError ? 'Compilation error' : r.points !== null ? `${fmt(r.points)} points` : (r.message ?? 'Graded');
     b.append(el('div', { class: 'row score-row' }, el('span', { class: `score ${r.compileError ? 'score-zero' : scoreClass(r.points)}` }, text)));
     if (r.verdicts.length) {
-      b.append(el('div', { class: 'row strip-row' }, verdictStrip(r.verdicts), el('span', { class: 'grow' }), legendButton('result')));
-      if (legendOpen === 'result') b.append(legend());
+      b.append(verdictStrip(r.verdicts));
     } else if (r.comment && !r.compileError) b.append(plainComment(r.comment));
     const failed = r.verdicts.filter((v) => !v.ok);
     if (failed.length && failed.length <= 6) b.append(el('ul', { class: 'failed' }, ...failed.map((v) => el('li', {}, v.label))));
@@ -655,14 +726,14 @@ function renderHistory(s: ViewState): void {
     return;
   }
   const H = s.history;
+  if (legendOpen === 'history') b.append(legend());
   if (H.stale) b.append(el('p', { class: 'hint' }, icon('warning'), ' May be out of date (could not reach the grader).'));
   if (!H.items.length) {
     b.append(el('p', { class: 'muted' }, H.loading ? 'Loading…' : H.error ? '' : 'No submissions for this problem yet.'));
   } else {
     const list = el('div', { class: 'history' });
     for (const h of H.items) list.append(historyRow(h, s));
-    b.append(list, el('div', { class: 'row muted small' }, el('span', { class: 'grow' }, `${H.items.length} submission${H.items.length === 1 ? '' : 's'}`), legendButton('history')));
-    if (legendOpen === 'history') b.append(legend());
+    b.append(list, el('p', { class: 'muted small' }, `${H.items.length} submission${H.items.length === 1 ? '' : 's'}`));
   }
   if (H.loading && H.items.length) b.append(el('p', { class: 'muted small' }, icon('loading', 'codicon-modifier-spin'), ' Refreshing…'));
   if (H.error) b.append(el('div', { class: 'error' }, icon('error'), ' ', H.error));
@@ -815,10 +886,10 @@ function sectionKeys(s: ViewState): Record<string, string> {
   return {
     banner: j([s.connection, s.problems.loaded, s.history.items.length > 0]),
     account: j([s.account, s.baseUrl, showLoginForm]),
-    current: j([s.file, s.problem, s.languages, s.submit, s.matching, s.testcases, s.cph, s.gradingElsewhere, pickerOpen, pickerOpen ? s.problems : s.problems.loaded]),
+    current: j([openMenu, s.file, s.problem, s.languages, s.submit, s.matching, s.testcases, s.cph, s.gradingElsewhere, pickerOpen, pickerOpen ? s.problems : s.problems.loaded]),
     result: j([s.result, s.submit.enabled, s.submit.reason, legendOpen === 'result']),
     history: j([pid, s.history, legendOpen === 'history']),
-    problems: j([s.problems, !!s.file, pid, ui.filter]),
+    problems: j([openMenu, s.problems, !!s.file, pid, ui.filter]),
   };
 }
 
