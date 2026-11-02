@@ -11,21 +11,191 @@
   },
   "type": "commonjs",
   "scripts": {
+    "build": "tsc --noEmit -p . && node esbuild.mjs",
+    "build:prod": "tsc --noEmit -p . && node esbuild.mjs --production",
+    "watch": "node esbuild.mjs --watch",
     "typecheck": "tsc --noEmit -p .",
     "test": "vitest run",
     "test:watch": "vitest",
-    "probe": "tsx scripts/probe.ts"
+    "probe": "tsx scripts/probe.ts",
+    "package": "npm run build:prod && vsce package --no-dependencies",
+    "vscode:prepublish": "npm run build:prod"
   },
   "dependencies": {
     "cheerio": "^1.2.0",
     "tough-cookie": "^6.0.2"
   },
   "devDependencies": {
+    "@types/jsdom": "^30.0.0",
     "@types/node": "^22.20.5",
     "@types/vscode": "~1.90.0",
+    "@vscode/codicons": "^0.0.46-24",
+    "@vscode/vsce": "^4.1.0",
     "esbuild": "^0.28.2",
+    "jsdom": "^30.1.3",
     "tsx": "^4.23.15",
     "typescript": "^7.0.2",
     "vitest": "^5.0.5"
+  },
+  "main": "./dist/extension.js",
+  "categories": [
+    "Education",
+    "Other"
+  ],
+  "keywords": [
+    "cafe-grader",
+    "grader",
+    "cedt",
+    "competitive programming",
+    "cph"
+  ],
+  "activationEvents": [
+    "onLanguage:c",
+    "onLanguage:cpp",
+    "onLanguage:python",
+    "onLanguage:java"
+  ],
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "cedtGrader",
+          "title": "CEDT Grader",
+          "icon": "media/icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "cedtGrader": [
+        {
+          "type": "webview",
+          "id": "cedtGrader.panel",
+          "name": "Grader",
+          "icon": "media/icon.svg",
+          "contextualTitle": "CEDT Grader"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "cedtGrader.login",
+        "title": "Log In",
+        "category": "CEDT Grader",
+        "icon": "$(sign-in)"
+      },
+      {
+        "command": "cedtGrader.logout",
+        "title": "Log Out",
+        "category": "CEDT Grader",
+        "icon": "$(sign-out)"
+      },
+      {
+        "command": "cedtGrader.submit",
+        "title": "Submit Current File",
+        "category": "CEDT Grader",
+        "icon": "$(cloud-upload)"
+      },
+      {
+        "command": "cedtGrader.chooseProblem",
+        "title": "Choose Problem for This File",
+        "category": "CEDT Grader",
+        "icon": "$(list-selection)"
+      },
+      {
+        "command": "cedtGrader.showLastResult",
+        "title": "Show Last Result",
+        "category": "CEDT Grader",
+        "icon": "$(history)"
+      },
+      {
+        "command": "cedtGrader.openStatement",
+        "title": "Open Problem Statement",
+        "category": "CEDT Grader",
+        "icon": "$(book)"
+      },
+      {
+        "command": "cedtGrader.refreshProblems",
+        "title": "Reload Problem List",
+        "category": "CEDT Grader",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "cedtGrader.focus",
+        "title": "Show Panel",
+        "category": "CEDT Grader",
+        "icon": "$(layout-sidebar-left)"
+      },
+      {
+        "command": "cedtGrader.openSettings",
+        "title": "Open Settings",
+        "category": "CEDT Grader",
+        "icon": "$(gear)"
+      }
+    ],
+    "menus": {
+      "editor/title": [
+        {
+          "command": "cedtGrader.submit",
+          "group": "navigation@90",
+          "when": "resourceScheme == file && resourceExtname =~ /^\\.(c|cc|cpp|cxx|py|java)$/"
+        }
+      ],
+      "view/title": [
+        {
+          "command": "cedtGrader.showLastResult",
+          "when": "view == cedtGrader.panel",
+          "group": "navigation@1"
+        },
+        {
+          "command": "cedtGrader.refreshProblems",
+          "when": "view == cedtGrader.panel",
+          "group": "navigation@2"
+        },
+        {
+          "command": "cedtGrader.openSettings",
+          "when": "view == cedtGrader.panel",
+          "group": "navigation@3"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "cedtGrader.focus"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "CEDT Grader",
+      "properties": {
+        "cedtGrader.baseUrl": {
+          "type": "string",
+          "default": "https://cedt-grader.nattee.net",
+          "scope": "application",
+          "markdownDescription": "Base URL of the cafe-grader-web server. Read from user settings only (a workspace cannot change where your password is sent)."
+        },
+        "cedtGrader.username": {
+          "type": "string",
+          "default": "",
+          "scope": "application",
+          "description": "Your grader login name. The password is stored in the OS keychain (VS Code SecretStorage), never in settings."
+        },
+        "cedtGrader.pollIntervalSeconds": {
+          "type": "number",
+          "default": 5,
+          "minimum": 3,
+          "description": "Seconds between status checks while a submission is graded (minimum 3). Polling only runs right after a submission and stops after 3 minutes."
+        },
+        "cedtGrader.confirmBeforeSubmit": {
+          "type": "boolean",
+          "default": true,
+          "description": "Ask for confirmation before each submission."
+        },
+        "cedtGrader.allowContestSubmissions": {
+          "type": "boolean",
+          "default": false,
+          "scope": "application",
+          "markdownDescription": "Allow submitting **contest/exam** problems from VS Code. Even when on, you must confirm every time that your instructor has permitted it. VS Code does not send the website's contest check-ins. Leave this off unless your instructor says otherwise."
+        }
+      }
+    }
   }
 }
