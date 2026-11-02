@@ -1,0 +1,27 @@
+<turbo-stream action="update" target="latest_status"><template><div class="row">
+<div class="col-12 d-flex align-items-center">
+<span class="me-1 mi text-secondary">tag</span>
+<a data-turbo="false" href="/submissions/2460978">2460978</a>
+<span class="ms-2">
+(<a data-turbo="false" href="/submissions/prob/1360">3 tries</a>)
+</span>
+<span class="ms-2">
+<a class="" data-turbo="true" data-turbo-method="post" href="/submissions/2460978/compiler_msg">compiler msg</a>
+</span>
+</div>
+</div>
+<div class="row">
+<div class="col-12 d-flex align-items-center gap-1">
+<span class="me-1 mi mr-2 text-secondary">hourglass</span>
+submitted
+<span>less than a minute ago</span>
+<span class="text-secondary">(12:44:48)</span>
+</div>
+</div>
+<div class="row">
+<div class="col-12 d-flex align-items-center" data-controller="refresh" data-refresh-delay-value="1000">
+<div data-refresh-target="waitingText">Waiting to be graded...</div>
+<a class="d-none" data-turbo-stream="true" data-refresh-target="refreshLink" href="/submissions/get_latest_submission_status/12345/1360">Refresh</a>
+</div>
+</div>
+</template></turbo-stream>

@@ -1,0 +1,283 @@
+<!DOCTYPE html><html><head>
+<title></title>
+<link rel="icon" type="image/svg+xml" href="/assets/icon-9eb6bf2c.svg">
+<link rel="stylesheet" href="/assets/application-1e3ccc7f.css" media="all">
+<link rel="stylesheet" href="/assets/tempus-dominus/tempus-dominus-bf7cdf80.css" media="all">
+<link rel="stylesheet" href="/assets/highlight/felipec.min-4efafeb2.css">
+<link rel="stylesheet" href="/assets/select2/select2.min-9d4c9d45.css" media="all">
+<link rel="stylesheet" href="/assets/select2/select2-bootstrap-5-theme.min-84d0f9bd.css" media="all">
+<link rel="stylesheet" href="/assets/datatables/datatables.min-af829b36.css">
+<meta name="csrf-param" content="authenticity_token">
+<meta name="csrf-token" content="***">
+
+<script type="importmap" data-turbo-track="reload">{
+  "imports": {
+    "application": "/assets/application-22a3007a.js",
+    "datatables": "/assets/datatables/datatables.min-5762938e.js",
+    "vfs-fonts": "/assets/datatables/vfs_fonts-53e983d7.js",
+    "pdfmake": "/assets/datatables/pdfmake.min-ec6eb0f2.js",
+    "select2": "/assets/select2.min-5af8005e.js",
+    "chart": "/assets/chart.umd-93fff58f.js",
+    "tempus-dominus-js": "/assets/tempus-dominus/tempus-dominus-e2871c38.js",
+    "@hotwired/stimulus": "/assets/stimulus.min-4b1e420e.js",
+    "@hotwired/stimulus-loading": "/assets/stimulus-loading-1fc53fe7.js",
+    "@hotwired/turbo-rails": "/assets/turbo.min-3a2e143f.js",
+    "rails-ujs": "/assets/rails-ujs.esm-7729bd96.js",
+    "bootbox": "/assets/bootbox-c2c00034.js",
+    "jquery": "/assets/jquery-50ed4c0e.js",
+    "bootstrap": "/assets/bootstrap.esm-cdbcd76f.js",
+    "@popperjs/core": "/assets/@popperjs-core-esm-4db3d57e.js",
+    "cafe_bundle": "/assets/cafe_bundle-fceeb265.js",
+    "cafe": "/assets/cafe-00807d0d.js",
+    "cafe_event": "/assets/cafe_event-9c1cba6c.js",
+    "cafe_datatable": "/assets/cafe_datatable-ee3897cb.js",
+    "cafe_turbo": "/assets/cafe_turbo-4776a88a.js",
+    "verdict_strip": "/assets/verdict_strip-7c296d1d.js",
+    "setup_jquery": "/assets/setup_jquery-8615e1ed.js",
+    "setup_bootstrap": "/assets/setup_bootstrap-99153508.js",
+    "setup_select2": "/assets/setup_select2-8feaa952.js",
+    "moment": "/assets/moment-b380aa82.js",
+    "ace-builds": "/assets/ace-builds-b9ccee56.js",
+    "ace-mode-c_cpp": "/assets/ace-noconflict/mode-c_cpp-d023408f.js",
+    "ace-mode-pascal": "/assets/ace-noconflict/mode-pascal-5141db1a.js",
+    "ace-mode-ruby": "/assets/ace-noconflict/mode-ruby-03d46f60.js",
+    "ace-mode-python": "/assets/ace-noconflict/mode-python-69e61eb6.js",
+    "ace-mode-java": "/assets/ace-noconflict/mode-java-7bda6ef3.js",
+    "ace-mode-rust": "/assets/ace-noconflict/mode-rust-9a912bab.js",
+    "ace-mode-golang": "/assets/ace-noconflict/mode-golang-be94316f.js",
+    "ace-mode-php": "/assets/ace-noconflict/mode-php-c3ca1dfd.js",
+    "ace-mode-haskell": "/assets/ace-noconflict/mode-haskell-d564f123.js",
+    "ace-mode-sql": "/assets/ace-noconflict/mode-sql-53db0752.js",
+    "ace-mode-xml": "/assets/ace-noconflict/mode-xml-ad72c17c.js",
+    "ace-mode-markdown": "/assets/ace-noconflict/mode-markdown-23c359cc.js",
+    "ace-theme-merbivore": "/assets/ace-noconflict/theme-merbivore-bdb5c244.js",
+    "ace-theme-merbivore_soft": "/assets/ace-noconflict/theme-merbivore_soft-fea8e05e.js",
+    "ace-theme-dracula": "/assets/ace-noconflict/theme-dracula-d6883689.js",
+    "ace-theme-github": "/assets/ace-noconflict/theme-github-722545b9.js",
+    "highlight": "/assets/highlight/highlight-71d9bff6.js",
+    "controllers/announcement_controller": "/assets/controllers/announcement_controller-0ce07996.js",
+    "controllers/application": "/assets/controllers/application-3affb389.js",
+    "controllers/auto_submit_controller": "/assets/controllers/auto_submit_controller-ddb50175.js",
+    "controllers/bs_tab_controller": "/assets/controllers/bs_tab_controller-7495fc6d.js",
+    "controllers/chart_controller": "/assets/controllers/chart_controller-1fe739ab.js",
+    "controllers/children_select_controller": "/assets/controllers/children_select_controller-fa3cd883.js",
+    "controllers/contest_controller": "/assets/controllers/contest_controller-d1d11c0f.js",
+    "controllers/contest_timer_controller": "/assets/controllers/contest_timer_controller-3db6d963.js",
+    "controllers/dataset_mode_toggle_controller": "/assets/controllers/dataset_mode_toggle_controller-42bf6846.js",
+    "controllers/datatables/columns": "/assets/controllers/datatables/columns-fa10c521.js",
+    "controllers/datatables/configs": "/assets/controllers/datatables/configs-282f1ef6.js",
+    "controllers/datatables/init_controller": "/assets/controllers/datatables/init_controller-16c36c14.js",
+    "controllers/datatables/init_score_table_controller": "/assets/controllers/datatables/init_score_table_controller-1f2ef6cb.js",
+    "controllers/dismiss_announcement_controller": "/assets/controllers/dismiss_announcement_controller-cadb2acf.js",
+    "controllers/editor_controller": "/assets/controllers/editor_controller-56289173.js",
+    "controllers/event_dispatcher_controller": "/assets/controllers/event_dispatcher_controller-04e4a47a.js",
+    "controllers/form/filter_problem_controller": "/assets/controllers/form/filter_problem_controller-51cdafb7.js",
+    "controllers/form/filter_submission_controller": "/assets/controllers/form/filter_submission_controller-15ad5ccd.js",
+    "controllers/form/filter_user_controller": "/assets/controllers/form/filter_user_controller-d6f861e9.js",
+    "controllers/grounding_draft_controller": "/assets/controllers/grounding_draft_controller-0781c9d1.js",
+    "controllers/group_controller": "/assets/controllers/group_controller-04e70bf1.js",
+    "controllers": "/assets/controllers/index-749a6dee.js",
+    "controllers/init_ui_component_controller": "/assets/controllers/init_ui_component_controller-4b3fc6cd.js",
+    "controllers/initialize_controller": "/assets/controllers/initialize_controller-072a587a.js",
+    "controllers/main_controller": "/assets/controllers/main_controller-3aec9395.js",
+    "controllers/markdown_editor_controller": "/assets/controllers/markdown_editor_controller-be887ac3.js",
+    "controllers/problem_controller": "/assets/controllers/problem_controller-e2f6a2aa.js",
+    "controllers/problem_name_controller": "/assets/controllers/problem_name_controller-a3ae61a6.js",
+    "controllers/refresh_controller": "/assets/controllers/refresh_controller-262885b3.js",
+    "controllers/submission_comment_controller": "/assets/controllers/submission_comment_controller-f7fd8c1b.js",
+    "controllers/tag_controller": "/assets/controllers/tag_controller-0420330e.js",
+    "controllers/user_admin/admin_controller": "/assets/controllers/user_admin/admin_controller-a256aa5c.js",
+    "controllers/user_admin/base_controller": "/assets/controllers/user_admin/base_controller-19a8d0d1.js",
+    "controllers/user_admin/index_controller": "/assets/controllers/user_admin/index_controller-235b3ad0.js",
+    "controllers/viva_exam_toggle_controller": "/assets/controllers/viva_exam_toggle_controller-32dadf35.js",
+    "controllers/viva_session_controller": "/assets/controllers/viva_session_controller-4fb513e6.js",
+    "mixins/row_field_toggle": "/assets/mixins/row_field_toggle-c945cf86.js"
+  }
+}</script>
+<link rel="modulepreload" href="/assets/application-22a3007a.js">
+<link rel="modulepreload" href="/assets/datatables/datatables.min-5762938e.js">
+<link rel="modulepreload" href="/assets/datatables/vfs_fonts-53e983d7.js">
+<link rel="modulepreload" href="/assets/datatables/pdfmake.min-ec6eb0f2.js">
+<link rel="modulepreload" href="/assets/select2.min-5af8005e.js">
+<link rel="modulepreload" href="/assets/chart.umd-93fff58f.js">
+<link rel="modulepreload" href="/assets/tempus-dominus/tempus-dominus-e2871c38.js">
+<link rel="modulepreload" href="/assets/stimulus.min-4b1e420e.js">
+<link rel="modulepreload" href="/assets/stimulus-loading-1fc53fe7.js">
+<link rel="modulepreload" href="/assets/turbo.min-3a2e143f.js">
+<link rel="modulepreload" href="/assets/rails-ujs.esm-7729bd96.js">
+<link rel="modulepreload" href="/assets/bootbox-c2c00034.js">
+<link rel="modulepreload" href="/assets/jquery-50ed4c0e.js">
+<link rel="modulepreload" href="/assets/bootstrap.esm-cdbcd76f.js">
+<link rel="modulepreload" href="/assets/@popperjs-core-esm-4db3d57e.js">
+<link rel="modulepreload" href="/assets/cafe_bundle-fceeb265.js">
+<link rel="modulepreload" href="/assets/cafe-00807d0d.js">
+<link rel="modulepreload" href="/assets/cafe_event-9c1cba6c.js">
+<link rel="modulepreload" href="/assets/cafe_datatable-ee3897cb.js">
+<link rel="modulepreload" href="/assets/cafe_turbo-4776a88a.js">
+<link rel="modulepreload" href="/assets/verdict_strip-7c296d1d.js">
+<link rel="modulepreload" href="/assets/setup_jquery-8615e1ed.js">
+<link rel="modulepreload" href="/assets/setup_bootstrap-99153508.js">
+<link rel="modulepreload" href="/assets/setup_select2-8feaa952.js">
+<link rel="modulepreload" href="/assets/moment-b380aa82.js">
+<link rel="modulepreload" href="/assets/ace-builds-b9ccee56.js">
+<link rel="modulepreload" href="/assets/ace-noconflict/mode-c_cpp-d023408f.js">
+<link rel="modulepreload" href="/assets/ace-noconflict/mode-pascal-5141db1a.js">
+<link rel="modulepreload" href="/assets/ace-noconflict/mode-ruby-03d46f60.js">
+<link rel="modulepreload" href="/assets/ace-noconflict/mode-python-69e61eb6.js">
+<link rel="modulepreload" href="/assets/ace-noconflict/mode-java-7bda6ef3.js">
+<link rel="modulepreload" href="/assets/ace-noconflict/mode-rust-9a912bab.js">
+<link rel="modulepreload" href="/assets/ace-noconflict/mode-golang-be94316f.js">
+<link rel="modulepreload" href="/assets/ace-noconflict/mode-php-c3ca1dfd.js">
+<link rel="modulepreload" href="/assets/ace-noconflict/mode-haskell-d564f123.js">
+<link rel="modulepreload" href="/assets/ace-noconflict/mode-sql-53db0752.js">
+<link rel="modulepreload" href="/assets/ace-noconflict/mode-xml-ad72c17c.js">
+<link rel="modulepreload" href="/assets/ace-noconflict/mode-markdown-23c359cc.js">
+<link rel="modulepreload" href="/assets/ace-noconflict/theme-merbivore-bdb5c244.js">
+<link rel="modulepreload" href="/assets/ace-noconflict/theme-merbivore_soft-fea8e05e.js">
+<link rel="modulepreload" href="/assets/ace-noconflict/theme-dracula-d6883689.js">
+<link rel="modulepreload" href="/assets/ace-noconflict/theme-github-722545b9.js">
+<link rel="modulepreload" href="/assets/highlight/highlight-71d9bff6.js">
+<link rel="modulepreload" href="/assets/controllers/announcement_controller-0ce07996.js">
+<link rel="modulepreload" href="/assets/controllers/application-3affb389.js">
+<link rel="modulepreload" href="/assets/controllers/auto_submit_controller-ddb50175.js">
+<link rel="modulepreload" href="/assets/controllers/bs_tab_controller-7495fc6d.js">
+<link rel="modulepreload" href="/assets/controllers/chart_controller-1fe739ab.js">
+<link rel="modulepreload" href="/assets/controllers/children_select_controller-fa3cd883.js">
+<link rel="modulepreload" href="/assets/controllers/contest_controller-d1d11c0f.js">
+<link rel="modulepreload" href="/assets/controllers/contest_timer_controller-3db6d963.js">
+<link rel="modulepreload" href="/assets/controllers/dataset_mode_toggle_controller-42bf6846.js">
+<link rel="modulepreload" href="/assets/controllers/datatables/columns-fa10c521.js">
+<link rel="modulepreload" href="/assets/controllers/datatables/configs-282f1ef6.js">
+<link rel="modulepreload" href="/assets/controllers/datatables/init_controller-16c36c14.js">
+<link rel="modulepreload" href="/assets/controllers/datatables/init_score_table_controller-1f2ef6cb.js">
+<link rel="modulepreload" href="/assets/controllers/dismiss_announcement_controller-cadb2acf.js">
+<link rel="modulepreload" href="/assets/controllers/editor_controller-56289173.js">
+<link rel="modulepreload" href="/assets/controllers/event_dispatcher_controller-04e4a47a.js">
+<link rel="modulepreload" href="/assets/controllers/form/filter_problem_controller-51cdafb7.js">
+<link rel="modulepreload" href="/assets/controllers/form/filter_submission_controller-15ad5ccd.js">
+<link rel="modulepreload" href="/assets/controllers/form/filter_user_controller-d6f861e9.js">
+<link rel="modulepreload" href="/assets/controllers/grounding_draft_controller-0781c9d1.js">
+<link rel="modulepreload" href="/assets/controllers/group_controller-04e70bf1.js">
+<link rel="modulepreload" href="/assets/controllers/index-749a6dee.js">
+<link rel="modulepreload" href="/assets/controllers/init_ui_component_controller-4b3fc6cd.js">
+<link rel="modulepreload" href="/assets/controllers/initialize_controller-072a587a.js">
+<link rel="modulepreload" href="/assets/controllers/main_controller-3aec9395.js">
+<link rel="modulepreload" href="/assets/controllers/markdown_editor_controller-be887ac3.js">
+<link rel="modulepreload" href="/assets/controllers/problem_controller-e2f6a2aa.js">
+<link rel="modulepreload" href="/assets/controllers/problem_name_controller-a3ae61a6.js">
+<link rel="modulepreload" href="/assets/controllers/refresh_controller-262885b3.js">
+<link rel="modulepreload" href="/assets/controllers/submission_comment_controller-f7fd8c1b.js">
+<link rel="modulepreload" href="/assets/controllers/tag_controller-0420330e.js">
+<link rel="modulepreload" href="/assets/controllers/user_admin/admin_controller-a256aa5c.js">
+<link rel="modulepreload" href="/assets/controllers/user_admin/base_controller-19a8d0d1.js">
+<link rel="modulepreload" href="/assets/controllers/user_admin/index_controller-235b3ad0.js">
+<link rel="modulepreload" href="/assets/controllers/viva_exam_toggle_controller-32dadf35.js">
+<link rel="modulepreload" href="/assets/controllers/viva_session_controller-4fb513e6.js">
+<link rel="modulepreload" href="/assets/mixins/row_field_toggle-c945cf86.js">
+<script type="module">import "application"</script>
+
+
+<meta content="width=device-width, initial-scale=1" name="viewport">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="">
+<script>
+  // generate paths to be used in js
+  // for any parameterized id, the id is replaced with -123 to be gsubbed, later
+  window.AppRoute = {
+    // contests
+    contest: "/contests/-123",
+    viewContest: "/contests/-123/view",
+    cloneContest: "/contests/-123/clone",
+  
+    // users
+    // this is for rendering a stat, which was, inappropriately assigned to user_admin controller
+    statContestUserAdmin: "/user_admin/-123/stat/contest/-456",
+    statUserAdmin: "/user_admin/-123/stat",
+    editUserAdmin: "/user_admin/-123/edit",
+  
+    // problems
+    editProblem: "/problems/-123/edit",
+    statProblem: "/problems/-123/stat",
+  
+    // tag
+    tag: "/tags/-123",
+    editTag: "/tags/-123/edit",
+  }
+</script>
+
+<script>
+  // Inject UI fragments from Rails so JS modules stay DRY without hardcoding HTML.
+  // This specifically allows DataTables rendering (e.g., `dt_yes_no_pill_renderer` in `cafe_datatable.js`) 
+  // to inherit the exact same HTML and Bootstrap CSS classes generated by the Rails backend 
+  // (e.g., `ApplicationHelper#format_key_pair_value`), keeping the design system unified.
+  //
+  // Note: We use `window.CafeUI` distinctly instead of appending to the existing `cafe` variable
+  // because `cafe` is imported across the frontend as an immutable ES module (`import * as cafe`),
+  // and `application.js` globally clobbers `window.cafe` on load, which would erase these injections.
+  window.CafeUI = {
+    badges: {
+      yes: "<span class=\"badge bg-success-subtle text-success border border-success-subtle rounded-pill\"><span class=\"translation_missing\" title=\"translation missing: en.helpers.yes\">Yes<\/span><\/span>",
+      no: "<span class=\"badge bg-light text-secondary border border-secondary-subtle rounded-pill\"><span class=\"translation_missing\" title=\"translation missing: en.helpers.no\">No<\/span><\/span>"
+    }
+  }
+</script>
+
+</head>
+<body class="bg-light" data-controller="initialize main">
+<!-- = content_tag(:p,flash[:notice],class: 'alert alert-success') if flash[:notice]!=nil -->
+<div class="container-fluid" id="main-content">
+<h1>CEDT Grader</h1>
+<div class="row mt-4">
+<div class="col-md-6 col-sm-12 mb-3">
+</div>
+<div class="col-lg-4 col-md-6 col-sm-12">
+<div class="card shadow-sm">
+<div class="card-body">
+<div class="card-title">
+<h3>Stay calm, keep coding</h3>
+</div>
+<div class="card-subtitle">Please login to see the problem list</div>
+<div class="card">
+<div class="card-body" style="background: #eeeeff;">
+<form action="/login/login" accept-charset="UTF-8" method="post"><input type="hidden" name="authenticity_token" value="***" autocomplete="off"><div class="mb-3">
+<label class="form-label" for="login">Login</label>
+<input class="form-control" type="text" name="login" id="login" value="">
+</div>
+<div class="mb-3">
+<label class="form-label" for="password">Password</label>
+<input class="form-control" type="password" name="password" id="password" value="">
+</div>
+<div class="mb-3">
+<div class="col-sm-offset-3 col-sm-9">
+<input type="submit" name="commit" value="Login" class="btn btn-primary" data-disable-with="Login">
+</div>
+</div>
+</form></div>
+</div>
+<br>
+</div>
+</div>
+
+<!-- = &quot;current ip is 161.200.190.5&quot; -->
+</div>
+</div>
+
+</div>
+<turbo-frame data-turbo="true" id="msg_modal_main"></turbo-frame>
+<turbo-frame data-turbo="true" id="toast_main"><div class="toast-container position-fixed bottom-0 start-0 p-3" id="toast-area">
+<!-- place holder -->
+</div>
+</turbo-frame><turbo-frame data-turbo="true" id="js_response"><div id="js-response">
+<!-- place holder -->
+</div>
+</turbo-frame>
+<footer class="footer py-1 bg-light fixed-bottom border-top">
+<div class="container-fluid px-3 text-center small text-body-secondary">
+☕
+<a class="text-decoration-none fw-medium" href="https://github.com/nattee/cafe-grader-web">cafe-grader</a>
+<span class="mx-1 opacity-50">·</span>
+<span class="font-monospace">rev 4.7.3cu</span>
+</div>
+</footer>
+
+</body></html>

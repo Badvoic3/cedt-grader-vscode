@@ -48,12 +48,11 @@ export function detectContest(html: string, now: Date = new Date()): ContestDete
   }
 
   // 2. Check-in loop started. `checkInLoop()` reschedules itself with
-  // `setTimeout(checkInLoop, ...)` inside its own body on every page, so only
-  // a start from the `load` listener (or the countdown ticker) counts.
-  const loadBlocks = scripts.match(/addEventListener\(\s*["']load["'][\s\S]*?\}\s*\)/g) ?? [];
-  if (
-    loadBlocks.some((b) => /setTimeout\(\s*checkInLoop|setInterval\(\s*updateRemainingTime/.test(b))
-  ) {
+  // `setTimeout(checkInLoop, ...)` (several times) inside its own body on
+  // every page, so the bodies of the header functions are removed first; a
+  // remaining call can only be the start from the contest `load` listener.
+  const outside = stripFunctionBodies(scripts, ['checkInLoop', 'updateRemainingTime']);
+  if (/setTimeout\(\s*checkInLoop\b|setInterval\(\s*updateRemainingTime\b/.test(outside)) {
     contest = true;
     signals.push('check-in-loop-started');
   }
@@ -138,6 +137,26 @@ export function detectContest(html: string, now: Date = new Date()): ContestDete
     reason: analysis ? 'Analysis mode (no running contest).' : 'No contest markers found.',
     ...base,
   };
+}
+
+/** Remove `function name(...) { ... }` bodies (brace-matched) from script text. */
+export function stripFunctionBodies(js: string, names: string[]): string {
+  let out = js;
+  for (const name of names) {
+    const re = new RegExp(`function\\s+${name}\\s*\\([^)]*\\)\\s*\\{`, 'g');
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(out))) {
+      let depth = 1;
+      let i = m.index + m[0].length;
+      for (; i < out.length && depth > 0; i++) {
+        if (out[i] === '{') depth++;
+        else if (out[i] === '}') depth--;
+      }
+      out = out.slice(0, m.index) + `function ${name}(){}` + out.slice(i);
+      re.lastIndex = m.index + 1;
+    }
+  }
+  return out;
 }
 
 /** True when the caller must block (contest or uncertain). */

@@ -198,7 +198,8 @@ describe('poll url', () => {
 describe('sanitizeHtml', () => {
   it('removes tokens, names, user id, emails and student ids', () => {
     const html = `<html><head><meta name="csrf-token" content="SECRETTOKEN123"></head><body>
-      <a data-user-id="4242" href="/users/profile">Somchai Jaidee</a>
+      <a data-user-id="4242" href="/users/profile"><span class="mi md-18">settings</span></a>
+      <a href="/main/logout"><span class="mi md-18">exit_to_app</span> Somchai Jaidee</a>
       <input type="hidden" name="authenticity_token" value="SECRETTOKEN456">
       <a href="/submissions/get_latest_submission_status/4242/9">x</a>
       Hello Somchai Jaidee (6730123421) somchai@student.chula.ac.th login 6730123421</body></html>`;
@@ -209,5 +210,8 @@ describe('sanitizeHtml', () => {
     expect(out).not.toMatch(/6730123421/);
     expect(out).not.toMatch(/chula/);
     expect(out).toContain('get_latest_submission_status/12345/9');
+    // Icon names are kept (they are not personal data).
+    expect(out).toContain('>settings<');
+    expect(out).toContain('exit_to_app');
   });
 });
