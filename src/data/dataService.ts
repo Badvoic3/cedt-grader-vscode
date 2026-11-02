@@ -120,7 +120,8 @@ export class DataService {
       this.timer = null;
       const id = this.focused;
       if (id === null || !this.visible || !this.opts.canFetch()) return;
-      if (!this.cache.isFresh(historyKey(id), HISTORY)) void this.loadHistory(id);
+      if (this.cache.isFresh(historyKey(id), HISTORY)) this.log(`switch    ${historyKey(id)} fresh, no request`);
+      else void this.loadHistory(id);
     }, SWITCH_DEBOUNCE_MS);
   }
 
