@@ -174,16 +174,39 @@ The sidebar (`cedtGrader` Activity Bar container, view `cedtGrader.panel`) is th
   - file name;
   - searchable picker (name or id), book icon → statement viewer;
   - wrong-language hint ("This problem doesn't accept C++. Wrong problem?" + Change);
-  - match-source icon next to the problem name (tooltips "Chosen by you" / "Matched by file name" / "Matched from CPH data" / "Suggested — click to confirm"; only suggested is highlighted, with Confirm), Change, copy-name icon, notes for ambiguous / stale mappings;
+  - header icons, always visible: Open statement, Copy problem name, Open on the grader website, Auto-detect, Unlink this file (not for suggestions); right-click on the header offers the same;
+  - match line under the selector ("Chosen by you" / "Matched by file name" / "Matched from CPH data"; a suggestion is a muted "Suggested from the file name · Use this"; choosing from the dropdown confirms too); notes for ambiguous / stale mappings;
+  - "Not linked to a problem" (Choose problem / Auto-detect) after "Unlink this file": the file is stored as explicitly unlinked (`cedtGrader.unlinked`), so auto-detection leaves it alone until the user chooses or auto-detects;
+  - "files for this problem" notice (see Problem links);
   - "Load test cases" (only when `has_testcase` and the file is mapped, not just suggested; CPH or files);
   - counted-score card (counted, best, latest, attempts, penalty, "your best still counts");
   - language dropdown;
   - Submit button.
 - **Result** (active file only): live status, points, verdict tiles, compiler message, improvement line, Resubmit.
 - **History** (API): every submission with relative/exact time, language, score, mini verdict strip, counted marker; expand for details (per test, runtime, memory, compiler message) and "Open this version" / "Compare with current file" (`cedt-grader-submission:` read-only documents, served from the cache).
-- **Problems:** counted score per problem; row actions (on hover/focus): copy name, go to file (mapped) or find file by name, new file for this problem, statement.
+- **Problems:** counted score per problem. Row click opens the problem's file(s) (several → pick in path order; missing → offer to remove the stale link; none → Link to <current file> / Create a new file / Find a file by name / Open statement; never links by itself). Row icons on hover / keyboard focus: copy name, go to file or find file by name, new file, statement. Right-click on a row: the same plus "Link to <file>" and "Open on the grader website". Row tooltip: bold "name #id" + full name only.
+- **Inline questions** (`askInline` → `ViewState.prompt`, plain buttons under the banner; cancelled on file switch): submit confirmation, suggested-match submit, newer linked file, auto-detect result, unlink other files, reconnect after a move, stale link. Native modal dialogs only for what can't be undone or loses data: overwrite a file, (future) clear cached data, the exam warning.
+- **Context menus** (`withContextMenu` in `webview/main.ts`): always in addition to visible icons, never instead. Long labels are cut in the middle (`webview/text.ts`), full label in tooltip + aria-label.
 
 Statement viewer (`webview/statement.ts`, `webview/zoom.ts`): pinch (Ctrl+wheel) zooms around the cursor via `PDFViewer.updateScale({origin})` with `preventDefault`; Cmd/Ctrl + / - / 0; page/zoom/scroll kept in webview state (serializer, restart) and globalState (`cedtGrader.statementView`, reopen); `retainContextWhenHidden`; `registerWebviewPanelSerializer('cedtGrader.statement')` reopens tabs after restart from the disk cache (no request).
+
+## Where to change things
+
+| What | Where |
+|---|---|
+| Default grader URL, website paths | `src/shared/constants.ts` (`DEFAULT_BASE_URL` — also `package.json` default; `WEB_PATHS`) |
+| Timings: poll interval/timeout/back-off, GET retries, debounce, history TTL, request timeout, file-event debounce | `src/shared/constants.ts` `TIMING` (poll interval also setting `cedtGrader.pollIntervalSeconds`) |
+| Limits (file search sizes, remembered auto-matches), stale-link days | `src/shared/constants.ts` `LIMITS`, `STALE_LINK_DAYS` |
+| Penalty cap / "solved" threshold (server literal 100) | `SERVER_SCORE_CAP` in `src/shared/constants.ts`; "out of" uses the problem's `full_score` |
+| Languages / extensions | from the server (`GET /api/v1/languages` `ext`); fallback table + aliases in `src/grader/languages.ts`; non-source (never auto-picked) in `src/mapping/newFileLanguage.ts`; binary extensions in `src/mapping/findByName.ts` |
+| Verdict codes, words, group text | `src/grader/verdicts.ts` (website `RESULT_CODE` order) |
+| User-facing text | `src/shared/strings.ts` (host messages, questions, picks; `HOW_LINKED`). Sidebar/statement webview labels are still inline in `webview/*.ts` (next step: move them too). |
+| Path normalization for links | `src/mapping/paths.ts` |
+| "Files for this problem" rules and notice wording | `src/mapping/problemFiles.ts` |
+| Folders never searched | `EXCLUDED_DIRS` in `src/mapping/findByName.ts` |
+| Settings | `package.json` `contributes.configuration` + `src/config.ts` |
+
+No course- or problem-specific names in code (problem names come from the server; `test/scalability.test.ts` checks).
 
 Phase 5 (not started): install guide + walkthrough + troubleshooting, cache management (`cedtGrader.cacheMaxMB`, LRU, daily cleanup, "Clear Cached Data" incl. stale mappings) — see spec.
 Phase 6 (not started): Thai translation (`cedtGrader.displayLanguage`, vscode.l10n, package.nls.th.json), plain-language strings in one place, more customization — see spec.
