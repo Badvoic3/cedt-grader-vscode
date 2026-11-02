@@ -71,6 +71,11 @@ const icon = (name: string, extra = '') => el('span', { class: `codicon codicon-
  * Icon-only button: always a tooltip (`title`) and the same `aria-label`.
  * When disabled, the tooltip says why.
  */
+/** "Troubleshooting": the README section on GitHub (connection banner, login errors). */
+function troubleshootingLink(): HTMLButtonElement {
+  return el('button', { class: 'link small', type: 'button', title: W.troubleshootingTip, onclick: () => send({ type: 'openTroubleshooting' }) }, icon('question'), ' ', W.troubleshooting);
+}
+
 function iconButton(name: string, label: string, onclick: () => void, opts: { disabledReason?: string | null } = {}): HTMLButtonElement {
   const text = opts.disabledReason ? `${label} (${opts.disabledReason})` : label;
   return el('button', { class: 'icon-btn', title: text, 'aria-label': text, type: 'button', disabled: !!opts.disabledReason, onclick }, icon(name));
@@ -333,6 +338,7 @@ function renderBanner(s: ViewState): void {
     ),
     el('p', {}, c.message),
     (s.problems.loaded || s.history.items.length > 0) && el('p', { class: 'small muted' }, W.showingSavedData),
+    el('div', { class: 'row' }, troubleshootingLink()),
   ]);
 }
 
@@ -384,7 +390,7 @@ function renderAccount(s: ViewState): void {
     }
     b.append(loginForm);
   }
-  if (a.error) b.append(el('div', { class: 'error', role: 'alert' }, icon('error'), ' ', a.error));
+  if (a.error) b.append(el('div', { class: 'error', role: 'alert' }, icon('error'), ' ', a.error), el('div', { class: 'row' }, troubleshootingLink()));
 }
 
 function openPicker(): void {
@@ -1180,6 +1186,11 @@ window.addEventListener('message', (ev: MessageEvent<ToWebview>) => {
       (loginUser.value ? loginPass : loginUser).focus();
     } else if (m.target === 'problem-search') {
       openPicker();
+    } else if (m.target === 'result') {
+      // Grading finished: show the Result section without taking keyboard focus from the editor.
+      ui.collapsed.result = false;
+      sResult.details.open = true;
+      sResult.details.scrollIntoView?.({ block: 'nearest' });
     } else {
       document.getElementById('submit-btn')?.focus();
     }

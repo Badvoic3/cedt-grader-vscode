@@ -405,6 +405,24 @@ describe.runIf(existsSync(resolve(__dirname, '../esbuild.mjs')))('sidebar webvie
     expect(problems).toEqual([]);
   });
 
+  it('troubleshooting link in the connection banner and under a login error; Result revealed after grading', () => {
+    const { doc, sent, post, dom } = boot();
+    post({ ...loggedIn, connection: { kind: 'offline', title: 'No internet connection', message: 'x', action: 'retry' } });
+    const link = [...doc.querySelectorAll<HTMLButtonElement>('.banner button')].find((b) => b.textContent?.includes('Troubleshooting'))!;
+    expect(link.getAttribute('data-tip')).toBe('Open the troubleshooting guide on GitHub');
+    link.click();
+    expect(sent).toContainEqual({ type: 'openTroubleshooting' });
+    post({ ...base, account: { ...base.account, error: 'Wrong username or password.' } });
+    expect(doc.querySelector('#sec-account')!.textContent).toContain('Troubleshooting');
+    // Collapsed Result section: the host's "result" focus opens it.
+    post(loggedIn);
+    const result = doc.querySelector<HTMLDetailsElement>('#sec-result')!;
+    result.open = false;
+    result.dispatchEvent(new dom.window.Event('toggle'));
+    dom.window.dispatchEvent(new dom.window.MessageEvent('message', { data: { type: 'focus', target: 'result' } }));
+    expect(result.open).toBe(true);
+  });
+
   it('Thai: the panel is built in the language of <html lang> (texts from strings.th.ts)', () => {
     const out = boot('th');
     out.post(base);

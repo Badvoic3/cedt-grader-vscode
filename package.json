@@ -185,6 +185,12 @@
         "title": "%command.openWalkthrough.title%",
         "category": "%command.category%",
         "icon": "$(rocket)"
+      },
+      {
+        "command": "cedtGrader.openTroubleshooting",
+        "title": "%command.openTroubleshooting.title%",
+        "category": "%command.category%",
+        "icon": "$(question)"
       }
     ],
     "menus": {
@@ -219,7 +225,12 @@
         {
           "command": "cedtGrader.openWalkthrough",
           "when": "view == cedtGrader.panel",
-          "group": "9_data@2"
+          "group": "8_help@1"
+        },
+        {
+          "command": "cedtGrader.openTroubleshooting",
+          "when": "view == cedtGrader.panel",
+          "group": "8_help@2"
         }
       ],
       "commandPalette": [
@@ -273,6 +284,16 @@
           "type": "boolean",
           "default": true,
           "description": "%config.confirmBeforeSubmit.description%"
+        },
+        "cedtGrader.saveBeforeSubmit": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "%config.saveBeforeSubmit.description%"
+        },
+        "cedtGrader.revealResultAfterSubmit": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "%config.revealResultAfterSubmit.description%"
         },
         "cedtGrader.debugRequests": {
           "type": "boolean",

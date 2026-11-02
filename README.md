@@ -119,6 +119,8 @@ With **Remember password on this computer** on, your password is kept in the OS 
 | `cedtGrader.username` | | Filled in when you log in from the panel. |
 | `cedtGrader.pollIntervalSeconds` | `5` | How often to check while grading (minimum 3). Polling only runs after a submission and stops after 3 minutes. |
 | `cedtGrader.confirmBeforeSubmit` | `true` | Ask before each submission. |
+| `cedtGrader.saveBeforeSubmit` | `true` | Save the file before submitting (after you confirm), so the grader gets exactly what is on disk. Save actions such as format on save run first. If saving fails, nothing is submitted. |
+| `cedtGrader.revealResultAfterSubmit` | `true` | When grading finishes, open the **Result** section and scroll it into view. Keyboard focus stays in your editor. |
 | `cedtGrader.statementBeside` | `true` | Open statements beside your code. |
 | `cedtGrader.defaultLanguage` | `C++` | Language for **New file for this problem** when your current file's language isn't allowed. |
 | `cedtGrader.cacheMaxMB` | `100` | Size limit for downloaded statements and test cases (see [Cache and storage](#cache-and-storage)). |
@@ -154,6 +156,8 @@ To avoid downloading the same thing twice, the extension keeps:
 It asks once more before deleting. Nothing else in your folders is ever deleted.
 
 ## Troubleshooting
+
+The panel links here: **Troubleshooting** in the connection banner, under a login error, and in the panel's **⋯** menu (or **CEDT Grader: Troubleshooting** in the Command Palette).
 
 **I can't log in.**
 - "Wrong username or password": check them on the [grader website](https://cedt-grader.nattee.net). A wrong saved password is forgotten automatically, so type it again.

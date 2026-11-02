@@ -16,6 +16,10 @@ export interface GraderConfig {
   defaultLanguage: string;
   /** Size limit of downloaded files (statements, test cases), in MB. */
   cacheMaxMB: number;
+  /** Save the file before submitting, so the grader gets what is on disk (default on). */
+  saveBeforeSubmit: boolean;
+  /** Open and scroll to the Result section when grading finishes (default on). */
+  revealResultAfterSubmit: boolean;
   /** `en` (default), `th`, or `auto` (follow VS Code's display language). */
   displayLanguage: LangSetting;
 }
@@ -48,6 +52,8 @@ export function readConfig(): GraderConfig {
     statementBeside: c.get<boolean>('statementBeside', true) !== false,
     defaultLanguage: String(c.get<string>('defaultLanguage', 'C++') || 'C++'),
     displayLanguage: ((v) => (v === 'th' || v === 'auto' ? v : 'en'))(c.get<string>('displayLanguage', 'en')),
+    saveBeforeSubmit: c.get<boolean>('saveBeforeSubmit', true) !== false,
+    revealResultAfterSubmit: c.get<boolean>('revealResultAfterSubmit', true) !== false,
     cacheMaxMB: Math.max(CACHE.maxMbMinimum, Number(c.get('cacheMaxMB', CACHE.maxMbDefault)) || CACHE.maxMbDefault),
   };
 }

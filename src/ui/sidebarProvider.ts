@@ -50,7 +50,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider, vscode.Dispo
     this.view.webview.html = this.html(this.view.webview, vscode.Uri.joinPath(this.extensionUri, 'media'));
   }
 
-  focus(target: 'login' | 'problem-search' | 'submit'): void {
+  focus(target: 'login' | 'problem-search' | 'submit' | 'result'): void {
     this.post({ type: 'focus', target });
   }
 
@@ -164,6 +164,9 @@ export class SidebarProvider implements vscode.WebviewViewProvider, vscode.Dispo
         return;
       case 'showCompilerMessage':
         await c.showCompilerMessage();
+        return;
+      case 'openTroubleshooting':
+        await c.openTroubleshooting();
         return;
       case 'openSettings':
         await vscode.commands.executeCommand('workbench.action.openSettings', 'cedtGrader');

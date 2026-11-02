@@ -49,10 +49,11 @@ import { comparePaths, linkedNotice, mergeProblemFiles, noticeDismissed, noticeS
 import { pathKey } from './mapping/paths';
 import { confirmSuggestion } from './mapping/suggestionGate';
 import { freeName, invalidFileName, nameMatchesProblem, renameProposal } from './mapping/renameToProblem';
-import { CACHE, LIMITS, TIMING, WEB_PATHS } from './shared/constants';
+import { CACHE, LIMITS, TIMING, troubleshootingUrl, WEB_PATHS } from './shared/constants';
+import { needsSave, shouldRevealResult } from './shared/submitOptions';
 import { MATCH_SOURCE, PICK_HOW, S } from './shared/strings';
 import { KEYS } from './shared/stateKeys';
-import { dateLocale, resolveLang, setLanguage } from './shared/i18n';
+import { currentLang, dateLocale, resolveLang, setLanguage } from './shared/i18n';
 import type { HistoryEntry, ProblemFilter, ProblemView, ResultView, SubmissionDetailView, ViewState } from './shared/messages';
 
 /** Dismissed "files for this problem" notices: problem id → notice signature (workspaceState; "Clear Cached Data" resets it). */
@@ -1482,7 +1483,7 @@ export class GraderController implements vscode.Disposable {
     this.focusTarget?.('problem-search');
   }
   /** Set by the sidebar provider: focus something inside the panel. */
-  focusTarget: ((t: 'login' | 'problem-search' | 'submit') => void) | null = null;
+  focusTarget: ((t: 'login' | 'problem-search' | 'submit' | 'result') => void) | null = null;
 
   /**
    * Click on a row of the problem list: open its linked file (several → most
@@ -2072,6 +2073,12 @@ export class GraderController implements vscode.Disposable {
         if (pick !== 'submit') return;
       }
 
+      // Save first (after the questions, so Cancel never saves): the grader gets what is on disk.
+      if (needsSave({ saveBeforeSubmit: this.cfg.saveBeforeSubmit, isDirty: doc.isDirty, isUntitled: doc.isUntitled }) && !(await doc.save())) {
+        this.setResult(key, newResult(problem, 'error', S.submit.saveFailed(fileName)));
+        return;
+      }
+
       // Busy from here on (questions above don't lock the panel).
       this.busy = true;
       this.gradingFile = key;
@@ -2125,6 +2132,14 @@ export class GraderController implements vscode.Disposable {
     const updated = this.currentProblem();
     const after = updated ? countedScore(updated.bestScore, updated.list?.cost ?? 0, updated.list?.rawSum ?? false) : null;
     this.updateResult(key, { improvement: describeImprovement(countedBefore, after, final.points) });
+    if (shouldRevealResult({ revealResultAfterSubmit: this.cfg.revealResultAfterSubmit, gradedFile: key, activeFile: this.fileUri?.fsPath ?? null })) {
+      this.focusTarget?.('result');
+    }
+  }
+
+  /** README troubleshooting section on GitHub, in the display language. */
+  async openTroubleshooting(): Promise<void> {
+    await vscode.env.openExternal(vscode.Uri.parse(troubleshootingUrl(currentLang()), true));
   }
 
   /** Continue a submission whose result could not be fetched (Retry, or connection back). */

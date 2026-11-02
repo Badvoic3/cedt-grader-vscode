@@ -20,6 +20,21 @@ export const DEFAULT_BASE_URL = 'https://cedt-grader.nattee.net';
  */
 export const SERVER_SCORE_CAP = 100;
 
+/** The extension's GitHub repository (README, troubleshooting). Keep in sync with package.json `repository`. */
+export const REPO_URL = 'https://github.com/Badvoic3/cedt-grader-vscode';
+
+/** README troubleshooting section per display language (GitHub heading anchors). */
+export const TROUBLESHOOTING = {
+  en: { file: 'README.md', anchor: 'troubleshooting' },
+  th: { file: 'README.th.md', anchor: 'การแก้ปัญหาเบื้องต้น' },
+} as const;
+
+/** Web address of the troubleshooting section (anchor percent-encoded). */
+export function troubleshootingUrl(lang: keyof typeof TROUBLESHOOTING): string {
+  const t = TROUBLESHOOTING[lang];
+  return `${REPO_URL}/blob/main/${t.file}#${encodeURIComponent(t.anchor)}`;
+}
+
 /** Website paths (opened in the browser; never fetched). */
 export const WEB_PATHS = {
   problem: (id: number) => `/submissions/direct_edit_problem/${id}`,

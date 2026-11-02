@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased (Phase 6)
+
+### Language
+- Thai: setting **CEDT Grader: Display Language** (English, ไทย (Thai), Follow VS Code), switches the panel, statement viewer, messages and status bar at once. Command names, settings and the walkthrough are in Thai when VS Code itself is in Thai. Grader content and verdict words stay as they are; Thai dates use Gregorian years.
+- Plainer English messages (what happened, what to do next).
+- `README.th.md` (Thai README) and pictures of the panel in both READMEs.
+
+### Submitting
+- **Save before submit** (`cedtGrader.saveBeforeSubmit`, on): the file is saved after you confirm, so the grader gets what is on disk; if saving fails nothing is sent.
+- **Show the result** (`cedtGrader.revealResultAfterSubmit`, on): when grading finishes, the Result section opens and scrolls into view; keyboard focus stays in the editor.
+
+### Help
+- **Troubleshooting** link (connection banner, login errors, panel ⋯ menu, command) opens the README's troubleshooting section on GitHub, in the display language.
+
 ## 0.6.0 — Phase 5 (quality and packaging)
 
 ### Cache and storage
