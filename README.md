@@ -175,3 +175,7 @@ npx tsx scripts/probe.ts --help   # protocol probe; credentials from .env (see .
 ```
 
 Press **F5** in VS Code to start an Extension Development Host. Architecture, protocol and "where to change things" are in `CLAUDE.md`; changes in `CHANGELOG.md`.
+
+## License
+
+MIT, see [LICENSE](LICENSE). Unofficial; not affiliated with the grader's maintainers.

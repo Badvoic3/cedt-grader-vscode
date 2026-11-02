@@ -2,9 +2,18 @@
   "name": "cedt-grader-submit",
   "displayName": "CEDT Grader Submit",
   "description": "Submit your code to CEDT Grader (cafe-grader) from VS Code: see scores, verdicts, history and problem statements in a sidebar.",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "publisher": "cedt-student",
   "license": "MIT",
+  "icon": "media/icon.png",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/badvoic3/cedt-grader-vscode.git"
+  },
+  "bugs": {
+    "url": "https://github.com/badvoic3/cedt-grader-vscode/issues"
+  },
+  "homepage": "https://github.com/badvoic3/cedt-grader-vscode#readme",
   "private": true,
   "engines": {
     "vscode": "^1.90.0"
@@ -18,7 +27,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "probe": "tsx scripts/probe.ts",
-    "package": "npm run build:prod && vsce package --no-dependencies",
+    "package": "vsce package --no-dependencies",
     "vscode:prepublish": "npm run build:prod"
   },
   "dependencies": {

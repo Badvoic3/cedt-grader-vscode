@@ -1,10 +1,17 @@
 // Bundles the extension host (dist/extension.js) and the sidebar webview
 // (media/dist/webview.js + css + codicons). Usage: node esbuild.mjs [--watch] [--production]
 import { context } from 'esbuild';
-import { copyFile, cp, mkdir } from 'node:fs/promises';
+import { copyFile, cp, mkdir, rm } from 'node:fs/promises';
 
 const watch = process.argv.includes('--watch');
 const production = process.argv.includes('--production');
+
+// Production (the .vsix): start from empty output folders, so no source maps or
+// other leftovers of a dev build are packaged (.vscodeignore re-includes all of media/dist).
+if (production) {
+  await rm('dist', { recursive: true, force: true });
+  await rm('media/dist', { recursive: true, force: true });
+}
 
 const copyAssets = {
   name: 'copy-webview-assets',
