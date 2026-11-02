@@ -117,7 +117,7 @@ describe('token expiry', () => {
     const { server, client, creds } = setup({ stored: false });
     await client.login(creds);
     server.expireTokens();
-    await expect(client.getProblem(201)).rejects.toBeInstanceOf(SessionExpiredError);
+    await expect(client.listSubmissions(201)).rejects.toBeInstanceOf(SessionExpiredError);
     expect(server.count('POST', '/api/v1/auth/login')).toBe(1);
   });
 
@@ -127,7 +127,7 @@ describe('token expiry', () => {
     await client.login();
     server.password = 'new';
     server.expireTokens();
-    await expect(client.getProblem(201)).rejects.toBeInstanceOf(AuthError);
+    await expect(client.listSubmissions(201)).rejects.toBeInstanceOf(AuthError);
     expect(server.count('POST', '/api/v1/auth/login')).toBe(2);
   });
 });

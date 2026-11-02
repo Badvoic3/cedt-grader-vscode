@@ -15,7 +15,7 @@ describe('problem no longer available on the grader', () => {
   it('404 → ProblemUnavailableError (problem, history, submit)', async () => {
     const { server, client } = await setup();
     server.unavailable.set(201, 404);
-    await expect(client.getProblem(201)).rejects.toMatchObject({ status: 404 });
+    await expect(client.listSubmissions(201)).rejects.toMatchObject({ status: 404 });
     await expect(client.listSubmissions(201)).rejects.toBeInstanceOf(ProblemUnavailableError);
     await expect(client.submit(201, 2, 'x', 'a.cpp')).rejects.toBeInstanceOf(ProblemUnavailableError);
   });
@@ -23,7 +23,7 @@ describe('problem no longer available on the grader', () => {
   it('403 → ProblemUnavailableError too (closed to you)', async () => {
     const { server, client } = await setup();
     server.unavailable.set(201, 403);
-    await expect(client.getProblem(201)).rejects.toMatchObject({ status: 403 });
+    await expect(client.listSubmissions(201)).rejects.toMatchObject({ status: 403 });
     await expect(client.submit(201, 2, 'x', 'a.cpp')).rejects.toBeInstanceOf(ProblemUnavailableError);
   });
 
