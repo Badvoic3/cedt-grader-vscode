@@ -318,7 +318,6 @@ No course- or problem-specific names in code (problem names come from the server
 
 ## Not done yet
 
-- Phase 5: built (v0.6.0); waiting for the CHECKPOINT (manual F5 / .vsix tests by the user).
 - Phase 6: Thai translation (`cedtGrader.displayLanguage`, vscode.l10n, package.nls.th.json), plain-language review, more customization — see spec.
 
 Commands (kept for keybindings; the panel is the primary interface): `cedtGrader.login`, `logout`, `submit`, `chooseProblem`, `clearMapping`, `loadTestcases`, `showLastResult`, `openStatement`, `refreshProblems`, `refreshHistory`, `showRequestLog`, `clearCache`, `openWalkthrough`, `openSettings`, `renameFileToProblem`, `focus`.

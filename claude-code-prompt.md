@@ -1,6 +1,6 @@
 # Build "CEDT Grader Submit": a VS Code extension for cedt-grader.nattee.net
 
-**Status (v0.6.0):** Phases 1–4 are done (see each phase for what changed from the original plan). Phase 5 is built and waits for the user's CHECKPOINT results — see **Next steps** at the end. `CLAUDE.md` describes the current code (architecture, rules, where to change things, open questions); this file is the spec.
+**Status (v0.6.0):** Phases 1–5 are done (see each phase for what changed from the original plan; Phase 5 confirmed by the user's F5 / .vsix checkpoint on 2026-11-03). Phase 6 is next — see **Next steps** at the end. `CLAUDE.md` describes the current code (architecture, rules, where to change things, open questions); this file is the spec.
 
 A VS Code extension (TypeScript) that lets students submit the active source file to the CEDT Grader and see the verdict inside VS Code. It is a standalone grader extension. **Competitive Programming Helper (CPH)** (`DivyanshuAgrawal.competitive-programming-helper`) is optional: everything works without it, and when it is installed the extension stays compatible with it (see "CPH is optional" below).
 
@@ -266,7 +266,7 @@ Changed from the original plan (later requests win): History shows every submiss
 - History tile tooltips (strip tiles, group boxes, per-test tiles) use the custom tooltip.
 - Scalability: languages and extensions from `GET /api/v1/languages` (table only as fallback); every score out of 100 as one named constant (section 1c; `full_score` is not the maximum — an earlier instruction to use it was wrong); timings, limits and URLs in `src/shared/constants.ts`; user-facing text in `src/shared/strings.ts`; no course-specific names in code; "Where to change things" in `CLAUDE.md`.
 
-### Phase 5: Quality and packaging — BUILT, CHECKPOINT PENDING
+### Phase 5: Quality and packaging — DONE
 Already in place (keep current): tests for parsers, `GraderClient` with a fake server (login, expired session re-login, submit, poll timeout, back-off), language mapping, request counts; `README.md` with a privacy note and "Works with CPH"; `CHANGELOG.md` (from v0.5.0); `CLAUDE.md`.
 - `npx @vscode/vsce package` produces a `.vsix` without warnings (repository / license fields, icon, `.vscodeignore` checked). Add an MIT `LICENSE` (confirm the copyright holder with me).
 - Clear install guide:
@@ -305,9 +305,9 @@ Already in place (keep current): tests for parsers, `GraderClient` with a fake s
 
 1. Read `CLAUDE.md` (architecture, rules, "Where to change things", known limitations, **open questions**) and this file's Phase 5.
 2. Run `npm install`, `npm test`, `npm run build` — all green at v0.6.0 (344 tests); `npm run package` builds the `.vsix` without warnings.
-3. Phase 5 is built ((a) cache management + "Clear Cached Data", (b) README install guide / troubleshooting / updating / uninstalling, (c) Getting Started walkthrough, (d) packaging: LICENSE, icon, repository, no source maps). Release decisions are in `CLAUDE.md`. Waiting for the user's results of the Phase 5 CHECKPOINT list; fix what they report.
+3. Phase 5 is built ((a) cache management + "Clear Cached Data", (b) README install guide / troubleshooting / updating / uninstalling, (c) Getting Started walkthrough, (d) packaging: LICENSE, icon, repository, no source maps). Release decisions are in `CLAUDE.md`. The user confirmed the CHECKPOINT (2026-11-03); fixes after it: counted star coloured by the score, walkthrough auto-open documented (only for installs inside VS Code).
 4. Git history was rewritten to the GitHub noreply email before the first push (see `CLAUDE.md`). Keep `git config user.email` on the noreply address.
-5. Phase 6 only after the user confirms Phase 5.
+5. Phase 6 (language and customization) is next; plan it first and show the user.
 
 Layout changes need the user's approval first (Phase 4 rule); later requests win over earlier ones.
 
