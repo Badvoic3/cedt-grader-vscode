@@ -68,6 +68,7 @@ npx tsx scripts/probe.ts [--list] [--problem <ID>] [--fixtures] [--submit file] 
   - `cacheClear.ts`: "Clear Cached Data" categories (`CLEAR_ORDER`, `CLEAR_DEFAULTS`), `planClear` (which keys / actions per checkbox), backup records (`recordBackup`, `backupsToDelete`).
 - `src/controller.ts`: session, mapping and UI state (results per file, expanded history entry). All grader data goes through `DataService`. Commands, sidebar and status bar all go through the controller.
 - `src/shared/messages.ts`: typed `ViewState` / `ToWebview` / `FromWebview`.
+- `src/shared/walkthrough.ts`: Getting Started walkthrough id and the context keys its steps complete on (`walkthroughContext(ViewState)`; `extension.ts` sets them only when they change). Steps in `package.json` `contributes.walkthroughs`, pages in `media/walkthrough/*.md`.
 - `src/shared/stateKeys.ts`: `KEYS`, every workspaceState / globalState key (one list; a test fails if a key literal appears elsewhere).
 - `src/ui/sidebarProvider.ts`: `WebviewViewProvider`; CSP with nonce, `localResourceRoots: [media]`.
 - `src/ui/statusBar.ts`: status bar shortcut that reveals the panel (warning icon while the connection banner is up).
@@ -233,6 +234,11 @@ Every icon-only button (`iconButton()` in `webview/main.ts`, `btn()` in `webview
   - Backup files [off, shown only if any]: only recorded `.prob.bak` files that still exist.
   - Then a modal confirm. Settings-like state (filter, test-case target, remember, CPH tip) is never cleared.
 
+## Getting Started walkthrough
+
+- `contributes.walkthroughs` `cedtGrader.start`: Open the panel (`onView:cedtGrader.panel`) → Log in (`onContext:cedtGrader.loggedIn`) → Open a solution file (`cedtGrader.hasSourceFile`) → Check the problem (`cedtGrader.hasProblem`) → Submit (`cedtGrader.submitted`, a submission was sent this session) → Optional: install CPH (`extensionInstalled:`). A test checks ids, pages, context keys and command links.
+- Opened once after install by VS Code itself (`workbench.welcomePage.walkthroughs.openOnInstall`, default on); no own "first run" flag, so it never opens twice. Reopen: `cedtGrader.openWalkthrough` ("Get Started", panel ⋯ menu).
+
 ## Exams / contests (section 2b; kept deliberately small)
 
 - `isContestPage(html)` runs on the `/main/list` page fetched at login or refresh: a non-empty `Date.parse('…')` contest end time, or a `#countdown` that isn't "ANALYSIS MODE". There are no extra requests just for detection.
@@ -308,7 +314,7 @@ No course- or problem-specific names in code (problem names come from the server
 
 ## Not done yet
 
-- Phase 5 (cache management done): install guide, troubleshooting, walkthrough, packaging polish — see spec.
+- Phase 5 (cache management, README install guide / troubleshooting, walkthrough done): packaging polish — see spec.
 - Phase 6: Thai translation (`cedtGrader.displayLanguage`, vscode.l10n, package.nls.th.json), plain-language review, more customization — see spec.
 
-Commands (kept for keybindings; the panel is the primary interface): `cedtGrader.login`, `logout`, `submit`, `chooseProblem`, `clearMapping`, `loadTestcases`, `showLastResult`, `openStatement`, `refreshProblems`, `refreshHistory`, `showRequestLog`, `clearCache`, `openSettings`, `renameFileToProblem`, `focus`.
+Commands (kept for keybindings; the panel is the primary interface): `cedtGrader.login`, `logout`, `submit`, `chooseProblem`, `clearMapping`, `loadTestcases`, `showLastResult`, `openStatement`, `refreshProblems`, `refreshHistory`, `showRequestLog`, `clearCache`, `openWalkthrough`, `openSettings`, `renameFileToProblem`, `focus`.

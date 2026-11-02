@@ -170,6 +170,12 @@
         "title": "Clear Cached Data…",
         "category": "CEDT Grader",
         "icon": "$(trash)"
+      },
+      {
+        "command": "cedtGrader.openWalkthrough",
+        "title": "Get Started",
+        "category": "CEDT Grader",
+        "icon": "$(rocket)"
       }
     ],
     "menus": {
@@ -200,6 +206,11 @@
           "command": "cedtGrader.clearCache",
           "when": "view == cedtGrader.panel",
           "group": "9_data@1"
+        },
+        {
+          "command": "cedtGrader.openWalkthrough",
+          "when": "view == cedtGrader.panel",
+          "group": "9_data@2"
         }
       ],
       "commandPalette": [
@@ -256,6 +267,81 @@
           "markdownDescription": "Size limit (MB) for downloaded problem statements and test cases. When it is exceeded, the least recently used files are deleted first. Files unused for 30 days are removed automatically. Use **CEDT Grader: Clear Cached Data…** to clear everything."
         }
       }
-    }
+    },
+    "walkthroughs": [
+      {
+        "id": "cedtGrader.start",
+        "title": "Get started with CEDT Grader",
+        "description": "Log in, link a solution file to its problem and submit it, without leaving VS Code.",
+        "steps": [
+          {
+            "id": "openPanel",
+            "title": "Open the CEDT Grader panel",
+            "description": "Everything happens in the **CEDT Grader** panel: the page-with-a-check-mark icon in the left bar.\n[Open the Panel](command:cedtGrader.focus)",
+            "media": {
+              "markdown": "media/walkthrough/openPanel.md"
+            },
+            "completionEvents": [
+              "onView:cedtGrader.panel"
+            ]
+          },
+          {
+            "id": "login",
+            "title": "Log in",
+            "description": "Use your grader username and password. Leave **Remember password on this computer** on if this is your own computer.\n[Log In](command:cedtGrader.login)",
+            "media": {
+              "markdown": "media/walkthrough/login.md"
+            },
+            "completionEvents": [
+              "onContext:cedtGrader.loggedIn"
+            ]
+          },
+          {
+            "id": "openFile",
+            "title": "Open a solution file",
+            "description": "Open the folder with your solutions, then a solution file such as `00_Intro_11.cpp`.\n[Open Folder](command:workbench.action.files.openFolder)",
+            "media": {
+              "markdown": "media/walkthrough/openFile.md"
+            },
+            "completionEvents": [
+              "onContext:cedtGrader.hasSourceFile"
+            ]
+          },
+          {
+            "id": "checkProblem",
+            "title": "Check the problem",
+            "description": "A file named like a problem is linked to it automatically. Otherwise choose the problem under **Current problem**; your choice is remembered.\n[Choose Problem](command:cedtGrader.chooseProblem)",
+            "media": {
+              "markdown": "media/walkthrough/checkProblem.md"
+            },
+            "completionEvents": [
+              "onContext:cedtGrader.hasProblem"
+            ]
+          },
+          {
+            "id": "submit",
+            "title": "Submit",
+            "description": "Press **Submit to Grader** in the panel. The verdict of every test and your counted score appear when grading is done.\n[Submit Current File](command:cedtGrader.submit)",
+            "media": {
+              "markdown": "media/walkthrough/submit.md"
+            },
+            "completionEvents": [
+              "onContext:cedtGrader.submitted"
+            ]
+          },
+          {
+            "id": "cph",
+            "title": "Optional: install CPH",
+            "description": "Competitive Programming Helper runs test cases on your computer. With it, **Load test cases** puts the grader's test cases into CPH. Everything else works without it.\n[Show CPH](command:extension.open?%5B%22DivyanshuAgrawal.competitive-programming-helper%22%5D)",
+            "media": {
+              "markdown": "media/walkthrough/cph.md"
+            },
+            "completionEvents": [
+              "extensionInstalled:DivyanshuAgrawal.competitive-programming-helper"
+            ]
+          }
+        ]
+      }
+    ]
   }
 }
