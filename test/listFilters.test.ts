@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { parseTopicTags, problemStatus } from '../src/grader';
 import type { ProblemView } from '../src/shared/messages';
-import { filterProblems } from '../webview/filters';
+import { filterProblems, sortProblems } from '../webview/filters';
 import { realFixture } from './helpers';
 
 const V = (id: number, status: ProblemView['status'], tags: string[] = [], name = `p${id}`): ProblemView => ({
-  id, name, fullName: name, status, tags, hasFile: false, hasTestcase: false,
+  id, name, fullName: name, status, tags, hasFile: false, hasTestcase: false, lastSubmissionTime: null, lastOpened: null,
   score: { counted: null, best: null, latest: null, attempts: 0, penaltyLabel: null, rawSum: false, source: 'api', latestBelowCounted: false },
 });
 
@@ -55,5 +55,27 @@ describe('robust to problems without tags', () => {
     const p = { ...V(9, 'untried'), tags: undefined as unknown as string[] };
     expect(filterProblems([p], { status: 'all', topic: 'ComProg' }, '')).toEqual([]);
     expect(filterProblems([p], { status: 'all', topic: null }, '')).toHaveLength(1);
+  });
+});
+
+describe('sorting (works with the filters)', () => {
+  const items: ProblemView[] = [
+    { ...V(1, 'solved', [], 'b_two'), score: { ...V(1, 'solved').score, counted: 100 }, lastSubmissionTime: '2026-10-01T00:00:00Z', lastOpened: 10 },
+    { ...V(2, 'inprogress', [], 'a_one'), score: { ...V(2, 'inprogress').score, counted: 40 }, lastSubmissionTime: '2026-11-01T00:00:00Z', lastOpened: null },
+    { ...V(3, 'untried', [], 'c_10'), lastSubmissionTime: null, lastOpened: 30 },
+    { ...V(4, 'untried', [], 'c_9'), lastSubmissionTime: null, lastOpened: 20 },
+  ];
+  const ids = (s: Parameters<typeof sortProblems>[1]) => sortProblems([...items], s).map((p) => p.id);
+  it('each order; missing keys go last; ties keep grader order', () => {
+    expect(ids('default')).toEqual([1, 2, 3, 4]);
+    expect(ids('name-asc')).toEqual([2, 1, 4, 3]); // numeric-aware: c_9 before c_10
+    expect(ids('name-desc')).toEqual([3, 4, 1, 2]);
+    expect(ids('latest')).toEqual([2, 1, 3, 4]);
+    expect(ids('score-asc')).toEqual([2, 1, 3, 4]);
+    expect(ids('score-desc')).toEqual([1, 2, 3, 4]);
+    expect(ids('recent')).toEqual([3, 4, 1, 2]);
+  });
+  it('combines with filters', () => {
+    expect(sortProblems(filterProblems(items, { status: 'unsolved', topic: null }, ''), 'name-asc').map((p) => p.id)).toEqual([2, 4, 3]);
   });
 });

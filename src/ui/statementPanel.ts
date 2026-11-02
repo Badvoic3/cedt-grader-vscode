@@ -17,6 +17,8 @@ interface Base {
   title: string;
   problemId: number;
   name: string;
+  /** Shown above the statement, e.g. when the problem is no longer on the grader. */
+  note?: string | null;
 }
 
 /** Host → statement webview. */
@@ -59,7 +61,10 @@ export class StatementPanels implements vscode.Disposable {
 
   static readonly viewType = 'cedtGrader.statement';
 
-  async open(problemId: number, name: string): Promise<void> {
+  private readonly notes = new Map<number, string | null>();
+
+  async open(problemId: number, name: string, opts: { outdated?: string | null } = {}): Promise<void> {
+    this.notes.set(problemId, opts.outdated ?? null);
     const existing = this.panels.get(problemId);
     if (existing) {
       existing.reveal();
@@ -97,15 +102,15 @@ export class StatementPanels implements vscode.Disposable {
     panel.webview.html = this.html(panel.webview, media);
 
     const title = `Statement: ${name}`;
-    const base = { title, problemId, name };
+    const base = () => ({ title, problemId, name, note: this.notes.get(problemId) ?? null });
     const post = (m: ToStatement) => void panel.webview.postMessage(m);
     const load = async (refresh: boolean) => {
-      post({ ...base, type: 'loading' });
+      post({ ...base(), type: 'loading' });
       try {
         const view = this.opts.memento.get<Record<string, StatementViewState>>(VIEW_KEY, {})[problemId] ?? null;
-        post(render(base, await this.store.get(problemId, { refresh }), view));
+        post(render(base(), await this.store.get(problemId, { refresh }), view));
       } catch (err) {
-        post({ ...base, type: 'message', text: this.opts.onError(err), error: true });
+        post({ ...base(), type: 'message', text: this.opts.onError(err), error: true });
       }
     };
     panel.webview.onDidReceiveMessage((m: FromStatement) => {

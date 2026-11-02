@@ -34,6 +34,8 @@ export class FakeGrader {
   description: { markdown: boolean; description: string } | 403 | 404 = 404;
   /** Make the next fetch reject like Node's fetch does (cause.code / TimeoutError). */
   rejectWith: unknown = null;
+  /** Problems the grader no longer offers: every /api/v1/problems/{id}… request answers this status. */
+  unavailable = new Map<number, 403 | 404>();
   /** Test cases served by /api/v1/problems/:id/testcases (403 = not allowed). */
   testcases: { id: number; num: number; input: string; sol: string; truncated?: 'input' | 'sol' }[] | 403 = [
     { id: 21186, num: 1, input: '1 2\r\n', sol: '3\n' },
@@ -98,6 +100,11 @@ export class FakeGrader {
       return this.json(status, { error: status === 429 ? 'Too many requests' : 'Internal Server Error' });
     }
 
+    const gone = /^\/api\/v1\/problems\/(\d+)/.exec(p);
+    if (gone && this.unavailable.has(Number(gone[1]))) {
+      const st = this.unavailable.get(Number(gone[1]))!;
+      return this.json(st, { error: st === 404 ? 'Problem not found' : 'You are not allowed to submit to this problem' });
+    }
     if (method === 'GET' && p === '/api/v1/problems') return this.json(200, this.problems);
     if (method === 'GET' && p === '/api/v1/languages') return this.json(200, this.languages);
     if (method === 'GET' && /^\/api\/v1\/problems\/\d+\/files\/pdf$/.test(p)) {

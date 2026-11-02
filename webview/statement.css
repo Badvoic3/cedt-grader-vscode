@@ -65,3 +65,10 @@ body:not(.mode-html) .text-view { display: none; }
   box-shadow: 0 2px 8px var(--vscode-widget-shadow, rgba(0, 0, 0, 0.3));
 }
 .tooltip[hidden] { display: none; }
+.note {
+  position: absolute; top: 32px; left: 0; right: 0; z-index: 2; padding: 4px 10px; font-size: 12px;
+  color: var(--vscode-inputValidation-warningForeground, var(--vscode-foreground));
+  background: var(--vscode-inputValidation-warningBackground, var(--vscode-editorWidget-background));
+  border-bottom: 1px solid var(--vscode-inputValidation-warningBorder, transparent);
+}
+.note[hidden] { display: none; }

@@ -6,7 +6,7 @@
  * access (CSP default-src 'none'); all actions are postMessage'd to the host.
  */
 import { groupLabel, VERDICT_LEGEND } from '../src/grader/verdicts';
-import { filterProblems, matches } from './filters';
+import { filterProblems, matches, SORTS, sortProblems } from './filters';
 import { installTooltips } from './tooltip';
 import type { FromWebview, HistoryEntry, ProblemFilter, ProblemView, ScoreView, SubmissionDetailView, ToWebview, VerdictView, ViewState } from '../src/shared/messages';
 
@@ -227,7 +227,10 @@ function renderAccount(s: ViewState): void {
     b.append(
       el('div', { class: 'row account' },
         el('span', { class: 'dot ok', 'aria-hidden': 'true' }),
-        el('span', { class: 'grow ellipsis', title: `${a.username} on ${host}` }, el('strong', {}, a.username), el('span', { class: 'muted' }, ` · ${host}`)),
+        el('span', { class: 'grow account-name', title: `${a.fullName ? `${a.fullName} (${a.username})` : a.username} on ${host}` },
+          el('strong', { class: 'ellipsis' }, a.fullName || a.username),
+          el('span', { class: 'muted small ellipsis' }, a.fullName ? `${a.username} · ${host}` : host),
+        ),
         button([icon('sign-out'), ' Log out'], () => send({ type: 'logout' }), { title: 'Log out and forget the saved password' }),
       ),
     );
@@ -355,12 +358,24 @@ function renderCurrent(s: ViewState): void {
         p ? el('button', { class: 'link small', type: 'button', title: 'Choose another problem for this file', onclick: () => openPicker() }, 'Change') : null,
         p ? iconButton('copy', 'Copy problem name', () => send({ type: 'copyName', problemId: p.id })) : null,
         p ? iconButton('book', 'Open statement', () => send({ type: 'openStatement', problemId: p.id })) : null,
+        p ? iconButton('globe', 'Open on the grader website', () => send({ type: 'openProblemInBrowser', problemId: p.id })) : null,
+        iconButton('sparkle', 'Auto-detect the problem for this file again', () => send({ type: 'autoDetect' })),
         p && p.source === 'saved' ? iconButton('close', 'Remove link', () => send({ type: 'unmapProblem' })) : null,
       ),
       combo,
       pickerOpen ? (renderPickerList(s), pickerBox) : null,
       p ? sourceLine(p.source, p.id, p.name) : null,
+      p?.unavailable
+        ? el('div', { class: 'notice warn', role: 'alert' },
+            el('div', { class: 'row' }, icon('warning'), el('span', { class: 'grow' }, 'This problem is no longer available on the grader.')),
+            el('div', { class: 'row gap' },
+              button('Change problem', () => openPicker(), { title: 'Link this file to another problem' }),
+              button('Remove link', () => send({ type: 'unmapProblem' }), { title: 'Forget the link for this file' }),
+            ),
+          )
+        : null,
       s.matching.note ? el('p', { class: 'hint' }, icon('info'), ' ', s.matching.note) : null,
+      s.linkedFiles.length > 1 ? linkedFilesNotice(s) : null,
     ),
   );
 
@@ -405,6 +420,19 @@ function renderCurrent(s: ViewState): void {
           button('Change', () => openPicker()),
         ),
         el('p', { class: 'small muted' }, `Accepted: ${mm.allowed.join(', ')}`),
+      ),
+    );
+  }
+
+  if (s.cphTip) {
+    b.append(
+      el('div', { class: 'notice tip', role: 'note' },
+        el('div', { class: 'row' }, icon('lightbulb'), el('span', { class: 'grow small' }, 'Want to run test cases inside VS Code? Install the Competitive Programming Helper (CPH) extension.')),
+        el('div', { class: 'row gap' },
+          button('Install', () => send({ type: 'cphTip', action: 'install' }), { kind: 'primary', title: "Open CPH's page in the Extensions view" }),
+          button('Not now', () => send({ type: 'cphTip', action: 'later' }), { title: 'Hide until VS Code restarts' }),
+          el('button', { class: 'link small', type: 'button', title: "Don't show this tip again", onclick: () => send({ type: 'cphTip', action: 'never' }) }, "Don't show again"),
+        ),
       ),
     );
   }
@@ -523,10 +551,23 @@ function renderResult(s: ViewState): void {
   }
 }
 
+/** Compact strip for history rows: every test (no cut-off), wraps on its own line, groups kept as boxes. */
 function miniStrip(verdicts: VerdictView[]): HTMLElement {
-  const strip = el('span', { class: 'mini-strip', 'aria-hidden': 'true' });
-  for (const v of verdicts.slice(0, 40)) strip.append(el('span', { class: `mini v-${v.kind in VERDICT_LETTER ? v.kind : 'unknown'}`, title: v.label }));
-  if (verdicts.length > 40) strip.append(el('span', { class: 'muted small' }, `+${verdicts.length - 40}`));
+  const passed = verdicts.filter((v) => v.ok).length;
+  const strip = el('div', { class: 'mini-strip', role: 'img', 'aria-label': `${passed} of ${verdicts.length} tests passed` });
+  const mini = (v: VerdictView) => el('span', { class: `mini v-${v.kind in VERDICT_LETTER ? v.kind : 'unknown'}` });
+  let i = 0;
+  while (i < verdicts.length) {
+    const v = verdicts[i];
+    if (v.group === undefined) {
+      strip.append(mini(v));
+      i++;
+      continue;
+    }
+    const members = verdicts.filter((x) => x.group === v.group);
+    strip.append(el('span', { class: 'mini-group' }, ...members.map(mini)));
+    i += members.length;
+  }
   return strip;
 }
 
@@ -573,15 +614,16 @@ function historyRow(h: HistoryEntry, s: ViewState): HTMLElement {
   const ex = s.history.expanded;
   const open = ex?.submissionId === h.submissionId;
   const row = el('div', { class: `history-item${open ? ' open' : ''}${h.counted ? ' counted' : ''}` });
-  row.append(
-    el('button', { class: 'history-row', type: 'button', 'aria-expanded': String(open), title: `Submission #${h.submissionId} · ${exact(h.submittedAt)}`, onclick: () => send({ type: 'toggleSubmission', submissionId: h.submissionId }) },
+  appendChildren(row, [
+    el('div', { class: 'row history-line' },
+    el('button', { class: 'history-row grow', type: 'button', 'aria-expanded': String(open), title: `Submission #${h.submissionId} · ${exact(h.submittedAt)}`, onclick: () => send({ type: 'toggleSubmission', submissionId: h.submissionId }) },
       icon(open ? 'chevron-down' : 'chevron-right'),
       el('span', { class: 'mono muted' }, h.number !== null ? `${h.number}.` : `#${h.submissionId}`),
       el('span', { class: `pill ${h.compileError ? 'score-zero' : scoreClass(h.points)}` }, h.compileError ? 'CE' : fmt(h.points)),
-      h.counted ? el('span', { class: 'badge counted', title: 'This submission holds your counted (best) score' }, icon('star-full'), 'counted') : null,
+      h.counted ? el('span', { class: 'badge counted', title: 'This submission holds your counted (best) score', 'aria-label': 'Counted (best) submission' }, icon('star-full'), el('span', { class: 'counted-text' }, 'counted')) : null,
       el('span', { class: 'grow ellipsis' },
         h.verdicts.length
-          ? miniStrip(h.verdicts)
+          ? el('span', { class: 'muted small', title: `${h.verdicts.filter((v) => v.ok).length} of ${h.verdicts.length} tests passed` }, `${h.verdicts.filter((v) => v.ok).length}/${h.verdicts.length}`)
           : h.compileError
             ? el('span', { class: 'muted small' }, 'compile error')
             : h.comment
@@ -590,7 +632,10 @@ function historyRow(h: HistoryEntry, s: ViewState): HTMLElement {
       ),
       el('span', { class: 'muted small nowrap', title: exact(h.submittedAt) }, relative(h.submittedAt)),
     ),
-  );
+    iconButton('globe', 'Open on the grader website', () => send({ type: 'openSubmission', submissionId: h.submissionId })),
+    ),
+    h.verdicts.length ? miniStrip(h.verdicts) : null,
+  ]);
   if (open) {
     row.append(
       el('div', { class: 'row small muted pad-left' }, h.language ?? '', h.language ? ' · ' : '', exact(h.submittedAt), ` · #${h.submissionId}`),
@@ -652,6 +697,30 @@ function problemRow(p: ProblemView, s: ViewState, where: 'picker' | 'list'): HTM
   );
 }
 
+let linkedOpen = false;
+function linkedFilesNotice(s: ViewState): HTMLElement {
+  const box = el('div', { class: 'notice linked' });
+  box.append(
+    el('div', { class: 'row' },
+      icon('files'),
+      el('span', { class: 'grow small' }, `${s.linkedFiles.length} files are linked to this problem`),
+      el('button', { class: 'link small', type: 'button', 'aria-expanded': String(linkedOpen), title: linkedOpen ? 'Hide the list' : 'Show the linked files', onclick: () => { linkedOpen = !linkedOpen; forceRender(); } }, linkedOpen ? 'Hide' : 'Show'),
+    ),
+  );
+  if (linkedOpen) {
+    box.append(
+      el('div', { class: 'linked-list' },
+        ...s.linkedFiles.map((f, i) =>
+          el('button', { class: `history-row${f.current ? ' current' : ''}`, type: 'button', title: f.current ? 'This file' : `Open ${f.path}`, disabled: f.current, onclick: () => send({ type: 'openLinkedFile', index: i }) },
+            icon(f.current ? 'circle-filled' : 'go-to-file'), el('span', { class: 'grow ellipsis' }, f.path), f.current ? el('span', { class: 'muted small' }, 'this file') : null),
+        ),
+      ),
+      el('div', { class: 'row gap' }, button('Keep only this file', () => send({ type: 'keepOnlyThisFile' }), { title: 'Unlink the other files (they are not changed)' })),
+    );
+  }
+  return box;
+}
+
 const SOURCE_ICON: Record<string, string> = { saved: 'pinned', filename: 'file', cph: 'beaker', suggested: 'lightbulb' };
 const SOURCE_TEXT: Record<string, string> = { saved: 'Chosen by you', filename: 'Matched by file name', cph: 'Matched from CPH data', suggested: 'Suggested' };
 
@@ -678,10 +747,10 @@ function renderProblems(s: ViewState): void {
     if (P.error) b.append(el('div', { class: 'error' }, icon('error'), ' ', P.error));
     return;
   }
-  b.append(statusFilter(P.filter), problemFilter);
+  b.append(statusFilter(P.filter), el('div', { class: 'row gap filter-row' }, problemFilter, sortSelect(P.filter)));
   if (P.topics.length) b.append(topicFilter(P.filter, P.topics));
   const q = problemFilter.value.trim().toLowerCase();
-  const hits = filterProblems(P.items, P.filter, q);
+  const hits = sortProblems(filterProblems(P.items, P.filter, q), P.filter.sort ?? 'default');
   const list = el('div', { class: 'problem-list' });
   for (const p of hits.slice(0, 150)) list.append(problemRow(p, s, 'list'));
   b.append(list);
@@ -708,6 +777,14 @@ function statusFilter(f: ProblemFilter): HTMLElement {
       }, x.label),
     ),
   );
+}
+
+function sortSelect(f: ProblemFilter): HTMLElement {
+  const sel = el('select', { class: 'sort', 'aria-label': 'Sort problems', title: 'Sort problems', onchange: (e: Event) => {
+    send({ type: 'setFilter', filter: { ...f, sort: (e.target as HTMLSelectElement).value as ProblemFilter['sort'] } });
+  } });
+  for (const x of SORTS) sel.append(el('option', { value: x.key, selected: (f.sort ?? 'default') === x.key }, x.label));
+  return sel;
 }
 
 function topicFilter(f: ProblemFilter, topics: { name: string; description: string | null }[]): HTMLElement {

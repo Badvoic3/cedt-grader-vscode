@@ -240,11 +240,15 @@ input::placeholder { color: var(--vscode-input-placeholderForeground); }
 .score-row { align-items: baseline; }
 .score { font-size: 1.5em; font-weight: 700; font-variant-numeric: tabular-nums; }
 
-.strip { display: flex; flex-wrap: wrap; gap: 2px; }
+.strip { display: flex; flex-wrap: wrap; align-items: center; gap: 3px 2px; min-width: 0; flex: 1 1 auto; }
+/* A group never shrinks or splits across lines: it moves to the next line as one box,
+   and only wraps inside when it is wider than the whole strip. */
+.strip > * { flex: 0 0 auto; }
 .tile-group {
   display: inline-flex;
   flex-wrap: wrap;
   gap: 2px;
+  max-width: 100%;
   padding: 1px;
   border: 1px dashed var(--muted);
   border-radius: 3px;
@@ -382,8 +386,10 @@ input::placeholder { color: var(--vscode-input-placeholderForeground); }
 .badge.counted { color: var(--ok); background: transparent; border: 1px solid currentColor; }
 .nowrap { white-space: nowrap; }
 .pad-left { padding-left: 22px; }
-.mini-strip { display: inline-flex; flex-wrap: nowrap; gap: 1px; vertical-align: middle; overflow: hidden; }
+.mini-strip { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 1px; padding: 0 4px 3px 22px; }
+.mini-strip > * { flex: 0 0 auto; }
 .mini { display: inline-block; width: 6px; height: 10px; border-radius: 1px; border: 1px solid var(--hc-border); flex: none; }
+.mini-group { display: inline-flex; flex-wrap: wrap; gap: 1px; max-width: 100%; padding: 0 1px; border: 1px dotted var(--muted); border-radius: 2px; }
 .detail { display: flex; flex-direction: column; gap: 6px; padding: 4px 6px 0 22px; min-width: 0; }
 .evals-wrap { overflow-x: auto; }
 .evals { border-collapse: collapse; font-size: 0.9em; width: 100%; }
@@ -475,3 +481,22 @@ input::placeholder { color: var(--vscode-input-placeholderForeground); }
 }
 .legend .row { gap: 6px; }
 .comment { font-family: var(--vscode-editor-font-family); word-break: break-all; }
+
+/* ---------------------------------------------------------- phase 3/4 bits */
+
+.account-name { display: flex; flex-direction: column; min-width: 0; }
+.notice.tip { border-color: var(--vscode-inputValidation-infoBorder, var(--border)); }
+.notice.linked { padding: 4px 8px; gap: 4px; }
+.linked-list { display: flex; flex-direction: column; }
+.history-row.current { opacity: 0.8; cursor: default; }
+.history-line { gap: 2px; }
+.filter-row { flex-wrap: nowrap; }
+.filter-row input[type='search'] { flex: 1 1 auto; }
+select.sort { width: auto; flex: 0 1 auto; max-width: 48%; }
+
+/* Problem header actions wrap instead of being clipped on narrow sidebars. */
+.field-label { flex-wrap: wrap; row-gap: 2px; }
+.history-line > .history-row { min-width: 0; overflow: hidden; }
+.history-row .badge.counted { flex: none; }
+/* Narrow sidebars: the "counted" badge keeps only its star (tooltip explains). */
+@media (max-width: 300px) { .counted-text { display: none; } }

@@ -29,6 +29,19 @@ export class SessionExpiredError extends GraderError {
 
 export class LanguageNotAllowedError extends GraderError {}
 
+/**
+ * The grader answered 404 / 403 for a problem (removed, hidden, or closed to
+ * you). The link is then shown as "no longer available".
+ */
+export class ProblemUnavailableError extends GraderError {
+  constructor(
+    message: string,
+    readonly status: 403 | 404,
+  ) {
+    super(message);
+  }
+}
+
 export class NetworkError extends GraderError {
   constructor(
     message: string,

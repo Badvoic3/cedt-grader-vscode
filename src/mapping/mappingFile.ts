@@ -75,3 +75,25 @@ export function reverseIndex(d: MappingFileData, baseUrl: string): Map<number, s
   }
   return out;
 }
+
+/**
+ * How many entries of the raw `.cedt-grader.json` text are duplicates: the
+ * same key twice (JSON.parse silently keeps the last one) or keys that are
+ * the same path once normalized (`./a.cpp`, `a.cpp`, `a\b.cpp` vs `a/b.cpp`).
+ */
+export function countDuplicateEntries(text: string): number {
+  const at = text.indexOf('"files"');
+  if (at < 0) return 0;
+  const keys: string[] = [];
+  const re = /"((?:[^"\\]|\\.)*)"\s*:\s*\{/g;
+  re.lastIndex = text.indexOf('{', at) + 1;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(text))) {
+    try {
+      keys.push(normalizeRel(JSON.parse(`"${m[1]}"`) as string));
+    } catch {
+      keys.push(normalizeRel(m[1]));
+    }
+  }
+  return keys.length - new Set(keys).size;
+}

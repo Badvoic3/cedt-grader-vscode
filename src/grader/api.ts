@@ -1,4 +1,4 @@
-import { AuthError, GraderError, LanguageNotAllowedError, networkErrorFrom, ServerBusyError, SessionExpiredError, SubmitRejectedError } from './errors';
+import { AuthError, GraderError, LanguageNotAllowedError, networkErrorFrom, ProblemUnavailableError, ServerBusyError, SessionExpiredError, SubmitRejectedError } from './errors';
 import type { FetchLike, Logger } from './http';
 import type { Redactor } from './redact';
 
@@ -126,7 +126,7 @@ export class ApiClient {
   async get<T>(path: string, signal?: AbortSignal): Promise<T> {
     for (let attempt = 0; ; attempt++) {
       const res = await this.raw('GET', path, undefined, true, signal, true);
-      if (res.status !== 429 && res.status < 500) return this.handle<T>(res);
+      if (res.status !== 429 && res.status < 500) return this.handle<T>(res, path);
       await res.body?.cancel().catch(() => {});
       if (attempt >= GET_RETRIES) {
         throw new ServerBusyError(
@@ -141,7 +141,7 @@ export class ApiClient {
 
   async post<T>(path: string, body: unknown): Promise<T> {
     const res = await this.raw('POST', path, body, true);
-    return this.handle<T>(res);
+    return this.handle<T>(res, path);
   }
 
   /**
@@ -179,7 +179,7 @@ export class ApiClient {
           byteSize: Number.isFinite(size) && size > 0 ? size : null,
         };
       }
-      if (res.status !== 429 && res.status < 500) return this.handle(res);
+      if (res.status !== 429 && res.status < 500) return this.handle(res, path);
       await res.body?.cancel().catch(() => {});
       if (attempt >= GET_RETRIES) throw new ServerBusyError(`The grader returned an error (HTTP ${res.status}).`, res.status);
       await this.sleep(2000 * 2 ** attempt);
@@ -198,14 +198,19 @@ export class ApiClient {
       );
     }
     const msg = body.error ?? body.errors?.join('; ') ?? `HTTP ${res.status}`;
+    if (res.status === 404 || res.status === 403) throw new ProblemUnavailableError(`This problem is no longer available on the grader (${msg}).`, res.status);
     throw new SubmitRejectedError(`Submission rejected: ${msg}`);
   }
 
-  private async handle<T>(res: Response): Promise<T> {
+  private async handle<T>(res: Response, path = ''): Promise<T> {
     const body = await this.json(res);
     if (res.ok) return body as T;
     const msg = (body as { error?: string } | null)?.error ?? `HTTP ${res.status}`;
     if (res.status === 401) throw new SessionExpiredError('Your grader login has expired.', true);
+    // Problem endpoints: 404 = gone, 403 = no longer open to you.
+    if ((res.status === 404 || res.status === 403) && /^\/api\/v1\/problems\/\d+/.test(path)) {
+      throw new ProblemUnavailableError('This problem is no longer available on the grader.', res.status);
+    }
     if (res.status === 404) throw new GraderError(`Not found on the grader (${msg}).`);
     throw new GraderError(`The grader refused the request: ${msg}`);
   }

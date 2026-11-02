@@ -19,6 +19,7 @@ import {
   languageForPath,
   matchLanguages,
   NetworkError,
+  ProblemUnavailableError,
   parseGraderComment,
   PollTimeoutError,
   type Problem,
@@ -55,6 +56,8 @@ const CLEANUP_KEY = 'cedtGrader.lastMappingCleanup';
 const TESTCASE_TARGET_KEY = 'cedtGrader.testcaseTarget';
 const NEWFILE_LANG_KEY = 'cedtGrader.lastNewFileLanguage';
 const FILTER_KEY = 'cedtGrader.problemFilter';
+const OPENED_KEY = 'cedtGrader.recentlyOpened';
+const CPH_TIP_KEY = 'cedtGrader.cphTipDismissed';
 const REMEMBER_KEY = 'cedtGrader.rememberPassword';
 
 type Listener = (s: ViewState) => void;
@@ -91,12 +94,17 @@ export class GraderController implements vscode.Disposable {
   private refreshSeq = 0;
   private changingUsername = false;
   /** Matching details for the active file (picker suggestions, ambiguous candidates, stale mapping). */
-  private matchInfo: { suggestions: Problem[]; ambiguous: Problem[] | null; ambiguousSource: 'cph' | 'filename' | null; staleMappingId: number | null } = {
+  private matchInfo: { suggestions: Problem[]; ambiguous: Problem[] | null; ambiguousSource: 'cph' | 'filename' | null } = {
     suggestions: [],
     ambiguous: null,
     ambiguousSource: null,
-    staleMappingId: null,
   };
+  /** Problems the grader no longer offers (missing from the list, or 404/403 this session). */
+  private readonly unavailableIds = new Set<number>();
+  /** Other files linked to the current problem (duplicate notice). */
+  private linkedFiles: vscode.Uri[] = [];
+  /** CPH tip: "Not now" hides it for this session. */
+  private cphTipHidden = false;
   /** Problems with at least one mapped file (for "go to file"). */
   private mappedIds = new Set<number>();
   private testcasesBusy = false;
@@ -130,7 +138,14 @@ export class GraderController implements vscode.Disposable {
     this.testcases = new TestcaseStore(ctx.globalStorageUri.fsPath, () => this.client, (l) => this.requestLog(l));
     this.cph = new CphPresence(vscode.extensions, () => this.emit());
     this.data.onChange = () => this.emit();
-    this.data.onError = (e, key) => this.reportError(e, () => this.reloadKey(key));
+    this.data.onError = (e, key) => {
+      if (e instanceof ProblemUnavailableError) {
+        const m = /^history:(\d+)$/.exec(key);
+        if (m) this.markUnavailable(Number(m[1]));
+        return;
+      }
+      this.reportError(e, () => this.reloadKey(key));
+    };
     this.data.onSuccess = () => this.connectionOk();
     this.statements = new StatementPanels(
       ctx.extensionUri,
@@ -147,6 +162,9 @@ export class GraderController implements vscode.Disposable {
     );
     // A late (deferred) list load: re-resolve the open file (local only: mapping file and CPH .prob).
     this.data.onProblemsLoaded = () => {
+      // Problems back in the list are available again.
+      const ids = new Set(this.problems.map((p) => p.id));
+      for (const id of [...this.unavailableIds]) if (ids.has(id)) this.unavailableIds.delete(id);
       if (this.fileUri) void this.setActiveFile(this.fileUri);
     };
     this.disposables.push(
@@ -171,6 +189,7 @@ export class GraderController implements vscode.Disposable {
       vscode.workspace.onDidSaveTextDocument((d) => {
         if (d.fileName.endsWith('.cedt-grader.json')) {
           this.mapping.invalidate();
+          void this.cleanupDuplicateLinks();
           if (this.fileUri) void this.setActiveFile(this.fileUri);
         }
       }),
@@ -182,6 +201,7 @@ export class GraderController implements vscode.Disposable {
     // Problem list saved by versions before v2 (no tags): no longer read, remove it.
     await this.ctx.workspaceState.update(`cedtGrader.problems:${this.cfg.baseUrl}:${this.cfg.username}`, undefined);
     await this.dailyCleanup();
+    await this.cleanupDuplicateLinks();
     this.hasSavedPassword = !!(await this.getPassword());
     if (await this.client.restore()) {
       this.accountStatus = 'logged-in';
@@ -218,7 +238,10 @@ export class GraderController implements vscode.Disposable {
   /** The sidebar was shown or hidden. */
   setPanelVisible(v: boolean): void {
     this.data.setVisible(v);
-    if (v) void this.ensureLanguages();
+    if (v) {
+      void this.ensureLanguages();
+      void this.ensureMe();
+    }
   }
 
   // ------------------------------------------------------------ plumbing
@@ -422,6 +445,8 @@ export class GraderController implements vscode.Disposable {
       hasTestcase: p.hasTestcase,
       status: problemStatus(p),
       tags: p.tags ?? [],
+      lastSubmissionTime: p.lastSubmissionTime,
+      lastOpened: this.ctx.workspaceState.get<Record<string, number>>(OPENED_KEY, {})[p.id] ?? null,
     };
   }
 
@@ -432,16 +457,18 @@ export class GraderController implements vscode.Disposable {
     const problem = this.currentProblem();
     const languagesLoading = this.data.cache.peek('languages') === undefined && loggedIn && !!problem && this.data.isVisible();
 
-    const mismatch = problem ? this.languageMismatch(problem) : null;
+    const unavailable = !!problem && this.unavailableIds.has(problem.id);
+    const mismatch = problem && !unavailable ? this.languageMismatch(problem) : null;
     let reason: string | null = null;
     if (this.busy) reason = null;
     else if (!file) reason = 'Open a source file to submit it.';
     else if (!loggedIn && !this.hasSavedPassword) reason = 'Log in first.';
     else if (!problem) reason = 'Choose the grader problem for this file.';
+    else if (unavailable) reason = 'This problem is no longer available on the grader.';
     else if (mismatch) reason = `This problem doesn't accept ${mismatch.wanted}.`;
     else if (this.languagesError) reason = this.languagesError;
 
-    const enabled = !this.busy && !!file && !!problem && (loggedIn || this.hasSavedPassword) && !mismatch;
+    const enabled = !this.busy && !!file && !!problem && (loggedIn || this.hasSavedPassword) && !mismatch && !unavailable;
     const pState = this.data.state('problems');
     const list = this.data.problemList();
 
@@ -450,6 +477,7 @@ export class GraderController implements vscode.Disposable {
       account: {
         status: this.accountStatus,
         username: this.cfg.username,
+        fullName: this.client.user?.fullName || null,
         hasSavedPassword: this.hasSavedPassword,
         rememberPassword: this.rememberPassword,
         error: this.accountError,
@@ -457,15 +485,19 @@ export class GraderController implements vscode.Disposable {
       file: file
         ? { path: vscode.workspace.asRelativePath(file, false), name: file.path.split('/').pop() ?? '', languageGuess: lang, supported: lang !== null }
         : null,
-      problem: problem ? { ...this.problemView(problem), source: problem.source, sourceLabel: SOURCE_LABEL[problem.source] } : null,
+      problem: problem ? { ...this.problemView(problem), source: problem.source, sourceLabel: SOURCE_LABEL[problem.source], unavailable } : null,
+      linkedFiles:
+        problem && this.linkedFiles.length > 1
+          ? this.linkedFiles.map((u) => ({ path: vscode.workspace.asRelativePath(u), current: u.fsPath === file?.fsPath }))
+          : [],
+      cphTip:
+        !this.cph.installed && !this.cphTipHidden && !this.ctx.globalState.get<boolean>(CPH_TIP_KEY, false) && !!problem?.hasTestcase && problem.source !== 'suggested',
       matching: {
         suggestions: this.matchInfo.suggestions.map((p) => this.problemView(p)),
         ambiguous: this.matchInfo.ambiguous?.map((p) => this.problemView(p)) ?? null,
         note: this.matchInfo.ambiguous
           ? `Several problems match this ${this.matchInfo.ambiguousSource === 'cph' ? "file's CPH data" : 'file name'}. Choose one.`
-          : this.matchInfo.staleMappingId !== null
-            ? `The saved problem #${this.matchInfo.staleMappingId} no longer exists; the mapping is ignored.`
-            : null,
+          : null,
       },
       testcases: { busy: this.testcasesBusy },
       cph: { installed: this.cph.installed },
@@ -482,7 +514,9 @@ export class GraderController implements vscode.Disposable {
         this.busy && this.gradingFile !== null && this.gradingFile !== file?.fsPath
           ? (this.results.get(this.gradingFile)?.problemName ?? 'another file')
           : null,
-      history: problem ? this.historyView(problem) : { loading: false, stale: false, error: null, items: [], expanded: null },
+      history: problem
+        ? { ...this.historyView(problem), ...(unavailable ? { stale: true } : {}) }
+        : { loading: false, stale: false, error: null, items: [], expanded: null },
       problems: {
         loading: pState.loading,
         loaded: list !== undefined,
@@ -567,7 +601,12 @@ export class GraderController implements vscode.Disposable {
   /** Persist the problem-list filter per workspace. */
   async setProblemFilter(f: ProblemFilter): Promise<void> {
     const valid: ProblemFilter['status'][] = ['all', 'unsolved', 'inprogress', 'solved'];
-    await this.ctx.workspaceState.update(FILTER_KEY, { status: valid.includes(f.status) ? f.status : 'all', topic: f.topic || null });
+    const sorts = ['default', 'name-asc', 'name-desc', 'latest', 'score-asc', 'score-desc', 'recent'];
+    await this.ctx.workspaceState.update(FILTER_KEY, {
+      status: valid.includes(f.status) ? f.status : 'all',
+      topic: f.topic || null,
+      sort: f.sort && sorts.includes(f.sort) ? f.sort : 'default',
+    });
     this.emit();
   }
 
@@ -582,6 +621,40 @@ export class GraderController implements vscode.Disposable {
 
   private allowedLanguages(p: Pick<Problem, 'permittedLanguageIds'>): Language[] {
     return p.permittedLanguageIds === null ? this.languages : this.languages.filter((l) => p.permittedLanguageIds!.includes(l.id));
+  }
+
+  private markUnavailable(problemId: number): void {
+    if (this.unavailableIds.has(problemId)) return;
+    this.unavailableIds.add(problemId);
+    this.emit();
+  }
+
+  /** Remember when a problem was last worked on (for "Recently opened" sorting). */
+  private async noteOpened(problemId: number): Promise<void> {
+    const all = { ...this.ctx.workspaceState.get<Record<string, number>>(OPENED_KEY, {}) };
+    all[problemId] = Date.now();
+    const keep = Object.entries(all).sort((a, b) => b[1] - a[1]).slice(0, 300);
+    await this.ctx.workspaceState.update(OPENED_KEY, Object.fromEntries(keep));
+  }
+
+  /** Full name for the Account section (`GET /api/v1/me`, once per session, after a token restore). */
+  private async ensureMe(): Promise<void> {
+    if (this.client.user || !this.client.isLoggedIn || !this.data.isVisible()) return;
+    try {
+      await this.data.cache.get('me', { kind: 'session' }, () => this.client.me());
+      this.emit();
+    } catch {
+      /* the login ID is shown instead */
+    }
+  }
+
+  // ---------------------------------------------------------------- CPH tip
+
+  async cphTip(action: 'install' | 'later' | 'never'): Promise<void> {
+    if (action === 'install') await vscode.commands.executeCommand('extension.open', CPH_EXTENSION_ID);
+    if (action === 'never') await this.ctx.globalState.update(CPH_TIP_KEY, true);
+    this.cphTipHidden = true; // never more than once per session
+    this.emit();
   }
 
   // --------------------------------------------------------------- account
@@ -730,19 +803,25 @@ export class GraderController implements vscode.Disposable {
     if (seq !== this.refreshSeq) return;
     this.mappedIds = mapped;
     let problem: (Problem & { source: MatchSource }) | null = null;
-    this.matchInfo = { suggestions: [], ambiguous: null, ambiguousSource: null, staleMappingId: null };
-    if (m.kind === 'match') {
+    this.matchInfo = { suggestions: [], ambiguous: null, ambiguousSource: null };
+    if (m.kind === 'unavailable') {
+      // Keep the saved link; the panel offers Change problem / Remove link and disables Submit.
+      this.unavailableIds.add(m.problemId);
+      problem = { ...placeholder(m.problemId, entry?.name ?? ''), source: 'saved' };
+      this.matchInfo.suggestions = m.suggestions;
+    } else if (m.kind === 'match') {
       problem = { ...(m.problem.name.startsWith('#') && entry?.name ? placeholder(m.problem.id, entry.name) : m.problem), source: m.source };
     } else if (m.kind === 'ambiguous') {
       this.matchInfo.ambiguous = m.candidates;
       this.matchInfo.ambiguousSource = m.source;
     } else {
       this.matchInfo.suggestions = m.suggestions;
-      this.matchInfo.staleMappingId = m.staleMappingId;
       // The closest candidate is pre-selected but marked "suggested" (submit asks first).
       if (m.suggestions.length) problem = { ...m.suggestions[0], source: 'suggested' };
     }
     this.problem = problem;
+    this.linkedFiles = problem && problem.source !== 'suggested' ? await this.mapping.filesFor(problem.id, this.cfg.baseUrl) : [];
+    if (problem && problem.source !== 'suggested') await this.noteOpened(problem.id);
     this.applyLanguageChoice();
     this.emit();
     // A suggestion is only a guess: don't fetch its history until it is confirmed.
@@ -920,6 +999,82 @@ export class GraderController implements vscode.Disposable {
     await this.mapping.set(this.fileUri, undefined);
     this.problem = null;
     await this.setActiveFile(this.fileUri);
+  }
+
+  /** Remove duplicate link entries (and tell the user). */
+  private async cleanupDuplicateLinks(): Promise<void> {
+    const n = await this.mapping.cleanupDuplicates();
+    if (n) void vscode.window.showInformationMessage(`Cleaned up ${n} duplicate file link${n === 1 ? '' : 's'} (.cedt-grader.json).`);
+  }
+
+  /** Re-run matching for the active file, ignoring the saved link; ask before replacing a manual link. */
+  async autoDetect(): Promise<void> {
+    const uri = this.fileUri;
+    if (!uri) return;
+    const entry = await this.mapping.get(uri, this.cfg.baseUrl);
+    const list = this.data.problemList()?.problems;
+    if (!list) {
+      await this.refreshProblems(false);
+      if (!this.data.problemList()) return;
+    }
+    const cph = await readCphProblem(uri.fsPath, this.cphSaveLocation());
+    const m = resolveProblem({ savedProblemId: null, cph, filePath: uri.fsPath, problems: this.data.problemList()!.problems, baseUrl: this.cfg.baseUrl });
+    const found =
+      m.kind === 'match'
+        ? `${m.problem.name} (#${m.problem.id}), ${SOURCE_LABEL[m.source].toLowerCase()}`
+        : m.kind === 'ambiguous'
+          ? `${m.candidates.length} equally good matches`
+          : m.suggestions.length
+            ? `no exact match; closest: ${m.suggestions[0].name}`
+            : 'no match';
+    if (entry) {
+      if (m.kind === 'match' && m.problem.id === entry.problemId) {
+        void vscode.window.showInformationMessage(`Auto-detect agrees with your choice: ${found}.`);
+        return;
+      }
+      const replace = 'Use Auto-detect';
+      const pick = await vscode.window.showWarningMessage(
+        `You linked this file to ${this.problemById(entry.problemId)?.name ?? entry.name ?? `#${entry.problemId}`}. Auto-detect found: ${found}.`,
+        { modal: true, detail: 'Replace your choice with the auto-detected result?' },
+        replace,
+      );
+      if (pick !== replace) return;
+      await this.mapping.set(uri, undefined);
+    } else {
+      void vscode.window.setStatusBarMessage(`Auto-detect: ${found}`, 4000);
+    }
+    await this.setActiveFile(uri);
+    if (m.kind === 'ambiguous' || (m.kind === 'none' && m.suggestions.length)) await vscode.commands.executeCommand('cedtGrader.panel.focus');
+  }
+
+  /** Jump to one of the files linked to the current problem (index into the list the panel shows). */
+  async openLinkedFile(index: number): Promise<void> {
+    const f = this.linkedFiles[index];
+    if (!f) return;
+    if (!(await exists(f.fsPath))) {
+      void this.goToFile(this.problem?.id ?? -1); // offers removing the stale link
+      return;
+    }
+    await vscode.window.showTextDocument(f);
+  }
+
+  /** Keep the active file as the only one linked to its problem. */
+  async keepOnlyThisFile(): Promise<void> {
+    const file = this.fileUri;
+    const problem = this.problem;
+    if (!file || !problem) return;
+    const others = this.linkedFiles.filter((u) => u.fsPath !== file.fsPath);
+    if (!others.length) return;
+    const ok = 'Unlink Others';
+    const pick = await vscode.window.showWarningMessage(
+      `Keep only ${vscode.workspace.asRelativePath(file)} linked to ${problem.name}?`,
+      { modal: true, detail: `The link is removed from: ${others.map((u) => vscode.workspace.asRelativePath(u)).join(', ')}. The files themselves are not changed.` },
+      ok,
+    );
+    if (pick !== ok) return;
+    for (const u of others) await this.mapping.set(u, undefined);
+    if (this.problem?.source !== 'saved') await this.mapping.set(file, { problemId: problem.id, name: problem.name, baseUrl: this.cfg.baseUrl });
+    await this.setActiveFile(file);
   }
 
   // ------------------------------------------------------------ linking
@@ -1316,6 +1471,33 @@ export class GraderController implements vscode.Disposable {
       }
       const language = allowed.find((l) => l.id === languageId);
 
+      if (this.unavailableIds.has(problem.id)) {
+        throw new ProblemUnavailableError('This problem is no longer available on the grader.', 404);
+      }
+
+      // Another file linked to the same problem changed more recently? Ask (drafts are normal).
+      const others = (await this.mapping.filesFor(problem.id, this.cfg.baseUrl)).filter((u) => u.fsPath !== fileUri.fsPath);
+      if (others.length) {
+        const mine = doc.isDirty ? Date.now() : ((await fsStat(fileUri.fsPath).catch(() => null))?.mtimeMs ?? 0);
+        let newest: { uri: vscode.Uri; t: number } | null = null;
+        for (const u of others) {
+          const t = (await fsStat(u.fsPath).catch(() => null))?.mtimeMs ?? 0;
+          if (t > mine && (!newest || t > newest.t)) newest = { uri: u, t };
+        }
+        if (newest) {
+          const go = 'Submit This File';
+          const open = 'Open the Other File';
+          const pick = await vscode.window.showWarningMessage(
+            `Submit this file? ${vscode.workspace.asRelativePath(newest.uri)} was changed more recently.`,
+            { modal: true, detail: `Both files are linked to ${problem.name} (#${problem.id}).` },
+            go,
+            open,
+          );
+          if (pick === open) await vscode.window.showTextDocument(newest.uri);
+          if (pick !== go) return;
+        }
+      }
+
       // A suggested (unconfirmed) match always asks, even with confirmations off.
       if (problem.source === 'suggested') {
         const use = 'Use This Problem and Submit';
@@ -1367,6 +1549,7 @@ export class GraderController implements vscode.Disposable {
       } else {
         this.setResult(key, newResult(problem, 'error', msg));
       }
+      if (err instanceof ProblemUnavailableError) this.markUnavailable(problem.id);
       if (!connectionMsg) void this.showError(err, msg);
     } finally {
       this.busy = false;
@@ -1512,7 +1695,9 @@ export class GraderController implements vscode.Disposable {
     }
     // A cached statement opens even when logged out (no request); otherwise the viewer explains.
     const p = this.problemById(id);
-    await this.statements.open(id, p?.name ?? `#${id}`);
+    await this.statements.open(id, p?.name ?? `#${id}`, {
+      outdated: this.unavailableIds.has(id) ? 'This problem is no longer available on the grader; this saved copy may be out of date.' : null,
+    });
   }
 
   async openStatementInBrowser(problemId: number): Promise<void> {

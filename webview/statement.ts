@@ -38,7 +38,9 @@ const { toolbar, pageInput, pageCount, zoomLabel, search, matches, titleEl } = t
 const container = el('div', { id: 'viewerContainer', tabindex: '0' }, el('div', { id: 'viewer', class: 'pdfViewer' }));
 const textView = el('div', { class: 'text-view' });
 const status = el('div', { class: 'status', role: 'status' });
-app.append(toolbar, status, container, textView);
+const noteEl = el('div', { class: 'note', role: 'status' });
+noteEl.hidden = true;
+app.append(toolbar, noteEl, status, container, textView);
 installTooltips(document);
 
 // -------------------------------------------------------------------- pdf
@@ -197,6 +199,8 @@ window.addEventListener('message', (ev: MessageEvent<ToStatement>) => {
   const m = ev.data;
   if (!m || typeof m !== 'object') return;
   titleEl.textContent = m.title;
+  noteEl.textContent = m.note ?? '';
+  noteEl.hidden = !m.note;
   if (!persisted || persisted.problemId !== m.problemId) persisted = { problemId: m.problemId, name: m.name, page: 1, scale: 'page-width', scrollTop: 0, scrollLeft: 0 };
   vscode.setState(persisted);
   status.textContent = '';

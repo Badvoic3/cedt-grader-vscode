@@ -53,11 +53,14 @@ export type MatchResult =
   | { kind: 'match'; problem: Problem; source: MatchSource; suggestions: Problem[] }
   /** Several problems match equally well: don't choose, ask. */
   | { kind: 'ambiguous'; candidates: Problem[]; source: 'cph' | 'filename' }
-  | { kind: 'none'; suggestions: Problem[]; staleMappingId: number | null };
+  /** A saved link whose problem is no longer on the grader (missing from the list). Kept, shown as unavailable. */
+  | { kind: 'unavailable'; problemId: number; suggestions: Problem[] }
+  | { kind: 'none'; suggestions: Problem[] };
 
 /**
  * Matching order for the active file:
- *  1. a saved mapping (always wins; ignored when its problem no longer exists),
+ *  1. a saved mapping (always wins; when its problem no longer exists it is
+ *     reported as unavailable, never silently replaced),
  *  2. the CPH .prob file (grader URL or problem name),
  *  3. exact normalized match between file name and problem name,
  *  4. otherwise the closest few candidates (suggested, not saved).
@@ -66,15 +69,14 @@ export type MatchResult =
 export function resolveProblem(input: MatchInput): MatchResult {
   const problems = input.problems ?? [];
   const loaded = input.problems !== undefined && input.problems.length > 0;
-  let staleMappingId: number | null = null;
 
   if (input.savedProblemId !== null) {
     const p = problems.find((x) => x.id === input.savedProblemId);
     if (p) return { kind: 'match', problem: p, source: 'saved', suggestions: [] };
     if (!loaded) return { kind: 'match', problem: placeholder(input.savedProblemId), source: 'saved', suggestions: [] };
-    staleMappingId = input.savedProblemId; // problem gone: fall through
+    return { kind: 'unavailable', problemId: input.savedProblemId, suggestions: suggest(normalizeName(fileStem(input.filePath)), problems) };
   }
-  if (!loaded) return { kind: 'none', suggestions: [], staleMappingId };
+  if (!loaded) return { kind: 'none', suggestions: [] };
 
   if (input.cph) {
     const byUrl = matchCphProblem({ ...input.cph, name: '' }, problems, input.baseUrl);
@@ -95,7 +97,7 @@ export function resolveProblem(input: MatchInput): MatchResult {
     if (hits.length > 1) return { kind: 'ambiguous', candidates: hits, source: 'filename' };
   }
 
-  return { kind: 'none', suggestions: suggest(stem, problems), staleMappingId };
+  return { kind: 'none', suggestions: suggest(stem, problems) };
 }
 
 /** The closest few problems by name similarity (token overlap and shared prefix). */
