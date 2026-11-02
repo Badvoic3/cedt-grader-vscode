@@ -538,3 +538,6 @@ select.sort { width: auto; flex: 0 1 auto; max-width: 48%; }
 .prompt { margin: 6px 8px; }
 .prompt[hidden] { display: none; }
 .source-line.source-suggested .codicon { color: var(--warn); }
+.linked-row { display: flex; flex-direction: column; gap: 2px; padding: 4px 0; border-top: 1px solid var(--vscode-widget-border, transparent); }
+.linked-row:first-child { border-top: none; }
+.linked-row.current .codicon { color: var(--vscode-focusBorder); }

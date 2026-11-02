@@ -45,7 +45,9 @@ Press F5 to start an Extension Development Host (`.vscode/launch.json` runs `npm
   - `webview/filters.ts`: problem list status/topic/text filter (website rules).
 - `src/mapping/` (Phase 3, linking):
   - `match.ts`: `cleanName`, `normalizeName`, `resolveProblem` (saved → CPH → exact file name → suggestions; ambiguous → ask), `fileNameFor`.
-  - `store.ts`: workspaceState keyed by `<folder name>/<relative path>` (+ legacy fsPath keys read) and `.cedt-grader.json`; reverse lookup (problem → files), rename, mark deleted (stale), expire, reconnect.
+  - `paths.ts`: the one path normalization for links (NFC, `./`/`..` resolved, `/` separators; `pathKey` lower-cases on macOS/Windows). Used by mappings, `.cedt-grader.json`, renames, reverse lookup, reconnect.
+  - `store.ts`: workspaceState keyed by `<folder name>/<pathKey(relative path)>` (+ legacy fsPath keys read) and `.cedt-grader.json`; reverse lookup (problem → files), rename, mark deleted (stale), expire, reconnect; explicit "not linked" set (`cedtGrader.unlinked`, follows renames); remembered auto-matches (`cedtGrader.autoMatches`).
+  - `problemFiles.ts`: "files for this problem" (`mergeProblemFiles`: chosen links + remembered auto-matches + cached name search, minus "not linked" and files linked elsewhere), `linkedNotice` wording, auto-match rename/delete rules, `ProblemFileSearch` (one findFiles per problem until a file event).
   - `mappingFile.ts`: `.cedt-grader.json` parsing (`staleSince` kept), `reverseIndex`.
   - `mappingOps.ts`: pure move logic (`planRename`, `reconnectCandidates`, `affectedByDelete`, `expired`) and `moveCphProblem`.
   - `cph.ts` / `cphImport.ts`: CPH `.prob` read / import (format below). `newFile.ts`: create without overwriting.
@@ -103,7 +105,8 @@ Every icon-only button (`iconButton()` in `webview/main.ts`, `btn()` in `webview
 ## Problem links: auto-detect, duplicates, unavailable problems
 
 - Auto-detect (sparkle button): `resolveProblem` without the saved link; asks before replacing a manual link.
-- Duplicates: `linkedFiles` (reverse lookup) → "N files are linked" notice, jump / "Keep only this file"; submit asks when another linked file is newer (mtime; dirty = now). `MappingStore.cleanupDuplicates()` (startup and on saving `.cedt-grader.json`) removes legacy+new duplicate keys and duplicate/same-path JSON entries (`countDuplicateEntries`), then tells the user.
+- Files for a problem: `GraderController.filesForProblem()` is the only source for the duplicate notice, row click / go to file, and the before-submit "changed more recently" check. It merges saved links, auto-matches recorded when a file was open (file name / CPH; never over a manual link or "not linked"; dropped on delete or a rename to a non-matching name) and a cached `workspace.findFiles` for the clean problem name (allowed extensions, "Find file by name" exclusions; runs only while the panel shows the problem; invalidated by file create/delete/rename, 1 s debounce; logged as `FILE SEARCH` in the request log).
+- Notice: same name in different folders → "Another file with the same name also matches this problem: <path>"; otherwise "N files are linked to this problem". Each file shows how it's linked with Open and Unlink (chosen) / "Don't match this file" (name or CPH match → "not linked"); "Unlink the other files". Submit asks (inline, once) when another file for the problem is newer (mtime; dirty = now). `MappingStore.cleanupDuplicates()` (startup and on saving `.cedt-grader.json`) removes legacy+new duplicate keys and duplicate/same-path JSON entries (`countDuplicateEntries`), then tells the user.
 - Unavailable: `resolveProblem` returns `unavailable` for a saved link missing from the loaded list; `ProblemUnavailableError` (ApiClient, 404/403 on `/api/v1/problems/{id}…`, incl. submit) marks it at runtime (`unavailableIds`, cleared when the problem is back in the list). Submit disabled, history kept (stale), statement opens from cache with a "may be out of date" note.
 
 ## Problem list and verdicts (as on the website)
