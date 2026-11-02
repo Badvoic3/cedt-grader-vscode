@@ -13,6 +13,7 @@ import {
 import { affectedByDelete, expired, type LocatedEntry, planRename } from './mappingOps';
 import { normalizeAbsPath, normalizeRelPath, pathKey, remapPath } from './paths';
 import { type AutoMatch, autoAfterDelete, autoAfterRename } from './problemFiles';
+import { LIMITS } from '../shared/constants';
 
 const STATE_KEY = 'cedtGrader.mappings';
 const LEGACY_KEY = 'cedtGrader.mapping';
@@ -58,7 +59,7 @@ export class MappingStore {
     const k = pathKey(uri.fsPath);
     const list = this.autoMatches().filter((a) => pathKey(a.fsPath) !== k);
     list.push({ fsPath: normalizeAbsPath(uri.fsPath), problemId, how, at: Date.now() });
-    await this.ctx.workspaceState.update(AUTO_KEY, list.slice(-500));
+    await this.ctx.workspaceState.update(AUTO_KEY, list.slice(-LIMITS.autoMatchesMax));
   }
 
   async dropAuto(uri: vscode.Uri): Promise<void> {

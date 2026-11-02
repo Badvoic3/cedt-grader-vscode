@@ -30,7 +30,7 @@ function boot() {
 }
 
 const score = (counted: number | null, extra: Partial<ScoreView> = {}): ScoreView => ({
-  counted, best: counted, latest: counted, attempts: counted === null ? 0 : 1, penaltyLabel: null, rawSum: false, source: 'problem-list', latestBelowCounted: false, ...extra,
+  counted, best: counted, latest: counted, attempts: counted === null ? 0 : 1, penaltyLabel: null, rawSum: false, fullScore: 100, source: 'problem-list', latestBelowCounted: false, ...extra,
 });
 
 const base: ViewState = {

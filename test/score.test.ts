@@ -1,3 +1,4 @@
+import { SERVER_SCORE_CAP } from '../src/shared/constants';
 import { describe, expect, it } from 'vitest';
 import { countedScore, describeImprovement, penaltyLabel, summarize } from '../src/grader';
 
@@ -48,5 +49,16 @@ describe('describeImprovement', () => {
     expect(describeImprovement(70, 70, 40)).toBe('This submission scored 40; your best 70 still counts.');
     expect(describeImprovement(70, 70, 70)).toBe('Counted score unchanged (70).');
     expect(describeImprovement(null, 30, 30)).toBe('First counted score: 30.');
+  });
+});
+
+describe('full score from the API', () => {
+  it('"out of" is full_score when known, the server cap (100) otherwise, none for raw-sum', () => {
+    const p = { bestScore: 40, lastScore: 40, submissionCount: 1, list: null };
+    expect(summarize(p, 50).fullScore).toBe(50);
+    expect(summarize(p).fullScore).toBe(SERVER_SCORE_CAP);
+    expect(summarize({ ...p, list: { rawMax: 40, adjusted: null, cost: 0, hintCount: 0, aiCount: 0, rawSum: true } }).fullScore).toBeNull();
+    // the counted cap stays the server literal (Submission.max_score_report), not full_score
+    expect(countedScore(150, 0)).toBe(100);
   });
 });

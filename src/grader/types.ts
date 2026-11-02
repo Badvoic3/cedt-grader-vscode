@@ -1,3 +1,4 @@
+import { SERVER_SCORE_CAP } from '../shared/constants';
 /** A language as the API reports it (`GET /api/v1/languages`). */
 export interface Language {
   id: number;
@@ -25,7 +26,7 @@ export interface ListScoreInfo {
 
 export interface Problem {
   id: number;
-  /** Short code name, e.g. `00_Intro_11`. */
+  /** Short code name (the file-name stem students use), e.g. `hw01_sum`. */
   name: string;
   /** Human title. */
   fullName: string;
@@ -82,7 +83,7 @@ export type ProblemStatus = 'solved' | 'inprogress' | 'untried';
 export function problemStatus(p: Pick<Problem, 'submissionCount' | 'bestScore' | 'lastSubmissionId'>): ProblemStatus {
   const submitted = p.submissionCount > 0 || p.lastSubmissionId !== null;
   if (!submitted) return 'untried';
-  return (p.bestScore ?? 0) >= 100 ? 'solved' : 'inprogress';
+  return (p.bestScore ?? 0) >= SERVER_SCORE_CAP ? 'solved' : 'inprogress';
 }
 
 export interface ProblemDetail extends Problem {

@@ -1,9 +1,10 @@
 import { type GraderClient, isFinalStatus } from '../grader/client';
 import { classifyConnectionError } from '../grader/connection';
 import { normalizeProblem } from '../grader/types';
-import type { Language, Problem, SubmissionBrief, SubmissionDetail } from '../grader/types';
+import type { Language, Problem, ProblemDetail, SubmissionBrief, SubmissionDetail } from '../grader/types';
 import type { ProblemList } from '../grader/client';
 import { type Freshness, RequestCache } from './cache';
+import { TIMING } from '../shared/constants';
 
 /**
  * The one shared cache layer between the UI and the grader (no `vscode`
@@ -20,8 +21,8 @@ import { type Freshness, RequestCache } from './cache';
  * - no background polling, no prefetching of other problems
  * - offline / 429 / 5xx: keep cached data and flag it as possibly out of date
  */
-export const HISTORY_TTL_MS = 5 * 60_000;
-export const SWITCH_DEBOUNCE_MS = 400;
+export const HISTORY_TTL_MS = TIMING.historyTtlMs;
+export const SWITCH_DEBOUNCE_MS = TIMING.switchDebounceMs;
 
 const SESSION: Freshness = { kind: 'session' };
 const HISTORY: Freshness = { kind: 'ttl', ms: HISTORY_TTL_MS };
@@ -155,6 +156,7 @@ export class DataService {
       if (id === null || !this.visible || !this.opts.canFetch()) return;
       if (this.cache.isFresh(historyKey(id), HISTORY)) this.log(`switch    ${historyKey(id)} fresh, no request`);
       else void this.loadHistory(id);
+      if (!this.cache.isFresh(problemKey(id), SESSION)) void this.loadProblemDetail(id);
     }, SWITCH_DEBOUNCE_MS);
   }
 
@@ -185,6 +187,25 @@ export class DataService {
     if (!this.visible) return this.history(problemId);
     const key = historyKey(problemId);
     return this.run(key, () => this.cache.get(key, HISTORY, () => this.opts.client().listSubmissions(problemId), force));
+  }
+
+  /** Problem detail (full score), once per session per focused problem. Failures are silent (optional data). */
+  async loadProblemDetail(problemId: number): Promise<ProblemDetail | undefined> {
+    if (!this.visible) return this.problemDetail(problemId);
+    const key = problemKey(problemId);
+    try {
+      const v = await this.cache.get(key, SESSION, () => this.opts.client().getProblem(problemId));
+      this.onChange();
+      return v;
+    } catch (err) {
+      this.log(`${key}: not loaded (${err instanceof Error ? err.message : String(err)})`);
+      this.onError(err, key); // unavailable problems (404/403) are marked by the controller
+      return undefined;
+    }
+  }
+
+  problemDetail(problemId: number): ProblemDetail | undefined {
+    return this.cache.peek<ProblemDetail>(problemKey(problemId))?.value;
   }
 
   /** Full detail, on demand. Cached forever once final; in-progress ones are always refetched. */
@@ -273,3 +294,4 @@ export class DataService {
 
 export const historyKey = (id: number) => `history:${id}` as const;
 export const detailKey = (id: number) => `detail:${id}` as const;
+export const problemKey = (id: number) => `problem:${id}` as const;

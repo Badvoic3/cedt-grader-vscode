@@ -1,4 +1,4 @@
-import { languageForPath, matchLanguages } from '../grader/languages';
+import { languageForPath, languagesByExt, matchLanguages } from '../grader/languages';
 import type { Language } from '../grader/types';
 
 /**
@@ -33,7 +33,7 @@ export function chooseNewFileLanguage(opts: {
   const auto = opts.permitted.filter(isAutoPickable);
   if (opts.activeFilePath) {
     const wanted = languageForPath(opts.activeFilePath);
-    const hit = wanted ? matchLanguages(wanted, auto)[0] : undefined;
+    const hit = languagesByExt(opts.activeFilePath, auto)[0] ?? (wanted ? matchLanguages(wanted, auto)[0] : undefined);
     if (hit) return { kind: 'auto', language: hit, reason: 'active-file' };
   }
   const last = auto.find((l) => l.id === opts.lastUsedLanguageId);

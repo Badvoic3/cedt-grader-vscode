@@ -1,3 +1,4 @@
+import { TIMING } from '../shared/constants';
 import { CookieJar } from 'tough-cookie';
 import { NetworkError, networkErrorFrom } from './errors';
 import { Redactor } from './redact';
@@ -28,7 +29,7 @@ export interface RequestOptions {
 }
 
 const MAX_REDIRECTS = 5;
-const REQUEST_TIMEOUT_MS = 30_000;
+const REQUEST_TIMEOUT_MS = TIMING.requestTimeoutMs;
 
 /**
  * Small HTTP session: built-in fetch + in-memory cookie jar + manual redirects.

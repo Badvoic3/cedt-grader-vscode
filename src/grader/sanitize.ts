@@ -74,7 +74,7 @@ export function sanitizeHtml(html: string, opts: SanitizeOptions = {}): string {
   }
   out = out
     .replace(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g, 'student@example.com')
-    // Chula student IDs are 10 digits (e.g. 67xxxxxx21).
+    // Student IDs: runs of 10 digits.
     .replace(/\b\d{10}\b/g, '0000000000');
   return out;
 }

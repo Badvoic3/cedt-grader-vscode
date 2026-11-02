@@ -1,3 +1,4 @@
+import { SERVER_SCORE_CAP } from '../shared/constants';
 import type { ListScoreInfo, Problem } from './types';
 
 /**
@@ -13,7 +14,7 @@ import type { ListScoreInfo, Problem } from './types';
 export function countedScore(best: number | null, cost = 0, rawSum = false): number | null {
   if (best === null) return null;
   if (rawSum) return best;
-  const cap = 100 - Math.min(100, Math.max(0, cost));
+  const cap = SERVER_SCORE_CAP - Math.min(SERVER_SCORE_CAP, Math.max(0, cost));
   return Math.max(0, Math.min(best, cap));
 }
 
@@ -28,6 +29,8 @@ export interface ScoreSummary {
   /** e.g. "-10 AI assist", "-5 hints + AI assist"; null without a penalty. */
   penaltyLabel: string | null;
   rawSum: boolean;
+  /** "out of": the problem's `full_score` (GET /api/v1/problems/{id}) when known, else the server cap; null for raw-sum. */
+  fullScore: number | null;
   /** 'problem-list' when hint/AI data from /main/list was applied; 'api' when only the API was available. */
   source: 'api' | 'problem-list';
   /** Latest submission scored lower than the counted score. */
@@ -41,7 +44,7 @@ export function penaltyLabel(info: Pick<ListScoreInfo, 'cost' | 'hintCount' | 'a
   return `-${fmt(info.cost)} ${what}`;
 }
 
-export function summarize(p: Pick<Problem, 'bestScore' | 'lastScore' | 'submissionCount' | 'list'>): ScoreSummary {
+export function summarize(p: Pick<Problem, 'bestScore' | 'lastScore' | 'submissionCount' | 'list'>, fullScore: number | null = null): ScoreSummary {
   const list = p.list;
   const best = p.bestScore ?? list?.rawMax ?? null;
   const rawSum = list?.rawSum ?? false;
@@ -55,6 +58,7 @@ export function summarize(p: Pick<Problem, 'bestScore' | 'lastScore' | 'submissi
     penalty: rawSum ? 0 : cost,
     penaltyLabel: rawSum || !list ? null : penaltyLabel(list),
     rawSum,
+    fullScore: rawSum ? fullScore : (fullScore ?? SERVER_SCORE_CAP),
     source: list ? 'problem-list' : 'api',
     latestBelowCounted: p.lastScore !== null && counted !== null && p.lastScore < counted,
   };
