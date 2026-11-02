@@ -19,7 +19,8 @@ import type {
 import { parseGraderComment } from './verdicts';
 import { WebSession } from './web';
 
-export const DEFAULT_BASE_URL = 'https://cedt-grader.nattee.net';
+export { DEFAULT_BASE_URL } from '../shared/constants';
+import { DEFAULT_BASE_URL, TIMING } from '../shared/constants';
 
 export interface Credentials {
   username: string;
@@ -66,12 +67,12 @@ export function isFinalStatus(status: string): boolean {
   return GRADED.has(status);
 }
 
-const MIN_POLL_MS = 3_000;
-const DEFAULT_POLL_MS = 5_000;
-const DEFAULT_POLL_TIMEOUT_MS = 3 * 60_000;
-const MAX_BACKOFF_MS = 60_000;
+const MIN_POLL_MS = TIMING.pollMinMs;
+const DEFAULT_POLL_MS = TIMING.pollDefaultMs;
+const DEFAULT_POLL_TIMEOUT_MS = TIMING.pollTimeoutMs;
+const MAX_BACKOFF_MS = TIMING.pollMaxBackoffMs;
 /** Consecutive network failures tolerated while polling; then polling stops (no retry loop while offline). */
-const MAX_POLL_NETWORK_FAILURES = 2;
+const MAX_POLL_NETWORK_FAILURES = TIMING.pollMaxNetworkFailures;
 const GRADED = new Set(['done', 'compilation_error', 'grader_error']);
 
 const defaultSleep = (ms: number, signal?: AbortSignal) =>
@@ -139,7 +140,7 @@ export class GraderClient {
     const t = await this.opts.tokenStore?.load();
     if (!t) return false;
     const exp = Date.parse(t.expiresAt);
-    if (!(exp > this.now().getTime() + 60_000)) return false;
+    if (!(exp > this.now().getTime() + TIMING.tokenMinValidityMs)) return false;
     this.api.setToken(t.token);
     this.tokenExpiresAt = exp;
     return true;
@@ -257,7 +258,7 @@ export class GraderClient {
 
   private async fetchListPage(): Promise<string> {
     // Login just landed on /main/list: reuse it instead of fetching the ~700 KB page again.
-    if (this.listHtml !== null && this.now().getTime() - this.listHtmlAt < 60_000) {
+    if (this.listHtml !== null && this.now().getTime() - this.listHtmlAt < TIMING.landingReuseMs) {
       this.opts.log?.('cache hit  /main/list (login landing page)');
       return this.listHtml;
     }

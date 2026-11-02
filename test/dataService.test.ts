@@ -83,6 +83,19 @@ describe('cache freshness', () => {
 });
 
 describe('switching files', () => {
+  it('problem detail (full score): loaded with the focused problem, once per session', async () => {
+    const { data, api, fireTimers } = await setup();
+    data.focusProblem(201);
+    await fireTimers();
+    expect(api(/\/api\/v1\/problems\/201$/)).toBe(1);
+    data.focusProblem(204);
+    await fireTimers();
+    data.focusProblem(201);
+    await fireTimers();
+    expect(api(/\/api\/v1\/problems\/201$/)).toBe(1); // session cache
+    expect(data.problemDetail(201)?.id).toBe(201);
+  });
+
   it(`debounced: ${10} rapid switches → at most 1 fetch, after ${SWITCH_DEBOUNCE_MS} ms`, async () => {
     const { data, api, timers, fireTimers } = await setup();
     for (let i = 0; i < 10; i++) data.focusProblem(i % 2 ? 204 : 201);

@@ -6,6 +6,7 @@
  * access (CSP default-src 'none'); all actions are postMessage'd to the host.
  */
 import { groupLabel, VERDICT_LEGEND } from '../src/grader/verdicts';
+import { SERVER_SCORE_CAP } from '../src/shared/constants';
 import { filterProblems, matches, SORTS, sortProblems } from './filters';
 import { installTooltips } from './tooltip';
 import type { FromWebview, HistoryEntry, ProblemFilter, ProblemView, ScoreView, SubmissionDetailView, ToWebview, VerdictView, ViewState } from '../src/shared/messages';
@@ -134,10 +135,10 @@ function fmt(n: number | null): string {
   return Number.isInteger(n) ? String(n) : String(Math.round(n * 100) / 100);
 }
 
-function scoreClass(score: number | null, rawSum = false): string {
+function scoreClass(score: number | null, rawSum = false, full: number | null = SERVER_SCORE_CAP): string {
   if (score === null) return 'score-none';
   if (rawSum) return 'score-partial';
-  if (score >= 100) return 'score-full';
+  if (score >= (full ?? SERVER_SCORE_CAP)) return 'score-full';
   if (score <= 0) return 'score-zero';
   return 'score-partial';
 }
@@ -146,8 +147,8 @@ function scorePill(s: ScoreView): HTMLElement {
   const tip =
     s.counted === null
       ? 'Not attempted yet'
-      : `Counted score: ${fmt(s.counted)}${s.rawSum ? '' : ' / 100'} (your best submission${s.penaltyLabel ? `, ${s.penaltyLabel}` : ''}) · ${s.attempts} attempt${s.attempts === 1 ? '' : 's'}`;
-  return el('span', { class: `pill score-pill ${scoreClass(s.counted, s.rawSum)}`, title: tip, 'aria-label': tip }, fmt(s.counted));
+      : `Counted score: ${fmt(s.counted)}${s.fullScore !== null ? ` / ${fmt(s.fullScore)}` : ''} (your best submission${s.penaltyLabel ? `, ${s.penaltyLabel}` : ''}) · ${s.attempts} attempt${s.attempts === 1 ? '' : 's'}`;
+  return el('span', { class: `pill score-pill ${scoreClass(s.counted, s.rawSum, s.fullScore)}`, title: tip, 'aria-label': tip }, fmt(s.counted));
 }
 
 /** Name and subtitle without repeating the name ("104_68_1_exam2_P1: Scholarship" → subtitle "Scholarship"). */
@@ -382,7 +383,7 @@ function scoreCard(sc: ScoreView): HTMLElement {
       el('span', { class: 'grow' }),
       sc.source === 'problem-list' ? el('span', { class: 'muted small', title: 'Hint/AI-assist penalties read from the problem list page' }, 'from problem list') : null,
     ),
-    el('div', { class: `score ${scoreClass(sc.counted, sc.rawSum)}` }, sc.counted === null ? 'Not attempted' : sc.rawSum ? fmt(sc.counted) : `${fmt(sc.counted)} / 100`),
+    el('div', { class: `score ${scoreClass(sc.counted, sc.rawSum, sc.fullScore)}` }, sc.counted === null ? 'Not attempted' : sc.fullScore === null ? fmt(sc.counted) : `${fmt(sc.counted)} / ${fmt(sc.fullScore)}`),
     el('div', { class: 'score-facts small' },
       el('span', {}, 'Best ', el('strong', {}, fmt(sc.best))),
       el('span', {}, 'Latest ', el('strong', {}, fmt(sc.latest))),

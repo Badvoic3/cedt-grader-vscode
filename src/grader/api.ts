@@ -1,3 +1,4 @@
+import { TIMING } from '../shared/constants';
 import { AuthError, GraderError, LanguageNotAllowedError, networkErrorFrom, ProblemUnavailableError, ServerBusyError, SessionExpiredError, SubmitRejectedError } from './errors';
 import type { FetchLike, Logger } from './http';
 import type { Redactor } from './redact';
@@ -82,9 +83,9 @@ export interface ApiCreatedSubmission {
   status: string;
 }
 
-const TIMEOUT_MS = 30_000;
+const TIMEOUT_MS = TIMING.requestTimeoutMs;
 /** GET retries on 429 / 5xx: waits 2 s, then 4 s (or the server's Retry-After, capped at 30 s). */
-const GET_RETRIES = 2;
+const GET_RETRIES = TIMING.getRetries;
 
 export type Sleep = (ms: number, signal?: AbortSignal) => Promise<void>;
 const realSleep: Sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -135,7 +136,7 @@ export class ApiClient {
         );
       }
       const retryAfter = Number(res.headers.get('retry-after'));
-      await this.sleep(Math.min(30_000, retryAfter > 0 ? retryAfter * 1000 : 2000 * 2 ** attempt), signal);
+      await this.sleep(Math.min(TIMING.retryAfterCapMs, retryAfter > 0 ? retryAfter * 1000 : TIMING.retryBaseMs * 2 ** attempt), signal);
     }
   }
 

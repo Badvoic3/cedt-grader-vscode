@@ -1,3 +1,4 @@
+import { STALE_LINK_DAYS } from '../shared/constants';
 import { mkdir, readFile, rename, stat, writeFile } from 'node:fs/promises';
 import { basename, dirname } from 'node:path';
 import { pathKey, remapPath } from './paths';
@@ -14,7 +15,7 @@ export interface LocatedEntry {
   entry: MappingEntry;
 }
 
-export const STALE_DAYS = 30;
+export const STALE_DAYS = STALE_LINK_DAYS;
 
 export { remapPath } from './paths';
 

@@ -16,8 +16,7 @@ import {
   GraderError,
   type Language,
   LanguageNotAllowedError,
-  languageForPath,
-  matchLanguages,
+  languageNameForPath,
   NetworkError,
   ProblemUnavailableError,
   parseGraderComment,
@@ -44,6 +43,7 @@ import { cleanName, fileNameFor, type MatchSource, placeholder, resolveProblem, 
 import { MappingStore } from './mapping/store';
 import { linkedNotice, mergeProblemFiles, type ProblemFile, ProblemFileSearch } from './mapping/problemFiles';
 import { pathKey } from './mapping/paths';
+import { LIMITS, TIMING, WEB_PATHS } from './shared/constants';
 import type { HistoryEntry, ProblemFilter, ProblemView, ResultView, SubmissionDetailView, ViewState } from './shared/messages';
 
 export const EXAM_WARNING =
@@ -451,10 +451,11 @@ export class GraderController implements vscode.Disposable {
   /** The file's language is not accepted by the mapped problem (e.g. a problem picked by mistake). */
   private languageMismatch(problem: Problem): { wanted: string; allowed: string[] } | null {
     if (!this.fileUri || !this.languages.length) return null;
-    const wanted = languageForPath(this.fileUri.fsPath);
     const allowed = this.allowedLanguages(problem);
-    if (!wanted || !allowed.length || matchLanguages(wanted, allowed).length) return null;
-    return { wanted, allowed: allowed.map((l) => l.name) };
+    if (!allowed.length) return null;
+    const c = chooseLanguage(this.fileUri.fsPath, allowed, this.languages);
+    if (c.kind !== 'not-allowed') return null;
+    return { wanted: c.wanted, allowed: allowed.map((l) => l.name) };
   }
 
   // ---------------------------------------------------------------- state
@@ -464,7 +465,7 @@ export class GraderController implements vscode.Disposable {
       id: p.id,
       name: cleanName(p.name),
       fullName: cleanName(p.fullName),
-      score: summarize(p),
+      score: summarize(p, this.data.problemDetail(p.id)?.fullScore ?? null),
       hasFile: this.mappedIds.has(p.id),
       hasTestcase: p.hasTestcase,
       status: problemStatus(p),
@@ -476,7 +477,7 @@ export class GraderController implements vscode.Disposable {
 
   state(): ViewState {
     const file = this.fileUri;
-    const lang = file ? languageForPath(file.fsPath) : null;
+    const lang = file ? languageNameForPath(file.fsPath, this.languages) : null;
     const loggedIn = this.accountStatus === 'logged-in';
     const problem = this.currentProblem();
     const languagesLoading = this.data.cache.peek('languages') === undefined && loggedIn && !!problem && this.data.isVisible();
@@ -939,7 +940,7 @@ export class GraderController implements vscode.Disposable {
     this.fileEventTimer = setTimeout(() => {
       this.fileSearch.invalidate();
       if (this.data.isVisible()) void this.refreshLinkedFiles();
-    }, 1000);
+    }, TIMING.fileEventDebounceMs);
   }
 
   /** Source extensions of the problem's permitted languages (binary/archive ones skipped). */
@@ -969,8 +970,8 @@ export class GraderController implements vscode.Disposable {
     let gitignore: string | null = null;
     if (root) gitignore = await fsReadFile(vscode.Uri.joinPath(root, '.gitignore').fsPath, 'utf8').catch(() => null);
     const t0 = Date.now();
-    const found = await vscode.workspace.findFiles(includeGlob(p.name, exts), excludeGlob([cfg('files'), cfg('search')], gitignore), 50);
-    const kept = filterCandidates(found.map((u) => u.fsPath), p.name, exts).slice(0, 20);
+    const found = await vscode.workspace.findFiles(includeGlob(p.name, exts), excludeGlob([cfg('files'), cfg('search')], gitignore), LIMITS.findFilesMax);
+    const kept = filterCandidates(found.map((u) => u.fsPath), p.name, exts).slice(0, LIMITS.findFilesKept);
     this.requestLog(`FILE SEARCH "${cleanName(p.name)}.{${exts.join(',')}}" (#${p.id}) → ${kept.length} file${kept.length === 1 ? '' : 's'} (${Date.now() - t0} ms)`);
     return kept;
   }
@@ -1160,7 +1161,7 @@ export class GraderController implements vscode.Disposable {
     if (allowed.some((l) => l.id === this.selectedLanguageId)) {
       this.languagesError = null;
     } else {
-      const c = chooseLanguage(this.fileUri.fsPath, allowed);
+      const c = chooseLanguage(this.fileUri.fsPath, allowed, this.languages);
       this.selectedLanguageId = c.kind === 'match' ? c.language.id : null;
       this.languagesError = null; // a mismatch is reported once, by languageMismatch()
     }
@@ -1559,7 +1560,7 @@ export class GraderController implements vscode.Disposable {
         srcPath: file.fsPath,
         saveLocation: this.cphSaveLocation(),
         problemName: cleanName(problem.name),
-        problemUrl: this.url(`/submissions/direct_edit_problem/${problem.id}`),
+        problemUrl: this.url(WEB_PATHS.problem(problem.id)),
         cases: set.cases,
       });
       const parts = [`Saved to CPH: loaded ${set.cases.length} of ${total} test case${total === 1 ? '' : 's'}${tooLarge}`];
@@ -1704,7 +1705,7 @@ export class GraderController implements vscode.Disposable {
 
       let languageId = this.selectedLanguageId;
       if (languageId === null || !allowed.some((l) => l.id === languageId)) {
-        const c = chooseLanguage(fileUri.fsPath, allowed);
+        const c = chooseLanguage(fileUri.fsPath, allowed, this.languages);
         if (c.kind === 'match') languageId = c.language.id;
         else if (c.kind === 'not-allowed') throw new LanguageNotAllowedError(`${c.wanted} is not allowed for this problem.`);
         else {
@@ -1968,7 +1969,7 @@ export class GraderController implements vscode.Disposable {
   async openProblemInBrowser(problemId?: number): Promise<void> {
     const id = problemId ?? this.problem?.id;
     if (!id) return;
-    await vscode.env.openExternal(vscode.Uri.parse(this.url(`/submissions/direct_edit_problem/${id}`)));
+    await vscode.env.openExternal(vscode.Uri.parse(this.url(WEB_PATHS.problem(id))));
   }
 
   async openSubmission(id: number): Promise<void> {

@@ -6,7 +6,7 @@ import { realFixture } from './helpers';
 
 const V = (id: number, status: ProblemView['status'], tags: string[] = [], name = `p${id}`): ProblemView => ({
   id, name, fullName: name, status, tags, hasFile: false, hasTestcase: false, lastSubmissionTime: null, lastOpened: null,
-  score: { counted: null, best: null, latest: null, attempts: 0, penaltyLabel: null, rawSum: false, source: 'api', latestBelowCounted: false },
+  score: { counted: null, best: null, latest: null, attempts: 0, penaltyLabel: null, rawSum: false, fullScore: 100, source: 'api', latestBelowCounted: false },
 });
 
 describe('status, as on the website (main/_problem.html.haml)', () => {
