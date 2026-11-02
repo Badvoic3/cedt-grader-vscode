@@ -597,6 +597,70 @@ describe.runIf(existsSync(resolve(__dirname, '../esbuild.mjs')))('sidebar webvie
     expect(sent.at(-1)).toEqual({ type: 'unlinkLinkedFile', index: 0 });
   });
 
+  it('problem list: all 300 problems reachable (virtualized), plain count, no 150 limit', () => {
+    const { doc, post } = boot();
+    const many = Array.from({ length: 300 }, (_, i) => ({ ...loggedIn.problems.items[1], id: 5000 + i, name: `p_${String(i).padStart(3, '0')}`, fullName: `Problem ${i}` }));
+    post({ ...loggedIn, problem: null, problems: { ...loggedIn.problems, items: many } });
+    const vp = doc.querySelector<HTMLElement>('#sec-problems .problem-list')!;
+    const rendered = vp.querySelectorAll('.problem-row').length;
+    expect(rendered).toBeGreaterThan(5);
+    expect(rendered).toBeLessThan(60); // only the rows in view + buffer
+    expect(doc.querySelector('#sec-problems .list-count')!.textContent).toBe('300 problems');
+    expect(doc.querySelector('#sec-problems')!.textContent).not.toContain('Refine the filter');
+    // the inner height covers every row, so the last one is reachable
+    expect(parseFloat((vp.firstElementChild as HTMLElement).style.height)).toBe(300 * 38);
+    // filtered count
+    const input = doc.querySelector<HTMLInputElement>('#sec-problems input[type=search]')!;
+    input.value = 'p_1';
+    input.dispatchEvent(new (doc.defaultView as unknown as typeof globalThis).Event('input'));
+    expect(doc.querySelector('#sec-problems .list-count')!.textContent).toBe('100 of 300 problems');
+  });
+
+  it('click a row near the bottom: after the file opens the scroll position is unchanged and the row shows ✓', () => {
+    const { doc, sent, post } = boot();
+    const many = Array.from({ length: 300 }, (_, i) => ({ ...loggedIn.problems.items[1], id: 5000 + i, name: `p_${String(i).padStart(3, '0')}`, fullName: `Problem ${i}` }));
+    const st = { ...loggedIn, problem: null, problems: { ...loggedIn.problems, items: many } };
+    post(st);
+    const vp = doc.querySelector<HTMLElement>('#sec-problems .problem-list')!;
+    let top = 0; // jsdom has no layout: back scrollTop with a value and send the scroll event
+    Object.defineProperty(vp, 'scrollTop', { get: () => top, set: (v: number) => { top = v; }, configurable: true });
+    top = 280 * 38;
+    vp.dispatchEvent(new (doc.defaultView as unknown as typeof globalThis).Event('scroll'));
+    const rowEl = [...vp.querySelectorAll<HTMLElement>('.problem-row')].find((r) => r.textContent?.includes('p_285'))!;
+    const before = [...vp.querySelectorAll('.problem-row')];
+    rowEl.querySelector<HTMLButtonElement>('.problem-main')!.click();
+    expect(sent.at(-1)).toEqual({ type: 'problemRowClick', problemId: 5285 });
+    // the extension opens the file → the active problem changes
+    post({ ...st, problem: { ...many[285], source: 'filename', sourceLabel: 'Matched by file name', unavailable: false } });
+    expect(top).toBe(280 * 38); // unchanged
+    expect(doc.querySelector('#sec-problems .problem-list')).toBe(vp); // same element, not re-created
+    const now = [...vp.querySelectorAll<HTMLElement>('.problem-row')];
+    const marked = now.find((r) => r.textContent?.includes('p_285'))!;
+    expect(marked.classList.contains('mapped')).toBe(true);
+    expect(marked.querySelector('.codicon-check')).not.toBeNull();
+    // only the changed row was rebuilt; the others are the same elements
+    expect(now.filter((r) => !before.includes(r))).toEqual([marked]);
+  });
+
+  it('active file changed by the user (not a row click): minimal scroll to the row; scroll kept in webview state', () => {
+    const { doc, post, saved } = boot();
+    const many = Array.from({ length: 300 }, (_, i) => ({ ...loggedIn.problems.items[1], id: 5000 + i, name: `p_${String(i).padStart(3, '0')}`, fullName: `Problem ${i}` }));
+    const st = { ...loggedIn, problem: null, problems: { ...loggedIn.problems, items: many } };
+    post(st);
+    const vp = doc.querySelector<HTMLElement>('#sec-problems .problem-list')!;
+    let top = 0;
+    Object.defineProperty(vp, 'scrollTop', { get: () => top, set: (v: number) => { top = v; }, configurable: true });
+    post({ ...st, problem: { ...many[5], source: 'filename', sourceLabel: 'Matched by file name', unavailable: false } });
+    expect(top).toBe(0); // already visible: no scroll
+    post({ ...st, problem: { ...many[200], source: 'filename', sourceLabel: 'Matched by file name', unavailable: false } });
+    expect(top).toBe(201 * 38 - 420); // just enough to show it at the bottom ("nearest"), not to the top
+    vp.dispatchEvent(new (doc.defaultView as unknown as typeof globalThis).Event('scroll'));
+    return new Promise<void>((r) => setTimeout(() => {
+      expect((saved() as { listScroll: number }).listScroll).toBe(201 * 38 - 420);
+      r();
+    }, 200));
+  });
+
   it('inline prompt (no modal): text, detail and plain buttons answer by id', () => {
     const { doc, sent, post } = boot();
     post({ ...loggedIn, prompt: { id: 7, text: 'Auto-detect found 104_exam67_1_P2 (from CPH data).', detail: null, tone: 'info', buttons: [{ id: 'switch', label: 'Switch to it', primary: true }, { id: 'keep', label: 'Keep current' }] } });

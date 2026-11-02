@@ -44,7 +44,7 @@ import { MappingStore } from './mapping/store';
 import { comparePaths, linkedNotice, mergeProblemFiles, type ProblemFile, ProblemFileSearch } from './mapping/problemFiles';
 import { pathKey } from './mapping/paths';
 import { LIMITS, TIMING, WEB_PATHS } from './shared/constants';
-import { HOW_LINKED, S } from './shared/strings';
+import { PICK_HOW, S } from './shared/strings';
 import type { HistoryEntry, ProblemFilter, ProblemView, ResultView, SubmissionDetailView, ViewState } from './shared/messages';
 
 export const EXAM_WARNING = S.exam.warning;
@@ -884,6 +884,7 @@ export class GraderController implements vscode.Disposable {
     }
     // Remember automatic matches of open files (never over a manual link or "not linked").
     if (!entry && !unlinked && m.kind === 'match' && (m.source === 'filename' || m.source === 'cph')) await this.mapping.recordAuto(uri, m.problem.id, m.source);
+    else if (!entry && !unlinked && m.kind === 'none' && m.suggestions.length) await this.mapping.recordAuto(uri, m.suggestions[0].id, 'suggested');
     else if (!entry && list?.length && m.kind !== 'match') await this.mapping.dropAuto(uri);
     await this.refreshMappedIds();
     if (seq !== this.refreshSeq) return;
@@ -908,7 +909,7 @@ export class GraderController implements vscode.Disposable {
    * Explicit "not linked" files and files linked to another problem are left out.
    * `search`: 'run' searches if not cached; 'cached' uses only a finished search.
    */
-  async filesForProblem(problemId: number, search: 'run' | 'cached' | 'none' = 'run'): Promise<ProblemFile[]> {
+  async filesForProblem(problemId: number, search: 'run' | 'cached' | 'none' = 'run', includeSuggested = false): Promise<ProblemFile[]> {
     const chosen = (await this.mapping.filesFor(problemId, this.cfg.baseUrl)).map((u) => u.fsPath);
     let searched: string[] = [];
     if (search === 'run') searched = await this.fileSearch.get(problemId);
@@ -920,6 +921,7 @@ export class GraderController implements vscode.Disposable {
       searched,
       unlinked: this.mapping.unlinkedPaths(),
       linkedElsewhere: await this.mapping.linkedElsewhere(problemId, this.cfg.baseUrl),
+      includeSuggested,
     });
   }
 
@@ -980,7 +982,8 @@ export class GraderController implements vscode.Disposable {
   private async existingFilesFor(problemId: number): Promise<{ found: { uri: vscode.Uri; t: number; how: ProblemFile['how'] }[]; gone: vscode.Uri[] }> {
     const found: { uri: vscode.Uri; t: number; how: ProblemFile['how'] }[] = [];
     const gone: vscode.Uri[] = [];
-    for (const f of await this.filesForProblem(problemId, 'run')) {
+    // Opening a file never links it, so suggestions are fine here.
+    for (const f of await this.filesForProblem(problemId, 'run', true)) {
       const st = await fsStat(f.fsPath).catch(() => null);
       if (st) found.push({ uri: vscode.Uri.file(f.fsPath), t: st.mtimeMs, how: f.how });
       else if (f.how === 'chosen') gone.push(vscode.Uri.file(f.fsPath));
@@ -1007,7 +1010,7 @@ export class GraderController implements vscode.Disposable {
   }
 
   private async pickAndOpen(found: { uri: vscode.Uri; t: number; how: ProblemFile['how'] }[], name: string): Promise<void> {
-    const how = HOW_LINKED;
+    const how = PICK_HOW;
     const target =
       found.length === 1
         ? found[0].uri
@@ -1024,7 +1027,7 @@ export class GraderController implements vscode.Disposable {
   private async refreshMappedIds(): Promise<void> {
     const ids = await this.mapping.mappedProblemIds(this.cfg.baseUrl);
     const blocked = new Set(this.mapping.unlinkedPaths().map((p) => pathKey(p)));
-    for (const a of this.mapping.autoMatches()) if (!blocked.has(pathKey(a.fsPath))) ids.add(a.problemId);
+    for (const a of this.mapping.autoMatches()) if (a.how !== 'suggested' && !blocked.has(pathKey(a.fsPath))) ids.add(a.problemId);
     this.mappedIds = ids;
   }
 

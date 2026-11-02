@@ -295,7 +295,9 @@ input::placeholder { color: var(--vscode-input-placeholderForeground); }
 /* ----------------------------------------------------------- history/list */
 
 .history, .problem-list { display: flex; flex-direction: column; }
-.problem-list { max-height: 420px; overflow-y: auto; }
+.problem-list { display: block; position: relative; max-height: 420px; overflow-y: auto; overscroll-behavior: contain; }
+.vlist-inner { position: relative; width: 100%; }
+.problem-list .vrow { position: absolute; left: 0; right: 0; box-sizing: border-box; }
 
 .history-row {
   display: flex;

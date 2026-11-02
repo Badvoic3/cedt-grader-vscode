@@ -145,7 +145,7 @@ export interface ViewState {
   problem: (ProblemView & { source: MatchSourceView; sourceLabel: string; unavailable: boolean }) | null;
   /** All files linked to the current problem when there are several (duplicate notice). */
   /** Files for the current problem (2+ → notice); current file first. */
-  linkedFiles: { path: string; current: boolean; how: 'chosen' | 'cph' | 'filename' }[];
+  linkedFiles: { path: string; current: boolean; how: 'chosen' | 'cph' | 'filename' | 'suggested' }[];
   /** "Another file with the same name also matches…" / "N files are linked to this problem". */
   linkedNotice: string | null;
   /** Show the dismissible "install CPH" tip. */

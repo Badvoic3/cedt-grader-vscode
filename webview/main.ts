@@ -7,6 +7,7 @@
  */
 import { groupLabel, VERDICT_LEGEND } from '../src/grader/verdicts';
 import { menuLabelMax, middleEllipsis } from './text';
+import { VirtualList } from './virtualList';
 import { SERVER_SCORE_CAP } from '../src/shared/constants';
 import { filterProblems, matches, SORTS, sortProblems } from './filters';
 import { installTooltips } from './tooltip';
@@ -23,11 +24,13 @@ declare function acquireVsCodeApi(): VsCodeApi;
 interface UiState {
   collapsed: Record<string, boolean>;
   filter: string;
+  /** Problem list scroll position (kept across re-renders, hide/show and restarts). */
+  listScroll?: number;
 }
 
 const vscode = acquireVsCodeApi();
 const ui: UiState = { collapsed: {}, filter: '', ...(vscode.getState() ?? {}) };
-const saveUi = () => vscode.setState({ collapsed: ui.collapsed, filter: ui.filter });
+const saveUi = () => vscode.setState({ collapsed: ui.collapsed, filter: ui.filter, listScroll: ui.listScroll });
 const send = (m: FromWebview) => vscode.postMessage(m);
 
 // ------------------------------------------------------------------ helpers
@@ -827,6 +830,9 @@ function rowMenuItems(p: ProblemView, s: ViewState): MenuItem[] {
   ];
 }
 
+/** Last click on a list row (an editor switch caused by it never scrolls the list). */
+let lastRowClickAt = 0;
+
 function problemRow(p: ProblemView, s: ViewState, where: 'picker' | 'list'): HTMLElement {
   const mapped = s.problem?.id === p.id;
   const sub = titleParts(p).subtitle;
@@ -842,6 +848,7 @@ function problemRow(p: ProblemView, s: ViewState, where: 'picker' | 'list'): HTM
         pickerSearch.value = '';
         send({ type: 'mapProblem', problemId: p.id });
       } else {
+        lastRowClickAt = Date.now();
         send({ type: 'problemRowClick', problemId: p.id });
       }
     },
@@ -866,12 +873,12 @@ function problemRow(p: ProblemView, s: ViewState, where: 'picker' | 'list'): HTM
         iconButton('book', 'Open statement', () => send({ type: 'openStatement', problemId: p.id })),
       ),
     ),
-    () => rowMenuItems(p, s),
+    () => rowMenuItems(p, state ?? s),
   );
 }
 
 let linkedOpen = false;
-const HOW_TEXT: Record<string, string> = { chosen: 'chosen by you', filename: 'matched by file name', cph: 'matched from CPH data' };
+const HOW_TEXT: Record<string, string> = { chosen: 'chosen by you', filename: 'matched by file name', cph: 'matched from CPH data', suggested: 'suggested' };
 function linkedFilesNotice(s: ViewState): HTMLElement {
   const box = el('div', { class: 'notice linked' });
   box.append(
@@ -933,8 +940,56 @@ function sourceLine(source: string, problemId: number, name: string): HTMLElemen
   return el('div', { class: `row source-line source-${source} small muted` }, icon(SOURCE_ICON[source] ?? 'info'), el('span', {}, SOURCE_TEXT[source] ?? source));
 }
 
+/**
+ * Problem list: one persistent virtualized list (every problem reachable by
+ * scrolling). Rows are keyed by problem id and rebuilt only when their own
+ * data changed; an editor switch only updates the rows whose ✓ changed.
+ */
+const problemVersion = (p: ProblemView) =>
+  JSON.stringify([p.name, p.fullName, p.score, p.status, p.hasFile, p.hasTestcase, state?.problem?.id === p.id]);
+let listSaveTimer: ReturnType<typeof setTimeout> | undefined;
+const problemList = new VirtualList<ProblemView>(document, {
+  key: (p) => String(p.id),
+  version: problemVersion,
+  kind: (p) => (titleParts(p).subtitle ? 'two-line' : 'one-line'),
+  render: (p) => problemRow(p, state!, 'list'),
+  fallbackHeight: (k) => (k === 'two-line' ? 38 : 24),
+  maxHeight: 420,
+  className: 'problem-list',
+  onScroll: (top) => {
+    ui.listScroll = top;
+    clearTimeout(listSaveTimer);
+    listSaveTimer = setTimeout(saveUi, 150);
+  },
+});
+let listRestored = false;
+let listHitsKey = '';
+let listHits: ProblemView[] = [];
+
+/** Filtered + sorted items (recomputed only when items, filter or search changed). */
+function problemHits(s: ViewState): ProblemView[] {
+  const q = problemFilter.value.trim().toLowerCase();
+  const key = JSON.stringify([s.problems.items, s.problems.filter, q]);
+  if (key !== listHitsKey) {
+    listHitsKey = key;
+    listHits = sortProblems(filterProblems(s.problems.items, s.problems.filter, q), s.problems.filter.sort ?? 'default');
+  }
+  return listHits;
+}
+
+/** Update the list rows in place (cheap; runs after every state push). */
+function syncProblemList(s: ViewState): void {
+  if (!s.problems.loaded || !problemList.viewport.isConnected) return;
+  problemList.setItems(problemHits(s));
+  if (!listRestored && ui.listScroll) {
+    problemList.scrollTop = ui.listScroll;
+  }
+  listRestored = true;
+}
+
 function renderProblems(s: ViewState): void {
   const b = sProblems.body;
+  const keepScroll = problemList.viewport.isConnected ? problemList.scrollTop : (ui.listScroll ?? 0);
   b.replaceChildren();
   const P = s.problems;
   if (!P.loaded) {
@@ -946,12 +1001,13 @@ function renderProblems(s: ViewState): void {
   }
   b.append(statusFilter(P.filter), el('div', { class: 'row gap filter-row' }, problemFilter, sortSelect(P.filter)));
   if (P.topics.length) b.append(topicFilter(P.filter, P.topics));
-  const q = problemFilter.value.trim().toLowerCase();
-  const hits = sortProblems(filterProblems(P.items, P.filter, q), P.filter.sort ?? 'default');
-  const list = el('div', { class: 'problem-list' });
-  for (const p of hits.slice(0, 150)) list.append(problemRow(p, s, 'list'));
-  b.append(list);
-  b.append(el('p', { class: 'muted small' }, hits.length > 150 ? `Showing 150 of ${hits.length}. Refine the filter.` : `${hits.length} of ${P.items.length} problems`));
+  const hits = problemHits(s);
+  b.append(problemList.viewport);
+  problemList.setItems(hits);
+  // The same viewport element is re-inserted: put the scroll position back.
+  if (keepScroll && problemList.scrollTop !== keepScroll) problemList.scrollTop = keepScroll;
+  listRestored = true;
+  b.append(el('p', { class: 'muted small list-count' }, hits.length === P.items.length ? `${P.items.length} problems` : `${hits.length} of ${P.items.length} problems`));
   if (P.penaltyNote) b.append(el('p', { class: 'hint' }, icon('info'), ' ', P.penaltyNote));
   if (P.stale) b.append(el('p', { class: 'hint' }, icon('warning'), ' May be out of date (could not reach the grader).'));
   if (P.loading) b.append(el('p', { class: 'muted small' }, icon('loading', 'codicon-modifier-spin'), ' Refreshing…'));
@@ -1016,7 +1072,7 @@ function sectionKeys(s: ViewState): Record<string, string> {
     current: j([s.notLinked, s.linkedNotice, s.linkedFiles, s.file, s.problem, s.languages, s.submit, s.matching, s.testcases, s.cph, s.gradingElsewhere, pickerOpen, pickerOpen ? s.problems : s.problems.loaded]),
     result: j([s.result, s.submit.enabled, s.submit.reason, legendOpen === 'result']),
     history: j([pid, s.history, legendOpen === 'history']),
-    problems: j([s.problems, !!s.file, pid, ui.filter]),
+    problems: j([{ ...s.problems, items: s.problems.items.length }, ui.filter]),
   };
 }
 
@@ -1026,6 +1082,7 @@ function render(): void {
     return;
   }
   const active = document.activeElement;
+  const pageScroll = document.scrollingElement?.scrollTop ?? 0;
   const keys = sectionKeys(state);
   const renderers: Record<string, (s: ViewState) => void> = {
     banner: renderBanner,
@@ -1041,8 +1098,11 @@ function render(): void {
     lastKeys.set(name, keys[name]);
     fn(state);
   }
+  syncProblemList(state);
   // Persistent inputs survive re-render; restore focus if it was on one of them.
   if (active instanceof HTMLInputElement && document.body.contains(active) && document.activeElement !== active) active.focus();
+  // A re-render never moves the panel.
+  if (document.scrollingElement && document.scrollingElement.scrollTop !== pageScroll) document.scrollingElement.scrollTop = pageScroll;
   tooltip.refresh();
 }
 
@@ -1066,6 +1126,7 @@ problemFilter.addEventListener('input', () => {
   saveUi();
   if (state) {
     renderProblems(state);
+    problemList.scrollTop = 0; // new search: start at the top of the results
     problemFilter.focus();
   }
 });
@@ -1075,8 +1136,13 @@ window.addEventListener('message', (ev: MessageEvent<ToWebview>) => {
   if (!m || typeof m !== 'object') return;
   if (m.type === 'state') {
     if (state && state.account.status !== 'logged-in' && m.state.account.status === 'logged-in') showLoginForm = false;
+    const prevPid = state?.problem?.id ?? null;
     state = m.state;
     render();
+    const pid = state.problem?.id ?? null;
+    // The active problem changed because the user opened a file themselves: show its row
+    // with a minimal scroll. Never after a click in the list (the list stays where it is).
+    if (pid !== null && pid !== prevPid && Date.now() - lastRowClickAt > 3000) problemList.revealNearest(String(pid));
   } else if (m.type === 'focus') {
     if (m.target === 'login') {
       showLoginForm = true;
