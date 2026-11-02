@@ -1,11 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import { autoAfterDelete, autoAfterRename, type AutoMatch, linkedNotice, mergeProblemFiles, ProblemFileSearch } from '../src/mapping/problemFiles';
+import { autoAfterDelete, autoAfterRename, type AutoMatch, linkedNotice, mergeProblemFiles } from '../src/mapping/problemFiles';
+import { OnceCache } from '../src/mapping/matchIndex';
+import { fileStem, normalizeName } from '../src/mapping/match';
 
 const A = '/w/data algo/da68_f2_zero_one_subset_sum.cpp';
 const B = '/w/i2cedt/da68_f2_zero_one_subset_sum.cpp';
 const NAME = 'da68_f2_zero_one_subset_sum';
 const rel = (p: string) => p.replace('/w/', '');
-const base = { problemId: 1731, chosen: [] as string[], auto: [] as AutoMatch[], searched: [] as string[], unlinked: [] as string[], linkedElsewhere: [] as string[], caseInsensitive: false };
+const base = { problemId: 1731, chosen: [] as string[], auto: [] as AutoMatch[], matched: [] as { fsPath: string; how: 'filename' | 'suggested' }[], unlinked: [] as string[], linkedElsewhere: [] as string[], caseInsensitive: false };
+/** Name matches as the matcher reports them. */
+const N = (...paths: string[]) => paths.map((fsPath) => ({ fsPath, how: 'filename' as const }));
 const auto = (fsPath: string, problemId = 1731, how: 'filename' | 'cph' = 'filename'): AutoMatch => ({ fsPath, problemId, how, at: 1 });
 
 describe('files for a problem (one function for notice, row click, submit check)', () => {
@@ -18,7 +22,7 @@ describe('files for a problem (one function for notice, row click, submit check)
   });
 
   it('a never-opened name match comes from the file search', () => {
-    expect(mergeProblemFiles({ ...base, chosen: [B], searched: [A, B] })).toEqual([
+    expect(mergeProblemFiles({ ...base, chosen: [B], matched: N(A, B) })).toEqual([
       { fsPath: A, how: 'filename' },
       { fsPath: B, how: 'chosen' }, // the search hit doesn't downgrade a chosen link
     ]);
@@ -26,37 +30,37 @@ describe('files for a problem (one function for notice, row click, submit check)
 
   it('chosen + suggested: a suggestion (not an exact name) is never in the list', () => {
     // Suggestions aren't recorded and the search only finds exact names, so only B is there.
-    const files = mergeProblemFiles({ ...base, chosen: [B], auto: [], searched: [] });
+    const files = mergeProblemFiles({ ...base, chosen: [B], auto: [], matched: N() });
     expect(files).toHaveLength(1);
     expect(linkedNotice(files, B, rel)).toBeNull();
   });
 
   it('explicit "not linked" files and files linked to another problem are excluded', () => {
-    expect(mergeProblemFiles({ ...base, auto: [auto(A)], searched: [A, B], unlinked: [A] })).toEqual([{ fsPath: B, how: 'filename' }]);
-    expect(mergeProblemFiles({ ...base, searched: [A, B], linkedElsewhere: [B] })).toEqual([{ fsPath: A, how: 'filename' }]);
+    expect(mergeProblemFiles({ ...base, auto: [auto(A)], matched: N(A, B), unlinked: [A] })).toEqual([{ fsPath: B, how: 'filename' }]);
+    expect(mergeProblemFiles({ ...base, matched: N(A, B), linkedElsewhere: [B] })).toEqual([{ fsPath: A, how: 'filename' }]);
     // auto-matches of other problems don't count
     expect(mergeProblemFiles({ ...base, auto: [auto(A, 999)] })).toEqual([]);
   });
 
   it('the notice appears from BOTH files\' views (the reported repro)', () => {
     // i2cedt/… chosen; data algo/… matched by file name.
-    const fromA = linkedNotice(mergeProblemFiles({ ...base, chosen: [B], auto: [auto(A)], searched: [A, B] }), A, rel)!;
+    const fromA = linkedNotice(mergeProblemFiles({ ...base, chosen: [B], auto: [auto(A)], matched: N(A, B) }), A, rel)!;
     expect(fromA.text).toBe('Another file with the same name also matches this problem.');
     expect(fromA.files.map((f) => [f.path, f.current, f.how])).toEqual([
       ['data algo/da68_f2_zero_one_subset_sum.cpp', true, 'filename'],
       ['i2cedt/da68_f2_zero_one_subset_sum.cpp', false, 'chosen'],
     ]);
     // From i2cedt/… even though data algo/… was never opened (search hit only).
-    const fromB = linkedNotice(mergeProblemFiles({ ...base, chosen: [B], searched: [A, B] }), B, rel)!;
+    const fromB = linkedNotice(mergeProblemFiles({ ...base, chosen: [B], matched: N(A, B) }), B, rel)!;
     expect(fromB.text).toBe('Another file with the same name also matches this problem.');
     expect(fromB.files[0]).toMatchObject({ path: 'data algo/da68_f2_zero_one_subset_sum.cpp', how: 'filename', current: false });
     expect(fromB.files[1]).toMatchObject({ path: 'i2cedt/da68_f2_zero_one_subset_sum.cpp', current: true });
   });
 
   it('two name-matched files in different folders → same-name wording; different names → "N files are linked"', () => {
-    expect(linkedNotice(mergeProblemFiles({ ...base, searched: [A, B] }), A, rel)!.text).toBe('Another file with the same name also matches this problem.');
+    expect(linkedNotice(mergeProblemFiles({ ...base, matched: N(A, B) }), A, rel)!.text).toBe('Another file with the same name also matches this problem.');
     const C = '/w/i2cedt/subset_sum_v2.cpp';
-    expect(linkedNotice(mergeProblemFiles({ ...base, chosen: [C], searched: [A] }), A, rel)!.text).toBe('2 files are linked to this problem');
+    expect(linkedNotice(mergeProblemFiles({ ...base, chosen: [C], matched: N(A) }), A, rel)!.text).toBe('2 files are linked to this problem');
   });
 });
 
@@ -66,7 +70,7 @@ describe('confident suggestions count like links', () => {
     const sug = { fsPath: S1, problemId: 1731, how: 'suggested' as const, at: 1 };
     expect(mergeProblemFiles({ ...base, chosen: [B], auto: [sug], includeSuggested: false })).toEqual([{ fsPath: B, how: 'chosen' }]);
     expect(linkedNotice(mergeProblemFiles({ ...base, chosen: [B], auto: [sug] }), S1, rel)!.text).toBe('2 files are linked to this problem');
-    expect(mergeProblemFiles({ ...base, chosen: [B], auto: [sug], searched: [A], includeSuggested: true })).toEqual([
+    expect(mergeProblemFiles({ ...base, chosen: [B], auto: [sug], matched: N(A), includeSuggested: true })).toEqual([
       { fsPath: A, how: 'filename' },
       { fsPath: S1, how: 'suggested' },
       { fsPath: B, how: 'chosen' },
@@ -80,7 +84,7 @@ describe('stable order', () => {
   it('switching the active file between the listed files keeps the row order identical', () => {
     const C = '/w/HW10/da68_f2_zero_one_subset_sum.cpp';
     const D = '/w/hw9/da68_f2_zero_one_subset_sum.cpp';
-    const files = mergeProblemFiles({ ...base, chosen: [B], auto: [auto(A)], searched: [C, D] });
+    const files = mergeProblemFiles({ ...base, chosen: [B], auto: [auto(A)], matched: N(C, D) });
     const orders = [A, B, C, D].map((cur) => linkedNotice(files, cur, rel)!.files.map((f) => f.path));
     for (const o of orders) expect(o).toEqual(orders[0]);
     // natural, case-insensitive: "data algo" < "hw9" < "HW10" < "i2cedt"
@@ -91,7 +95,8 @@ describe('stable order', () => {
 });
 
 describe('remembered auto-matches follow renames and deletes', () => {
-  const name = (id: number) => (id === 1731 ? NAME : undefined);
+  // The matcher's answer for a path (here: exact name match only).
+  const name = (fsPath: string, id: number) => id === 1731 && normalizeName(fileStem(fsPath)) === normalizeName(NAME);
 
   it('renamed to a still-matching path (moved folder): kept, path updated', () => {
     expect(autoAfterRename([auto(A)], '/w/data algo', '/w/algo', name, false)).toEqual([auto('/w/algo/da68_f2_zero_one_subset_sum.cpp')]);
@@ -109,32 +114,31 @@ describe('remembered auto-matches follow renames and deletes', () => {
   });
 });
 
-describe('file search: once per problem until a file event', () => {
-  it('findFiles called once per problem; invalidate() searches again', async () => {
-    const calls: number[] = [];
-    const s = new ProblemFileSearch(async (id) => {
-      calls.push(id);
-      return [A];
-    });
-    expect(s.peek(1731)).toBeUndefined();
-    await Promise.all([s.get(1731), s.get(1731)]); // concurrent → one search
-    await s.get(1731);
-    await s.get(42);
-    expect(calls).toEqual([1731, 42]);
-    expect(await s.peek(1731)).toEqual([A]);
-    s.invalidate(); // file created / deleted / renamed
-    await s.get(1731);
-    expect(calls).toEqual([1731, 42, 1731]);
+describe('match index: computed once until a file event', () => {
+  it('one findFiles for all problems; invalidate() (file created / deleted / renamed) computes again', async () => {
+    let builds = 0;
+    const c = new OnceCache(async () => {
+      builds++;
+      return new Map([[1731, [{ fsPath: A, how: 'filename' as const }]]]);
+    }, () => new Map());
+    expect(c.peek()).toBeUndefined();
+    await Promise.all([c.get(), c.get()]); // concurrent → one build
+    await c.get();
+    expect(builds).toBe(1);
+    expect((await c.peek())!.get(1731)).toHaveLength(1);
+    c.invalidate();
+    await c.get();
+    expect(builds).toBe(2);
   });
 
-  it('a failed search counts as no files (and is cached until the next file event)', async () => {
+  it('a failed build counts as empty (and is cached until the next file event)', async () => {
     let n = 0;
-    const s = new ProblemFileSearch(async () => {
+    const c = new OnceCache<Map<number, unknown>>(async () => {
       n++;
       throw new Error('boom');
-    });
-    expect(await s.get(1)).toEqual([]);
-    expect(await s.get(1)).toEqual([]);
+    }, () => new Map());
+    expect((await c.get()).size).toBe(0);
+    await c.get();
     expect(n).toBe(1);
   });
 });

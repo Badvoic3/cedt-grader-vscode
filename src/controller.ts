@@ -35,13 +35,14 @@ import { cphProbPath as cphProbPathFor, readCphProblem } from './mapping/cph';
 import { importIntoCph } from './mapping/cphImport';
 import { createFileNoOverwrite, pathExists as exists } from './mapping/newFile';
 import { chooseNewFileLanguage } from './mapping/newFileLanguage';
-import { BINARY_EXTS, excludeGlob, filterCandidates, includeGlob, rankCandidates } from './mapping/findByName';
+import { BINARY_EXTS, excludeGlob, filterSourceFiles, rankCandidates, sourceGlob } from './mapping/findByName';
+import { buildMatchIndex, type IndexedFile, matchFile, OnceCache, type SourceFile } from './mapping/matchIndex';
 import { EXTENSION_LANGUAGE } from './grader/languages';
 import { stat as fsStat, readFile as fsReadFile } from 'node:fs/promises';
 import { dismissKey, type LocatedEntry, moveCphProblem, reconnectCandidates, remapPath } from './mapping/mappingOps';
 import { cleanName, fileNameFor, type MatchSource, placeholder, resolveProblem, SOURCE_LABEL } from './mapping/match';
 import { MappingStore } from './mapping/store';
-import { comparePaths, linkedNotice, mergeProblemFiles, type ProblemFile, ProblemFileSearch } from './mapping/problemFiles';
+import { comparePaths, linkedNotice, mergeProblemFiles, type ProblemFile } from './mapping/problemFiles';
 import { pathKey } from './mapping/paths';
 import { confirmSuggestion } from './mapping/suggestionGate';
 import { LIMITS, TIMING, WEB_PATHS } from './shared/constants';
@@ -108,8 +109,16 @@ export class GraderController implements vscode.Disposable {
   private notLinked = false;
   /** Files for the current problem (duplicate notice): saved links, remembered auto-matches, name matches. */
   private linkedFiles: ProblemFile[] = [];
-  /** One cached file search per problem; cleared on file create/delete/rename (debounced). */
-  private readonly fileSearch = new ProblemFileSearch((id) => this.searchFilesNamed(id, true));
+  /**
+   * Problem → files with the ONE matcher (matchIndex.ts): one workspace.findFiles of source
+   * files, cached until a file is created / deleted / renamed (debounced) or the list reloads.
+   */
+  private readonly matchIndex = new OnceCache<Map<number, IndexedFile[]>>(() => this.buildIndex(), () => new Map());
+  /**
+   * Temporary link (row click opened a name-matched / suggested file): the panel shows that
+   * problem for the file, marked "Suggested · Use this", until another file becomes active.
+   */
+  private tempLink: { key: string; problemId: number } | null = null;
   private fileEventTimer: ReturnType<typeof setTimeout> | undefined;
   /** CPH tip: "Not now" hides it for this session. */
   private cphTipHidden = false;
@@ -177,6 +186,7 @@ export class GraderController implements vscode.Disposable {
       // Problems back in the list are available again.
       const ids = new Set(this.problems.map((p) => p.id));
       for (const id of [...this.unavailableIds]) if (ids.has(id)) this.unavailableIds.delete(id);
+      this.matchIndex.invalidate(); // the index depends on the problem list
       if (this.fileUri) void this.setActiveFile(this.fileUri);
     };
     this.disposables.push(
@@ -858,6 +868,7 @@ export class GraderController implements vscode.Disposable {
     this.fileUri = uri;
     if (changed) {
       this.cancelPrompt();
+      if (this.tempLink && this.tempLink.key !== pathKey(uri.fsPath)) this.tempLink = null; // "for that action only"
       this.selectedLanguageId = this.ctx.workspaceState.get<Record<string, number>>(LANGUAGE_KEY, {})[uri.fsPath] ?? null;
       this.languagesError = null;
       this.expandedSubmission = null;
@@ -898,6 +909,13 @@ export class GraderController implements vscode.Disposable {
       this.matchInfo.suggestions = [...m.suggestions];
     }
     if (m.kind === 'match' && m.source === 'suggested') this.matchInfo.suggestions = [...m.suggestions];
+    // Opened from a problem row: show that problem as a temporary link ("Suggested · Use this")
+    // unless the file already resolves to it. Saving it is up to the user.
+    const temp = this.tempLink && this.tempLink.key === pathKey(uri.fsPath) && !entry && !unlinked ? this.problemById(this.tempLink.problemId) : undefined;
+    if (temp && !(problem && problem.id === temp.id)) {
+      problem = { ...temp, source: 'suggested' };
+      this.matchInfo = { suggestions: [temp, ...this.matchInfo.suggestions.filter((x) => x.id !== temp.id)], ambiguous: null, ambiguousSource: null };
+    }
     // Remember automatic matches of open files (never over a manual link or "not linked").
     if (!entry && !unlinked && m.kind === 'match' && (m.source === 'filename' || m.source === 'cph' || m.source === 'suggested')) await this.mapping.recordAuto(uri, m.problem.id, m.source);
     else if (!entry && list?.length && m.kind !== 'match') await this.mapping.dropAuto(uri);
@@ -907,7 +925,7 @@ export class GraderController implements vscode.Disposable {
     // Cached name search only here; a missing search runs right after the first render.
     // Suggestions (confident ones only) behave like links for everything read-only.
     this.linkedFiles = problem ? await this.filesForProblem(problem.id, 'cached') : [];
-    if (problem && !this.fileSearch.peek(problem.id) && this.data.isVisible()) void this.refreshLinkedFiles();
+    if (problem && !this.matchIndex.peek() && this.data.isVisible()) void this.refreshLinkedFiles();
     if (problem) await this.noteOpened(problem.id);
     this.applyLanguageChoice();
     this.emit();
@@ -920,21 +938,21 @@ export class GraderController implements vscode.Disposable {
 
   /**
    * The one "files for this problem" answer (duplicate notice, row click /
-   * go to file, before-submit check): saved links, remembered auto-matches
-   * and files named like the problem (one cached search per problem).
-   * Explicit "not linked" files and files linked to another problem are left out.
-   * `search`: 'run' searches if not cached; 'cached' uses only a finished search.
+   * go to file, before-submit check): saved links, remembered auto-matches and
+   * what the one matcher assigns to this problem (match index). Explicit "not
+   * linked" files and files linked to another problem are left out.
+   * `search`: 'run' builds the index if needed; 'cached' uses only a finished one.
    */
   async filesForProblem(problemId: number, search: 'run' | 'cached' | 'none' = 'run', includeSuggested = true): Promise<ProblemFile[]> {
     const chosen = (await this.mapping.filesFor(problemId, this.cfg.baseUrl)).map((u) => u.fsPath);
-    let searched: string[] = [];
-    if (search === 'run') searched = await this.fileSearch.get(problemId);
-    else if (search === 'cached') searched = (await this.fileSearch.peek(problemId)) ?? [];
+    let index: Map<number, IndexedFile[]> | undefined;
+    if (search === 'run') index = await this.matchIndex.get();
+    else if (search === 'cached') index = await this.matchIndex.peek();
     return mergeProblemFiles({
       problemId,
       chosen,
       auto: this.mapping.autoMatches(),
-      searched,
+      matched: index?.get(problemId) ?? [],
       unlinked: this.mapping.unlinkedPaths(),
       linkedElsewhere: await this.mapping.linkedElsewhere(problemId, this.cfg.baseUrl),
       includeSuggested,
@@ -956,7 +974,7 @@ export class GraderController implements vscode.Disposable {
   private onFileEvent(): void {
     clearTimeout(this.fileEventTimer);
     this.fileEventTimer = setTimeout(() => {
-      this.fileSearch.invalidate();
+      this.matchIndex.invalidate();
       if (this.data.isVisible()) void this.refreshLinkedFiles();
     }, TIMING.fileEventDebounceMs);
   }
@@ -972,26 +990,48 @@ export class GraderController implements vscode.Disposable {
     return [...exts];
   }
 
+  /** Every known source extension: the server's languages (non-binary) + the fallback table. */
+  private allSourceExts(): string[] {
+    const exts = new Set<string>(Object.keys(EXTENSION_LANGUAGE).map((e) => e.slice(1)));
+    for (const l of this.languages) if (l.ext && !BINARY_EXTS.has(l.ext.toLowerCase())) exts.add(l.ext.toLowerCase().replace(/^\./, ''));
+    return [...exts];
+  }
+
+  /** A workspace file as the matcher sees it (path + workspace-relative parent folders for the folder/tag bonus). */
+  private sourceFile(fsPath: string): SourceFile {
+    const relDir = vscode.workspace.asRelativePath(vscode.Uri.joinPath(vscode.Uri.file(fsPath), '..'), false);
+    return { fsPath, folders: relDir.split('/').filter((x) => x && x !== '.' && !x.includes(':')) };
+  }
+
   /**
-   * One workspace.findFiles for source files named exactly like the problem
-   * (case-insensitive), with a permitted extension, outside excluded folders
-   * (same rules as "Find file by name"). Logged as a file search.
+   * Build the match index: one workspace.findFiles of source files (same
+   * exclusions as everywhere: settings, .gitignore, build folders, binaries),
+   * then the one matcher per file. Logged as a file search.
    */
-  private async searchFilesNamed(problemId: number, background: boolean): Promise<string[]> {
-    const p = this.problemById(problemId);
-    if (!p) return [];
-    if (!background) await this.data.languages().catch(() => undefined);
-    const exts = this.sourceExtsFor(p);
-    if (!exts.length) return [];
+  private async buildIndex(): Promise<Map<number, IndexedFile[]>> {
+    const problems = this.data.problemList()?.problems;
+    if (!problems?.length) {
+      queueMicrotask(() => this.matchIndex.invalidate()); // not ready yet: don't keep an empty index
+      return new Map();
+    }
     const cfg = (section: string) => vscode.workspace.getConfiguration(section).get<Record<string, unknown>>('exclude') ?? {};
     const root = vscode.workspace.workspaceFolders?.[0]?.uri;
     let gitignore: string | null = null;
     if (root) gitignore = await fsReadFile(vscode.Uri.joinPath(root, '.gitignore').fsPath, 'utf8').catch(() => null);
     const t0 = Date.now();
-    const found = await vscode.workspace.findFiles(includeGlob(p.name, exts), excludeGlob([cfg('files'), cfg('search')], gitignore), LIMITS.findFilesMax);
-    const kept = filterCandidates(found.map((u) => u.fsPath), p.name, exts).slice(0, LIMITS.findFilesKept);
-    this.requestLog(`FILE SEARCH "${cleanName(p.name)}.{${exts.join(',')}}" (#${p.id}) → ${kept.length} file${kept.length === 1 ? '' : 's'} (${Date.now() - t0} ms)`);
-    return kept;
+    const exts = this.allSourceExts();
+    const found = await vscode.workspace.findFiles(sourceGlob(exts), excludeGlob([cfg('files'), cfg('search')], gitignore), LIMITS.indexMaxFiles);
+    const files = filterSourceFiles(found.map((u) => u.fsPath), exts).map((f) => this.sourceFile(f));
+    const index = buildMatchIndex(files, problems, this.cfg.baseUrl);
+    const matched = [...index.values()].reduce((n, l) => n + l.length, 0);
+    this.requestLog(`FILE SEARCH source files: ${files.length} → ${matched} matched to ${index.size} problems (${Date.now() - t0} ms)`);
+    return index;
+  }
+
+  /** Does the one matcher (without saved links) give `problemId` for this path? */
+  private matcherSays(fsPath: string, problemId: number): boolean {
+    const problems = this.data.problemList()?.problems ?? [];
+    return matchFile(this.sourceFile(fsPath), problems, this.cfg.baseUrl)?.problemId === problemId;
   }
 
   /** Existing files for a problem, in the stable path order; missing saved links reported, missing auto-matches dropped. */
@@ -1001,6 +1041,14 @@ export class GraderController implements vscode.Disposable {
     // Opening a file never links it, so suggestions are fine here.
     for (const f of await this.filesForProblem(problemId, 'run', true)) {
       const st = await fsStat(f.fsPath).catch(() => null);
+      // Same answer as opening the file: CPH data pointing to another problem wins over the name.
+      if (st && f.how !== 'chosen' && f.how !== 'cph') {
+        const cph = await readCphProblem(f.fsPath, this.cphSaveLocation());
+        if (cph) {
+          const r = resolveProblem({ savedProblemId: null, cph, filePath: f.fsPath, problems: this.data.problemList()?.problems, baseUrl: this.cfg.baseUrl, folders: this.sourceFile(f.fsPath).folders });
+          if (r.kind === 'match' && r.problem.id !== problemId) continue;
+        }
+      }
       if (st) found.push({ uri: vscode.Uri.file(f.fsPath), t: st.mtimeMs, how: f.how });
       else if (f.how === 'chosen') gone.push(vscode.Uri.file(f.fsPath));
       else await this.mapping.deleteAuto(vscode.Uri.file(f.fsPath));
@@ -1025,7 +1073,7 @@ export class GraderController implements vscode.Disposable {
     this.emit();
   }
 
-  private async pickAndOpen(found: { uri: vscode.Uri; t: number; how: ProblemFile['how'] }[], name: string): Promise<void> {
+  private async pickAndOpen(found: { uri: vscode.Uri; t: number; how: ProblemFile['how'] }[], name: string, problemId?: number): Promise<void> {
     const how = PICK_HOW;
     const target =
       found.length === 1
@@ -1036,6 +1084,11 @@ export class GraderController implements vscode.Disposable {
               { placeHolder: S.files.filesFor(name) },
             )
           )?.uri;
+    if (target && problemId !== undefined) {
+      // Opening never links: a name-matched / suggested file shows this problem as a temporary link.
+      const how = found.find((f) => f.uri.fsPath === target.fsPath)?.how;
+      this.tempLink = how && how !== 'chosen' ? { key: pathKey(target.fsPath), problemId } : null;
+    }
     if (target) await vscode.window.showTextDocument(target);
   }
 
@@ -1063,7 +1116,7 @@ export class GraderController implements vscode.Disposable {
     const moved: { from: string; to: string }[] = [];
     for (const f of files) moved.push(...(await this.mapping.rename(f.oldUri, f.newUri)));
     // Auto-matches follow the file only while the new name still matches.
-    for (const f of files) await this.mapping.renameAuto(f.oldUri, f.newUri, (id) => this.problemById(id)?.name);
+    for (const f of files) await this.mapping.renameAuto(f.oldUri, f.newUri, (path, id) => this.matcherSays(path, id));
     this.onFileEvent();
     // Per-file state follows the file even when it had no mapping (results, chosen language).
     const langs = { ...this.ctx.workspaceState.get<Record<string, number>>(LANGUAGE_KEY, {}) };
@@ -1279,7 +1332,7 @@ export class GraderController implements vscode.Disposable {
     const { found, gone } = await this.existingFilesFor(problemId);
     await this.offerRemoveStale(gone);
     if (found.length) {
-      await this.pickAndOpen(found, p.name);
+      await this.pickAndOpen(found, p.name, problemId);
       return;
     }
     if (gone.length) return;
@@ -1457,7 +1510,7 @@ export class GraderController implements vscode.Disposable {
     const p = this.problemById(problemId);
     const { found, gone } = await this.existingFilesFor(problemId);
     await this.offerRemoveStale(gone);
-    if (found.length) await this.pickAndOpen(found, p?.name ?? `#${problemId}`);
+    if (found.length) await this.pickAndOpen(found, p?.name ?? `#${problemId}`, problemId);
   }
 
   /**
@@ -1469,14 +1522,12 @@ export class GraderController implements vscode.Disposable {
     const p = this.problemById(problemId);
     if (!p) return;
     await this.data.languages().catch(() => undefined);
-    const exts = this.sourceExtsFor(p);
-    if (!exts.length) {
-      void vscode.window.showInformationMessage(S.files.noSourceLanguage(p.name));
-      return;
-    }
-    const kept = await this.searchFilesNamed(problemId, false);
+    // The one matcher decides (same as opening a file): name matches and confident suggestions.
+    const kept = ((await this.matchIndex.get()).get(problemId) ?? [])
+      .map((f) => f.fsPath)
+      .filter((f) => !this.mapping.unlinkedPaths().some((u) => pathKey(u) === pathKey(f)));
     if (!kept.length) {
-      void vscode.window.showInformationMessage(S.files.noFileNamed(cleanName(p.name), [...exts].map((e) => `.${e}`).join(', ')));
+      void vscode.window.showInformationMessage(S.files.noFileNamed(cleanName(p.name), this.sourceExtsFor(p).map((e) => `.${e}`).join(', ')));
       return;
     }
     const mtimes = new Map<string, number>();

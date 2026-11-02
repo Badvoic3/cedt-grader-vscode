@@ -3,7 +3,8 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import type { Language } from '../src/grader';
-import { caseInsensitiveGlob, excludeGlob, filterCandidates, includeGlob, rankCandidates } from '../src/mapping/findByName';
+import { excludeGlob, filterSourceFiles, rankCandidates, sourceGlob } from '../src/mapping/findByName';
+import { buildMatchIndex } from '../src/mapping/matchIndex';
 import { chooseNewFileLanguage, isAutoPickable } from '../src/mapping/newFileLanguage';
 
 // Languages as the real server reports them (test/fixtures/api_languages.json).
@@ -73,14 +74,17 @@ describe('Find file by name', () => {
     return { root, all: files.map((f) => join(root, f)) };
   }
 
-  it('keeps only sources of permitted languages, named exactly like the problem (case-insensitive)', () => {
+  it('keeps only source files (no binaries, build output, .cph, node_modules, *.dSYM); the matcher picks the problem', () => {
     const { root, all } = tree();
-    const kept = filterCandidates(all, '00_​Intro_11', ['cpp', 'cc', 'cxx']).map((p) => p.slice(root.length + 1)).sort();
-    expect(kept).toEqual(['hw/00_Intro_11.cpp', 'other/00_INTRO_11.CPP']);
-    // Python not permitted → .py excluded; with Python permitted it is included.
-    expect(filterCandidates(all, '00_Intro_11', ['py']).map((p) => p.slice(root.length + 1))).toEqual(['other/00_Intro_11.py']);
+    const rel = (xs: string[]) => xs.map((p) => p.slice(root.length + 1)).sort();
+    const src = filterSourceFiles(all, ['cpp', 'cc', 'cxx', 'py']);
+    expect(rel(src)).toEqual(['hw/00_Intro_11.cpp', 'other/00_INTRO_11.CPP', 'other/00_Intro_11.py', 'other/00_Intro_11_v2.cpp']);
     // Binary extensions never, even if a language claims them.
-    expect(filterCandidates(all, '00_Intro_11', ['bin', 'o', 'zip'])).toEqual([]);
+    expect(filterSourceFiles(all, ['bin', 'o', 'zip'])).toEqual([]);
+    // Problem → files through the one matcher: exact names (any case / extension); "_v2" is a different name.
+    const P = (id: number, name: string) => ({ id, name, fullName: name, bestScore: null, lastScore: null, lastResult: null, lastSubmissionId: null, lastSubmissionTime: null, submissionCount: 0, hasTestcase: false, hasAttachment: false, permittedLanguageIds: null, tags: [], list: null });
+    const idx = buildMatchIndex(src.map((fsPath) => ({ fsPath, folders: [] })), [P(1360, '00_​Intro_11'), P(9, 'unrelated_problem')], 'https://x');
+    expect(rel(idx.get(1360)!.filter((f) => f.how === 'filename').map((f) => f.fsPath))).toEqual(['hw/00_Intro_11.cpp', 'other/00_INTRO_11.CPP', 'other/00_Intro_11.py']);
   });
 
   it('ranks: same folder as the active file first, then most recently modified', () => {
@@ -94,9 +98,8 @@ describe('Find file by name', () => {
     expect(rankCandidates([a, b], join(root, 'elsewhere'), mtime)).toEqual([b, a]);
   });
 
-  it('globs: case-insensitive include; exclude merges our folders, *.dSYM, settings and .gitignore', () => {
-    expect(caseInsensitiveGlob('Ab_1')).toBe('[aA][bB]_1');
-    expect(includeGlob('00_Intro_11', ['cpp'])).toBe('**/00_[iI][nN][tT][rR][oO]_11.{cpp,CPP}');
+  it('globs: source-file include; exclude merges our folders, *.dSYM, settings and .gitignore', () => {
+    expect(sourceGlob(['cpp', '.py', 'zip'])).toBe('**/*.{cpp,CPP,py,PY}'); // binaries never searched
     const ex = excludeGlob([{ '**/tmp': true, '**/keep': false }, { '**/dist': true }], 'node_modules/\n# comment\n/coverage\n*.log\n!important.log\n');
     for (const part of ['**/node_modules/**', '**/.git/**', '**/bin/**', '**/build/**', '**/out/**', '**/.cph/**', '**/*.dSYM/**', '**/tmp', '**/dist', 'coverage', '**/*.log']) {
       expect(ex).toContain(part);

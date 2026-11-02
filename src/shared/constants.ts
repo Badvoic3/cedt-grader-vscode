@@ -104,12 +104,10 @@ export const MATCH = {
 // ------------------------------------------------------------------ limits
 
 export const LIMITS = {
-  /** workspace.findFiles result cap ("Find file by name", name search). */
-  findFilesMax: 50,
-  /** Candidates kept after filtering. */
-  findFilesKept: 20,
   /** Remembered auto-matches (oldest dropped). */
   autoMatchesMax: 500,
   /** "Recently opened" problems remembered for sorting. */
   recentlyOpenedMax: 300,
+  /** Source files read for the match index (problem → file). */
+  indexMaxFiles: 5_000,
 } as const;
