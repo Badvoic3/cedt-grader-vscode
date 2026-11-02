@@ -14,13 +14,14 @@ import { affectedByDelete, expired, type LocatedEntry, planRename } from './mapp
 import { normalizeAbsPath, normalizeRelPath, pathKey, remapPath } from './paths';
 import { type AutoMatch, autoAfterDelete, autoAfterRename } from './problemFiles';
 import { LIMITS } from '../shared/constants';
+import { KEYS } from '../shared/stateKeys';
 
-const STATE_KEY = 'cedtGrader.mappings';
-const LEGACY_KEY = 'cedtGrader.mapping';
+const STATE_KEY = KEYS.mappings;
+const LEGACY_KEY = KEYS.legacyMapping;
 /** Files the user explicitly unlinked: auto-detection must not re-link them. */
-const UNLINKED_KEY = 'cedtGrader.unlinked';
+const UNLINKED_KEY = KEYS.unlinked;
 /** Remembered auto-matches (file name / CPH data) of files that were open. */
-const AUTO_KEY = 'cedtGrader.autoMatches';
+const AUTO_KEY = KEYS.autoMatches;
 
 /** workspaceState entry: also remembers the absolute path, for reverse lookup. */
 interface StateEntry extends MappingEntry {
@@ -230,6 +231,41 @@ export class MappingStore {
     const old = expired(await this.allEntries(), now);
     for (const e of old) await this.set(vscode.Uri.file(e.fsPath), undefined);
     return old.length;
+  }
+
+  /** "Clear Cached Data": remove every stale link (file missing), whatever its age. */
+  async removeStale(): Promise<number> {
+    const stale = (await this.allEntries()).filter((e) => e.entry.staleSince);
+    for (const e of stale) await this.set(vscode.Uri.file(e.fsPath), undefined);
+    return stale.length;
+  }
+
+  /**
+   * "Clear Cached Data" → links: empty the entries of every `.cedt-grader.json`
+   * (the file is kept). A file with unsaved edits in an editor is left alone.
+   * The workspaceState keys are removed by the caller.
+   */
+  async emptyMappingFiles(): Promise<{ emptied: number; skippedDirty: number }> {
+    let emptied = 0;
+    let skippedDirty = 0;
+    for (const folder of vscode.workspace.workspaceFolders ?? []) {
+      const uri = vscode.Uri.joinPath(folder.uri, MAPPING_FILE_NAME);
+      const open = vscode.workspace.textDocuments.find((d) => d.uri.toString() === uri.toString());
+      if (open?.isDirty) {
+        skippedDirty++;
+        continue;
+      }
+      const data = await this.readFile(folder);
+      if (!Object.keys(data.files).length) continue;
+      try {
+        await this.writeMappingText(uri, open, serializeMappingFile(emptyMapping()));
+        emptied++;
+      } catch {
+        // Read-only folder: nothing to do.
+      }
+    }
+    this.invalidate();
+    return { emptied, skippedDirty };
   }
 
   /** Re-link a mapping that belonged to a file moved outside VS Code. */

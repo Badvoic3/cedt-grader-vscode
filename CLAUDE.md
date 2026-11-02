@@ -64,8 +64,11 @@ npx tsx scripts/probe.ts [--list] [--problem <ID>] [--fixtures] [--submit file] 
   - `dataService.ts`: `DataService` (problems, languages, history, details; debounce, visibility, after-submit refresh, stale-on-error; reports failures to the controller's banner).
   - `statementStore.ts`: statement PDF / description cache in `globalStorage/statements/<host>/<id>.pdf|json`.
   - `testcaseStore.ts`: grader test cases per problem in `globalStorage/testcases/<host>/<id>.json` (downloaded one at a time; truncated cases listed, never imported).
+  - `cacheFiles.ts`: downloaded-file housekeeping (see "Cache and storage"): `scanCache`, `touch` (LRU marker = mtime), `writeAtomic`, `pickLru` / `pickExpired`, `enforceLimit`, `cleanupCache`, `clearCacheFiles`.
+  - `cacheClear.ts`: "Clear Cached Data" categories (`CLEAR_ORDER`, `CLEAR_DEFAULTS`), `planClear` (which keys / actions per checkbox), backup records (`recordBackup`, `backupsToDelete`).
 - `src/controller.ts`: session, mapping and UI state (results per file, expanded history entry). All grader data goes through `DataService`. Commands, sidebar and status bar all go through the controller.
 - `src/shared/messages.ts`: typed `ViewState` / `ToWebview` / `FromWebview`.
+- `src/shared/stateKeys.ts`: `KEYS`, every workspaceState / globalState key (one list; a test fails if a key literal appears elsewhere).
 - `src/ui/sidebarProvider.ts`: `WebviewViewProvider`; CSP with nonce, `localResourceRoots: [media]`.
 - `src/ui/statusBar.ts`: status bar shortcut that reveals the panel (warning icon while the connection banner is up).
 - `src/ui/statementPanel.ts` + `webview/statement.ts`: "Statement: <problem>" editor tabs (bundled pdf.js 4.10 viewer: zoom, fit width, pages, text selection, search; description fallback rendered with markdown-it `html: false`).
@@ -178,7 +181,7 @@ Every icon-only button (`iconButton()` in `webview/main.ts`, `btn()` in `webview
 - Suggestions behave like links for everything read-only (score, history, results, statement, files for this problem, notice, ✓) and load only that one problem; write actions (Submit, Load test cases) ask once inline (`confirmSuggestion`), yes saves the link.
 - Remembered auto-matches (`cedtGrader.autoMatches`): file name / CPH / suggestion of files that were open; never over a manual link or "not linked"; dropped on delete; kept on rename only if the matcher still agrees.
 - **Rename file to match the problem** (Current problem link, header right-click, command): shown when the name doesn't match (same normalization); proposes `<clean problem name>.<ext>`, editable; `WorkspaceEdit.renameFile` (editors, links, rename handling and the CPH prompt follow; Undo works); never overwrites (suggests `<name>_2.<ext>`).
-- **Files for this problem** notice: Dismiss hides it per problem until the set of files or how they are linked changes (`cedtGrader.dismissedNotices`, `noticeSignature`); Phase 5 "Clear Cached Data" must reset it.
+- **Files for this problem** notice: Dismiss hides it per problem until the set of files or how they are linked changes (`cedtGrader.dismissedNotices`, `noticeSignature`); "Clear Cached Data" (lists) resets it.
 
 ## Hard rules
 
@@ -210,6 +213,26 @@ Every icon-only button (`iconButton()` in `webview/main.ts`, `btn()` in `webview
 - **Offline:** no retry loops. Polling stops after 2 consecutive network errors and resumes on Retry or the next successful request (`pendingPoll`). Submit failures say whether anything was sent (`describeSubmitFailure`).
 - **Dependencies:** keep them minimal. Runtime: `cheerio/slim`, `tough-cookie`, `markdown-it`, Node fetch. Bundled at build time: `pdfjs-dist`, `@vscode/codicons`. Dev: esbuild, TypeScript, vitest, jsdom, tsx, vsce.
 
+## Cache and storage
+
+| Where | What |
+|---|---|
+| globalStorage | `statements/<host>/<id>.pdf\|json`, `testcases/<host>/<id>.json` (the only files the cache code touches: `CACHE_DIRS`) |
+| workspaceState / globalState | keys in `src/shared/stateKeys.ts` (problem list, links, "not linked", auto-matches, notices, recently opened, statement view, backups, …) |
+| SecretStorage | password and token (only with "Remember") |
+| memory | history and submission details (`RequestCache`; never on disk) |
+| workspace | `.cedt-grader.json`, `.cph/*.prob.bak` (written by test-case import / CPH move; recorded in `cedtGrader.backups`) |
+
+- Size limit `cedtGrader.cacheMaxMB` (default 100, min 10): after every write (`onWrite` → `cacheWritten`, one run at a time, the new file kept) the least recently used files go first. Stores `touch()` files on every cache hit; writes are atomic (`*.tmp` + rename).
+- Daily (`dailyCleanup`, at most once a day): stale links > 30 days, files unused 30 days, `*.tmp` older than 30 days, size limit, statement view state of statements no longer cached. Never touches the workspace.
+- **Clear Cached Data…** (`cedtGrader.clearCache`, panel "⋯" menu + palette): QuickPick with the size in use, checkboxes (`CLEAR_DEFAULTS`):
+  - Downloaded files [on]: statements, test cases, statement view state, submission details in memory.
+  - Problem list, history and remembered matches [on]: saved problem lists, history, auto-matches, "not linked", dismissed notices / reconnects, recently opened, stale links.
+  - File-to-problem links [off]: all links incl. the entries of each `.cedt-grader.json` (file kept; a file with unsaved edits is skipped), per-file languages.
+  - Saved login [off]: same as Log Out.
+  - Backup files [off, shown only if any]: only recorded `.prob.bak` files that still exist.
+  - Then a modal confirm. Settings-like state (filter, test-case target, remember, CPH tip) is never cleared.
+
 ## Exams / contests (section 2b; kept deliberately small)
 
 - `isContestPage(html)` runs on the `/main/list` page fetched at login or refresh: a non-empty `Date.parse('…')` contest end time, or a `#countdown` that isn't "ANALYSIS MODE". There are no extra requests just for detection.
@@ -237,7 +260,7 @@ The sidebar (`cedtGrader` Activity Bar container, view `cedtGrader.panel`) is th
 - **Result** (active file only): live status, points, verdict tiles, compiler message, improvement line, Resubmit.
 - **History** (API): every submission with relative/exact time, language, score, mini verdict strip, counted marker; expand for details (per test, runtime, memory, compiler message) and "Open this version" / "Compare with current file" (`cedt-grader-submission:` read-only documents, served from the cache).
 - **Problems:** counted score per problem; virtualized, every problem reachable by scrolling; count "292 problems" / "127 of 292 problems". The list element is persistent: scroll position survives re-renders, data refresh and hide/show (`listScroll` in webview state); an editor switch only updates rows whose ✓ changed. No scroll after a row click; when the user opens a file themselves the active row is revealed with a minimal ("nearest") scroll. Row click opens the problem's file(s) via `filesForProblem(…, includeSuggested)` — saved links, remembered auto-matches, name matches and suggestions (opening never links) — (several → pick in path order labeled linked / matched by file name / suggested; missing → offer to remove the stale link; none → Link to <current file> / Create a new file / Find a file by name / Open statement; never links by itself). Row icons on hover / keyboard focus: copy name, go to file or find file by name, new file, statement. Right-click on a row: the same plus "Link to <file>" and "Open on the grader website". Row tooltip: bold "name #id" + full name only.
-- **Inline questions** (`askInline` → `ViewState.prompt`, plain buttons under the banner; cancelled on file switch): submit confirmation, suggested-match submit, newer linked file, auto-detect result, unlink other files, reconnect after a move, stale link. Native modal dialogs only for what can't be undone or loses data: overwrite a file, (future) clear cached data, the exam warning.
+- **Inline questions** (`askInline` → `ViewState.prompt`, plain buttons under the banner; cancelled on file switch): submit confirmation, suggested-match submit, newer linked file, auto-detect result, unlink other files, reconnect after a move, stale link. Native modal dialogs only for what can't be undone or loses data: overwrite a file, Clear Cached Data, the exam warning.
 - **Context menus** (`withContextMenu` in `webview/main.ts`): always in addition to visible icons, never instead. Long labels are cut in the middle (`webview/text.ts`), full label in tooltip + aria-label.
 
 Statement viewer (`webview/statement.ts`, `webview/zoom.ts`): pinch (Ctrl+wheel) zooms around the cursor via `PDFViewer.updateScale({origin})` with `preventDefault`; Cmd/Ctrl + / - / 0; page/zoom/scroll kept in webview state (serializer, restart) and globalState (`cedtGrader.statementView`, reopen); `retainContextWhenHidden`; `registerWebviewPanelSerializer('cedtGrader.statement')` reopens tabs after restart from the disk cache (no request).
@@ -249,6 +272,7 @@ Statement viewer (`webview/statement.ts`, `webview/zoom.ts`): pinch (Ctrl+wheel)
 | Default grader URL, website paths | `src/shared/constants.ts` (`DEFAULT_BASE_URL` — also `package.json` default; `WEB_PATHS`) |
 | Timings: poll interval/timeout/back-off, GET retries, debounce, history TTL, request timeout, file-event debounce, token fallback, daily cleanup | `src/shared/constants.ts` `TIMING` (poll interval also setting `cedtGrader.pollIntervalSeconds`) |
 | Webview timings and sizes (tooltip delay, list height, scroll save, row-click window, statement state save) | `src/shared/constants.ts` `PANEL` |
+| Cache size / age limits | `CACHE` in `src/shared/constants.ts` (size also setting `cedtGrader.cacheMaxMB`); what "Clear Cached Data" removes: `src/data/cacheClear.ts`; stored key names: `src/shared/stateKeys.ts` |
 | Limits (match-index file cap, remembered auto-matches, recently opened), stale-link days | `src/shared/constants.ts` `LIMITS`, `STALE_LINK_DAYS` |
 | Suggestion confidence (threshold, tie margin, folder/tag bonus, picker cut-off) | `src/shared/constants.ts` `MATCH` |
 | Score maximum / penalty cap / "solved" threshold (server literal 100, scorer.rb) | `SERVER_SCORE_CAP` in `src/shared/constants.ts`; display rule `scoreText` in `src/grader/score.ts` |
@@ -273,7 +297,6 @@ No course- or problem-specific names in code (problem names come from the server
 - No file-name pattern setting yet: "New file" and "Rename file to match the problem" use `<clean problem name>.<ext>` (Phase 6).
 - Undo of "Rename file to match the problem" relies on VS Code's undo for WorkspaceEdit file operations (checked by hand, not by a test).
 - The controller (vscode-dependent) has no unit tests; its rules are kept in pure, tested helpers (`problemFiles.ts`, `suggestionGate.ts`, `match.ts`, `mappingOps.ts`, `paths.ts`) and the webview is tested in jsdom.
-- No cache size limit / "Clear Cached Data" yet (Phase 5).
 - English only; texts are already in `src/shared/strings.ts`, ready for Phase 6.
 
 ## Open questions (decide before or during Phase 5)
@@ -285,7 +308,7 @@ No course- or problem-specific names in code (problem names come from the server
 
 ## Not done yet
 
-- Phase 5: install guide, walkthrough, troubleshooting, cache management (`cedtGrader.cacheMaxMB`, LRU, daily cleanup, "Clear Cached Data" incl. stale mappings), packaging polish — see spec.
+- Phase 5 (cache management done): install guide, troubleshooting, walkthrough, packaging polish — see spec.
 - Phase 6: Thai translation (`cedtGrader.displayLanguage`, vscode.l10n, package.nls.th.json), plain-language review, more customization — see spec.
 
-Commands (kept for keybindings; the panel is the primary interface): `cedtGrader.login`, `logout`, `submit`, `chooseProblem`, `clearMapping`, `loadTestcases`, `showLastResult`, `openStatement`, `refreshProblems`, `refreshHistory`, `showRequestLog`, `openSettings`, `renameFileToProblem`, `focus`.
+Commands (kept for keybindings; the panel is the primary interface): `cedtGrader.login`, `logout`, `submit`, `chooseProblem`, `clearMapping`, `loadTestcases`, `showLastResult`, `openStatement`, `refreshProblems`, `refreshHistory`, `showRequestLog`, `clearCache`, `openSettings`, `renameFileToProblem`, `focus`.

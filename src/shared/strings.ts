@@ -137,6 +137,26 @@ export const S = {
     load: 'Load test cases',
   },
 
+  cache: {
+    title: (size: string) => `Clear Cached Data (${size} in use)`,
+    placeholder: 'Choose what to clear, then press Enter',
+    files: 'Downloaded files',
+    filesDetail: 'Problem statements, test cases and submission details. Downloaded again when needed.',
+    lists: 'Problem list, history and remembered matches',
+    listsDetail:
+      'Saved problem list, submission history, remembered automatic matches, "not linked" files, dismissed notices, recently opened problems and links of deleted files.',
+    links: 'File-to-problem links',
+    linksDetail: 'Every problem you chose for a file, also the entries in .cedt-grader.json (the file itself is kept).',
+    login: 'Saved login',
+    loginDetail: 'Your saved password and login token (the same as Log Out).',
+    backups: 'Backup files from test-case imports',
+    backupsDetail: (n: number) => `${plural(n, 'old CPH test file')} (.prob.bak) this extension kept in your folders.`,
+    confirm: (what: string) => `Clear ${what}? This can't be undone.`,
+    clear: 'Clear',
+    cleared: (size: string) => `Cached data cleared (${size} freed).`,
+    skippedDirty: (n: number) => `${plural(n, '.cedt-grader.json file has', '.cedt-grader.json files have')} unsaved changes and ${n === 1 ? 'was' : 'were'} not emptied.`,
+  },
+
   submit: {
     noSource: 'The grader does not return the source of this submission.',
     alreadyGrading: 'A submission is already being graded.',

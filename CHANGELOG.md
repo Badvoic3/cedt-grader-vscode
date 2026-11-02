@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+### Cache and storage
+- Downloaded statements and test cases have a size limit (setting `cedtGrader.cacheMaxMB`, default 100 MB); the least recently used files are deleted first.
+- Once a day: files unused for 30 days and leftover temporary files are removed (never anything in your workspace).
+- New command **CEDT Grader: Clear Cached Data…** (also in the panel's ⋯ menu): shows the size in use and lets you choose what to clear: downloaded files, problem list / history / remembered matches, file-to-problem links (incl. `.cedt-grader.json` entries), saved login, and the `.prob.bak` backups this extension created. Asks before deleting.
+- Cache files are written atomically (no half-written statements after a crash).
+
 ## 0.5.0 — pre-Phase 5 checkpoint
 
 First tagged version (re-tagged after the last pre-Phase 5 fixes). Phases 1–4 of `claude-code-prompt.md` are done.

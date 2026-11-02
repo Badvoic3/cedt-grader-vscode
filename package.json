@@ -164,6 +164,12 @@
         "title": "Load Test Cases",
         "category": "CEDT Grader",
         "icon": "$(beaker)"
+      },
+      {
+        "command": "cedtGrader.clearCache",
+        "title": "Clear Cached Data…",
+        "category": "CEDT Grader",
+        "icon": "$(trash)"
       }
     ],
     "menus": {
@@ -189,6 +195,11 @@
           "command": "cedtGrader.openSettings",
           "when": "view == cedtGrader.panel",
           "group": "navigation@3"
+        },
+        {
+          "command": "cedtGrader.clearCache",
+          "when": "view == cedtGrader.panel",
+          "group": "9_data@1"
         }
       ],
       "commandPalette": [
@@ -237,6 +248,12 @@
           "type": "string",
           "default": "C++",
           "description": "Language for \"New file for this problem\" when the active file's language isn't allowed and no language was used before (e.g. C++, Python, Java). Archive and other non-source languages are never chosen automatically."
+        },
+        "cedtGrader.cacheMaxMB": {
+          "type": "number",
+          "default": 100,
+          "minimum": 10,
+          "markdownDescription": "Size limit (MB) for downloaded problem statements and test cases. When it is exceeded, the least recently used files are deleted first. Files unused for 30 days are removed automatically. Use **CEDT Grader: Clear Cached Data…** to clear everything."
         }
       }
     }

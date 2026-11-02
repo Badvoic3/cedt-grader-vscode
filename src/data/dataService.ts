@@ -237,6 +237,13 @@ export class DataService {
     }
   }
 
+  /** "Clear Cached Data" → downloaded files: forget submission details (refetched when opened again). */
+  forgetDetails(): void {
+    this.cache.deletePrefix('detail:');
+    for (const k of [...this.states.keys()]) if (k.startsWith('detail:')) this.states.delete(k);
+    this.onChange();
+  }
+
   clear(): void {
     if (this.timer !== null) this.clearTimer(this.timer);
     this.persistedAt = null;

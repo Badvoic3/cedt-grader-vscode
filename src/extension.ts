@@ -54,6 +54,7 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
     vscode.commands.registerCommand('cedtGrader.renameFileToProblem', () => controller.renameFileToProblem()),
     vscode.commands.registerCommand('cedtGrader.loadTestcases', () => controller.loadTestcases(false)),
     vscode.commands.registerCommand('cedtGrader.showRequestLog', () => controller.showRequestLog()),
+    vscode.commands.registerCommand('cedtGrader.clearCache', () => controller.clearCachedData()),
     // Read-only documents with the source of past submissions (for "Compare with current file").
     // Statement tabs reopen after a restart, from the disk cache (no request).
     vscode.window.registerWebviewPanelSerializer(StatementPanels.viewType, {

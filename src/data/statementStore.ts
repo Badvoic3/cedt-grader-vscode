@@ -1,6 +1,7 @@
-import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { readFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { GraderClient } from '../grader/client';
+import { touch, writeAtomic } from './cacheFiles';
 
 /**
  * Problem statements, cached on disk in the extension's globalStorage
@@ -23,6 +24,8 @@ export class StatementStore {
     private readonly dir: string,
     private readonly client: () => GraderClient,
     private readonly log: (line: string) => void = () => {},
+    /** A file was written (the controller enforces the cache size limit). */
+    private readonly onWrite: (path: string) => void = () => {},
   ) {}
 
   private folder(): string {
@@ -62,27 +65,30 @@ export class StatementStore {
   private async readCache(id: number): Promise<Statement | null> {
     const base = join(this.folder(), String(id));
     try {
-      return { kind: 'pdf', bytes: new Uint8Array(await readFile(`${base}.pdf`)) };
+      const bytes = new Uint8Array(await readFile(`${base}.pdf`));
+      await touch(`${base}.pdf`); // least recently used goes first when the cache is full
+      return { kind: 'pdf', bytes };
     } catch {
       /* no pdf */
     }
     try {
       const j = JSON.parse(await readFile(`${base}.json`, 'utf8')) as Statement;
-      return j.kind === 'description' || j.kind === 'none' ? j : null;
+      if (j.kind !== 'description' && j.kind !== 'none') return null;
+      await touch(`${base}.json`);
+      return j;
     } catch {
       return null;
     }
   }
 
   private async writeCache(id: number, st: Statement): Promise<void> {
-    const folder = this.folder();
-    const base = join(folder, String(id));
+    const base = join(this.folder(), String(id));
+    const path = st.kind === 'pdf' ? `${base}.pdf` : `${base}.json`;
     try {
-      await mkdir(folder, { recursive: true });
       await rm(`${base}.pdf`, { force: true });
       await rm(`${base}.json`, { force: true });
-      if (st.kind === 'pdf') await writeFile(`${base}.pdf`, st.bytes);
-      else await writeFile(`${base}.json`, JSON.stringify(st));
+      await writeAtomic(path, st.kind === 'pdf' ? st.bytes : JSON.stringify(st));
+      this.onWrite(path);
     } catch (err) {
       this.log(`statement cache not written: ${err instanceof Error ? err.message : err}`);
     }

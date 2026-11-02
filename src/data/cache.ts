@@ -77,6 +77,11 @@ export class RequestCache {
     this.entries.delete(key);
   }
 
+  /** Drop every entry whose key starts with `prefix`. */
+  deletePrefix(prefix: string): void {
+    for (const k of [...this.entries.keys()]) if (k.startsWith(prefix)) this.entries.delete(k);
+  }
+
   clear(): void {
     this.entries.clear();
     this.inflight.clear();

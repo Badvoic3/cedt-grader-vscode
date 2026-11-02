@@ -1,4 +1,5 @@
 import { G } from '../shared/strings';
+import { KEYS } from '../shared/stateKeys';
 import { randomBytes } from 'node:crypto';
 import * as cheerio from 'cheerio/slim';
 import MarkdownIt from 'markdown-it';
@@ -36,7 +37,7 @@ export type FromStatement =
   | { type: 'openInBrowser' }
   | { type: 'viewState'; state: StatementViewState };
 
-const VIEW_KEY = 'cedtGrader.statementView';
+const VIEW_KEY = KEYS.statementView;
 
 /** Raw HTML is disabled: markdown-it escapes it, so the output is safe to insert. */
 const md = new MarkdownIt({ html: false, linkify: true, breaks: false });
