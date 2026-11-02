@@ -262,6 +262,40 @@
             "%config.displayLanguage.enum.auto%"
           ]
         },
+        "cedtGrader.panel.sections": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "enum": [
+              "account",
+              "current",
+              "result",
+              "history",
+              "problems"
+            ],
+            "enumDescriptions": [
+              "%config.panel.sections.account%",
+              "%config.panel.sections.current%",
+              "%config.panel.sections.result%",
+              "%config.panel.sections.history%",
+              "%config.panel.sections.problems%"
+            ]
+          },
+          "default": [
+            "account",
+            "current",
+            "result",
+            "history",
+            "problems"
+          ],
+          "markdownDescription": "%config.panel.sections.description%"
+        },
+        "cedtGrader.panel.compact": {
+          "type": "boolean",
+          "default": false,
+          "markdownDescription": "%config.panel.compact.description%"
+        },
         "cedtGrader.baseUrl": {
           "type": "string",
           "default": "https://cedt-grader.nattee.net",

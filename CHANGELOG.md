@@ -14,6 +14,10 @@
 ### Files
 - **File-name pattern** (`cedtGrader.fileNamePattern`, default `{name}.{ext}`): names for "New file for this problem" and "Rename file to match the problem", e.g. `{id}_{name}.{ext}`. Files named this way are matched to their problem automatically (both directions). An invalid pattern falls back to the default with a warning.
 
+### Panel
+- **Choose and order the sections** (`cedtGrader.panel.sections`): hide the ones you don't use, move Problems up, etc. Account comes back while logged out.
+- **Compact mode** (`cedtGrader.panel.compact`): about 20% shorter panel with the same content.
+
 ### Help
 - **Troubleshooting** link (connection banner, login errors, panel ⋯ menu, command) opens the README's troubleshooting section on GitHub, in the display language.
 

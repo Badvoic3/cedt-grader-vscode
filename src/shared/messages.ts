@@ -1,3 +1,4 @@
+import type { SectionId } from './layout';
 /**
  * Typed messages between the extension host and the sidebar webview.
  * Shared by both bundles; must stay free of `vscode` and Node imports.
@@ -125,6 +126,8 @@ export interface SubmissionDetailView {
 
 export interface ViewState {
   baseUrl: string;
+  /** Panel layout settings (sections shown and their order, compact mode). */
+  layout: { sections: SectionId[]; compact: boolean };
   account: {
     status: 'logged-out' | 'logging-in' | 'logged-in';
     username: string;

@@ -115,6 +115,8 @@ With **Remember password on this computer** on, your password is kept in the OS 
 | Setting | Default | |
 |---|---|---|
 | `cedtGrader.displayLanguage` | `en` | Language of the panel and messages: English, ไทย (Thai), or Follow VS Code. See [Language](#language). |
+| `cedtGrader.panel.sections` | all, in order | Which panel sections to show and in what order (Account, Current problem, Result, History, Problems). Remove one to hide it. Account always comes back while you are logged out. |
+| `cedtGrader.panel.compact` | `false` | Compact panel: tighter spacing, the counted score on one line, one-line problem rows (full name in the tooltip), smaller verdict tiles. |
 | `cedtGrader.baseUrl` | `https://cedt-grader.nattee.net` | Another cafe-grader server. User settings only. |
 | `cedtGrader.username` | | Filled in when you log in from the panel. |
 | `cedtGrader.pollIntervalSeconds` | `5` | How often to check while grading (minimum 3). Polling only runs after a submission and stops after 3 minutes. |

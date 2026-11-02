@@ -545,3 +545,21 @@ select.sort { width: auto; flex: 0 1 auto; max-width: 48%; }
 .linked-row:first-child { border-top: none; }
 .linked-row.current .codicon { color: var(--vscode-focusBorder); }
 .invisible { visibility: hidden; }
+
+/* ------------------------------------------------------- compact mode
+   cedtGrader.panel.compact (approved mockup, checkpoint C): tighter spacing,
+   counted score on one line, one-line problem rows (full name in the
+   tooltip), slimmer Submit button, 12 px tiles. */
+body.compact .section > summary { height: 20px; }
+body.compact .section-body { padding: 3px 8px 6px 14px; gap: 5px; }
+body.compact .score-card { flex-direction: row; flex-wrap: wrap; align-items: baseline; gap: 0 8px; padding: 3px 6px; }
+body.compact .score-card > .score-row { flex: 0 0 auto; }
+body.compact .score-card > .score-row > .grow,
+body.compact .score-card > .score-row > span:nth-child(3) { display: none; }
+body.compact .score-card .score { font-size: 1.1em; }
+body.compact .score-facts { gap: 0 8px; }
+body.compact #sec-result .score { font-size: 1.2em; }
+body.compact .problem-full { display: none; }
+body.compact .btn.big { min-height: 26px; padding: 3px 10px; font-size: 1em; }
+body.compact .tile { width: 12px; height: 12px; font-size: 8px; }
+body.compact .history-row { padding: 1px 4px; }

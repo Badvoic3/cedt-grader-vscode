@@ -35,6 +35,7 @@ const score = (counted: number | null, extra: Partial<ScoreView> = {}): ScoreVie
 
 const base: ViewState = {
   baseUrl: 'https://cedt-grader.nattee.net',
+  layout: { sections: ['account', 'current', 'result', 'history', 'problems'], compact: false },
   account: { status: 'logged-out', username: '', fullName: null, hasSavedPassword: false, rememberPassword: true, error: null },
   file: null,
   problem: null,
@@ -421,6 +422,26 @@ describe.runIf(existsSync(resolve(__dirname, '../esbuild.mjs')))('sidebar webvie
     result.dispatchEvent(new dom.window.Event('toggle'));
     dom.window.dispatchEvent(new dom.window.MessageEvent('message', { data: { type: 'focus', target: 'result' } }));
     expect(result.open).toBe(true);
+  });
+
+  it('layout: sections hidden and reordered by the setting; Account back while logged out; compact class', () => {
+    const { doc, post } = boot();
+    const order = () => [...doc.querySelectorAll<HTMLElement>('#app > details.section')].filter((d) => !d.hidden).map((d) => d.id);
+    post(loggedIn);
+    expect(order()).toEqual(['sec-account', 'sec-current', 'sec-result', 'sec-history', 'sec-problems']);
+    post({ ...loggedIn, layout: { sections: ['current', 'problems', 'result'], compact: false } });
+    expect(order()).toEqual(['sec-current', 'sec-problems', 'sec-result']);
+    expect(doc.querySelector<HTMLElement>('#sec-history')!.hidden).toBe(true);
+    post({ ...base, layout: { sections: ['current', 'problems'], compact: false } });
+    expect(order()).toEqual(['sec-account', 'sec-current', 'sec-problems']);
+    expect(doc.body.classList.contains('compact')).toBe(false);
+    post({ ...loggedIn, layout: { sections: ['account', 'current', 'result', 'history', 'problems'], compact: true } });
+    expect(doc.body.classList.contains('compact')).toBe(true);
+    expect(order()).toHaveLength(5);
+    // Hidden Result: the "result" focus after grading does nothing.
+    post({ ...loggedIn, layout: { sections: ['current'], compact: false } });
+    doc.defaultView!.dispatchEvent(new doc.defaultView!.MessageEvent('message', { data: { type: 'focus', target: 'result' } }));
+    expect(doc.querySelector<HTMLElement>('#sec-result')!.hidden).toBe(true);
   });
 
   it('Thai: the panel is built in the language of <html lang> (texts from strings.th.ts)', () => {
