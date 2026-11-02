@@ -30,7 +30,7 @@ function setup(opts: { stored?: boolean; password?: string } = {}) {
     },
   });
   lastServer = server;
-  return { server, client, waits, logs, creds, saved: () => saved };
+  return { server, client, waits, logs, creds, saved: () => saved, tick: (ms: number) => void (clock += ms) };
 }
 
 let lastServer: FakeGrader | null = null;
@@ -142,9 +142,10 @@ describe('problems and scores', () => {
   });
 
   it('without a web session and no stored password: API data only', async () => {
-    const { server, client, creds } = setup({ stored: false });
+    const { server, client, creds, tick } = setup({ stored: false });
     server.listHtml = '';
     await client.login(creds);
+    tick(5 * 60_000); // past the reuse window of the login landing page
     server.webSessions.clear();
     const { problems, listStatus } = await client.listProblems();
     expect(listStatus).toBe('no-web-session');
