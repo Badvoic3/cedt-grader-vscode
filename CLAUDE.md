@@ -330,6 +330,6 @@ No course- or problem-specific names in code (problem names come from the server
 
 ## Not done yet
 
-- Phase 6: built (v0.7.0): Thai + plain English, submit options, Troubleshooting link, file-name pattern, panel sections / compact mode. Waiting for the final CHECKPOINT (F5 + .vsix) before the GitHub Release; Marketplace publishing waits for the user's publisher account.
+- Phase 6: done (v0.7.0, confirmed 2026-11-03, released on GitHub). Marketplace publishing waits for the user's publisher account (see Releasing).
 
 Commands (kept for keybindings; the panel is the primary interface): `cedtGrader.login`, `logout`, `submit`, `chooseProblem`, `clearMapping`, `loadTestcases`, `showLastResult`, `openStatement`, `refreshProblems`, `refreshHistory`, `showRequestLog`, `clearCache`, `openWalkthrough`, `openSettings`, `renameFileToProblem`, `focus`.
