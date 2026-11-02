@@ -1,5 +1,6 @@
 import { type GraderClient, isFinalStatus } from '../grader/client';
 import { classifyConnectionError } from '../grader/connection';
+import { normalizeProblem } from '../grader/types';
 import type { Language, Problem, SubmissionBrief, SubmissionDetail } from '../grader/types';
 import type { ProblemList } from '../grader/client';
 import { type Freshness, RequestCache } from './cache';
@@ -81,9 +82,21 @@ export class DataService {
 
   /** Seed the cache with the saved list (marked stale: the first load of the session fetches). */
   private restorePersisted(): void {
-    const saved = this.opts.persist?.load();
-    if (!saved) return;
-    this.cache.set('problems', saved.list);
+    let saved: { at: number; list: ProblemList } | undefined;
+    try {
+      saved = this.opts.persist?.load();
+    } catch {
+      saved = undefined;
+    }
+    const raw = saved?.list as Partial<ProblemList> | undefined;
+    if (!saved || !raw || !Array.isArray(raw.problems)) return;
+    // Saved by an older version: fill in missing fields instead of trusting the shape.
+    const list: ProblemList = {
+      problems: raw.problems.filter((p) => p && typeof p.id === 'number').map((p) => normalizeProblem(p)),
+      listStatus: raw.listStatus ?? 'loaded',
+      topics: Array.isArray(raw.topics) ? raw.topics : null,
+    };
+    this.cache.set('problems', list);
     this.cache.invalidate('problems');
     this.persistedAt = saved.at;
   }

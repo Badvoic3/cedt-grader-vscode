@@ -179,6 +179,8 @@ export class GraderController implements vscode.Disposable {
 
   /** Restores a stored API token (no network). Never logs in on its own. */
   async init(): Promise<void> {
+    // Problem list saved by versions before v2 (no tags): no longer read, remove it.
+    await this.ctx.workspaceState.update(`cedtGrader.problems:${this.cfg.baseUrl}:${this.cfg.username}`, undefined);
     await this.dailyCleanup();
     this.hasSavedPassword = !!(await this.getPassword());
     if (await this.client.restore()) {
@@ -198,8 +200,19 @@ export class GraderController implements vscode.Disposable {
 
   onState(l: Listener): vscode.Disposable {
     this.listeners.add(l);
-    l(this.state());
+    const s = this.safeState();
+    if (s) l(s);
     return new vscode.Disposable(() => this.listeners.delete(l));
+  }
+
+  /** Never let a bug in building the view state break activation or the panel: log it instead. */
+  private safeState(): ViewState | null {
+    try {
+      return this.state();
+    } catch (err) {
+      this.log(`Internal error while building the panel: ${err instanceof Error ? (err.stack ?? err.message) : err}`);
+      return null;
+    }
   }
 
   /** The sidebar was shown or hidden. */
@@ -288,7 +301,8 @@ export class GraderController implements vscode.Disposable {
   }
 
   private problemsKey(): string {
-    return `cedtGrader.problems:${this.cfg.baseUrl}:${this.cfg.username}`;
+    // v2: problems carry `tags`; older saved lists are still read safely (normalized), but new ones go here.
+    return `cedtGrader.problems.v2:${this.cfg.baseUrl}:${this.cfg.username}`;
   }
 
   private secretKey(kind: 'password' | 'token', username = this.cfg.username): string {
@@ -301,7 +315,8 @@ export class GraderController implements vscode.Disposable {
   }
 
   private emit(): void {
-    const s = this.state();
+    const s = this.safeState();
+    if (!s) return;
     for (const l of this.listeners) l(s);
   }
 
@@ -406,7 +421,7 @@ export class GraderController implements vscode.Disposable {
       hasFile: this.mappedIds.has(p.id),
       hasTestcase: p.hasTestcase,
       status: problemStatus(p),
-      tags: p.tags,
+      tags: p.tags ?? [],
     };
   }
 
@@ -561,7 +576,7 @@ export class GraderController implements vscode.Disposable {
     if (!list) return [];
     if (list.topics && list.topics.length) return list.topics;
     const names = new Set<string>();
-    for (const p of list.problems) for (const t of p.tags) names.add(t);
+    for (const p of list.problems) for (const t of p.tags ?? []) names.add(t);
     return [...names].sort((a, b) => a.localeCompare(b)).map((name) => ({ name, description: null }));
   }
 

@@ -46,6 +46,29 @@ export interface Problem {
   list: ListScoreInfo | null;
 }
 
+/**
+ * Fill in fields that older saved data (workspace state from a previous
+ * version) may lack, so restored problems always have the current shape.
+ */
+export function normalizeProblem(p: Partial<Problem> & { id: number }): Problem {
+  return {
+    id: p.id,
+    name: typeof p.name === 'string' ? p.name : `#${p.id}`,
+    fullName: typeof p.fullName === 'string' ? p.fullName : (p.name ?? ''),
+    bestScore: typeof p.bestScore === 'number' ? p.bestScore : null,
+    lastScore: typeof p.lastScore === 'number' ? p.lastScore : null,
+    lastResult: p.lastResult ?? null,
+    lastSubmissionId: p.lastSubmissionId ?? null,
+    lastSubmissionTime: p.lastSubmissionTime ?? null,
+    submissionCount: typeof p.submissionCount === 'number' ? p.submissionCount : 0,
+    hasTestcase: !!p.hasTestcase,
+    hasAttachment: !!p.hasAttachment,
+    permittedLanguageIds: Array.isArray(p.permittedLanguageIds) ? p.permittedLanguageIds : null,
+    tags: Array.isArray(p.tags) ? p.tags.filter((t): t is string => typeof t === 'string') : [],
+    list: p.list ?? null,
+  };
+}
+
 /** A "topic" tag the website shows as a filter pill (`Tag.where(kind: 'topic')`). */
 export interface TopicTag {
   name: string;

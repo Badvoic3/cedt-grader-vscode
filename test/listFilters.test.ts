@@ -49,3 +49,11 @@ describe('topic tags from /main/list', () => {
     expect(parseTopicTags('<html><body><table></table></body></html>')).toEqual([]);
   });
 });
+
+describe('robust to problems without tags', () => {
+  it('topic filter does not crash on a problem lacking `tags`', () => {
+    const p = { ...V(9, 'untried'), tags: undefined as unknown as string[] };
+    expect(filterProblems([p], { status: 'all', topic: 'ComProg' }, '')).toEqual([]);
+    expect(filterProblems([p], { status: 'all', topic: null }, '')).toHaveLength(1);
+  });
+});

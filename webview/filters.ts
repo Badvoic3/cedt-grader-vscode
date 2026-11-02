@@ -14,7 +14,7 @@ export function filterProblems(items: ProblemView[], f: ProblemFilter, q: string
   return items.filter((p) => {
     if (f.status === 'unsolved' && p.status === 'solved') return false;
     if ((f.status === 'inprogress' || f.status === 'solved') && p.status !== f.status) return false;
-    if (f.topic && !p.tags.includes(f.topic)) return false;
+    if (f.topic && !(p.tags ?? []).includes(f.topic)) return false;
     return matches(p, q);
   });
 }

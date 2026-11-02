@@ -65,7 +65,12 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
     ),
   );
 
-  await controller.init();
+  try {
+    await controller.init();
+  } catch (err) {
+    // Activation must not fail because of bad saved data; the panel still works.
+    console.error('CEDT Grader: init failed', err);
+  }
 }
 
 export function deactivate(): void {
