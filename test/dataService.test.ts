@@ -215,3 +215,36 @@ describe('errors', () => {
     expect(log.join('\n')).not.toMatch(/tok\d|Bearer|pw/);
   });
 });
+
+describe('saved data from an older version', () => {
+  it('a persisted problem list without `tags` / `topics` is normalized, not crashed on', async () => {
+    const old = {
+      at: 1,
+      list: {
+        listStatus: 'loaded',
+        problems: [
+          { id: 1360, name: '00_Intro_11', fullName: 'Hello', bestScore: 100, lastScore: 100, lastResult: 'P', lastSubmissionId: 1, lastSubmissionTime: null, submissionCount: 1, hasTestcase: false, hasAttachment: false, permittedLanguageIds: null, list: null },
+          { id: 1361 }, // even more incomplete
+          null,
+        ],
+      },
+    };
+    const data = new DataService({ client: () => { throw new Error('no network expected'); }, canFetch: () => false, persist: { load: () => old as never, save: () => {} } });
+    const list = data.problemList()!;
+    expect(list.topics).toBeNull();
+    expect(list.problems.map((p) => p.id)).toEqual([1360, 1361]);
+    for (const p of list.problems) {
+      expect(p.tags).toEqual([]);
+      expect(p.list).toBeNull();
+    }
+    expect(list.problems[1]).toMatchObject({ name: '#1361', submissionCount: 0, permittedLanguageIds: null });
+    expect(data.cache.isFresh('problems', { kind: 'session' })).toBe(false); // still refetched this session
+  });
+
+  it('unreadable saved data is ignored', () => {
+    const data = new DataService({ client: () => { throw new Error('x'); }, canFetch: () => false, persist: { load: () => { throw new Error('corrupt'); }, save: () => {} } });
+    expect(data.problemList()).toBeUndefined();
+    const data2 = new DataService({ client: () => { throw new Error('x'); }, canFetch: () => false, persist: { load: () => ({ at: 1, list: { problems: 'nope' } }) as never, save: () => {} } });
+    expect(data2.problemList()).toBeUndefined();
+  });
+});
