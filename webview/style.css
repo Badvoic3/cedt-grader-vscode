@@ -195,11 +195,6 @@ input::placeholder { color: var(--vscode-input-placeholderForeground); }
   border: 1px solid var(--hc-border);
 }
 .badge .codicon { font-size: 10px; }
-.badge.contest {
-  color: var(--vscode-inputValidation-warningForeground, var(--vscode-foreground));
-  background: var(--vscode-inputValidation-warningBackground, transparent);
-  border: 1px solid var(--vscode-inputValidation-warningBorder, var(--warn));
-}
 
 .pill {
   flex: none;

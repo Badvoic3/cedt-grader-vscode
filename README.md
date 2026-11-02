@@ -38,15 +38,10 @@ The mapping is saved in `.cedt-grader.json` in your workspace folder, and also i
 | `cedtGrader.username` | | Filled in when you log in from the panel. |
 | `cedtGrader.pollIntervalSeconds` | `5` | How often to check while grading (minimum 3). Polling only runs after a submission and stops after 3 minutes. |
 | `cedtGrader.confirmBeforeSubmit` | `true` | Ask before each submission. |
-| `cedtGrader.allowContestSubmissions` | `false` | See below. User settings only. |
 
-## Exams and contests
+## Exams
 
-Exams on the grader run as **contests**. **The extension blocks submissions while a contest/exam is running.** It shows *"This problem is part of an active contest/exam. Submit through the website."* with a button to open the problem in your browser. If the extension cannot tell for sure whether a contest is running, it also blocks.
-
-- During an exam the website sends regular "check-ins" that show you are present. VS Code never sends them, never imitates them and never pretends to be a browser. If you submit from VS Code during an exam, you may look absent, and the exam rules may forbid such tools anyway.
-- In exam mode the grader also locks your account to one device. **Do not log in from VS Code during an exam:** it can lock your browser out ("You cannot login from two different places").
-- `cedtGrader.allowContestSubmissions` exists for instructors who explicitly allow it. Even when it is on, you must confirm every single time that you have your instructor's permission. **Ask your instructor before using this extension in any exam.**
+This is an unofficial homework tool. If a problem looks like part of an exam, the extension warns you before submitting. Ask your instructor before using it in any exam.
 
 ## Using it with CPH
 
@@ -63,7 +58,7 @@ Exams on the grader run as **contests**. **The extension blocks submissions whil
 
 ```bash
 npm install
-npm test          # vitest: parsers, contest detector, client (mocked fetch), webview (jsdom)
+npm test          # vitest: parsers, client (mocked fetch), webview (jsdom)
 npm run build     # typecheck + esbuild → dist/extension.js, media/dist/*
 npm run package   # .vsix
 npx tsx scripts/probe.ts --help   # protocol probe; credentials from .env (see .env.example)

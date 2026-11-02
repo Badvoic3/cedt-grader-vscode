@@ -3,13 +3,10 @@ import { readConfig, type GraderConfig } from './config';
 import {
   AuthError,
   chooseLanguage,
-  ContestBlockedError,
-  type ContestDetection,
   GraderClient,
   GraderError,
   LanguageNotAllowedError,
   languageForPath,
-  mustBlock,
   NetworkError,
   PollTimeoutError,
   type Problem,
@@ -21,7 +18,9 @@ import {
 import { matchCphProblem, readCphProblem } from './mapping/cph';
 import { MappingStore } from './mapping/store';
 import type { HistoryEntry, ResultView, ViewState } from './shared/messages';
-import { CONTEST_BLOCK_MESSAGE, decideSubmit } from './submitGate';
+
+export const EXAM_WARNING =
+  'This problem looks like part of an exam/contest. Submitting from VS Code may not be allowed. Check with your instructor.';
 
 const PROBLEMS_TTL_MS = 10 * 60_000;
 const SUBMIT_PAGE_TTL_MS = 2 * 60_000;
@@ -32,7 +31,7 @@ const HISTORY_MAX = 10;
 type Listener = (s: ViewState) => void;
 
 interface SubmitPageEntry {
-  page: SubmitPage & { contest: ContestDetection };
+  page: SubmitPage;
   at: number;
 }
 
@@ -62,8 +61,10 @@ export class GraderController implements vscode.Disposable {
   private languagesLoading = false;
   private languagesError: string | null = null;
   private selectedLanguageId: number | null = null;
-  private contest: ContestDetection | null = null;
-  private result: ResultView | null = null;
+  /** Latest result per source file (fsPath), so the panel only shows the active file's result. */
+  private results = new Map<string, ResultView>();
+  /** File whose submission is being graded right now. */
+  private gradingFile: string | null = null;
   private busy = false;
   private pollAbort: AbortController | null = null;
   private refreshSeq = 0;
@@ -122,7 +123,6 @@ export class GraderController implements vscode.Disposable {
         const password = await this.getPassword();
         return this.cfg.username && password ? { username: this.cfg.username, password } : undefined;
       },
-      confirmAgreement: (text) => this.confirmAgreement(text),
       log: (line) => this.output.appendLine(line),
     });
   }
@@ -141,7 +141,6 @@ export class GraderController implements vscode.Disposable {
       this.problems = [];
       this.problemsAt = 0;
       this.submitPages.clear();
-      this.contest = null;
       void this.getPassword().then((p) => {
         this.hasSavedPassword = !!p;
         if (this.fileUri) void this.setActiveFile(this.fileUri);
@@ -178,16 +177,6 @@ export class GraderController implements vscode.Disposable {
     const file = this.fileUri;
     const lang = file ? languageForPath(file.fsPath) : null;
     const entry = this.problem ? this.submitPages.get(this.problem.id) : undefined;
-    const gate = this.problem ? decideSubmit(this.contest, this.cfg.allowContestSubmissions) : null;
-    const contestView = this.contest
-      ? {
-          blocked: mustBlock(this.contest),
-          certain: this.contest.certain,
-          reason: this.contest.reason,
-          ...(this.contest.contestName ? { contestName: this.contest.contestName } : {}),
-          allowSetting: this.cfg.allowContestSubmissions,
-        }
-      : null;
 
     let reason: string | null = null;
     if (this.busy) reason = null;
@@ -195,7 +184,6 @@ export class GraderController implements vscode.Disposable {
     else if (this.accountStatus !== 'logged-in' && !this.hasSavedPassword) reason = 'Log in first.';
     else if (!this.problem) reason = 'Choose the grader problem for this file.';
     else if (this.languagesLoading) reason = 'Checking the problem…';
-    else if (gate?.kind === 'block' && this.contest) reason = gate.reason;
     else if (this.languagesError) reason = this.languagesError;
     else if (entry && !entry.page.canSubmit) reason = 'This problem is not open for your submissions.';
 
@@ -205,7 +193,6 @@ export class GraderController implements vscode.Disposable {
       !!this.problem &&
       (this.accountStatus === 'logged-in' || this.hasSavedPassword) &&
       !this.languagesLoading &&
-      !(gate?.kind === 'block' && this.contest) &&
       !(entry && !entry.page.canSubmit);
 
     return {
@@ -236,21 +223,18 @@ export class GraderController implements vscode.Disposable {
         forced: entry?.page.languageForced ?? false,
         error: this.languagesError,
       },
-      contest: contestView,
-      submit: {
-        enabled,
-        busy: this.busy,
-        reason,
-        label: gate?.kind === 'confirm' ? 'Submit (contest: needs permission)' : 'Submit to Grader',
-      },
-      result: this.result,
+      submit: { enabled, busy: this.busy, reason, label: 'Submit to Grader' },
+      result: file ? (this.results.get(file.fsPath) ?? null) : null,
+      gradingElsewhere:
+        this.busy && this.gradingFile !== null && this.gradingFile !== file?.fsPath
+          ? (this.results.get(this.gradingFile)?.problemName ?? 'another file')
+          : null,
       history: this.problem ? this.history(this.problem.id) : [],
       problems: {
         loading: this.problemsLoading,
         loaded: this.problemsAt > 0,
         items: this.problems.map((p) => ({ id: p.id, name: p.name, fullName: p.fullName, bestScore: p.bestScore })),
         error: this.problemsError,
-        contest: this.client.lastContest ? mustBlock(this.client.lastContest) : false,
       },
     };
   }
@@ -309,19 +293,13 @@ export class GraderController implements vscode.Disposable {
     this.accountError = null;
     this.emit();
     try {
-      const det = await this.client.login();
+      await this.client.login();
       this.accountStatus = 'logged-in';
       this.log(`Logged in to ${this.cfg.baseUrl}.`);
       if (this.client.landingProblems) {
         this.problems = this.client.landingProblems;
         this.problemsAt = Date.now();
         this.problemsError = null;
-      }
-      this.contest = det;
-      if (mustBlock(det)) {
-        void vscode.window.showWarningMessage(
-          'The grader is in contest/exam mode. Submitting from VS Code is blocked; submit through the website.',
-        );
       }
       if (this.fileUri) await this.setActiveFile(this.fileUri);
       else this.emit();
@@ -342,6 +320,7 @@ export class GraderController implements vscode.Disposable {
   async logout(): Promise<void> {
     this.pollAbort?.abort();
     this.client.logout();
+    this.results.clear();
     if (this.cfg.username) await this.ctx.secrets.delete(this.secretKey());
     this.hasSavedPassword = false;
     this.accountStatus = 'logged-out';
@@ -349,24 +328,7 @@ export class GraderController implements vscode.Disposable {
     this.problems = [];
     this.problemsAt = 0;
     this.submitPages.clear();
-    this.contest = null;
     this.emit();
-  }
-
-  private async confirmAgreement(text: string): Promise<boolean> {
-    const accept = 'I accept, no exam is running';
-    const pick = await vscode.window.showWarningMessage(
-      'The grader asks you to accept an agreement before logging in.',
-      {
-        modal: true,
-        detail:
-          `${text || '(no agreement text)'}\n\n` +
-          'cafe-grader turns this on in exam mode. During an exam, logging in from VS Code can lock your browser ' +
-          'out ("You cannot login from two different places"). If an exam is running, cancel and use the website.',
-      },
-      accept,
-    );
-    return pick === accept;
   }
 
   private async ensureLoggedIn(): Promise<boolean> {
@@ -402,24 +364,15 @@ export class GraderController implements vscode.Disposable {
     if (problem) await this.loadSubmitPage(problem.id, false);
   }
 
-  /** Languages + contest status for a problem (cached; no automatic refresh in contest mode). */
+  /** Languages for a problem (cached for a couple of minutes). */
   private async loadSubmitPage(problemId: number, force: boolean): Promise<void> {
     if (!this.client.isLoggedIn) {
-      this.contest = this.client.lastContest;
       this.emit();
       return;
     }
     const cached = this.submitPages.get(problemId);
-    const fresh = cached && Date.now() - cached.at < SUBMIT_PAGE_TTL_MS;
-    const inContest = this.client.lastContest ? mustBlock(this.client.lastContest) : false;
-    if (!force && cached && (fresh || inContest)) {
+    if (!force && cached && Date.now() - cached.at < SUBMIT_PAGE_TTL_MS) {
       this.applySubmitPage(cached.page);
-      return;
-    }
-    if (!force && inContest && !cached) {
-      // Contest mode: do not fetch pages on our own; the user can press Recheck.
-      this.contest = this.client.lastContest;
-      this.emit();
       return;
     }
     const seq = this.refreshSeq;
@@ -439,8 +392,7 @@ export class GraderController implements vscode.Disposable {
     }
   }
 
-  private applySubmitPage(page: SubmitPage & { contest: ContestDetection }): void {
-    this.contest = page.contest;
+  private applySubmitPage(page: SubmitPage): void {
     if (this.problem && this.problem.id === page.problemId) {
       if (page.problemName && this.problem.name.startsWith('#')) this.problem.name = page.problemName.replace(/^\[|\]$/g, '');
       if (page.problemFullName && !this.problem.fullName) this.problem.fullName = page.problemFullName;
@@ -470,11 +422,6 @@ export class GraderController implements vscode.Disposable {
     this.emit();
   }
 
-  async recheck(): Promise<void> {
-    if (!(await this.ensureLoggedIn())) return;
-    if (this.problem) await this.loadSubmitPage(this.problem.id, true);
-  }
-
   // -------------------------------------------------------------- problems
 
   async refreshProblems(force = true): Promise<void> {
@@ -484,12 +431,10 @@ export class GraderController implements vscode.Disposable {
     this.problemsError = null;
     this.emit();
     try {
-      const { problems, contest } = await this.client.listProblems();
-      this.problems = problems;
+      this.problems = await this.client.listProblems();
       this.problemsAt = Date.now();
-      this.contest = this.problem ? (this.submitPages.get(this.problem.id)?.page.contest ?? contest) : contest;
       if (this.problem) {
-        const p = problems.find((x) => x.id === this.problem!.id);
+        const p = this.problems.find((x) => x.id === this.problem!.id);
         if (p) this.problem = { ...p, source: this.problem.source };
       }
     } catch (err) {
@@ -515,7 +460,6 @@ export class GraderController implements vscode.Disposable {
     if (!this.fileUri) return;
     await this.mapping.set(this.fileUri, undefined);
     this.problem = null;
-    this.contest = this.client.lastContest;
     await this.setActiveFile(this.fileUri);
   }
 
@@ -527,12 +471,11 @@ export class GraderController implements vscode.Disposable {
     }
     await this.refreshProblems(false);
     if (!this.problems.length) return;
-    const contest = this.client.lastContest ? mustBlock(this.client.lastContest) : false;
     const pick = await vscode.window.showQuickPick(
       this.problems.map((p) => ({
         label: p.name,
         description: p.fullName !== p.name ? p.fullName : undefined,
-        detail: [p.bestScore !== null ? `best ${p.bestScore}` : null, contest ? '$(warning) contest' : null].filter(Boolean).join('  ·  ') || undefined,
+        detail: p.bestScore !== null ? `best ${p.bestScore}` : undefined,
         id: p.id,
       })),
       { placeHolder: `Grader problem for ${this.fileUri.path.split('/').pop()}`, matchOnDescription: true },
@@ -551,9 +494,10 @@ export class GraderController implements vscode.Disposable {
       void vscode.window.showInformationMessage('A submission is already being graded.');
       return;
     }
-    const editor = vscode.window.visibleTextEditors.find((e) => e.document.uri.toString() === this.fileUri?.toString());
-    const doc = editor?.document ?? (this.fileUri ? await vscode.workspace.openTextDocument(this.fileUri) : undefined);
-    if (!doc || !this.fileUri) {
+    const fileUri = this.fileUri;
+    const editor = vscode.window.visibleTextEditors.find((e) => e.document.uri.toString() === fileUri?.toString());
+    const doc = editor?.document ?? (fileUri ? await vscode.workspace.openTextDocument(fileUri) : undefined);
+    if (!doc || !fileUri) {
       void vscode.window.showInformationMessage('Open a source file to submit it.');
       return;
     }
@@ -563,36 +507,32 @@ export class GraderController implements vscode.Disposable {
       if (!this.problem) return;
     }
     const problem = this.problem;
+    const key = fileUri.fsPath;
+    const fileName = fileUri.path.split('/').pop() ?? '';
 
     this.busy = true;
+    this.gradingFile = key;
     this.emit();
     try {
-      // 1. Contest check on a fresh submit page, every time (section 2b).
       const page = await this.client.getSubmitPage(problem.id);
       this.submitPages.set(problem.id, { page, at: Date.now() });
       this.applySubmitPage(page);
-      const gate = decideSubmit(page.contest, this.cfg.allowContestSubmissions);
-      let allowContest = false;
-      if (gate.kind === 'block') {
-        this.showContestBlocked(problem.id);
-        return;
-      }
-      if (gate.kind === 'confirm') {
-        const ok = 'Submit anyway (I have permission)';
-        const pick = await vscode.window.showWarningMessage(
-          `${problem.name} is part of an active contest/exam.`,
-          { modal: true, detail: gate.reason },
-          ok,
-        );
-        if (pick !== ok) return; // never remembered
-        allowContest = true;
-      }
       if (!page.canSubmit) throw new SubmitRejectedError('This problem is not open for your submissions.');
 
-      // 2. Language.
+      // Exam hint (section 2b): a warning only, never remembered.
+      let warned = false;
+      if (page.contestPage) {
+        const open = 'Open in Browser';
+        const anyway = 'Submit Anyway';
+        const pick = await vscode.window.showWarningMessage(EXAM_WARNING, { modal: true }, open, anyway);
+        if (pick === open) await this.openProblemInBrowser(problem.id);
+        if (pick !== anyway) return;
+        warned = true;
+      }
+
       let languageId = this.selectedLanguageId;
       if (languageId === null || !page.languages.some((l) => l.id === languageId)) {
-        const c = chooseLanguage(this.fileUri.fsPath, page.languages, page.languageForced);
+        const c = chooseLanguage(fileUri.fsPath, page.languages, page.languageForced);
         if (c.kind === 'match') languageId = c.language.id;
         else if (c.kind === 'not-allowed') throw new LanguageNotAllowedError(`${c.wanted} is not allowed for this problem.`);
         else {
@@ -607,55 +547,55 @@ export class GraderController implements vscode.Disposable {
       }
       const language = page.languages.find((l) => l.id === languageId)!;
 
-      // 3. Optional confirmation.
-      const fileName = this.fileUri.path.split('/').pop() ?? '';
-      if (this.cfg.confirmBeforeSubmit && !allowContest) {
+      if (this.cfg.confirmBeforeSubmit && !warned) {
         const ok = 'Submit';
         const pick = await vscode.window.showInformationMessage(
-          `Submit ${fileName} to ${problem.name} as ${language.name}?`,
+          `Submit ${fileName} to ${problem.name} (#${problem.id}) as ${language.name}?`,
           { modal: true, detail: 'Turn this off with the setting "CEDT Grader: Confirm Before Submit".' },
           ok,
         );
         if (pick !== ok) return;
       }
 
-      const source = doc.getText();
-      this.result = this.newResult(problem, 'submitting', 'Submitting…', mustBlock(page.contest));
-      this.emit();
-
-      // 4. Submit (the client re-checks the contest status on its own fresh page).
-      const sub = await this.client.submit(problem.id, languageId!, source, { allowContest, filename: fileName });
-      this.result = {
-        ...this.result,
+      this.setResult(key, this.newResult(problem, 'submitting', 'Submitting…'));
+      const sub = await this.client.submit(problem.id, languageId!, doc.getText(), { filename: fileName });
+      this.updateResult(key, {
         phase: 'grading',
         submissionId: sub.submissionId,
         submissionUrl: this.url(`/submissions/${sub.submissionId}`),
         message: 'Waiting to be graded…',
-      };
-      this.emit();
-
-      // 5. Poll (only right after this explicit submission).
-      await this.poll(problem, sub.submissionId, sub.pollUrl);
+      });
+      await this.poll(key, problem, sub.submissionId, sub.pollUrl);
     } catch (err) {
-      if (err instanceof ContestBlockedError) {
-        this.showContestBlocked(problem.id);
+      const msg = this.describe(err);
+      const r = this.results.get(key);
+      if (r && r.problemId === problem.id && (r.phase === 'submitting' || r.phase === 'grading')) {
+        this.updateResult(key, { phase: 'error', message: msg });
       } else {
-        const msg = this.describe(err);
-        if (this.result && (this.result.phase === 'submitting' || this.result.phase === 'grading')) {
-          this.result = { ...this.result, phase: 'error', message: msg };
-        } else {
-          this.result = { ...this.newResult(problem, 'error', msg, false) };
-        }
-        void this.showError(err, msg);
+        this.setResult(key, this.newResult(problem, 'error', msg));
       }
+      void this.showError(err, msg);
     } finally {
       this.busy = false;
+      this.gradingFile = null;
       this.pollAbort = null;
       this.emit();
     }
   }
 
-  private newResult(problem: Problem, phase: ResultView['phase'], message: string | null, contest: boolean): ResultView {
+  private setResult(key: string, r: ResultView): void {
+    this.results.set(key, r);
+    this.emit();
+  }
+
+  private updateResult(key: string, patch: Partial<ResultView>): void {
+    const r = this.results.get(key);
+    if (!r) return;
+    this.results.set(key, { ...r, ...patch });
+    this.emit();
+  }
+
+  private newResult(problem: Problem, phase: ResultView['phase'], message: string | null): ResultView {
     return {
       phase,
       problemId: problem.id,
@@ -671,19 +611,14 @@ export class GraderController implements vscode.Disposable {
       compileError: false,
       compilerMessage: null,
       message,
-      contest,
     };
   }
 
-  private async poll(problem: Problem, submissionId: number, pollUrl: string | null): Promise<void> {
+  private async poll(key: string, problem: Problem, submissionId: number, pollUrl: string | null): Promise<void> {
     const abort = new AbortController();
     this.pollAbort = abort;
     await vscode.window.withProgress(
-      {
-        location: vscode.ProgressLocation.Notification,
-        title: `Grading ${problem.name} (#${submissionId})`,
-        cancellable: true,
-      },
+      { location: vscode.ProgressLocation.Notification, title: `Grading ${problem.name} (#${submissionId})`, cancellable: true },
       async (progress, token) => {
         token.onCancellationRequested(() => abort.abort());
         try {
@@ -695,14 +630,13 @@ export class GraderController implements vscode.Disposable {
             onUpdate: (s) => {
               if (s.id !== null && s.id < submissionId) return;
               progress.report({ message: s.state === 'graded' ? 'graded' : 'waiting…' });
-              this.applyStatus(s, s.state === 'graded' ? 'done' : 'grading');
+              this.applyStatus(key, s, s.state === 'graded' ? 'done' : 'grading');
             },
           });
-          this.applyStatus(final, 'done');
+          this.applyStatus(key, final, 'done');
           if (final.compileError) {
             try {
-              const msg = await this.client.getCompilerMessage(submissionId);
-              if (this.result) this.result = { ...this.result, compilerMessage: msg };
+              this.updateResult(key, { compilerMessage: await this.client.getCompilerMessage(submissionId) });
             } catch (err) {
               this.log(`Compiler message unavailable: ${this.describe(err)}`);
             }
@@ -710,11 +644,11 @@ export class GraderController implements vscode.Disposable {
           await this.recordDone(problem, final);
         } catch (err) {
           if (abort.signal.aborted) {
-            if (this.result) this.result = { ...this.result, phase: 'timeout', message: 'Stopped waiting. Use "Show Last Result" or open the submission.' };
+            this.updateResult(key, { phase: 'timeout', message: 'Stopped waiting. Use "Show Last Result" or open the submission.' });
             return;
           }
           if (err instanceof PollTimeoutError) {
-            if (this.result) this.result = { ...this.result, phase: 'timeout', message: err.message };
+            this.updateResult(key, { phase: 'timeout', message: err.message });
             return;
           }
           throw err;
@@ -723,13 +657,13 @@ export class GraderController implements vscode.Disposable {
     );
   }
 
-  private applyStatus(s: SubmissionStatus, phase: ResultView['phase']): void {
-    if (!this.result) return;
-    this.result = {
-      ...this.result,
+  private applyStatus(key: string, s: SubmissionStatus, phase: ResultView['phase']): void {
+    const r = this.results.get(key);
+    if (!r) return;
+    this.updateResult(key, {
       phase,
-      submissionId: s.id ?? this.result.submissionId,
-      submissionUrl: s.id ? this.url(`/submissions/${s.id}`) : this.result.submissionUrl,
+      submissionId: s.id ?? r.submissionId,
+      submissionUrl: s.id ? this.url(`/submissions/${s.id}`) : r.submissionUrl,
       score: s.score,
       scoreHidden: phase === 'done' && s.score === null,
       tries: s.tries,
@@ -738,8 +672,7 @@ export class GraderController implements vscode.Disposable {
       verdicts: s.verdicts,
       compileError: s.compileError,
       message: phase === 'done' ? (s.compileError ? 'Compilation error' : null) : 'Waiting to be graded…',
-    };
-    this.emit();
+    });
   }
 
   private async recordDone(problem: Problem, s: SubmissionStatus): Promise<void> {
@@ -760,46 +693,42 @@ export class GraderController implements vscode.Disposable {
     this.emit();
   }
 
-  /** Refresh the latest status once (no polling loop). */
+  /** Refresh the latest status of the current file's problem once (no polling loop). */
   async showLastResult(): Promise<void> {
     await vscode.commands.executeCommand('cedtGrader.panel.focus');
-    const problem = this.problem ?? (this.result ? this.problemById(this.result.problemId) : undefined);
-    if (!problem) return;
-    if (this.busy) return;
+    const problem = this.problem;
+    const key = this.fileUri?.fsPath;
+    if (!problem || !key || this.busy) return;
     if (!(await this.ensureLoggedIn())) return;
-    if (this.client.lastContest && mustBlock(this.client.lastContest)) {
-      // Rule 5: no status requests during contests except right after a confirmed submit.
-      return;
-    }
     try {
       const s = await this.client.getLatestStatus(problem.id);
       if (s.state === 'none') {
-        this.result = this.newResult(problem, 'done', 'No submissions yet.', false);
-      } else {
-        this.result = this.newResult(problem, s.state === 'graded' ? 'done' : 'grading', null, false);
-        this.applyStatus(s, s.state === 'graded' ? 'done' : 'timeout');
-        if (s.state !== 'graded' && this.result) this.result = { ...this.result, message: 'Still being graded. Check again in a moment.' };
+        this.setResult(key, this.newResult(problem, 'done', 'No submissions yet.'));
+        return;
       }
-      this.emit();
+      this.setResult(key, this.newResult(problem, 'grading', null));
+      this.applyStatus(key, s, s.state === 'graded' ? 'done' : 'timeout');
+      if (s.state !== 'graded') this.updateResult(key, { message: 'Still being graded. Check again in a moment.' });
     } catch (err) {
       void this.showError(err, this.describe(err));
     }
   }
 
   async showCompilerMessage(): Promise<void> {
-    const r = this.result;
-    if (!r?.submissionId) return;
-    if (!r.compilerMessage) {
+    const key = this.fileUri?.fsPath;
+    const r = key ? this.results.get(key) : undefined;
+    if (!key || !r?.submissionId) return;
+    let msg = r.compilerMessage;
+    if (msg === null) {
       try {
-        const msg = await this.client.getCompilerMessage(r.submissionId);
-        this.result = { ...r, compilerMessage: msg };
-        this.emit();
+        msg = await this.client.getCompilerMessage(r.submissionId);
+        this.updateResult(key, { compilerMessage: msg });
       } catch (err) {
         void this.showError(err, this.describe(err));
         return;
       }
     }
-    const doc = await vscode.workspace.openTextDocument({ content: this.result!.compilerMessage ?? '', language: 'log' });
+    const doc = await vscode.workspace.openTextDocument({ content: msg ?? '', language: 'log' });
     await vscode.window.showTextDocument(doc, { preview: true, viewColumn: vscode.ViewColumn.Beside });
   }
 
@@ -823,13 +752,6 @@ export class GraderController implements vscode.Disposable {
 
   async openSubmission(id: number): Promise<void> {
     await vscode.env.openExternal(vscode.Uri.parse(this.url(`/submissions/${id}`)));
-  }
-
-  private showContestBlocked(problemId: number): void {
-    const open = 'Open in Browser';
-    void vscode.window.showErrorMessage(CONTEST_BLOCK_MESSAGE, open).then((pick) => {
-      if (pick === open) void this.openProblemInBrowser(problemId);
-    });
   }
 
   // ----------------------------------------------------------------- errors

@@ -35,8 +35,7 @@ export class GraderStatusBar implements vscode.Disposable {
       this.item.text = '$(cloud-upload) Submit to Grader';
       this.item.tooltip = `${s.problem.name}: open the CEDT Grader panel`;
     }
-    this.item.backgroundColor = s.contest?.blocked ? new vscode.ThemeColor('statusBarItem.warningBackground') : undefined;
-    if (s.contest?.blocked) this.item.tooltip += ' (contest mode: submit through the website)';
+    this.item.backgroundColor = undefined;
     this.item.show();
   }
 

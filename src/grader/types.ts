@@ -12,8 +12,6 @@ export interface Problem {
   /** Relative URLs found in the row (may be absent). */
   statementUrl?: string;
   testcasesUrl?: string;
-  /** Set by the caller when contest mode is detected for the page. */
-  contest?: boolean;
 }
 
 export interface Language {
@@ -33,6 +31,8 @@ export interface SubmitPage {
   /** Submit form present (problem open for submissions). */
   canSubmit: boolean;
   csrfToken: string | null;
+  /** `isContestPage()` on this page (exam warning only). */
+  contestPage: boolean;
 }
 
 export interface Verdict {
@@ -73,18 +73,4 @@ export interface Evaluation {
   memory: string | null;
   result: string | null;
   score: string | null;
-}
-
-export interface ContestDetection {
-  /** Final decision used by callers: true = treat as contest (block). */
-  inContest: boolean;
-  /** False when the page could not be classified with confidence. */
-  certain: boolean;
-  /** Which markers were seen, for display/debugging (never contains secrets). */
-  signals: string[];
-  reason: string;
-  /** Active contest name if the page shows one. */
-  contestName?: string;
-  /** Contest end (ISO) if present in the page script. */
-  endTime?: string;
 }

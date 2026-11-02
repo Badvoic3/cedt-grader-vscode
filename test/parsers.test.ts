@@ -32,13 +32,6 @@ describe('login page', () => {
     expect(f.hasAgreement).toBe(false);
     expect(extractAlerts(html)).toEqual(['Wrong password']);
   });
-
-  it('detects the agreement checkbox and its label', () => {
-    const f = parseLoginForm(fixture('login_page.agreement.synthetic.html'));
-    expect(f.hasAgreement).toBe(true);
-    expect(f.agreementValue).toBe('1');
-    expect(f.agreementText).toBe('I agree to the exam rules');
-  });
 });
 
 describe('problem list', () => {
@@ -64,12 +57,6 @@ describe('problem list', () => {
     expect(hasLoginForm(html)).toBe(false);
     expect(extractCsrf(html)).toBe('REDACTED');
     expect(parseUserId(html)).toBe(12345);
-  });
-
-  it('does not confuse contest table rows with problems', () => {
-    const ps = parseProblemList(fixture('main_list.contest.synthetic.html'));
-    expect(ps.map((p) => p.id)).toEqual([101, 102, 103]);
-    expect(ps[0].name).toBe('DigLo69_Exam2__1');
   });
 
   const real = realFixture('main_list.html');

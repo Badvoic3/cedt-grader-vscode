@@ -76,7 +76,6 @@ function scorePill(score: number | null): HTMLElement {
   return el('span', { class: `pill ${scoreClass(score)}`, title: score === null ? 'No score' : `Best score ${score}` }, score === null ? '–' : String(score));
 }
 
-const contestBadge = () => el('span', { class: 'badge contest', title: 'Contest/exam detected' }, icon('warning'), 'contest');
 
 function fmtScore(n: number): string {
   return Number.isInteger(n) ? String(n) : n.toFixed(1);
@@ -124,6 +123,8 @@ let showLoginForm = false;
 
 const pickerSearch = el('input', { type: 'search', class: 'picker-search', placeholder: 'Search problems…', 'aria-label': 'Search problems', spellcheck: 'false' });
 const pickerList = el('div', { class: 'picker-list', role: 'listbox' });
+// One persistent container: typing only re-renders the list, never moves the search box.
+const pickerBox = el('div', { class: 'picker' }, pickerSearch, pickerList);
 let pickerOpen = false;
 
 const problemFilter = el('input', { type: 'search', placeholder: 'Filter problems…', 'aria-label': 'Filter problems', spellcheck: 'false', value: ui.filter });
@@ -190,7 +191,7 @@ function renderAccount(s: ViewState): void {
   );
 }
 
-function renderPicker(s: ViewState): HTMLElement {
+function renderPickerList(s: ViewState): void {
   const items = s.problems.items;
   const q = pickerSearch.value.trim().toLowerCase();
   const hits = q ? items.filter((p) => p.name.toLowerCase().includes(q) || p.fullName.toLowerCase().includes(q)) : items;
@@ -206,7 +207,6 @@ function renderPicker(s: ViewState): HTMLElement {
     for (const p of hits.slice(0, 50)) pickerList.append(problemRow(p, s, 'picker'));
     if (hits.length > 50) pickerList.append(el('div', { class: 'muted pad' }, `${hits.length - 50} more. Refine the search.`));
   }
-  return el('div', { class: 'picker' }, pickerSearch, pickerList);
 }
 
 function renderCurrent(s: ViewState): void {
@@ -243,14 +243,13 @@ function renderCurrent(s: ViewState): void {
     el('div', { class: 'field' },
       el('div', { class: 'field-label' }, 'Problem',
         p && p.source === 'cph' ? el('span', { class: 'badge', title: 'Matched from the CPH problem file. Pick it again to save the mapping.' }, 'from CPH') : null,
-        s.contest?.blocked && p ? contestBadge() : null,
         p ? scorePill(p.bestScore) : null,
         el('span', { class: 'grow' }),
         p ? iconButton('link-external', 'Open problem statement', () => send({ type: 'openStatement', problemId: p.id })) : null,
         p ? iconButton('close', 'Forget the problem for this file', () => send({ type: 'unmapProblem' })) : null,
       ),
       current,
-      pickerOpen ? renderPicker(s) : null,
+      pickerOpen ? (renderPickerList(s), pickerBox) : null,
     ),
   );
 
@@ -271,22 +270,6 @@ function renderCurrent(s: ViewState): void {
     );
   }
 
-  // Contest notice.
-  if (p && s.contest?.blocked) {
-    b.append(
-      el('div', { class: 'notice warn', role: 'alert' },
-        el('div', { class: 'row' }, contestBadge(), el('strong', { class: 'grow' }, s.contest.contestName ?? 'Contest / exam')),
-        el('p', {}, 'This problem is part of an active contest/exam. Submit through the website.'),
-        !s.contest.certain ? el('p', { class: 'small muted' }, 'Detection was uncertain, so it is treated as a contest.') : null,
-        s.contest.allowSetting ? el('p', { class: 'small' }, 'Contest submissions are enabled in settings. You will be asked to confirm instructor permission every time.') : null,
-        el('div', { class: 'row gap' },
-          button([icon('globe'), ' Open in browser'], () => send({ type: 'openProblemInBrowser', problemId: p.id })),
-          button([icon('refresh'), ' Recheck'], () => send({ type: 'recheckProblem' })),
-        ),
-      ),
-    );
-  }
-
   // Submit.
   const sub = s.submit;
   b.append(
@@ -295,7 +278,10 @@ function renderCurrent(s: ViewState): void {
       ` ${sub.busy ? 'Grading…' : sub.label}`,
     ),
   );
-  if (sub.reason && !(p && s.contest?.blocked && !s.contest.allowSetting)) {
+  if (s.gradingElsewhere) {
+    b.append(el('p', { class: 'hint' }, icon('loading', 'codicon-modifier-spin'), ` Grading ${s.gradingElsewhere} for another file…`));
+  }
+  if (sub.reason) {
     b.append(el('p', { class: 'hint', id: 'submit-reason' }, icon('info'), ' ', sub.reason));
   }
   if (s.languages.error && p) b.append(el('div', { class: 'error' }, icon('error'), ' ', s.languages.error));
@@ -341,7 +327,6 @@ function renderResult(s: ViewState): void {
   }
   const head = el('div', { class: 'row result-head' },
     el('span', { class: 'ellipsis' }, el('strong', {}, r.problemName)),
-    r.contest ? contestBadge() : null,
     el('span', { class: 'grow' }),
     r.submissionId
       ? el('button', { class: 'link', type: 'button', title: 'Open the submission in the browser', onclick: () => send({ type: 'openSubmission', submissionId: r.submissionId! }) }, `#${r.submissionId}`, icon('link-external'))
@@ -438,7 +423,6 @@ function renderProblems(s: ViewState): void {
     if (P.error) b.append(el('div', { class: 'error' }, icon('error'), ' ', P.error));
     return;
   }
-  if (P.contest) b.append(el('div', { class: 'notice warn small' }, contestBadge(), ' The grader is in contest/exam mode. Submit through the website.'));
   b.append(problemFilter);
   const q = problemFilter.value.trim().toLowerCase();
   const hits = q ? P.items.filter((p) => p.name.toLowerCase().includes(q) || p.fullName.toLowerCase().includes(q)) : P.items;
@@ -467,7 +451,7 @@ function render(): void {
   if (active instanceof HTMLInputElement && document.body.contains(active)) active.focus();
 }
 
-pickerSearch.addEventListener('input', () => state && renderPicker(state));
+pickerSearch.addEventListener('input', () => state && renderPickerList(state));
 pickerSearch.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
     pickerOpen = false;

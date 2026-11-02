@@ -34,12 +34,6 @@ export class NetworkError extends GraderError {}
 /** Server answered with a flash alert after a submit (problem not available, source missing, ...). */
 export class SubmitRejectedError extends GraderError {}
 
-export class ContestBlockedError extends GraderError {
-  constructor(message = 'This problem is part of an active contest/exam. Submit through the website.') {
-    super(message);
-  }
-}
-
 export class PollTimeoutError extends GraderError {}
 
 export class ParseError extends GraderError {}

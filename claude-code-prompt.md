@@ -34,28 +34,17 @@ Notes:
 - Be gentle with the server: poll every 5 seconds (the site's own default), only after a submission, stop when a score appears or after 3 minutes, and back off on errors. No parallel submissions, no bulk scraping.
 - Base URL is a setting (`cedtGrader.baseUrl`, default `https://cedt-grader.nattee.net`) so it works with other cafe-grader servers.
 - Handle session expiry: if a request redirects to the login page, log in again once and retry.
-- Follow the **Contest / exam safety** section below. It overrides convenience features.
+- Follow the short **Exams / contests** section below.
 - Prefer Node 18+ built-in `fetch`; use `tough-cookie` (or a small manual cookie jar) for cookies, `cheerio` for HTML parsing. Keep dependencies minimal and bundle with `esbuild`.
 
-## 2b. Contest / exam safety
+## 2b. Exams / contests (kept deliberately small)
 
-Timed exams on this grader run as cafe-grader **contests** (problem names like `DigLo69_Exam2__1`). What was observed on the site:
+Contests on this grader are only used for exams, and this is an unofficial homework tool, so there is no contest system in the extension.
 
-- Every page includes a `checkInLoop()` script that, when a contest is active, sends `POST /contests/user_check_in` (with `X-CSRF-Token`) about every 60 s plus 0.5–2.5 s of random jitter.
-- The JSON reply has `ms_since_last_check_in` and `current_time`. If check-ins arrive too close together (several tabs or devices), the client backs off 2×, 3×…, so the server can see overlapping sessions.
-- The same script drives a countdown from a contest end time (`Date.parse('...')`, empty outside contests) and an `#countdown` element.
-- Outside a contest the function is defined but not started.
-
-Submitting from the extension sends no check-ins, so during an exam the student would look absent while submissions arrive, and exams may forbid such tools anyway. Rules:
-
-1. **Detect contest mode** before every submit. Read the cafe-grader source (`/contests` routes, contest controller and views, the layout that renders `checkInLoop` and `#countdown`) to find the most reliable signal, then implement it. Candidate signals: a non-empty contest end time in the page script, a visible `#countdown`, a started `checkInLoop`, contest-related links or routes, or the problem belonging to an active contest. Combine signals; if detection fails or is uncertain, treat it as a contest.
-2. **Block submission in contest mode by default.** Show a clear message: "This problem is part of an active contest/exam. Submit through the website." with a button to open the problem in the browser.
-3. Add a setting `cedtGrader.allowContestSubmissions` (default `false`). When `true`, still show a modal confirmation each time, stating that the student must have the instructor's permission. Never remember that confirmation.
-4. **Never call `/contests/user_check_in`, never imitate check-ins, never fake presence, timing or user agent,** and never automate anything else contest-related. The extension must not try to look like a browser tab.
-5. Do not poll during contests at all except right after an explicitly confirmed submission.
-6. Mark problems in the quick-pick and results panel with a "contest" badge when detected.
-7. Tests: fixtures for a normal page and a contest page (build the contest fixture from the cafe-grader views if no real one is available, and label it as synthetic), unit tests for the detector including the "uncertain → treat as contest" path, and a test that submit is blocked when the setting is off.
-8. README: a short "Exams and contests" section explaining the default block and telling students to ask their instructor before using it in any exam.
+- `isContestPage(html)`: one cheap check on a page we already fetch (a non-empty contest end time `Date.parse('…')` or a `#countdown` element in the page header). No extra requests just for detection.
+- If it returns true, warn before submitting: "This problem looks like part of an exam/contest. Submitting from VS Code may not be allowed. Check with your instructor." with buttons **Open in Browser** and **Submit Anyway**. The choice is not remembered.
+- One unit test for `isContestPage` (contest page vs normal page).
+- Never call `/contests/user_check_in` or imitate check-ins (not implementing anything contest-related satisfies this).
 
 ## 3. Phases
 
@@ -63,15 +52,15 @@ Submitting from the extension sends no check-ins, so during an exam the student 
 - Create `scripts/probe.ts` (run with `npx tsx`) and a `src/grader/` module with a `GraderClient` class: `login()`, `listProblems()`, `getLanguages(problemId)`, `submit(problemId, languageId, source)`, `pollLatest(problemId)`, `getCompilerMessage(submissionId)`.
 - Parse everything with cheerio into typed objects (`Problem`, `Language`, `SubmissionStatus { id, score, tries, verdicts: {index, ok, label}[] }`).
 - Save sample HTML responses I fetch into `test/fixtures/` (strip CSRF tokens, cookies, names and student IDs before saving).
-- Add `detectContest(html)` to the client (see section 2b) and make the probe print the detection result before submitting; the probe must refuse to submit when it says contest.
+- Add `isContestPage(html)` (see section 2b); the probe prints its result.
 - Unit-test every parser against the fixtures with `vitest`.
 - **CHECKPOINT:** tell me the exact command to run the probe against the real site with a problem ID I choose, then wait for my output before Phase 2.
 
 ### Phase 2: Extension skeleton
 - Scaffold a TypeScript extension (equivalent of `yo code`, but hand-written is fine) with `package.json` contributions, `esbuild` bundling, launch config for F5 debugging.
 - Commands: `CEDT Grader: Log In`, `CEDT Grader: Log Out`, `CEDT Grader: Submit Current File`, `CEDT Grader: Choose Problem for This File`, `CEDT Grader: Show Last Result`, `CEDT Grader: Open Problem Statement`.
-- Settings: `cedtGrader.baseUrl`, `cedtGrader.username`, `cedtGrader.pollIntervalSeconds` (min 3, default 5), `cedtGrader.confirmBeforeSubmit` (default true), `cedtGrader.allowContestSubmissions` (default false).
-- The submit command runs the contest check from section 2b first, every time.
+- Settings: `cedtGrader.baseUrl`, `cedtGrader.username`, `cedtGrader.pollIntervalSeconds` (min 3, default 5), `cedtGrader.confirmBeforeSubmit` (default true).
+- The submit command runs the `isContestPage` warning from section 2b before submitting.
 - The commands stay (so keyboard shortcuts and the command palette keep working), but the **sidebar GUI from Phase 4 is the primary interface**. Build the skeleton with the sidebar in mind: commands and the webview call the same controller.
 
 ### Phase 3: Problem mapping and CPH integration
@@ -85,7 +74,7 @@ Instead of relying on the command palette, build a sidebar GUI like the CPH and 
 - Add an Activity Bar view container "CEDT Grader" with its own icon (SVG, monochrome so it follows the theme) containing one webview view, using a `WebviewViewProvider`.
 - The webview is the main interface. Sections:
   1. **Account:** login form (username + password) when logged out; username and a Log out button when logged in. The password goes straight to `context.secrets` and is never kept in webview state or logged.
-  2. **Current problem:** shows the active editor's file, the mapped problem (with a searchable picker from `/main/list`), a language dropdown filled from that problem's allowed languages, a "contest" badge, and a big Submit button. Submit is disabled with an explanation when the contest check blocks it (section 2b).
+  2. **Current problem:** shows the active editor's file, the mapped problem (with a searchable picker from `/main/list`), a language dropdown filled from that problem's allowed languages, and a big Submit button.
   3. **Result:** live status while grading, then score, a colored verdict strip (one tile per test, tooltip with the label), compiler message if compilation failed, link to the submission, and Resubmit.
   4. **History:** the last few submissions for this problem.
   5. **Problems:** a searchable list of problems with best score; clicking one maps it to the current file or opens its statement.
@@ -104,11 +93,10 @@ Instead of relying on the command palette, build a sidebar GUI like the CPH and 
 - `README.md` for students: install from `.vsix`, log in, map a file, submit; a note on using it together with CPH; a privacy note (password stays in the OS keychain via VS Code SecretStorage).
 - `npx @vscode/vsce package` produces a `.vsix`. Add `CHANGELOG.md` and an MIT `LICENSE`.
 - Write a `CLAUDE.md` for this repo summarising the protocol table above, the hard rules, and the build/test commands, so future sessions have context.
-- Include section 2b (contest safety) in `CLAUDE.md` so later changes keep it.
-- **CHECKPOINT:** list what I should test manually in the F5 Extension Development Host (log in, submit a correct solution, submit a compile error, submit a wrong answer, try a contest/exam problem and confirm it is blocked, log out) and wait for my results.
+- **CHECKPOINT:** list what I should test manually in the F5 Extension Development Host (log in, submit a correct solution, submit a compile error, submit a wrong answer, log out) and wait for my results.
 
 ## 4. Done means
 - `npm test` passes, `npm run build` passes, `.vsix` builds.
 - I can submit the active `.cpp` file in two clicks and see the score and verdict strip without opening a browser.
 - CPH still works exactly as before in the same workspace.
-- Contest/exam problems are blocked by default, and the code never sends check-ins or fakes presence.
+- The code never sends contest check-ins or fakes presence.

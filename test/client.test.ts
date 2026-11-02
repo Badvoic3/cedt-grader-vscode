@@ -1,7 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   AuthError,
-  ContestBlockedError,
   GraderClient,
   LanguageNotAllowedError,
   PollTimeoutError,
@@ -11,7 +10,7 @@ import {
 import { FakeGrader } from './fakeServer';
 import { DURING_CONTEST, fixture } from './helpers';
 
-function setup(opts: { confirmAgreement?: (t: string) => Promise<boolean>; now?: Date; password?: string } = {}) {
+function setup(opts: { now?: Date; password?: string } = {}) {
   const server = new FakeGrader();
   let clock = (opts.now ?? DURING_CONTEST).getTime();
   const waits: number[] = [];
@@ -19,7 +18,6 @@ function setup(opts: { confirmAgreement?: (t: string) => Promise<boolean>; now?:
   const client = new GraderClient({
     baseUrl: 'https://grader.test',
     getCredentials: async () => ({ username: 'student', password: opts.password ?? 'pw' }),
-    confirmAgreement: opts.confirmAgreement,
     fetch: server.fetch,
     log: (l) => logs.push(l),
     now: () => new Date(clock),
@@ -33,7 +31,7 @@ function setup(opts: { confirmAgreement?: (t: string) => Promise<boolean>; now?:
 
 let lastServer: FakeGrader | null = null;
 afterEach(() => {
-  // Global invariants for every test: never touch /contests, never spoof a UA.
+  // Global invariants for every test: never touch /contests, never set a UA.
   if (!lastServer) return;
   for (const r of lastServer.requests) {
     expect(r.path.startsWith('/contests')).toBe(false);
@@ -47,12 +45,11 @@ function track<T extends { server: FakeGrader }>(x: T): T {
 }
 
 describe('login', () => {
-  it('logs in with CSRF token, keeps cookies, finds user id and contest status', async () => {
+  it('logs in with CSRF token, keeps cookies, finds user id', async () => {
     const { server, client } = track(setup());
-    const det = await client.login();
+    await client.login();
     expect(client.isLoggedIn).toBe(true);
     expect(client.userId).toBe(12345);
-    expect(det.inContest).toBe(false);
     const post = server.requests.find((r) => r.path === '/login/login')!;
     expect(post.form).toEqual({ authenticity_token: 'REDACTED', login: 'student', password: 'pw', commit: 'Login' });
     // The uuid cookie set on GET / was sent with the login POST.
@@ -65,27 +62,11 @@ describe('login', () => {
     expect(server.count('POST', '/login/login')).toBe(1);
   });
 
-  it('agreement checkbox without consent → refuses and does not tick it', async () => {
+  it('agreement checkbox → refuses and does not tick it', async () => {
     const { server, client } = track(setup());
-    server.loginHtml = fixture('login_page.agreement.synthetic.html');
+    server.loginHtml = server.loginHtml.replace('<input type="submit"', '<input type="checkbox" name="accept_agree" value="1" /><input type="submit"');
     await expect(client.login()).rejects.toBeInstanceOf(AuthError);
     expect(server.count('POST', '/login/login')).toBe(0);
-  });
-
-  it('agreement checkbox with explicit consent → sends accept_agree', async () => {
-    let shown = '';
-    const { server, client } = track(
-      setup({
-        confirmAgreement: async (t) => {
-          shown = t;
-          return true;
-        },
-      }),
-    );
-    server.loginHtml = fixture('login_page.agreement.synthetic.html');
-    await client.login();
-    expect(shown).toBe('I agree to the exam rules');
-    expect(server.requests.find((r) => r.path === '/login/login')!.form.accept_agree).toBe('1');
   });
 
   it('logs never contain password, token or cookies', async () => {
@@ -103,7 +84,7 @@ describe('session expiry', () => {
     const { server, client } = track(setup());
     await client.login();
     server.expireAllSessions();
-    const { problems } = await client.listProblems();
+    const problems = await client.listProblems();
     expect(problems).toHaveLength(3);
     expect(server.count('POST', '/login/login')).toBe(2);
   });
@@ -140,31 +121,9 @@ describe('submit', () => {
       editor_text: 'int main(){}',
       commit: 'Submit',
     });
-    // The submit page was fetched right before the POST (contest re-check).
+    // The submit page was fetched right before the POST (fresh CSRF token).
     const i = server.requests.findIndex((x) => x.path === '/main/submit');
     expect(server.requests[i - 1].path).toBe('/submissions/direct_edit_problem/102');
-  });
-
-  it('is blocked in contest mode and never POSTs', async () => {
-    const { server, client } = track(setup());
-    server.submitPageHtml = fixture('direct_edit_problem.contest.synthetic.html');
-    await expect(client.submit(102, 2, 'x')).rejects.toBeInstanceOf(ContestBlockedError);
-    expect(server.count('POST', '/main/submit')).toBe(0);
-  });
-
-  it('is blocked when detection is uncertain', async () => {
-    const { server, client } = track(setup());
-    server.submitPageHtml = fixture('direct_edit_problem.normal.synthetic.html').replace(/function checkInLoop/, 'function somethingElse');
-    await expect(client.submit(102, 2, 'x')).rejects.toBeInstanceOf(ContestBlockedError);
-    expect(server.count('POST', '/main/submit')).toBe(0);
-  });
-
-  it('allowContest only after explicit confirmation goes through', async () => {
-    const { server, client } = track(setup());
-    server.submitPageHtml = fixture('direct_edit_problem.contest.synthetic.html');
-    const r = await client.submit(102, 2, 'x', { allowContest: true });
-    expect(r.contest.inContest).toBe(true);
-    expect(server.count('POST', '/main/submit')).toBe(1);
   });
 
   it('rejects a language not in the per-problem list without POSTing', async () => {
