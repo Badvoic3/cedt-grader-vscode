@@ -212,7 +212,7 @@ export interface ViewState {
 }
 
 /** Host → webview. */
-export type ToWebview = { type: 'state'; state: ViewState } | { type: 'focus'; target: 'login' | 'problem-search' | 'submit' };
+export type ToWebview = { type: 'state'; state: ViewState } | { type: 'focus'; target: 'login' | 'problem-search' | 'submit' | 'result' };
 
 /** Webview → host. The password is only ever carried by `login`. */
 export type FromWebview =
@@ -251,7 +251,8 @@ export type FromWebview =
   | { type: 'renameFileToProblem' }
   | { type: 'cphTip'; action: 'install' | 'later' | 'never' }
   | { type: 'showCompilerMessage' }
-  | { type: 'openSettings' };
+  | { type: 'openSettings' }
+  | { type: 'openTroubleshooting' };
 
 export function isFromWebview(m: unknown): m is FromWebview {
   return typeof m === 'object' && m !== null && typeof (m as { type?: unknown }).type === 'string';

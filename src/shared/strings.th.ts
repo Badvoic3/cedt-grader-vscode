@@ -197,6 +197,7 @@ export const TH: Strings = {
       noSubmissionsYet: 'ยังไม่มีการส่ง',
       anotherFile: 'อีกไฟล์หนึ่ง',
       testLabel: (n, word) => `Test ${n}: ${word}`,
+      saveFailed: (file) => `บันทึก ${file} ไม่ได้ จึงยังไม่ได้ส่งอะไรไป บันทึกไฟล์แล้วส่งอีกครั้ง`,
     },
 
     account: {
@@ -376,6 +377,8 @@ export const TH: Strings = {
     nFilesLinked: (n) => `มี ${n} ไฟล์ที่เชื่อมกับโจทย์นี้`,
     hideTheList: 'ซ่อนรายการ',
     dismiss: 'ซ่อน',
+    troubleshooting: 'แก้ปัญหาเบื้องต้น',
+    troubleshootingTip: 'เปิดคู่มือแก้ปัญหาเบื้องต้นบน GitHub',
     renameToProblem: 'เปลี่ยนชื่อไฟล์ให้ตรงกับโจทย์',
     renameToProblemTip: (from, to) => `เปลี่ยนชื่อ ${from} เป็น ${to} (แก้ชื่อก่อนได้)`,
     dismissNoticeTip: 'ซ่อนประกาศนี้จนกว่าไฟล์ของโจทย์นี้จะเปลี่ยน',

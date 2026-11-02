@@ -195,6 +195,7 @@ const EN_S = {
     noSubmissionsYet: 'No submissions yet.',
     anotherFile: 'another file',
     testLabel: (n: number, word: string) => `Test ${n}: ${word}`,
+    saveFailed: (file: string) => `Couldn't save ${file}, so nothing was submitted. Save it, then submit again.`,
   },
 
   account: {
@@ -376,6 +377,8 @@ const EN_W = {
   nFilesLinked: (n: string | number) => `${n} files are linked to this problem`,
   hideTheList: "Hide the list",
   dismiss: 'Dismiss',
+  troubleshooting: 'Troubleshooting',
+  troubleshootingTip: 'Open the troubleshooting guide on GitHub',
   renameToProblem: 'Rename file to match the problem',
   renameToProblemTip: (from: string, to: string) => `Rename ${from} to ${to} (you can edit the name first)`,
   dismissNoticeTip: 'Hide this notice until the files for this problem change',
