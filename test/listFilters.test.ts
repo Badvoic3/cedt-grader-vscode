@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { parseTopicTags, problemStatus } from '../src/grader';
 import type { ProblemView } from '../src/shared/messages';
 import { filterProblems, sortProblems } from '../webview/filters';
+import { cleanTagFilter, matchesTags, otherTags } from '../src/shared/tags';
 import { realFixture } from './helpers';
 
 const V = (id: number, status: ProblemView['status'], tags: string[] = [], name = `p${id}`): ProblemView => ({
@@ -77,5 +78,45 @@ describe('sorting (works with the filters)', () => {
   });
   it('combines with filters', () => {
     expect(sortProblems(filterProblems(items, { status: 'unsolved', topic: null }, ''), 'name-asc').map((p) => p.id)).toEqual([2, 4, 3]);
+  });
+});
+
+describe('other tags: the "Tags" dropdown (several at once, Any / All)', () => {
+  const items = [
+    V(1, 'solved', ['DataAlgo', 'Graph', 'DFS', 'BFS']),
+    V(2, 'untried', ['DataAlgo', 'Graph']),
+    V(3, 'untried', ['ComProg', 'dfs']),
+    V(4, 'untried', []),
+  ];
+  const ids = (f: Parameters<typeof filterProblems>[1]) => filterProblems(items, f, '').map((p) => p.id);
+  const topics = [{ name: 'ComProg' }, { name: 'DataAlgo' }];
+
+  it('the dropdown lists every tag that is not a topic pill, case-insensitive, once, sorted', () => {
+    expect(otherTags(items, topics)).toEqual(['BFS', 'DFS', 'Graph']);
+  });
+  it('topics unknown (no /main/list): every tag goes to the dropdown', () => {
+    expect(otherTags(items, [])).toEqual(['BFS', 'ComProg', 'DataAlgo', 'DFS', 'Graph']);
+  });
+  it('a chosen tag no problem has any more stays listed, so it can be unticked', () => {
+    expect(otherTags(items, topics, ['Heap'])).toEqual(['BFS', 'DFS', 'Graph', 'Heap']);
+  });
+  it('Any (OR, the default): at least one chosen tag; tag case does not matter', () => {
+    expect(ids({ status: 'all', topic: null, tags: ['BFS', 'DFS'] })).toEqual([1, 3]);
+    expect(ids({ status: 'all', topic: null, tags: ['BFS', 'DFS'], tagMode: 'or' })).toEqual([1, 3]);
+  });
+  it('All (AND): every chosen tag', () => {
+    expect(ids({ status: 'all', topic: null, tags: ['Graph', 'DFS'], tagMode: 'and' })).toEqual([1]);
+    expect(ids({ status: 'all', topic: null, tags: ['Graph'], tagMode: 'and' })).toEqual([1, 2]);
+  });
+  it('combines with the topic pill, status and search; no tags chosen = no tag filter (older saved filters)', () => {
+    expect(ids({ status: 'all', topic: 'ComProg', tags: ['DFS'] })).toEqual([3]);
+    expect(ids({ status: 'unsolved', topic: null, tags: ['Graph'] })).toEqual([2]);
+    expect(ids({ status: 'all', topic: null, tags: [] })).toEqual([1, 2, 3, 4]);
+    expect(ids({ status: 'all', topic: null })).toEqual([1, 2, 3, 4]);
+    expect(matchesTags(undefined, ['Graph'], 'or')).toBe(false);
+  });
+  it('a stored filter is cleaned: strings only, no duplicates, mode defaults to OR', () => {
+    expect(cleanTagFilter(['Graph', ' graph ', 3, '', 'DFS'], 'xor')).toEqual({ tags: ['Graph', 'DFS'], tagMode: 'or' });
+    expect(cleanTagFilter(undefined, 'and')).toEqual({ tags: [], tagMode: 'and' });
   });
 });

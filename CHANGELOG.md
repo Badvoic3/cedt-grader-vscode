@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Problem list
+- **Tags on every problem row**, as on the website (topics and other tags such as Graph, DFS, BFS). Hidden in compact mode.
+- **Filter by other tags:** a **Tags** dropdown next to the topic pills lists every tag that isn't a topic. Tick several and match **Any (OR)** or **All (AND)**. It combines with the status filter, the topic pill and the search, and is remembered per workspace. When the website's topic list can't be read, every tag is in the dropdown instead of showing as pills.
+
 ### Submitting
 - **Confirm Before Submit asks once, not every time.** A file whose problem was matched automatically (file name, folder name or CPH data) asks once before its first submit. Submitting saves the match as your choice ("Chosen by you"), so later submits go straight through. Problems you chose yourself are never asked; suggestions still always ask. In folder mode, the "which file?" question is also asked only until the folder's submit file is chosen.
 

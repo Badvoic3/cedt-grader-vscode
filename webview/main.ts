@@ -985,7 +985,7 @@ function problemRow(p: ProblemView, s: ViewState, where: 'picker' | 'list'): HTM
   const main = el('button', {
     class: 'problem-main',
     type: 'button',
-    'aria-label': `${p.name} #${p.id}${sub ? `, ${sub}` : ''}`,
+    'aria-label': `${p.name} #${p.id}${sub ? `, ${sub}` : ''}${where === 'list' && p.tags?.length ? `, ${W.problemTags(p.tags.join(', '))}` : ''}`,
     // Picker: choose this problem for the file. List: open its linked file (or offer choices).
     disabled: where === 'picker' && !s.file,
     onclick: () => {
@@ -1001,6 +1001,8 @@ function problemRow(p: ProblemView, s: ViewState, where: 'picker' | 'list'): HTM
   },
     el('span', { class: 'problem-name ellipsis' }, mapped ? icon('check') : null, p.name, el('span', { class: 'muted id' }, ` #${p.id}`)),
     sub ? el('span', { class: 'problem-full ellipsis muted' }, sub) : null,
+    // Every tag of the problem, as on the website's problem list (topics and other tags).
+    where === 'list' && p.tags?.length ? el('span', { class: 'problem-tags', 'aria-hidden': 'true' }, ...p.tags.map((t) => el('span', { class: 'tag' }, t))) : null,
   );
   // Tooltip: just the names (bold "name #id", the title below).
   main.dataset.tipTitle = `${p.name} #${p.id}`;
@@ -1165,6 +1167,8 @@ function syncProblemList(s: ViewState): void {
 function renderProblems(s: ViewState): void {
   const b = sProblems.body;
   const keepScroll = problemList.viewport.isConnected ? problemList.scrollTop : (ui.listScroll ?? 0);
+  // Ticking a tag re-renders the section: put keyboard focus back on the same control.
+  const focusKey = (document.activeElement as HTMLElement | null)?.dataset?.focus;
   b.replaceChildren();
   const P = s.problems;
   if (!P.loaded) {
@@ -1176,6 +1180,7 @@ function renderProblems(s: ViewState): void {
   }
   b.append(statusFilter(P.filter), el('div', { class: 'row gap filter-row' }, problemFilter, sortSelect(P.filter)));
   if (P.topics.length) b.append(topicFilter(P.filter, P.topics));
+  if (P.tags.length) b.append(tagFilter(P.filter, P.tags));
   const hits = problemHits(s);
   b.append(problemList.viewport);
   problemList.setItems(hits);
@@ -1183,6 +1188,7 @@ function renderProblems(s: ViewState): void {
   if (keepScroll && problemList.scrollTop !== keepScroll) problemList.scrollTop = keepScroll;
   listRestored = true;
   b.append(el('p', { class: 'muted small list-count' }, hits.length === P.items.length ? W.nProblems(P.items.length) : W.nOfProblems(hits.length, P.items.length)));
+  if (focusKey) [...b.querySelectorAll<HTMLElement>('[data-focus]')].find((x) => x.dataset.focus === focusKey)?.focus();
   if (P.penaltyNote) b.append(el('p', { class: 'hint' }, icon('info'), ' ', P.penaltyNote));
   if (P.stale) b.append(el('p', { class: 'hint' }, icon('warning'), ' ', W.mayBeOutOfDate));
   if (P.loading) b.append(el('p', { class: 'muted small' }, icon('loading', 'codicon-modifier-spin'), ' ', W.refreshing));
@@ -1225,6 +1231,58 @@ function topicFilter(f: ProblemFilter, topics: { name: string; description: stri
       }, t.name),
     ),
   );
+}
+
+/** The "Tags" dropdown is open (local UI state; it stays open while ticking several tags). */
+let tagMenuOpen = false;
+
+/**
+ * "Tags" dropdown: the problems' other tags (not the topic pills), several at
+ * once, matched with Any (OR) or All (AND). Combines with status, topic and search.
+ */
+function tagFilter(f: ProblemFilter, tags: string[]): HTMLElement {
+  const chosen = f.tags ?? [];
+  const mode = f.tagMode ?? 'or';
+  const set = (next: Partial<ProblemFilter>) => send({ type: 'setFilter', filter: { ...f, tags: chosen, tagMode: mode, ...next } });
+  const label = chosen.length ? W.tagsChosen(chosen.join(mode === 'and' ? ' + ' : ' / ')) : W.tagsFilter;
+  const toggle = el('button', {
+    class: `tag-toggle${chosen.length ? ' active' : ''}`, type: 'button', 'aria-expanded': String(tagMenuOpen), title: W.tagsFilterTip,
+    'data-focus': 'tag-toggle',
+    onclick: () => { tagMenuOpen = !tagMenuOpen; forceRender(); },
+  }, icon('tag'), el('span', { class: 'ellipsis' }, label), icon(tagMenuOpen ? 'chevron-up' : 'chevron-down'));
+  const box = el('div', { class: 'tag-filter' }, toggle);
+  if (!tagMenuOpen) return box;
+  const modes: { key: 'or' | 'and'; label: string; tip: string }[] = [
+    { key: 'or', label: W.tagMatchAny, tip: W.tagMatchAnyTip },
+    { key: 'and', label: W.tagMatchAll, tip: W.tagMatchAllTip },
+  ];
+  const menu = el('div', { class: 'tag-menu', role: 'group', 'aria-label': W.tagsFilter,
+    onkeydown: (e: Event) => { if ((e as KeyboardEvent).key === 'Escape') { tagMenuOpen = false; forceRender(); document.querySelector<HTMLElement>('[data-focus="tag-toggle"]')?.focus(); } },
+  },
+    el('div', { class: 'row gap tag-menu-head' },
+      el('span', { class: 'small muted' }, W.tagMatch),
+      el('div', { class: 'segmented grow', role: 'radiogroup', 'aria-label': W.tagMatch },
+        ...modes.map((m) => el('button', {
+          class: `seg${mode === m.key ? ' active' : ''}`, type: 'button', role: 'radio', 'aria-checked': String(mode === m.key), title: m.tip,
+          'data-focus': `tag-mode-${m.key}`,
+          onclick: () => set({ tagMode: m.key }),
+        }, m.label)),
+      ),
+      el('button', { class: 'link small', type: 'button', title: W.clearTagsTip, disabled: !chosen.length, 'data-focus': 'tag-clear', onclick: () => set({ tags: [] }) }, W.clearTags),
+    ),
+    el('div', { class: 'tag-list' },
+      ...tags.map((t) => {
+        const on = chosen.some((c) => c.toLowerCase() === t.toLowerCase());
+        return el('label', { class: 'tag-option' },
+          el('input', { type: 'checkbox', checked: on, 'data-focus': `tag:${t}`,
+            onchange: () => set({ tags: on ? chosen.filter((c) => c.toLowerCase() !== t.toLowerCase()) : [...chosen, t] }) }),
+          el('span', { class: 'ellipsis' }, t),
+        );
+      }),
+    ),
+  );
+  box.append(menu);
+  return box;
 }
 
 // ---------------------------------------------------------------- wiring
