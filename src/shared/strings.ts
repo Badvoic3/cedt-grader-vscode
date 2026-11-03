@@ -67,7 +67,7 @@ const EN_S = {
     linkTo: (file: string) => `$(link) Link to ${file}`,
     createNew: '$(new-file) Create a new file',
     findByName: '$(search) Find a matching file',
-    openStatement: '$(book) Open statement',
+    openStatement: '$(file-pdf) Open statement',
     cleanedDuplicates: (n: number) => `Removed ${plural(n, 'duplicate file link')} from .cedt-grader.json.`,
     unlinkOthers: (what: string, problem: string) => `Unlink ${what} from ${problem}?`,
     nOtherFiles: (n: number) => `${n} other files`,

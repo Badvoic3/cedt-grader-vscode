@@ -1,6 +1,15 @@
 # Changelog
 
-## Unreleased
+## 1.0.0 — unreleased
+
+The first release on the VS Code Marketplace (search "CEDT Grader Submit", ID `Badvoic3.cedt-grader-submit`). Needs VS Code 1.90 or newer.
+
+**Highlights:** download a problem's attachment and work on a whole folder (folder mode: **Submits** / **Runs**, **Run tests**); **Load samples** reads the example table in the statement PDF; test cases can always be saved as `.in` / `.out` files; problem tags and a **Tags** filter; a new Problems list layout; a smaller, faster extension; security fixes.
+
+### Upgrading
+- From 0.7.0 (publisher `Badvoic3`): the same extension. Installing 1.0.0 from the Marketplace or a `.vsix` replaces it and keeps your login, links and settings.
+- From 0.6.0 or older (publisher `cedt-student`): a different extension. Uninstall it first, then log in again. Links in `.cedt-grader.json` are kept.
+- Links and data saved by 0.7.0 keep working. Going back to an older version is not supported (it drops the folder-mode fields from `.cedt-grader.json`).
 
 ### Problem list
 - **New row layout; rows can no longer overlap.** Rows are now laid out by the browser, each exactly as tall as its content, at any panel width and in compact mode (before, rows with several tags could cover the next row and leave gaps elsewhere). The score is in a column on the left and the problem name, full name and tags use the rest of the width, so long names are cut much later. The row icons appear over the row's bottom right when you hover or focus it instead of always taking room; the download icon comes first so the others stay in the same place on every row.
@@ -55,12 +64,27 @@
 
 ### Fixes
 - Test cases: the last line `KEY: …` in the expected outputs of problems with a provided `main.cpp` is left out when loading them (only the grader's own main prints it, so local runs always failed). Loading again updates tests loaded before.
-- "Load test cases" without CPH no longer keeps spinning after the files are saved; "Download Again" in the result message works again. The button says the test cases come from the grader ("Load test cases from the grader").
+- "Load test cases" without CPH no longer keeps spinning after the files are saved; "Download Again" in the result message works again.
 - Questions about submitting (confirm, which file, newer file, suggested match) appear right above the **Submit to Grader** button instead of at the top of the panel.
 - Folder mode: with another file of the folder open (e.g. `main.cpp`), Submit asks **Submit student.h** or **Submit main.cpp (open file)**. The answer is remembered for the folder (shown under **Submits**), so it is asked once; with "Confirm Before Submit" on it is the confirm question.
 - A folder matched only by its name (e.g. a package opened in another VS Code window, where its folder link isn't saved) now works like a linked folder: **Submits** / **Runs** are detected and Submit sends the submit file instead of the open `main.cpp`. Choosing a file saves the folder link.
 - The **Resubmit** button under Result is gone: **Submit to Grader** is the one way to submit.
 - Long answers in the panel's questions (e.g. long folder names when extracting a zip) wrap instead of running out of the box; the extract choices say which name the folder gets ("Name it after the problem (…/) and link it" / "Keep the original name (…/), don't link").
+
+### Security
+- Zip packages: hidden folders (`.git/`, `.vscode/`, …), `.git` and `.cedt-grader.json` files are never extracted; a zip with a huge number of entries is refused before anything is read.
+- The extension follows a redirect only within the grader's address (`cedtGrader.baseUrl`). Otherwise the request is stopped and the panel says so.
+- Size limits are checked while downloading, not after: attachments 20 MB, statement PDFs 50 MB.
+- Names from the server (file names, test numbers, extensions) are checked before they are used in a file path; `.cedt-grader.json` entries that point outside their folder are ignored.
+- **Load samples** stops after a set number of pages and time on very long statements ("The statement is too long to read the example table …").
+- When another user logs in, or the grader address changes, the saved password and token of the earlier login are deleted.
+- Faster patterns for verdict strings and exam detection, so unusual server text can't slow the extension down.
+
+### Texts
+- Progress messages, the compare title and website-login errors now come from the string tables, so they are translated too.
+
+### README
+- Rewritten for the Marketplace: what the extension does and how to install it first, then one section per area (panel, linking, folder mode and attachments, test cases and sample cases, statements, CPH), with the reference sections (scores, settings, storage, troubleshooting) at the end.
 
 ## 0.7.0 — Phase 6 (language and customization)
 

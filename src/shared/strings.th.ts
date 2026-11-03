@@ -98,7 +98,7 @@ export const TH: Strings = {
       linkTo: (file) => `$(link) เชื่อมกับ ${file}`,
       createNew: '$(new-file) สร้างไฟล์ใหม่',
       findByName: '$(search) หาไฟล์ที่ตรงกับโจทย์',
-      openStatement: '$(book) เปิดโจทย์',
+      openStatement: '$(file-pdf) เปิดโจทย์',
       cleanedDuplicates: (n) => `ลบการเชื่อมไฟล์ที่ซ้ำ ${n} รายการออกจาก .cedt-grader.json แล้ว`,
       unlinkOthers: (what, problem) => `ยกเลิกการเชื่อม ${what} กับ ${problem} ไหม?`,
       nOtherFiles: (n) => `อีก ${n} ไฟล์`,
