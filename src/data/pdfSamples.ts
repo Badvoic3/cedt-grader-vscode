@@ -1,5 +1,6 @@
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { S } from '../shared/strings';
 import { addPageTables, fontId, gridsOf, pathSegments, samplesFrom, type PathOps, type SampleTable, type Table, type TextItem } from './sampleTables';
 
 /*
@@ -35,10 +36,25 @@ interface RawItem {
 
 /** The parts of the pdf.js module used here. */
 export interface Pdfjs {
-  getDocument(src: { data: Uint8Array; isEvalSupported: boolean; verbosity: number; isOffscreenCanvasSupported: boolean }): { promise: Promise<DocLike> };
+  getDocument(src: { data: Uint8Array; isEvalSupported: boolean; verbosity: number; isOffscreenCanvasSupported: boolean }): { promise: Promise<DocLike>; destroy?(): Promise<void> };
   OPS: PathOps;
   GlobalWorkerOptions: { workerSrc: string };
 }
+
+/**
+ * Limits for reading a statement in the host thread (course statements have
+ * fewer than 20 pages and read in ~10–90 ms). Past either one nothing is
+ * loaded (`SampleReadLimitError`): a hostile or huge PDF can't keep the
+ * extension host busy. The time is checked between pages, and the wait for
+ * one page stops when the budget is used up.
+ */
+export const SAMPLE_READ = {
+  maxPages: 100,
+  timeBudgetMs: 10_000,
+} as const;
+
+/** The statement has more pages than `SAMPLE_READ.maxPages`, or reading it took longer than the time budget. */
+export class SampleReadLimitError extends Error {}
 
 /** File names of pdf.js's legacy build (node_modules/pdfjs-dist/legacy/build): the library in dist/pdfjs, the worker in media/dist/pdfjs. */
 export const PDFJS_FILES = { lib: 'pdf.min.mjs', worker: 'pdf.worker.min.mjs' } as const;
@@ -79,19 +95,50 @@ function fontName(page: PageLike, id: string): Promise<string> {
   });
 }
 
-/** The sample tables of a PDF (per page: operator list → grids; text only on pages with grids). */
-export async function readSampleTables(bytes: Uint8Array, pdfjs: Pdfjs): Promise<SampleTable[]> {
+/**
+ * The sample tables of a PDF (per page: operator list → grids; text only on
+ * pages with grids). Throws SampleReadLimitError past `limits`.
+ */
+export async function readSampleTables(
+  bytes: Uint8Array,
+  pdfjs: Pdfjs,
+  limits: { maxPages: number; timeBudgetMs: number; now?: () => number } = SAMPLE_READ,
+): Promise<SampleTable[]> {
+  const now = limits.now ?? (() => Date.now());
+  const deadline = now() + limits.timeBudgetMs;
+  /** `p`, unless the budget runs out first. */
+  const inTime = async <T>(p: Promise<T>): Promise<T> => {
+    const left = deadline - now();
+    if (left <= 0) throw new SampleReadLimitError(S.samples.tooLong);
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const late = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => reject(new SampleReadLimitError(S.samples.tooLong)), left);
+    });
+    try {
+      return await Promise.race([p, late]);
+    } finally {
+      clearTimeout(timer);
+    }
+  };
   // A copy: pdf.js may detach the buffer it is given.
-  const doc = await pdfjs.getDocument({ data: bytes.slice(), isEvalSupported: false, verbosity: 0, isOffscreenCanvasSupported: false }).promise;
+  const task = pdfjs.getDocument({ data: bytes.slice(), isEvalSupported: false, verbosity: 0, isOffscreenCanvasSupported: false });
+  let doc: DocLike;
   try {
+    doc = await inTime(task.promise);
+  } catch (err) {
+    void task.destroy?.().catch(() => {});
+    throw err;
+  }
+  try {
+    if (doc.numPages > limits.maxPages) throw new SampleReadLimitError(S.samples.tooLong);
     const tables: Table[] = [];
     for (let p = 1; p <= doc.numPages; p++) {
-      const page = await doc.getPage(p);
+      const page = await inTime(doc.getPage(p));
       const [, , pw, ph] = page.view;
-      const opList = await page.getOperatorList(); // also loads the page's fonts into commonObjs
+      const opList = await inTime(page.getOperatorList()); // also loads the page's fonts into commonObjs
       const grids = gridsOf(pathSegments(opList.fnArray, opList.argsArray, pdfjs.OPS), pw, ph);
       if (!grids.length) continue;
-      const raw = ((await page.getTextContent()).items as RawItem[]).filter((i) => i.str && i.transform);
+      const raw = ((await inTime(page.getTextContent())).items as RawItem[]).filter((i) => i.str && i.transform);
       const names = new Map<string, string>();
       for (const id of new Set(raw.map((i) => i.fontName ?? ''))) names.set(id, await fontName(page, id));
       const items: TextItem[] = raw.map((i) => ({

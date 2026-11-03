@@ -21,7 +21,7 @@ import { parseGraderComment } from './verdicts';
 import { WebSession } from './web';
 
 export { DEFAULT_BASE_URL } from '../shared/constants';
-import { ATTACHMENT, DEFAULT_BASE_URL, TIMING } from '../shared/constants';
+import { ATTACHMENT, DEFAULT_BASE_URL, STATEMENT, TIMING } from '../shared/constants';
 
 export interface Credentials {
   username: string;
@@ -216,7 +216,7 @@ export class GraderClient {
   async languages(): Promise<Language[]> {
     if (this.languagesCache) return this.languagesCache;
     const list = await this.authed(() => this.api.get<ApiLanguage[]>('/api/v1/languages'));
-    this.languagesCache = list.map((l) => ({ id: l.id, name: l.pretty_name || l.name, code: l.name, ext: l.ext }));
+    this.languagesCache = list.map((l) => ({ id: l.id, name: l.pretty_name || l.name, code: l.name, ext: safeExt(l.ext) }));
     return this.languagesCache;
   }
 
@@ -294,9 +294,10 @@ export class GraderClient {
           `/api/v1/problems/${problemId}/testcases`,
         ),
       );
-      return list.map((t) => ({
+      const nums = caseNumbers(list.map((t) => t.num));
+      return list.map((t, i) => ({
         id: t.id,
-        num: t.num,
+        num: nums[i],
         group: t.group ?? null,
         groupName: t.group_name ?? null,
         weight: t.weight ?? null,
@@ -319,7 +320,7 @@ export class GraderClient {
   /** `GET /api/v1/problems/{id}/files/pdf`: 403 = PDF hidden for this problem, 404 = none. */
   async getStatementPdf(id: number): Promise<{ status: 200; bytes: Uint8Array } | { status: 403 | 404; error: string | null }> {
     assertId(id);
-    const r = await this.authed(() => this.api.getBytes(`/api/v1/problems/${id}/files/pdf`));
+    const r = await this.authed(() => this.api.getBytes(`/api/v1/problems/${id}/files/pdf`, STATEMENT.maxPdfBytes));
     return r.status === 200 ? { status: 200, bytes: r.bytes } : r;
   }
 
@@ -462,4 +463,24 @@ function clean(s: string): string {
 
 function assertId(id: number): void {
   if (!Number.isInteger(id) || id <= 0) throw new GraderError(G.invalidId(id));
+}
+
+/**
+ * Test-case numbers as the server sent them when every one is a distinct
+ * positive integer; otherwise 1, 2, … in list order. They become file names
+ * (`<num>.in`), so a value such as `"../../x"` never reaches the disk.
+ */
+export function caseNumbers(nums: unknown[]): number[] {
+  const ok = nums.every((n) => Number.isSafeInteger(n) && (n as number) > 0) && new Set(nums).size === nums.length;
+  return ok ? (nums as number[]) : nums.map((_, i) => i + 1);
+}
+
+/**
+ * A language's file extension from the server, used in file names ("New
+ * file"): letters, digits, `+`, `_`, `-` (an optional leading dot is kept);
+ * anything else (separators, `..`) → '' (no extension known: "New file"
+ * then uses `.txt`, and no file is matched to the language by extension).
+ */
+export function safeExt(ext: unknown): string {
+  return typeof ext === 'string' && /^\.?[A-Za-z0-9+_-]{1,10}$/.test(ext) ? ext : '';
 }

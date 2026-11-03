@@ -53,6 +53,7 @@ export function parseMappingFile(text: string): MappingFileData {
     const e = v as Partial<MappingEntry>;
     if (typeof e?.problemId === 'number' && Number.isInteger(e.problemId) && e.problemId > 0) {
       const rel = normalizeRelPath(k);
+      if (!insideWorkspace(rel)) continue;
       const prev = byKey.get(pathKey(rel));
       if (prev !== undefined) delete out.files[prev];
       byKey.set(pathKey(rel), rel);
@@ -70,11 +71,21 @@ export function parseMappingFile(text: string): MappingFileData {
   return out;
 }
 
+/**
+ * A key stays inside the workspace folder that holds the file: no absolute
+ * path, drive letter or leading `..` (after `normalizeRelPath`). Others are
+ * ignored, so a hostile file can't link a folder above the workspace (every
+ * file would submit from there) or make each file switch read `/`.
+ */
+export function insideWorkspace(rel: string): boolean {
+  return !(rel === '..' || rel.startsWith('../') || rel.startsWith('/') || /^[a-zA-Z]:/.test(rel));
+}
+
 /** A folder-relative path field, kept only when it stays inside the folder. */
 function insideFolder(key: 'submitFile' | 'runFile', v: unknown): Partial<MappingEntry> {
   if (typeof v !== 'string') return {};
   const rel = normalizeRelPath(v);
-  return rel && !rel.startsWith('..') ? { [key]: rel } : {};
+  return rel && !rel.startsWith('..') && insideWorkspace(rel) ? { [key]: rel } : {};
 }
 
 export function serializeMappingFile(d: MappingFileData): string {

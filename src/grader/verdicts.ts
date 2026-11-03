@@ -22,11 +22,16 @@ const CODES: Readonly<Record<string, { kind: string }>> = {
 export const VERDICT_CODES = Object.keys(CODES);
 const LETTERS = '?P\\-sTMxE!';
 /**
- * Exactly the website's pattern (`GraderCommentHelper::VERDICT_STRING_RE`):
- * runs of known codes and `[...]` groups of known codes. Anything else
- * (free text, unknown codes, nested or unbalanced brackets) is not a strip.
+ * The website's pattern (`GraderCommentHelper::VERDICT_STRING_RE`,
+ * `^(?:[L]+|\[[L]+\])+$`): runs of known codes and `[...]` groups of known
+ * codes. Anything else (free text, unknown codes, nested or unbalanced
+ * brackets) is not a strip. Written with one code per repetition instead of
+ * a run (`[L]` for `[L]+`): the same strings match, but the nested `+` of the
+ * website's spelling backtracks exponentially in JavaScript on a long run of
+ * codes followed by any other character (a hostile grader comment froze the
+ * extension host). Here `[` is not a code, so every step has one choice.
  */
-export const VERDICT_STRING_RE = new RegExp(`^(?:[${LETTERS}]+|\\[[${LETTERS}]+\\])+$`);
+export const VERDICT_STRING_RE = new RegExp(`^(?:[${LETTERS}]|\\[[${LETTERS}]+\\])+$`);
 
 
 /**

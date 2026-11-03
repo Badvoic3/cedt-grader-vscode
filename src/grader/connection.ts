@@ -1,5 +1,5 @@
 import { G } from '../shared/strings';
-import { AuthError, NetworkError, ServerBusyError, SessionExpiredError } from './errors';
+import { AuthError, NetworkError, RedirectRefusedError, ServerBusyError, SessionExpiredError } from './errors';
 
 /** Kinds of connection trouble shown in the sidebar banner. */
 export type ConnectionKind = 'offline' | 'unreachable' | 'server' | 'session' | 'throttled' | 'timeout';
@@ -25,6 +25,10 @@ export function classifyConnectionError(err: unknown): ConnectionProblem | null 
   }
   if (err instanceof ServerBusyError && err.status === 429) {
     return { kind: 'throttled', title: G.rateLimitedTitle, message: G.rateLimitedMsg, action: 'retry' };
+  }
+  if (err instanceof RedirectRefusedError) {
+    // Not an internet problem: say where the grader tried to send the request.
+    return { kind: 'unreachable', title: G.unreachableTitle, message: err.message, action: 'retry' };
   }
   if (err instanceof NetworkError) {
     switch (err.kind) {

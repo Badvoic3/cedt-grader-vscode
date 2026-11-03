@@ -53,6 +53,34 @@ export class NetworkError extends GraderError {
   }
 }
 
+/**
+ * A redirect the grader sent that leaves its address (another origin, or
+ * https → http): never followed, so no body, token or cookie goes there.
+ * Shown in the connection banner with its own text (connection.ts).
+ */
+export class RedirectRefusedError extends NetworkError {
+  constructor(from: string, to: string) {
+    super(G.redirectRefused(from, to), 'unreachable');
+  }
+}
+
+/**
+ * Check a redirect target against the configured grader address: same
+ * origin only (scheme, host, port), which also rules out https → http.
+ * Returns the absolute target URL; throws RedirectRefusedError otherwise.
+ */
+export function checkRedirect(baseUrl: string, current: string, location: string): string {
+  const base = new URL(baseUrl);
+  let next: URL;
+  try {
+    next = new URL(location, current);
+  } catch {
+    throw new RedirectRefusedError(base.host, location.slice(0, 100));
+  }
+  if (next.origin !== base.origin) throw new RedirectRefusedError(base.host, next.origin);
+  return next.toString();
+}
+
 /** Map a fetch() rejection to a NetworkError with a kind (DNS → offline, refused/reset → unreachable, abort → timeout). */
 export function networkErrorFrom(err: unknown, host: string): NetworkError {
   const e = err as { name?: string; message?: string; cause?: { code?: string; name?: string } };

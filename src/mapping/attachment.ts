@@ -20,6 +20,9 @@ import { invalidFileName } from './renameToProblem';
  * for the same path), entry count and total size are capped on the declared
  * sizes before inflating and again on the real output, entries are always
  * written as plain files (never links), and nothing existing is overwritten.
+ * Never extracted: anything inside a folder whose name starts with "."
+ * (`.git/`, `.vscode/`, `.idea/`: a planted `.git/config` can run commands
+ * through Git), a `.git` file (a `gitdir:` pointer) and `.cedt-grader.json`.
  */
 
 export class AttachmentError extends Error {}
@@ -40,11 +43,35 @@ export interface ZipPlan {
   topFolder: string | null;
 }
 
-/** macOS metadata that zips made in Finder carry along, and shipped build output (`main.o`; a PDF is kept). */
+/**
+ * File names a download never creates: the extension's own link file and a
+ * Git `gitdir:` pointer (compared without case: macOS / Windows ignore it).
+ */
+export function isProtectedName(name: string): boolean {
+  const n = name.toLowerCase();
+  return n === '.cedt-grader.json' || n === '.git';
+}
+
+/**
+ * Never extracted: macOS metadata that zips made in Finder carry along,
+ * shipped build output (`main.o`; a PDF is kept), anything inside a folder
+ * whose name starts with "." at any depth (`.git/`, `.vscode/`, `.idea/`),
+ * and the protected names above. Plain dot files (`.clang-format`) are kept.
+ */
 function isJunk(segs: string[]): boolean {
   const last = segs[segs.length - 1];
   const ext = extname(last).slice(1).toLowerCase();
+  if (segs.slice(0, -1).some((s) => s.startsWith('.')) || isProtectedName(last)) return true;
   return segs[0] === '__MACOSX' || last === '.DS_Store' || last.startsWith('._') || (ext !== 'pdf' && BINARY_EXTS.has(ext));
+}
+
+/**
+ * Central-directory records read before a zip is refused: files, folder
+ * entries and macOS junk all count. fflate loops over the count the zip
+ * claims (zip64: up to 2^32), so this stops a lying count quickly.
+ */
+export function maxZipRecords(maxEntries: number): number {
+  return maxEntries * 4;
 }
 
 /** A compiled program without an extension (ELF, Mach-O, PE): shipped build output, never extracted. */
@@ -72,11 +99,13 @@ export function planZip(bytes: Uint8Array, limits: { maxEntries: number; maxTota
   const seen = new Set<string>();
   const order: string[] = [];
   let count = 0;
+  let records = 0;
   let declared = 0;
   let unzipped: Record<string, Uint8Array>;
   try {
     unzipped = unzipSync(bytes, {
       filter: (f) => {
+        if (++records > maxZipRecords(limits.maxEntries)) throw new AttachmentError(S.attachment.tooManyFiles(limits.maxEntries));
         const rel = entryPath(f.name);
         if (!rel || isJunk(rel.split('/'))) return false;
         const key = pathKey(rel);

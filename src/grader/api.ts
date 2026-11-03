@@ -1,6 +1,6 @@
 import { G } from '../shared/strings';
 import { TIMING } from '../shared/constants';
-import { AuthError, GraderError, LanguageNotAllowedError, networkErrorFrom, ProblemUnavailableError, ServerBusyError, SessionExpiredError, SubmitRejectedError } from './errors';
+import { AuthError, checkRedirect, GraderError, NetworkError, LanguageNotAllowedError, networkErrorFrom, ProblemUnavailableError, ServerBusyError, SessionExpiredError, SubmitRejectedError } from './errors';
 import type { FetchLike, Logger } from './http';
 import type { Redactor } from './redact';
 
@@ -85,6 +85,8 @@ export interface ApiCreatedSubmission {
 }
 
 const TIMEOUT_MS = TIMING.requestTimeoutMs;
+/** Same-origin redirects followed per request (`raw`). */
+const MAX_REDIRECTS = 5;
 /** GET retries on 429 / 5xx: waits 2 s, then 4 s (or the server's Retry-After, capped at 30 s). */
 const GET_RETRIES = TIMING.getRetries;
 
@@ -148,11 +150,12 @@ export class ApiClient {
 
   /**
    * Binary GET (statement PDF, attachment). 403 / 404 are returned as statuses, not thrown.
-   * Retries 429 / 5xx like `get`. `maxBytes`: a larger body is refused (Content-Length and real size).
+   * Retries 429 / 5xx like `get`. `maxBytes`: a larger body is refused (Content-Length first, then
+   * counted while reading: a body without Content-Length, or compressed, stops at the cap).
    */
   async getBytes(
     path: string,
-    maxBytes = Infinity,
+    maxBytes: number,
   ): Promise<{ status: 200; bytes: Uint8Array; contentType: string | null; disposition: string | null } | { status: 403 | 404; error: string | null }> {
     for (let attempt = 0; ; attempt++) {
       const res = await this.raw('GET', path, undefined, true, undefined, true);
@@ -162,8 +165,7 @@ export class ApiClient {
           await res.body?.cancel().catch(() => {});
           throw new GraderError(G.downloadTooLarge(Math.ceil(maxBytes / 1048576)));
         }
-        const bytes = new Uint8Array(await res.arrayBuffer());
-        if (bytes.length > maxBytes) throw new GraderError(G.downloadTooLarge(Math.ceil(maxBytes / 1048576)));
+        const bytes = await readCapped(res, maxBytes);
         return { status: 200, bytes, contentType: res.headers.get('content-type'), disposition: res.headers.get('content-disposition') };
       }
       if (res.status === 403 || res.status === 404) {
@@ -249,22 +251,74 @@ export class ApiClient {
     }
     const timeout = AbortSignal.timeout(TIMEOUT_MS);
     let res: Response;
-    try {
-      res = await this.fetchImpl(this.baseUrl + path, {
-        method,
-        headers,
-        body: body === undefined ? undefined : JSON.stringify(body),
-        signal: signal ? AbortSignal.any([signal, timeout]) : timeout,
-      });
-    } catch (err) {
-      if (signal?.aborted) throw err;
-      throw networkErrorFrom(err, new URL(this.baseUrl).host);
+    // Redirects are followed here, not by fetch (`redirect: 'manual'`), and only within the
+    // grader's origin: fetch would re-send a 307/308 login body (the password) to any host,
+    // and whether it drops the Authorization header across origins depends on the Node version.
+    let url = this.baseUrl + path;
+    let sendBody = body === undefined ? undefined : JSON.stringify(body);
+    let verb: 'GET' | 'POST' = method;
+    let shown = path; // logged path (no query)
+    for (let hop = 0; ; hop++) {
+      try {
+        res = await this.fetchImpl(url, {
+          method: verb,
+          headers,
+          body: sendBody,
+          redirect: 'manual',
+          signal: signal ? AbortSignal.any([signal, timeout]) : timeout,
+        });
+      } catch (err) {
+        if (signal?.aborted) throw err;
+        throw networkErrorFrom(err, new URL(this.baseUrl).host);
+      }
+      const location = res.headers.get('location');
+      if (res.status < 300 || res.status >= 400 || !location) break;
+      this.log(`${verb} ${shown} → ${res.status}`);
+      await res.body?.cancel().catch(() => {});
+      url = checkRedirect(this.baseUrl, url, location);
+      shown = new URL(url).pathname;
+      if (hop >= MAX_REDIRECTS) throw new NetworkError(G.tooManyRedirects);
+      // 301/302/303 → GET without a body (as fetch does); 307/308 keep both.
+      if (res.status !== 307 && res.status !== 308) {
+        verb = 'GET';
+        sendBody = undefined;
+        delete headers['Content-Type'];
+      }
     }
-    this.log(`${method} ${path} → ${res.status}`);
+    this.log(`${verb} ${shown} → ${res.status}`);
     if (res.status >= 500 && !passErrors) {
       await res.body?.cancel().catch(() => {});
       throw new ServerBusyError(G.httpError(res.status), res.status);
     }
     return res;
   }
+}
+
+/**
+ * The body as bytes, read chunk by chunk; the read is cancelled as soon as it
+ * passes `maxBytes` (the whole body is never buffered first).
+ */
+export async function readCapped(res: Response, maxBytes: number): Promise<Uint8Array> {
+  const tooBig = () => new GraderError(G.downloadTooLarge(Math.ceil(maxBytes / 1048576)));
+  if (!res.body) return new Uint8Array(0);
+  const reader = res.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.length;
+    if (total > maxBytes) {
+      await reader.cancel().catch(() => {});
+      throw tooBig();
+    }
+    chunks.push(value);
+  }
+  const out = new Uint8Array(total);
+  let at = 0;
+  for (const c of chunks) {
+    out.set(c, at);
+    at += c.length;
+  }
+  return out;
 }

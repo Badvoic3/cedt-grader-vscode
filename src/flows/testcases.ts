@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { readFile as fsReadFile } from 'node:fs/promises';
 import { chooseTestcaseTarget, CPH_EXTENSION_ID, CPH_RUN_COMMAND } from '../cphIntegration';
-import { type Pdfjs, readSampleTables } from '../data/pdfSamples';
+import { type Pdfjs, readSampleTables, SampleReadLimitError } from '../data/pdfSamples';
 import type { SampleTable } from '../data/sampleTables';
 import { stripGraderKey, TestcaseStore } from '../data/testcaseStore';
 import { classifyConnectionError, type Problem } from '../grader';
@@ -213,6 +213,7 @@ export class TestCases {
       tables = await readSampleTables(st.bytes, await this.pdfjs());
     } catch (err) {
       if (classifyConnectionError(err)) h.reportError(err, () => this.loadSampleCases());
+      else if (err instanceof SampleReadLimitError) void h.tellInline(null, S.samples.tooLong); // nothing written
       else void h.tellInline(err, S.samples.failed(h.describe(err)));
       return;
     } finally {
@@ -275,7 +276,7 @@ export class TestCases {
     if (!where) return undefined;
     const extra = o.extra ?? [];
     if (where === 'files') {
-      const folder = testsFolderOf(o.file.fsPath, h.folder.link?.fsPath ?? null, o.problem.name);
+      const folder = testsFolderOf(o.file.fsPath, h.folder.link?.fsPath ?? null, o.problem.name, o.problem.id);
       if (!(await this.confirmTestsFolder(folder, o.cases.length))) return undefined;
       const r = await writeCases({ kind: 'files', folder }, o.cases, o.kind);
       const open = S.testcases.showFolder;

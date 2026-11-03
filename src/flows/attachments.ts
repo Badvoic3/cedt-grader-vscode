@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import type { DataService } from '../data/dataService';
 import { type Attachment, classifyConnectionError, type Problem, ProblemUnavailableError } from '../grader';
-import { attachmentKind, AttachmentError, extractedFileToOpen, freeFolderName, ownFolderStem, planZip, writeExtracted, writeNewFile } from '../mapping/attachment';
+import { attachmentKind, AttachmentError, extractedFileToOpen, freeFolderName, isProtectedName, ownFolderStem, planZip, writeExtracted, writeNewFile } from '../mapping/attachment';
 import { fileNameFor, folderNameFor } from '../mapping/match';
 import { pathExists as exists } from '../mapping/newFile';
 import { freeName, nameMatchesProblem, renameProposal } from '../mapping/renameToProblem';
@@ -61,8 +61,10 @@ export class Attachments {
   private async saveFile(p: Problem, dir: vscode.Uri, a: Attachment): Promise<void> {
     const h = this.host;
     const pattern = h.cfg.fileNamePattern.pattern;
-    const ext = a.filename?.includes('.') ? a.filename.split('.').pop()! : 'txt';
-    const desired = a.filename ?? fileNameFor(p.name, ext, pattern, p.id);
+    // Never `.cedt-grader.json` (it would add links) or `.git`: the problem's name instead.
+    const filename = a.filename && !isProtectedName(a.filename) ? a.filename : null;
+    const ext = filename?.includes('.') ? filename.split('.').pop()! : 'txt';
+    const desired = filename ?? fileNameFor(p.name, ext, pattern, p.id);
     const name = await freeName(desired, (n) => exists(vscode.Uri.joinPath(dir, n).fsPath));
     const target = vscode.Uri.joinPath(dir, name);
     await writeNewFile(target.fsPath, a.bytes);

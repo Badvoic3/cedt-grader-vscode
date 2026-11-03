@@ -43,6 +43,9 @@ export const TH_REVIEW: readonly string[] = [
   // Progress texts that were hard-coded in English (2026-11-04): not reviewed yet.
   'S.testcases.downloadProgress',
   'S.submit.graded',
+  // Security fixes (2026-11-04): not reviewed yet.
+  'G.redirectRefused',
+  'G.tooManyRedirects',
 ];
 
 export const TH: Strings = {
@@ -195,6 +198,7 @@ export const TH: Strings = {
       savedFiles: (written, folder, extra) => `บันทึก ${written} ข้อไว้ที่ ${folder}/ (sample1.in, sample1.out, …)${extra ? ` (${extra})` : ''}`,
       savedCph: (parts) => `บันทึกลง CPH แล้ว: ${parts}`,
       failed: (why) => `โหลดตัวอย่างไม่ได้: ${why}`,
+      tooLong: 'โจทย์ยาวเกินกว่าจะอ่านตารางตัวอย่างได้ จึงไม่ได้โหลดตัวอย่างเลย ให้คัดลอกจากโจทย์เอง',
     },
 
     cache: {
@@ -669,6 +673,8 @@ export const TH: Strings = {
     timeoutDetail: (host) => `Grader (${host}) ไม่ตอบกลับทันเวลา`,
     offlineDetail: (host) => `ไม่มีการเชื่อมต่ออินเทอร์เน็ต (ติดต่อ ${host} ไม่ได้)`,
     unreachableDetail: (host) => `เชื่อมต่อ Grader (${host}) ไม่ได้`,
+    redirectRefused: (from, to) => `Grader (${from}) ส่งคำขอต่อไปยังที่อยู่อื่น (${to}) จึงหยุดไว้ ถ้านั่นคือที่อยู่ของ Grader ให้ใส่ไว้ในการตั้งค่า cedtGrader.baseUrl`,
+    tooManyRedirects: 'Grader เปลี่ยนเส้นทาง (redirect) มากเกินไป',
     logInFirst: 'เข้าสู่ระบบ CEDT Grader ก่อน',
     loginExpired: 'การเข้าสู่ระบบ Grader หมดอายุแล้ว เข้าสู่ระบบใหม่',
     noWebSession: 'ยังไม่ได้เข้าสู่ระบบเว็บไซต์ Grader เข้าสู่ระบบใหม่',

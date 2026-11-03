@@ -169,6 +169,7 @@ const EN_S = {
       `Saved ${plural(written, 'case')} to ${folder}/ (sample1.in, sample1.out, …)${extra ? ` (${extra})` : ''}.`,
     savedCph: (parts: string) => `Saved to CPH: ${parts}`,
     failed: (why: string) => `Couldn't load the sample cases: ${why}`,
+    tooLong: "The statement is too long to read the example table, so no sample cases were loaded. Copy them from the statement by hand.",
   },
 
   cache: {
@@ -654,6 +655,9 @@ const EN_G = {
   timeoutDetail: (host: string | number) => `The grader (${host}) didn't answer in time.`,
   offlineDetail: (host: string | number) => `No internet connection (couldn't reach ${host}).`,
   unreachableDetail: (host: string | number) => `Couldn't connect to the grader (${host}).`,
+  redirectRefused: (from: string, to: string) =>
+    `The grader (${from}) sent the request on to another address (${to}), so it was stopped. If that is the grader's address, put it in the cedtGrader.baseUrl setting.`,
+  tooManyRedirects: 'Too many redirects from the grader.',
   logInFirst: "Log in to CEDT Grader first.",
   loginExpired: "Your grader login has expired. Log in again.",
   noWebSession: "Not logged in to the grader website. Log in again.",

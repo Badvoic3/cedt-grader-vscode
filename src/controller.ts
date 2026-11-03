@@ -43,6 +43,7 @@ import { nameMatchesProblem, renameProposal } from './mapping/renameToProblem';
 import { LIMITS, SUBMISSION_SCHEME, TIMING, troubleshootingUrl, WEB_PATHS } from './shared/constants';
 import { MATCH_SOURCE, S, W } from './shared/strings';
 import { KEYS } from './shared/stateKeys';
+import { SecretLedger, type SecretKind, secretKey } from './shared/secrets';
 import { cleanTagFilter, cleanTopicFilter, otherTags } from './shared/tags';
 import { currentLang, resolveLang, setLanguage } from './shared/i18n';
 import type { HistoryEntry, ProblemFilter, ProblemView, SubmissionDetailView, ViewState } from './shared/messages';
@@ -120,8 +121,11 @@ export class GraderController implements vscode.Disposable {
   private readonly submitFlow: SubmitFlow;
   private readonly attachments: Attachments;
   private readonly cache: CacheCare;
+  /** Password / token writes and deletes (every key written is listed, so Log Out removes them all). */
+  private readonly secrets: SecretLedger;
 
   constructor(private readonly ctx: vscode.ExtensionContext) {
+    this.secrets = new SecretLedger(ctx.secrets, ctx.globalState);
     this.output = vscode.window.createOutputChannel('CEDT Grader');
     this.mapping = new MappingStore(ctx);
     this.client = this.makeClient();
@@ -359,8 +363,8 @@ export class GraderController implements vscode.Disposable {
         },
         save: async (t) => {
           // The token is persisted only when the user chose to remember the password.
-          if (t && this.rememberPassword) await this.ctx.secrets.store(this.secretKey('token'), JSON.stringify(t));
-          else await this.ctx.secrets.delete(this.secretKey('token'));
+          if (t && this.rememberPassword) await this.secrets.store(this.secretKey('token'), JSON.stringify(t));
+          else await this.secrets.delete(this.secretKey('token'));
         },
       },
       log: (line) => this.requestLog(line),
@@ -408,6 +412,8 @@ export class GraderController implements vscode.Disposable {
     }
     if (prev.baseUrl !== this.cfg.baseUrl || prev.username !== this.cfg.username) {
       void this.client.logout();
+      // Another user or grader: the previous one's saved password and token don't stay behind.
+      void this.secrets.forgetAccount(prev.baseUrl, prev.username);
       this.client = this.makeClient();
       this.resetSessionState();
       void this.getPassword().then((p) => {
@@ -430,8 +436,8 @@ export class GraderController implements vscode.Disposable {
     return `${KEYS.problemsPrefix}.v2:${this.cfg.baseUrl}:${this.cfg.username}`;
   }
 
-  private secretKey(kind: 'password' | 'token', username = this.cfg.username): string {
-    return `cedtGrader.${kind}:${this.cfg.baseUrl}:${username}`;
+  private secretKey(kind: SecretKind, username = this.cfg.username): string {
+    return secretKey(kind, this.cfg.baseUrl, username);
   }
 
   private async getPassword(): Promise<string | undefined> {
@@ -522,7 +528,7 @@ export class GraderController implements vscode.Disposable {
       this.accountStatus = 'logged-out';
       this.accountError = null; // the banner says it; don't repeat it in the form
       if (err instanceof AuthError && err.reason === 'wrong-password') {
-        void this.ctx.secrets.delete(this.secretKey('password'));
+        void this.secrets.delete(this.secretKey('password'));
         this.hasSavedPassword = false;
       }
     }
@@ -877,6 +883,7 @@ export class GraderController implements vscode.Disposable {
     }
     await this.ctx.globalState.update(KEYS.rememberPassword, remember);
     if (username !== this.cfg.username) {
+      await this.secrets.forgetAccount(this.cfg.baseUrl, this.cfg.username);
       this.changingUsername = true;
       try {
         await vscode.workspace.getConfiguration('cedtGrader').update('username', username, vscode.ConfigurationTarget.Global);
@@ -888,8 +895,8 @@ export class GraderController implements vscode.Disposable {
       this.client = this.makeClient();
       this.resetSessionState();
     }
-    if (remember) await this.ctx.secrets.store(this.secretKey('password'), password);
-    else await this.ctx.secrets.delete(this.secretKey('password'));
+    if (remember) await this.secrets.store(this.secretKey('password'), password);
+    else await this.secrets.delete(this.secretKey('password'));
     this.hasSavedPassword = remember;
     return this.doLogin({ username, password });
   }
@@ -934,7 +941,7 @@ export class GraderController implements vscode.Disposable {
     this.accountStatus = 'logged-out';
     this.accountError = this.describe(err);
     if (err instanceof AuthError && err.reason === 'wrong-password') {
-      await this.ctx.secrets.delete(this.secretKey('password'));
+      await this.secrets.delete(this.secretKey('password'));
       this.hasSavedPassword = false;
     }
     this.emit();
@@ -944,10 +951,8 @@ export class GraderController implements vscode.Disposable {
   async logout(): Promise<void> {
     this.submitFlow.stop();
     await this.client.logout();
-    if (this.cfg.username) {
-      await this.ctx.secrets.delete(this.secretKey('password'));
-      await this.ctx.secrets.delete(this.secretKey('token'));
-    }
+    // Every saved password / token (also of earlier users or grader addresses), and the current ones.
+    await this.secrets.forgetAll(this.cfg.username ? [this.secretKey('password'), this.secretKey('token')] : []);
     this.hasSavedPassword = false;
     this.accountError = null;
     this.connection = null;

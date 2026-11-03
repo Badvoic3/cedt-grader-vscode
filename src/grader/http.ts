@@ -1,6 +1,7 @@
 import { TIMING } from '../shared/constants';
+import { G } from '../shared/strings';
 import { CookieJar } from 'tough-cookie';
-import { NetworkError, networkErrorFrom } from './errors';
+import { checkRedirect, NetworkError, networkErrorFrom } from './errors';
 import { Redactor } from './redact';
 
 export type FetchLike = (input: string, init?: RequestInit) => Promise<Response>;
@@ -37,6 +38,7 @@ const REQUEST_TIMEOUT_MS = TIMING.requestTimeoutMs;
  * - Cookies live only in memory and are never logged.
  * - We do not set a custom User-Agent and never pretend to be a browser.
  * - Logs contain only method, path and status.
+ * - Redirects are followed only within the grader's origin (`checkRedirect`).
  */
 export class HttpSession {
   private jar = new CookieJar();
@@ -98,12 +100,20 @@ export class HttpSession {
 
       const location = res.headers.get('location');
       if (res.status >= 300 && res.status < 400 && location) {
-        const next = new URL(location, url).toString();
+        // Only to the grader's own origin (no https → http): the form body (password, CSRF
+        // token) and the session cookie never go anywhere else.
+        let next: string;
+        try {
+          next = checkRedirect(this.baseUrl, url, location);
+        } catch (err) {
+          await res.body?.cancel().catch(() => {});
+          throw err;
+        }
         redirects.push(next);
         if (!follow) {
           return { status: res.status, url, path, redirects, body: '', contentType: '' };
         }
-        if (hop >= MAX_REDIRECTS) throw new NetworkError('Too many redirects from the grader.');
+        if (hop >= MAX_REDIRECTS) throw new NetworkError(G.tooManyRedirects);
         await res.body?.cancel().catch(() => {});
         // 301/302/303 after POST → GET (what browsers and Rails expect).
         if (res.status !== 307 && res.status !== 308) {

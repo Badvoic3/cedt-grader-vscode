@@ -3,7 +3,8 @@
  * (no `vscode` import). One list, so "Clear Cached Data"
  * (`src/data/cacheClear.ts`) knows exactly what each checkbox removes.
  * Secrets (`cedtGrader.password:…` / `cedtGrader.token:…`) are in
- * SecretStorage and are only removed by Log Out / "Saved login".
+ * SecretStorage and are only removed by Log Out / "Saved login" and when the
+ * user or grader address changes (src/shared/secrets.ts).
  */
 export const KEYS = {
   // ---- workspaceState
@@ -45,4 +46,6 @@ export const KEYS = {
   rememberPassword: 'cedtGrader.rememberPassword',
   /** `.prob.bak` files this extension created in the workspace (deleted only from "Clear Cached Data"). */
   backups: 'cedtGrader.backups',
+  /** SecretStorage keys written (password / token per address and user), so Log Out removes all of them (src/shared/secrets.ts). */
+  secretKeys: 'cedtGrader.secretKeys',
 } as const;

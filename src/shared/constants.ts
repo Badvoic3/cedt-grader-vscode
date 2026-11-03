@@ -117,7 +117,7 @@ export const CACHE = {
  * real output (zip bombs).
  */
 export const ATTACHMENT = {
-  /** Largest download accepted. */
+  /** Largest download accepted (counted while downloading, see `readCapped` in src/grader/api.ts). */
   maxDownloadBytes: 20 * 1024 * 1024,
   /** Most files extracted from one zip. */
   maxEntries: 500,
@@ -127,6 +127,15 @@ export const ATTACHMENT = {
   maxInlineChoices: 6,
   /** Folder mode: C/C++ files larger than this are not read for submit / run file detection. */
   maxRoleFileBytes: 512 * 1024,
+} as const;
+
+/**
+ * Statement PDFs (`GET /api/v1/problems/{id}/files/pdf`): a larger answer is
+ * refused while it downloads (course statements are well under 5 MB). The PDF
+ * is cached and, for "Load sample cases", read in the extension host.
+ */
+export const STATEMENT = {
+  maxPdfBytes: 50 * 1024 * 1024,
 } as const;
 
 /** Links of deleted files are kept (stale) this many days, so a moved file can reconnect. */

@@ -47,15 +47,20 @@ export function caseKey(t: { input: string; output: string }): string {
   return `${normalizeEol(t.input)}\u0000${normalizeEol(t.output)}`;
 }
 
-/** `<source dir>/<clean problem name>/tests` */
-export function testsFolderFor(sourceDir: string, problemName: string): string {
-  const folder = fileNameFor(problemName, 'x').replace(/\.x$/, '');
+/** `<source dir>/<clean problem name>/tests` (a name such as `..` → the problem id, see `stemFor`). */
+export function testsFolderFor(sourceDir: string, problemName: string, problemId = 0): string {
+  const folder = fileNameFor(problemName, 'x', undefined, problemId).replace(/\.x$/, '');
   return join(sourceDir, folder, 'tests');
 }
 
 /** Where a file's cases go as files: folder mode → `<folder>/tests` (the folder already carries the problem's name); else `testsFolderFor` next to the file. */
-export function testsFolderOf(filePath: string, folder: string | null, problemName: string): string {
-  return folder ? join(folder, 'tests') : testsFolderFor(dirname(filePath), problemName);
+export function testsFolderOf(filePath: string, folder: string | null, problemName: string, problemId = 0): string {
+  return folder ? join(folder, 'tests') : testsFolderFor(dirname(filePath), problemName, problemId);
+}
+
+/** `<prefix><num>` for a case's files; a number that isn't a whole number ≥ 0 (a hostile or old cache) → `<prefix>case<n>` by position. */
+function caseStem(prefix: string, num: unknown, position: number): string {
+  return `${prefix}${Number.isSafeInteger(num) && (num as number) >= 0 ? num : `case${position}`}`;
 }
 
 export interface SaveFilesResult {
@@ -104,8 +109,8 @@ export async function saveTestcasesAsFiles(folder: string, cases: GraderCase[], 
   let unchanged = 0;
   let keptExisting = 0;
   let alreadyPresent = 0;
-  for (const c of [...cases].sort((a, b) => a.num - b.num)) {
-    const stem = `${prefix}${c.num}`;
+  for (const [i, c] of [...cases].sort((a, b) => a.num - b.num).entries()) {
+    const stem = caseStem(prefix, c.num, i + 1);
     const other = pairs.get(caseKey(c));
     if (other !== undefined && other !== stem) {
       alreadyPresent++;
