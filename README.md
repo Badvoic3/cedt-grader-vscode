@@ -36,12 +36,6 @@ Use this if you can't use the Marketplace.
 
 *Or, from a terminal:* `code --install-extension cedt-grader-submit-<version>.vsix`. On macOS, if `code` isn't found, first run **Shell Command: Install 'code' command in PATH** from the Command Palette (<kbd>Cmd</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd>).
 
-### Do you have version 0.6 or older?
-
-Versions up to 0.6 came from the publisher `cedt-student` (ID `cedt-student.cedt-grader-submit`). VS Code sees it as a **different extension**. Uninstall it first, then install this one. You have to log in again. Links saved in `.cedt-grader.json` files are kept; links that were only in VS Code's storage are not.
-
-Coming from 0.7 (publisher `Badvoic3`)? It is the same extension: installing 1.0 replaces it and keeps your login, links and settings.
-
 ### Check that it worked
 
 A **CEDT Grader** icon (a page with a check mark) appears in the left bar. If you installed from inside VS Code, the **Get started with CEDT Grader** page opens. You can open it any time with **CEDT Grader: Get Started** from the Command Palette or the **⋯** menu at the top of the panel.

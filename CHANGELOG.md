@@ -6,11 +6,6 @@ The first release on the VS Code Marketplace (search "CEDT Grader Submit", ID `B
 
 **Highlights:** download a problem's attachment and work on a whole folder (folder mode: **Submits** / **Runs**, **Run tests**); **Load samples** reads the example table in the statement PDF; test cases can always be saved as `.in` / `.out` files; problem tags and a **Tags** filter; a new Problems list layout; a smaller, faster extension; security fixes.
 
-### Upgrading
-- From 0.7.0 (publisher `Badvoic3`): the same extension. Installing 1.0.0 from the Marketplace or a `.vsix` replaces it and keeps your login, links and settings.
-- From 0.6.0 or older (publisher `cedt-student`): a different extension. Uninstall it first, then log in again. Links in `.cedt-grader.json` are kept.
-- Links and data saved by 0.7.0 keep working. Going back to an older version is not supported (it drops the folder-mode fields from `.cedt-grader.json`).
-
 ### Problem list
 - **New row layout; rows can no longer overlap.** Rows are now laid out by the browser, each exactly as tall as its content, at any panel width and in compact mode (before, rows with several tags could cover the next row and leave gaps elsewhere). The score is in a column on the left and the problem name, full name and tags use the rest of the width, so long names are cut much later. The row icons appear over the row's bottom right when you hover or focus it instead of always taking room; the download icon comes first so the others stay in the same place on every row.
 - **Keyboard:** the problem list is one Tab stop; ↑ / ↓ / Home / End move between problems, Tab goes on to that row's icons.
