@@ -547,15 +547,13 @@ const EN_W = {
   compilationError: 'Compilation error',
   points: (n: string) => `${n} points`,
   graded: 'Graded',
-  /** Topic pill tooltip (also its aria-label): the state, then what the next click does (off → hide → show only → off). */
-  topicTip: (description: string | null, topic: string, state: 'off' | 'out' | 'in') =>
-    `${description ? `${description}. ` : ''}${
-      state === 'in'
-        ? `Showing only ${topic} problems. Click to stop filtering by ${topic}`
-        : state === 'out'
-          ? `Hiding ${topic} problems. Click to show only ${topic} problems`
-          : `${topic}: click to hide ${topic} problems`
-    }`,
+  /** Topic pill tooltip (also its aria-label): the state, then what the next click does (order from the setting). */
+  topicTip: (description: string | null, topic: string, state: 'off' | 'out' | 'in', order: 'showFirst' | 'hideFirst') => {
+    const next = (order === 'hideFirst' ? { off: 'out', out: 'in', in: 'off' } : { off: 'in', in: 'out', out: 'off' })[state];
+    const now = state === 'in' ? `Showing only ${topic} problems. ` : state === 'out' ? `Hiding ${topic} problems. ` : `${topic}: `;
+    const click = next === 'in' ? `click to show only ${topic} problems` : next === 'out' ? `click to hide ${topic} problems` : `click to stop filtering by ${topic}`;
+    return `${description ? `${description}. ` : ''}${now}${state === 'off' ? click : click[0].toUpperCase() + click.slice(1)}`;
+  },
   defaultOrder: "Default order",
   nameAZ: "Name A–Z",
   nameZA: "Name Z–A",

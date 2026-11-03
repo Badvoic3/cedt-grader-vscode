@@ -4,7 +4,7 @@
 
 ### Problem list
 - **Tags on every problem row**, as on the website (topics and other tags such as Graph, DFS, BFS). Hidden in compact mode.
-- **Topic pills have three states.** Click to cycle: hide that topic's problems (red, struck through) → show only them (filled, ✓) → off. Several pills can be set at once. A saved single-topic filter from an older version still works.
+- **Topic pills have three states.** Click to cycle: show only that topic's problems (filled, ✓) → hide them (red, struck through) → off. The new setting **Topic Click Order** (`cedtGrader.panel.topicClickOrder`) puts "hide" first instead. Several pills can be set at once. A saved single-topic filter from an older version still works.
 - **Filter by other tags:** a **Tags** dropdown next to the topic pills lists every tag that isn't a topic. Tick several and match **Any (OR)** or **All (AND)**. It combines with the status filter, the topic pill and the search, and is remembered per workspace. When the website's topic list can't be read, every tag is in the dropdown instead of showing as pills.
 
 ### Submitting

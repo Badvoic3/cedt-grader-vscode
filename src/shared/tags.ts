@@ -64,14 +64,23 @@ export function topicState(f: TopicFilter, name: string): TopicState {
   return 'off';
 }
 
-/** Click on a pill: not chosen → hide → show only → not chosen. Clears the older single `topic`. */
-export function cycleTopic(f: TopicFilter, name: string): { topic: null; topicsIn: string[]; topicsOut: string[] } {
-  const state = topicState(f, name);
+/** Order of the three states on clicks (setting `cedtGrader.panel.topicClickOrder`). */
+export type TopicClickOrder = 'showFirst' | 'hideFirst';
+
+/**
+ * Click on a pill. `showFirst` (default): not chosen → show only → hide → not chosen;
+ * `hideFirst`: not chosen → hide → show only → not chosen. Clears the older single `topic`.
+ */
+export function cycleTopic(f: TopicFilter, name: string, order: TopicClickOrder = 'showFirst'): { topic: null; topicsIn: string[]; topicsOut: string[] } {
+  const steps: TopicState[] = order === 'hideFirst' ? ['off', 'out', 'in'] : ['off', 'in', 'out'];
+  const next = steps[(steps.indexOf(topicState(f, name)) + 1) % steps.length];
   const { inc, exc } = topicSets(f);
   const without = (list: string[]) => list.filter((t) => key(t) !== key(name));
-  if (state === 'off') return { topic: null, topicsIn: inc, topicsOut: [...exc, name] };
-  if (state === 'out') return { topic: null, topicsIn: [...inc, name], topicsOut: without(exc) };
-  return { topic: null, topicsIn: without(inc), topicsOut: exc };
+  return {
+    topic: null,
+    topicsIn: next === 'in' ? [...without(inc), name] : without(inc),
+    topicsOut: next === 'out' ? [...without(exc), name] : without(exc),
+  };
 }
 
 /** Does a problem pass the topic pills? At least one shown-only topic (if any), and no hidden one. */
