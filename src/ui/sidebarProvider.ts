@@ -75,7 +75,6 @@ export class SidebarProvider implements vscode.WebviewViewProvider, vscode.Dispo
         await c.logout();
         return;
       case 'submit':
-      case 'resubmit':
         await c.submit();
         return;
       case 'selectLanguage':
