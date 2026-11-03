@@ -14,10 +14,17 @@ import type { Strings } from './strings';
 
 /**
  * Keys whose Thai wording is less certain (highlighted on the review page).
- * Empty: everything was reviewed at checkpoint B (2026-11-03). Add keys here
+ * Everything else was reviewed at checkpoint B (2026-11-03). Add keys here
  * when a new text is translated without review.
  */
-export const TH_REVIEW: readonly string[] = [];
+export const TH_REVIEW: readonly string[] = [
+  // Experimental statement sample import (2026-11-03): not reviewed yet.
+  'S.samples',
+  'W.importSamplesTip',
+  'W.samplesWarning',
+  'W.samplesNoneDetail',
+  'W.samplesAnnotated',
+];
 
 export const TH: Strings = {
   HOW_LINKED: {
@@ -153,6 +160,19 @@ export const TH: Strings = {
       suggestedQ: (name, sub) => `โหลด test case ของ ${name}${sub ? ` (${sub})` : ''} ไหม?`,
       load: 'โหลด test case',
       progressTitle: (name) => `Test case ของ ${name}`,
+    },
+
+    samples: {
+      invalid: 'นำเข้าตัวอย่างจากโจทย์ไม่ได้ (ข้อมูลไม่ถูกต้อง)',
+      importLabel: 'นำเข้าตัวอย่าง',
+      suggestedQ: (name, sub) => `นำเข้าตัวอย่างจากโจทย์ ${name}${sub ? ` (${sub})` : ''} ไปที่ไฟล์นี้ไหม`,
+      noFile: (name) => `ยังไม่มีไฟล์ที่ลิงก์กับ ${name} ลิงก์หรือสร้างไฟล์คำตอบก่อนนำเข้าตัวอย่าง`,
+      pickFile: (name) => `นำเข้าตัวอย่างของ ${name} ไปที่ไฟล์ไหน`,
+      whereTo: (n) => `อ่านตัวอย่างจากโจทย์ได้ ${n} ข้อ จะเก็บไว้ที่ไหน`,
+      savedFiles: (written, total, folder, extra) =>
+        `บันทึก ${written} จาก ${total} ตัวอย่างไว้ที่ ${folder}/ (sample1.in, sample1.out, …)${extra ? ` (${extra})` : ''}`,
+      savedCph: (n) => `บันทึกลง CPH แล้ว: ตัวอย่างจากโจทย์ ${n} ข้อ`,
+      failed: (why) => `นำเข้าตัวอย่างไม่ได้: ${why}`,
     },
 
     cache: {
@@ -488,6 +508,21 @@ export const TH: Strings = {
     matchOf: (current, total) => `${current} จาก ${total}`,
     loadingStatement: 'กำลังโหลดโจทย์…',
     pdfError: (why) => `แสดง PDF ไม่ได้: ${why}`,
+    importSamplesTip: 'นำเข้าตัวอย่าง test case จากโจทย์นี้ (ทดลอง)',
+    samplesReading: 'กำลังอ่านตารางตัวอย่าง…',
+    samplesTitle: (n) => `ตัวอย่าง test case จากโจทย์นี้ (${n})`,
+    samplesWarning: 'ฟีเจอร์ทดลอง: อ่าน test case จากตารางใน PDF อาจขาดหรืออ่านผิดได้ ตรวจทุกข้อก่อนนำเข้า',
+    samplesNone: 'ไม่พบตารางตัวอย่างใน PDF นี้',
+    samplesNoneDetail: 'อ่านได้เฉพาะตารางที่มีเส้นขอบและเลือกข้อความได้ ไม่รองรับหน้าที่สแกนมาหรือตารางที่ไม่มีเส้นขอบ',
+    samplesCase: (n, page) => `ข้อ ${n} · หน้า ${page}`,
+    samplesInput: 'Input',
+    samplesOutput: 'Output',
+    samplesEmpty: '(ว่าง)',
+    samplesAnnotated: 'ตัดหมายเหตุออกแล้ว ตรวจข้อนี้อีกครั้ง',
+    samplesImport: 'นำเข้า',
+    samplesCancel: 'ยกเลิก',
+    samplesClose: 'ปิด',
+    samplesError: (why) => `อ่านตารางตัวอย่างไม่ได้: ${why}`,
     sectionAccount: 'บัญชี',
     sectionCurrent: 'โจทย์ปัจจุบัน',
     sectionResult: 'ผลตรวจ',

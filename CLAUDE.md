@@ -77,6 +77,7 @@ npx tsx scripts/probe.ts [--list] [--problem <ID>] [--fixtures] [--submit file] 
 - `src/ui/sidebarProvider.ts`: `WebviewViewProvider`; CSP with nonce, `localResourceRoots: [media]`.
 - `src/ui/statusBar.ts`: status bar shortcut that reveals the panel (warning icon while the connection banner is up).
 - `src/ui/statementPanel.ts` + `webview/statement.ts`: "Statement: <problem>" editor tabs (bundled pdf.js 4.10 viewer: zoom, fit width, pages, text selection, search; description fallback rendered with markdown-it `html: false`).
+- Statement sample cases (**experimental**, see "Statement sample cases" below): `webview/sampleTables.ts` (pure: rules → grids → cells → main-font runs → sample tables), `webview/sampleExtract.ts` (pdf.js adapter, also used by `scripts/checkSamples.ts`), `webview/samplesPreview.ts` (preview drawer), `src/mapping/sampleImport.ts` (host validation, numbering).
 - `webview/main.ts`, `webview/style.css`: plain DOM sidebar, bundled to `media/dist/` (git-ignored).
   - Sections re-render only when their slice of `ViewState` changed (`sectionKeys`); `forceRender()` after local UI changes.
   - `webview/tooltip.ts`: the one custom tooltip (`data-tip`; `el()` maps `title` → `data-tip`). Never use native `title`.
@@ -145,7 +146,7 @@ Every icon-only button (`iconButton()` in `webview/main.ts`, `btn()` in `webview
 - JSON `{name, url, interactive, memoryLimit, timeLimit, group, tests:[{input, output, id}], srcPath, local?, customCheckerPath?}`, written by CPH with plain `JSON.stringify`.
 - CPH re-reads a `.prob` only on `onDidChangeActiveTextEditor` (no reload command; commands: runTestCases, submitToCodeForces, compileWithoutRunning) and saves its in-memory problem back, so after writing a `.prob` the user must switch to the file before running tests ("Reload in CPH" does that by briefly showing a placeholder tab).
 - CPH has no rename/delete handling; a renamed source orphans its `.prob` (we offer to move it).
-- Our imported tests: `id = 7e15 + grader testcase id` (marker that survives CPH re-saves); backup `<file>.prob.bak`; own tests first and never removed; duplicates by input+output skipped; line endings `\n`.
+- Our imported tests: `id = 7e15 + grader testcase id` (`GRADER_ID_BASE`, marker that survives CPH re-saves); statement samples (experimental): `id = 7.5e15 + n` (`STATEMENT_ID_BASE`, n = 1, 2, … in preview order); backup `<file>.prob.bak`; own tests first and never removed; duplicates by input+output skipped (also between grader and statement cases); line endings `\n`.
 - Never modify CPH itself; only write `.prob` files in this exact format.
 
 ## Folder mode and attachments
@@ -290,6 +291,16 @@ The sidebar (`cedtGrader` Activity Bar container, view `cedtGrader.panel`) is th
 - **Inline questions** (`askInline` → `ViewState.prompt`, plain buttons under the banner; cancelled on file switch): submit confirmation, suggested-match submit, newer linked file, auto-detect result, unlink other files, reconnect after a move, stale link. Native modal dialogs only for what can't be undone or loses data: overwrite a file, Clear Cached Data, the exam warning.
 - **Context menus** (`withContextMenu` in `webview/main.ts`): always in addition to visible icons, never instead. Long labels are cut in the middle (`webview/text.ts`), full label in tooltip + aria-label.
 
+### Statement sample cases (experimental)
+
+- **Button:** beaker icon in the statement toolbar (`btn()`, `pdf-only`: hidden for the description fallback). No sidebar button, no command. Click → drawer (`samplesPreview.ts`): "Reading…", then the warning ("experimental … may be missing or misread"), every case (input / output, monospace, `textContent` only), "Notes removed: check this case" for `annotated`, **Import** / **Cancel**; none → "No sample table found in this PDF." Esc closes. Read once per document (`samples` promise, reset on a new `pdf` / `loading` message).
+- **No network:** reads the pdf.js document already shown (`getOperatorList` + `getTextContent` per page); fonts from `page.commonObjs.get(id, cb)` (async in the browser; 1 s fallback to the id). CSP unchanged, `isEvalSupported: false`.
+- **Algorithm** (`sampleTables.ts`, ported from a prototype checked on 47 + 3 real PDFs): `constructPath` rects / lines under the CTM, tagged by the next paint op (`endPath` drops). Thin filled rects (≤ 3 pt) = rules; stroked rects = cell boxes; big filled rects (shading) and page-sized rects ignored. Collinear pieces merged (±1.5 pt, gaps ≤ 4 pt), H < 10 / V < 6 pt dropped. Grids by union-find (TOL 2.5; ≥ 2 ys, ≥ 3 xs). Items by centre; a grid ≤ 24 pt below one with the same xs joins it; a header-less table on the next page with the same xs continues it. Main font = `<name without ABCDEF+>@<size>` with most ASCII characters below row 1. Runs split at gap > 3h or font change after gap > 0.5h; kept if main-font text or starting within 1.5h of the cell's left edge. Header = Thai letters or input/output; `// …` with Thai → removed, `annotated`; case = input + ≥ 97 % ASCII; table = 2–3 columns, ≥ half the body rows valid. Thai is detected, never read (broken ToUnicode).
+- **Message:** `FromStatement` `{ type: 'importSamples', problemId, cases }` (statement messages live in `statementPanel.ts`). The panel drops it unless `problemId` is its own, `validateSampleCases` (strings only, `SAMPLES.maxCases` 50, `SAMPLES.maxCaseChars` 20 000, non-empty input) → `GraderController.importStatementSamples` (null → "unexpected data").
+- **Target** (`sampleTarget`): the active file's problem → like Load test cases (folder mode: `askFolderRole('run')` → `runUri()`; a suggestion asks once). Another problem → `filesForProblem(id, 'run', false)`; a folder item → `folderRunFile` (`runFileFor`: chosen → detected → only C/C++ source → QuickPick, saved on a folder link); several → QuickPick; none → inline "Link to <file>" / "Create a new file", then looked up again once.
+- **Write:** shared with Load test cases (`testcaseTarget`, `testsFolder`, `confirmTestsFolder`): CPH → `importIntoCph(…, idBase: STATEMENT_ID_BASE)`, backup recorded, `refreshRunTests`, "Reload in CPH"; files → `saveTestcasesAsFiles(folder, cases, 'sample')` = `tests/sample<n>.in|out` (never collides with grader `<n>.in`). Texts end with one `\n`.
+- **Check on real PDFs** (local only, course PDFs never committed): `npx tsx scripts/checkSamples.ts <dir> [expected.json]` → per-PDF counts and mismatches.
+
 Statement viewer (`webview/statement.ts`, `webview/zoom.ts`): pinch (Ctrl+wheel) zooms around the cursor via `PDFViewer.updateScale({origin})` with `preventDefault`; Cmd/Ctrl + / - / 0; page/zoom/scroll kept in webview state (serializer, restart) and globalState (`cedtGrader.statementView`, reopen); `retainContextWhenHidden`; `registerWebviewPanelSerializer('cedtGrader.statement')` reopens tabs after restart from the disk cache (no request).
 
 ## Where to change things
@@ -312,6 +323,7 @@ Statement viewer (`webview/statement.ts`, `webview/zoom.ts`): pinch (Ctrl+wheel)
 | "Files for this problem" rules and notice wording | `src/mapping/problemFiles.ts` |
 | Folders never searched | `EXCLUDED_DIRS` in `src/mapping/findByName.ts` |
 | Attachment caps (download size, zip entries / total size, inline submit-file buttons) | `ATTACHMENT` in `src/shared/constants.ts`; extraction rules `src/mapping/attachment.ts` |
+| Statement sample import (experimental): caps / table rules | `SAMPLES` in `src/shared/constants.ts`; thresholds at the top of `webview/sampleTables.ts` |
 | Settings | `package.json` `contributes.configuration` + `src/config.ts` |
 
 No course- or problem-specific names in code (problem names come from the server; `test/scalability.test.ts` checks).
@@ -330,6 +342,7 @@ No course- or problem-specific names in code (problem names come from the server
 - Undo of "Rename file to match the problem" relies on VS Code's undo for WorkspaceEdit file operations (checked by hand, not by a test).
 - The controller (vscode-dependent) has no unit tests; its rules are kept in pure, tested helpers (`problemFiles.ts`, `suggestionGate.ts`, `match.ts`, `mappingOps.ts`, `paths.ts`) and the webview is tested in jsdom.
 - English only; texts are already in `src/shared/strings.ts`, ready for Phase 6.
+- Statement sample import (experimental) reads only ruled tables with a text layer: scanned PDFs and borderless tables give nothing; a note set in the data font and aligned left in the cell is kept as data; a 2–3 column plain-ASCII table that isn't a sample (e.g. function arguments → result) would be offered as cases (the preview is the safeguard). Its Thai texts are in `TH_REVIEW`.
 
 ## Releasing
 

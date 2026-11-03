@@ -125,6 +125,18 @@ export const ATTACHMENT = {
   maxRoleFileBytes: 512 * 1024,
 } as const;
 
+/**
+ * Experimental "Import sample cases from this statement": the host checks
+ * the cases the statement viewer sends against these caps (a sample table
+ * holds a few short cases; anything bigger is not a sample).
+ */
+export const SAMPLES = {
+  /** Most cases in one import. */
+  maxCases: 50,
+  /** Longest input or output of one case (characters). */
+  maxCaseChars: 20_000,
+} as const;
+
 /** Links of deleted files are kept (stale) this many days, so a moved file can reconnect. */
 export const STALE_LINK_DAYS = 30;
 

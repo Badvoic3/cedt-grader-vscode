@@ -94,7 +94,9 @@ Renaming or moving a linked file in VS Code keeps the link. If you move files in
 
 ## Problem statements
 
-Click the book icon next to the problem to open its statement in a tab beside your code (pinch or Cmd/Ctrl +/- to zoom, Cmd/Ctrl 0 to fit width, page navigation, search with Cmd/Ctrl+F). The tab remembers its page and zoom and reopens after a restart. Statements are downloaded once and kept in VS Code's own storage (never in your project); the viewer's Refresh button downloads them again. Problems without a PDF show their text description. Set `cedtGrader.statementBeside` to `false` to open statements in the current editor group.
+Click the book icon next to the problem to open its statement in a tab beside your code (pinch or Cmd/Ctrl +/- to zoom, Cmd/Ctrl 0 to fit width, page navigation, search with Cmd/Ctrl+F). The tab remembers its page and zoom and reopens after a restart. Statements are downloaded once and kept in VS Code's own storage (never in your project); the viewer's Refresh button downloads them again. Problems without a PDF show their text description.
+
+**Sample cases from the statement (experimental).** In a PDF statement, the beaker icon reads the statement's sample input/output table and shows the cases in a preview first. It may miss or misread cases (scanned PDFs and tables without borders are not read; a case with a removed note is marked "check this case"), so check them before you press **Import**. Import puts them where **Load test cases** would: the file's CPH tests, or `tests/sample1.in`, `sample1.out`, … without CPH (folder mode: the run file). Nothing is downloaded for this. Set `cedtGrader.statementBeside` to `false` to open statements in the current editor group.
 
 ## When the connection fails
 
