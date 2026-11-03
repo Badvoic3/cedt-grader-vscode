@@ -99,7 +99,6 @@ function equalWidths(row: HTMLElement): void {
   raf(() => {
     let w = 0;
     for (const b of row.children as HTMLCollectionOf<HTMLElement>) {
-      if (b.classList.contains('run-tests')) continue;
       b.style.width = 'max-content';
       w = Math.max(w, b.getBoundingClientRect().width);
       b.style.width = '';
@@ -602,8 +601,9 @@ function renderCurrent(s: ViewState): void {
         el('p', { class: 'small muted' }, W.submitFileTip),
       );
     }
-    // Test-case buttons, the same width: the grader's (when it has them) and the statement's
-    // example table (every problem), side by side when they fit, stacked otherwise; Run tests below, full width.
+    // Test-case buttons, the same width: the grader's (when it has them) and the statement's example
+    // table (unless the cached statement is not a PDF); side by side when they fit, stacked otherwise,
+    // a single one full width, none → no row. Run tests below, full width like Submit.
     const tests = el('div', { class: 'test-buttons' });
     if (p.hasTestcase) {
       tests.append(
@@ -621,21 +621,27 @@ function renderCurrent(s: ViewState): void {
         ),
       );
     }
-    tests.append(
-      button(
-        s.samples.busy ? [icon('loading', 'codicon-modifier-spin'), ' ', W.readingSampleCases] : [icon('table'), ' ', W.loadSampleCases],
-        () => send({ type: 'loadSampleCases' }),
-        { disabled: s.samples.busy, title: s.samples.busy ? W.readingStatementTip : W.loadSampleCasesTip },
-      ),
-    );
+    if (s.samples.available || s.samples.busy) {
+      tests.append(
+        button(
+          s.samples.busy ? [icon('loading', 'codicon-modifier-spin'), ' ', W.readingSampleCases] : [icon('table'), ' ', W.loadSampleCases],
+          () => send({ type: 'loadSampleCases' }),
+          { disabled: s.samples.busy, title: s.samples.busy ? W.readingStatementTip : W.loadSampleCasesTip },
+        ),
+      );
+    }
+    if (tests.children.length) {
+      b.append(tests);
+      equalWidths(tests);
+    }
     // Run tests (CPH installed only): the run file in folder mode, else this file.
     if (s.runTests) {
-      const run = button([icon('play'), ' ', W.runTests], () => send({ type: 'runTests' }), { disabled: !!s.runTests.disabledReason, title: s.runTests.disabledReason ? `${W.runTestsTip} (${s.runTests.disabledReason})` : W.runTestsTip });
-      run.classList.add('run-tests'); // full width, like Submit
-      tests.append(run);
+      b.append(
+        el('button', { class: 'btn secondary wide', type: 'button', disabled: !!s.runTests.disabledReason, title: s.runTests.disabledReason ? `${W.runTestsTip} (${s.runTests.disabledReason})` : W.runTestsTip, onclick: () => send({ type: 'runTests' }) },
+          icon('play'), ` ${W.runTests}`,
+        ),
+      );
     }
-    b.append(tests);
-    equalWidths(tests);
   }
 
   const mm = p ? s.languages.mismatch : null;

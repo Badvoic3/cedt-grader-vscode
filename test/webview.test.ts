@@ -46,7 +46,7 @@ const base: ViewState = {
   notLinked: false,
   prompt: null,
   testcases: { busy: false },
-  samples: { busy: false },
+  samples: { busy: false, available: true },
   folder: null,
   folderMode: null,
   attachment: { busy: null },
@@ -399,10 +399,16 @@ describe.runIf(existsSync(resolve(__dirname, '../esbuild.mjs')))('sidebar webvie
     expect(sent.at(-1)).toEqual({ type: 'loadSampleCases' });
     post({ ...loggedIn, problem: { ...loggedIn.problem!, hasTestcase: false } });
     expect(row()).toEqual(['Load samples']);
-    post({ ...loggedIn, samples: { busy: true } });
+    post({ ...loggedIn, samples: { busy: true, available: true } });
     expect(btn().disabled).toBe(true);
     expect(btn().textContent?.trim()).toBe('Reading…');
     expect(btn().dataset.tip).toBe('Reading the example table in the statement…');
+    // The cached statement is not a PDF: no samples button; the grader's button alone (full width).
+    post({ ...loggedIn, samples: { busy: false, available: false } });
+    expect(row()).toEqual(['Load test cases']);
+    // Neither: no row at all (the rest moves up).
+    post({ ...loggedIn, problem: { ...loggedIn.problem!, hasTestcase: false }, samples: { busy: false, available: false } });
+    expect(doc.querySelector('#sec-current .test-buttons')).toBeNull();
   });
 
   it('accessibility: every icon-only button has a tooltip and the same aria-label; disabled buttons say why', () => {
@@ -506,7 +512,7 @@ describe.runIf(existsSync(resolve(__dirname, '../esbuild.mjs')))('sidebar webvie
     post(withAttachment({ folder: { path: 'pkg/', matched: false, submitFile: 'student.h', submitWhy: 'the included file named student.*', submitChosen: false, runFile: 'main.cpp', runWhy: 'the only file with main()', runChosen: false, candidates: ['main.cpp', 'student.h', 'vector.h'], runCandidates: ['main.cpp'] }, folderMode: { on: true, disabledReason: null }, runTests: { disabledReason: 'load the test cases first' } }));
     const run = [...cur.querySelectorAll<HTMLButtonElement>('button')].find((b) => b.textContent?.includes('Run tests'))!;
     expect(run.disabled).toBe(true);
-    expect(run.classList.contains('run-tests')).toBe(true); // spans the panel like Submit
+    expect(run.classList.contains('wide')).toBe(true); // full width like Submit, outside the test-case row
     expect(run.dataset.tip).toContain('load the test cases first');
     post({ ...withAttachment(), runTests: null });
     expect([...cur.querySelectorAll('button')].some((b) => b.textContent?.includes('Run tests'))).toBe(false); // no CPH: no button

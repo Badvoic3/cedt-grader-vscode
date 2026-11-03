@@ -159,6 +159,8 @@ const EN_S = {
     suggestedQ: (name: string, sub: string) => `Load the statement's sample cases for ${name}${sub ? ` (${sub})` : ''} into this file?`,
     noPdf: "This problem's statement has no PDF to read.",
     none: 'No example table found in the statement.',
+    incomplete: (n: number) =>
+      `${plural(n, 'row')} of the statement's example table couldn't be read, so no sample cases were loaded. Copy them from the statement by hand.`,
     loaded: (n: number) => `Loaded ${plural(n, 'sample case')} from the statement.`,
     annotated: (n: number) => ` Notes were removed from ${plural(n, 'case')}, so check them.`,
     whereTo: (n: number) => `${plural(n, 'sample case')} read from the statement. Where should they go?`,
