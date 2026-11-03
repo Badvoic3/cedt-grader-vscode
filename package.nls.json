@@ -20,7 +20,7 @@
   "command.downloadAttachment.title": "Download Problem Attachment",
   "command.runTests.title": "Run Tests",
   "command.toggleFolderMode.title": "Switch Between Linking This File and the Whole Folder",
-  "command.loadTestcases.title": "Load Test Cases",
+  "command.loadTestcases.title": "Load Test Cases from the Grader",
   "command.clearCache.title": "Clear Cached Data…",
   "command.openWalkthrough.title": "Get Started",
   "command.openTroubleshooting.title": "Troubleshooting",

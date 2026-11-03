@@ -76,3 +76,20 @@ export class TestcaseStore {
     return { status: 'ok', set, fromCache: false };
   }
 }
+
+/**
+ * Problems with a provided driver (`main.cpp` from the attachment) are graded
+ * with the grader's own main, which also prints a last line `KEY: <token>`
+ * (seen live: the same token on every case; problems without an attachment
+ * have none). The provided main doesn't print it, so local runs would always
+ * fail. Removed only when every case ends with the same `KEY: <token>` line
+ * and the program the tests are for doesn't print that token itself. The
+ * cache keeps the grader's text as it is.
+ */
+export function stripGraderKey(cases: GraderCase[], programText = ''): { cases: GraderCase[]; key: string | null } {
+  const KEY_LINE = /(?:^|\n)KEY:[ \t]*(\S+)[ \t]*\s*$/;
+  const keys = cases.map((c) => KEY_LINE.exec(c.output)?.[1] ?? null);
+  const key = keys[0];
+  if (!key || keys.some((k) => k !== key) || programText.includes(key)) return { cases, key: null };
+  return { cases: cases.map((c) => ({ ...c, output: c.output.replace(KEY_LINE, (m) => (m.startsWith('\n') ? '\n' : '')) })), key };
+}
