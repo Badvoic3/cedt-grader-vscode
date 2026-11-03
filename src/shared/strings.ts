@@ -547,8 +547,15 @@ const EN_W = {
   compilationError: 'Compilation error',
   points: (n: string) => `${n} points`,
   graded: 'Graded',
-  topicTip: (description: string | null, topic: string, active: boolean) =>
-    `${description ? `${description}. ` : ''}${active ? 'Click again to show all topics' : `Show only ${topic} problems`}`,
+  /** Topic pill tooltip (also its aria-label): the state, then what the next click does (off → hide → show only → off). */
+  topicTip: (description: string | null, topic: string, state: 'off' | 'out' | 'in') =>
+    `${description ? `${description}. ` : ''}${
+      state === 'in'
+        ? `Showing only ${topic} problems. Click to stop filtering by ${topic}`
+        : state === 'out'
+          ? `Hiding ${topic} problems. Click to show only ${topic} problems`
+          : `${topic}: click to hide ${topic} problems`
+    }`,
   defaultOrder: "Default order",
   nameAZ: "Name A–Z",
   nameZA: "Name Z–A",

@@ -473,6 +473,12 @@ input::placeholder { color: var(--vscode-input-placeholderForeground); }
 }
 .topic:hover { background: var(--vscode-list-hoverBackground); }
 .topic.active { color: var(--vscode-button-foreground); background: var(--vscode-button-background); border-color: transparent; }
+/* Hidden topic: red outline and text, struck through (colour + icon + line, not colour alone). */
+.topic.excluded {
+  color: var(--vscode-errorForeground, #f14c4c); border-color: var(--vscode-errorForeground, #f14c4c);
+  background: var(--vscode-inputValidation-errorBackground, transparent); text-decoration: line-through;
+}
+.topic .codicon { font-size: 12px; vertical-align: -2px; margin-right: 2px; }
 .segmented .seg:focus-visible, .topic:focus-visible { outline: 1px solid var(--vscode-focusBorder); outline-offset: -1px; }
 /* "Tags" dropdown (other tags, several at once, Any / All). */
 .tag-filter { display: flex; flex-direction: column; gap: 4px; }

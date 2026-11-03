@@ -634,8 +634,27 @@ describe.runIf(existsSync(resolve(__dirname, '../esbuild.mjs')))('sidebar webvie
     post({ ...st, problems: { ...st.problems, filter: { status: 'unsolved', topic: null } } });
     expect(doc.querySelectorAll('#sec-problems .problem-row')).toHaveLength(1); // the untried one
     expect(doc.querySelector('#sec-problems')!.textContent).toContain('1 of 2 problems');
-    doc.querySelector<HTMLButtonElement>('#sec-problems .topic')!.click();
-    expect(sent.at(-1)).toEqual({ type: 'setFilter', filter: { status: 'unsolved', topic: 'ComProg' } });
+    // Topic pill, three states: not chosen → hide → show only → not chosen.
+    const pill = () => doc.querySelector<HTMLButtonElement>('#sec-problems .topic')!;
+    expect(pill().className).toBe('topic');
+    pill().click();
+    expect(sent.at(-1)).toEqual({ type: 'setFilter', filter: { status: 'unsolved', topic: null, topicsIn: [], topicsOut: ['ComProg'] } });
+    post({ ...st, problems: { ...st.problems, filter: { status: 'all', topic: null, topicsIn: [], topicsOut: ['ComProg'] } } });
+    expect(pill().classList.contains('excluded')).toBe(true);
+    expect(pill().querySelector('.codicon-circle-slash')).not.toBeNull();
+    expect(pill().getAttribute('aria-label')).toContain('Hiding ComProg problems');
+    expect(doc.querySelectorAll('#sec-problems .problem-row')).toHaveLength(1); // the ComProg one is hidden
+    pill().click();
+    expect(sent.at(-1)).toEqual({ type: 'setFilter', filter: { status: 'all', topic: null, topicsIn: ['ComProg'], topicsOut: [] } });
+    post({ ...st, problems: { ...st.problems, filter: { status: 'all', topic: null, topicsIn: ['ComProg'], topicsOut: [] } } });
+    expect(pill().classList.contains('active')).toBe(true);
+    expect(pill().querySelector('.codicon-check')).not.toBeNull();
+    expect(doc.querySelectorAll('#sec-problems .problem-row')).toHaveLength(1); // only the ComProg one
+    pill().click();
+    expect(sent.at(-1)).toEqual({ type: 'setFilter', filter: { status: 'all', topic: null, topicsIn: [], topicsOut: [] } });
+    // An older saved filter (one topic) shows as "show only".
+    post({ ...st, problems: { ...st.problems, filter: { status: 'all', topic: 'ComProg' } } });
+    expect(pill().classList.contains('active')).toBe(true);
     expect(doc.querySelector('#sec-problems')!.textContent).not.toMatch(/Random/);
   });
 

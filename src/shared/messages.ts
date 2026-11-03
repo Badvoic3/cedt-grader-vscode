@@ -55,8 +55,12 @@ export type ProblemSort = 'default' | 'name-asc' | 'name-desc' | 'latest' | 'sco
 
 export interface ProblemFilter {
   status: 'all' | 'unsolved' | 'inprogress' | 'solved';
-  /** Topic tag name, or null for all topics. */
+  /** Older saved filters: one topic, shown only (read as `topicsIn`; new filters store null). */
   topic: string | null;
+  /** Topic pills set to "show only problems with this topic" (any of them). Optional: older saved filters lack it. */
+  topicsIn?: string[];
+  /** Topic pills set to "hide problems with this topic". */
+  topicsOut?: string[];
   /** Other tags chosen in the "Tags" dropdown (none = no tag filter). Optional: older saved filters lack it. */
   tags?: string[];
   /** How several chosen tags combine: 'or' = any of them (default), 'and' = all of them. */

@@ -39,6 +39,7 @@ export const TH_REVIEW: readonly string[] = [
   'W.clearTags',
   'W.clearTagsTip',
   'W.problemTags',
+  'W.topicTip',
 ];
 
 export const TH: Strings = {
@@ -564,8 +565,14 @@ export const TH: Strings = {
     compilationError: 'Compile error',
     points: (n) => `${n} คะแนน`,
     graded: 'ตรวจแล้ว',
-    topicTip: (description, topic, active) =>
-      `${description ? `${description} ` : ''}${active ? 'คลิกอีกครั้งเพื่อแสดงทุกหัวข้อ' : `แสดงเฉพาะโจทย์หัวข้อ ${topic}`}`,
+    topicTip: (description, topic, state) =>
+      `${description ? `${description} ` : ''}${
+        state === 'in'
+          ? `แสดงเฉพาะโจทย์หัวข้อ ${topic} อยู่ คลิกเพื่อเลิกกรองหัวข้อ ${topic}`
+          : state === 'out'
+            ? `ซ่อนโจทย์หัวข้อ ${topic} อยู่ คลิกเพื่อแสดงเฉพาะโจทย์หัวข้อ ${topic}`
+            : `${topic}: คลิกเพื่อซ่อนโจทย์หัวข้อ ${topic}`
+      }`,
     defaultOrder: 'ลำดับเดิม',
     nameAZ: 'ชื่อ A–Z',
     nameZA: 'ชื่อ Z–A',
