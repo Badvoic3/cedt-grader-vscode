@@ -5,7 +5,7 @@
 ### Attachments
 - **Download attachment** (the website's "File"): a cloud-download icon on the current problem and on problem rows (and in their right-click menus, plus the command "Download Problem Attachment"), only for problems that have an attachment. Downloaded only when you click, through the grader's API (`GET /api/v1/problems/{id}/files/attachment`).
 - A single file (e.g. a `.dig` or `.cpp` template) is saved next to the active file (or in the workspace root) under its own name, opened, and the panel offers to rename it to match the problem. Nothing is ever overwritten (`_2`, `_3`, …).
-- A zip package is checked completely first (no unsafe paths, at most 500 files / 50 MB, macOS `__MACOSX` junk and shipped compiled programs skipped, a single top folder removed), then one question: **Extract to `<problem name>/` and link it** (folder mode) or extract under its own name only. Always a new folder.
+- A zip package is checked completely first (no unsafe paths, at most 500 files / 50 MB, macOS `__MACOSX` junk and shipped compiled programs skipped, a single top folder removed), then one question: **Name it after the problem (`<problem name>/`) and link it** (folder mode) or keep the zip's original name without linking. Always a new folder.
 
 ### Folder mode
 - A problem can be linked to a **folder** instead of a single file (a package with `main.cpp` and headers): every file in the folder shows that problem. **Link the whole folder / Link only this file** switches it (folder icon on the current problem, right-click menu, command "Switch Between Linking This File and the Whole Folder").
@@ -22,6 +22,15 @@
 ### Matching
 - **Matched by folder name:** when a file's own name matches no problem, the name of the folder it is in is tried with the same rules (exact name first, then a confident suggestion), so any file in a folder named like a problem resolves to it. Same matcher both ways (clicking a problem finds those files; a folder counts as one item in "files for this problem").
 - `.h` / `.hpp` headers count as C++ (`.h` as C when a problem takes C only).
+
+### Fixes
+- Test cases: the last line `KEY: …` in the expected outputs of problems with a provided `main.cpp` is left out when loading them (only the grader's own main prints it, so local runs always failed). Loading again updates tests loaded before.
+- "Load test cases" without CPH no longer keeps spinning after the files are saved; "Download Again" in the result message works again. The button says the test cases come from the grader ("Load test cases from the grader").
+- Questions about submitting (confirm, which file, newer file, suggested match) appear right above the **Submit to Grader** button instead of at the top of the panel.
+- Folder mode: with another file of the folder open (e.g. `main.cpp`), Submit asks **Submit student.h** or **Submit main.cpp (open file)**. The answer is remembered for the folder (shown under **Submits**), so it is asked once; with "Confirm Before Submit" on it is the confirm question.
+- A folder matched only by its name (e.g. a package opened in another VS Code window, where its folder link isn't saved) now works like a linked folder: **Submits** / **Runs** are detected and Submit sends the submit file instead of the open `main.cpp`. Choosing a file saves the folder link.
+- The **Resubmit** button under Result is gone: **Submit to Grader** is the one way to submit.
+- Long answers in the panel's questions (e.g. long folder names when extracting a zip) wrap instead of running out of the box; the extract choices say which name the folder gets ("Name it after the problem (…/) and link it" / "Keep the original name (…/), don't link").
 
 ## 0.7.0 — Phase 6 (language and customization)
 

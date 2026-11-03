@@ -20,7 +20,7 @@
   "command.downloadAttachment.title": "ดาวน์โหลดไฟล์แนบของโจทย์",
   "command.runTests.title": "รันเทส",
   "command.toggleFolderMode.title": "สลับระหว่างเชื่อมไฟล์นี้กับเชื่อมทั้งโฟลเดอร์",
-  "command.loadTestcases.title": "โหลด Test Case",
+  "command.loadTestcases.title": "โหลด Test Case จาก Grader",
   "command.clearCache.title": "ล้างข้อมูลแคช…",
   "command.openWalkthrough.title": "เริ่มต้นใช้งาน",
   "command.openTroubleshooting.title": "แก้ปัญหาเบื้องต้น",
