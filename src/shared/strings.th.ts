@@ -23,6 +23,7 @@ export const TH: Strings = {
   HOW_LINKED: {
     chosen: 'เลือกโดยคุณ',
     filename: 'ตรงกับชื่อไฟล์',
+    folder: 'ตรงกับชื่อโฟลเดอร์',
     cph: 'ตรงกับข้อมูล CPH',
     suggested: 'แนะนำ',
   },
@@ -30,6 +31,7 @@ export const TH: Strings = {
   PICK_HOW: {
     chosen: 'เชื่อมไว้แล้ว',
     filename: 'ตรงกับชื่อไฟล์',
+    folder: 'ตรงกับชื่อโฟลเดอร์',
     cph: 'ตรงกับข้อมูล CPH',
     suggested: 'แนะนำ',
   },
@@ -122,7 +124,7 @@ export const TH: Strings = {
       ambiguousKept: (n) => `จับคู่อัตโนมัติเจอโจทย์ที่ตรงพอ ๆ กัน ${n} ข้อ จึงใช้โจทย์ที่คุณเลือกไว้`,
       noneKept: 'จับคู่อัตโนมัติไม่เจอโจทย์ที่ตรงพอดี จึงใช้โจทย์ที่คุณเลือกไว้',
       none: 'จับคู่อัตโนมัติไม่เจอโจทย์ที่ตรงกัน เลือกโจทย์จากรายการแทน',
-      how: { cph: 'จากข้อมูล CPH', filename: 'จากชื่อไฟล์', suggested: 'แนะนำ' },
+      how: { cph: 'จากข้อมูล CPH', filename: 'จากชื่อไฟล์', folder: 'จากชื่อโฟลเดอร์', suggested: 'แนะนำ' },
     },
 
     testcases: {
@@ -227,6 +229,7 @@ export const TH: Strings = {
     match: {
       severalCould: 'มีหลายโจทย์ที่อาจตรงกับไฟล์นี้ เลือกหนึ่งข้อ',
       severalMatch: (cph) => `มีหลายโจทย์ที่ตรงกับ${cph ? 'ข้อมูล CPH ของไฟล์นี้' : 'ชื่อไฟล์นี้'} เลือกหนึ่งข้อ`,
+      severalMatchFolder: 'มีหลายโจทย์ที่ตรงกับชื่อโฟลเดอร์นี้ เลือกหนึ่งข้อ',
     },
 
     rename: {
@@ -239,6 +242,57 @@ export const TH: Strings = {
         reserved: 'ชื่อไฟล์ห้ามมี : * ? " < > |',
       },
       failed: (name) => `เปลี่ยนชื่อไฟล์เป็น ${name} ไม่ได้`,
+    },
+
+    folder: {
+      openFile: 'เปิดไฟล์ในโฟลเดอร์ก่อน',
+      outsideWorkspace: 'เชื่อมได้เฉพาะโฟลเดอร์ที่อยู่ใน workspace ที่เปิดอยู่',
+      atRoot: 'ไฟล์นี้อยู่ชั้นบนสุดของโฟลเดอร์ workspace ย้ายไปไว้ในโฟลเดอร์ของตัวเองก่อนจึงจะเชื่อมทั้งโฟลเดอร์ได้',
+      replaceQ: (folder, old, name) => `${folder}/ เชื่อมกับ ${old} อยู่ เปลี่ยนไปเชื่อมกับ ${name} ไหม`,
+      replace: 'เชื่อมกับโจทย์นี้',
+      nowFolder: (folder) => `$(folder) เชื่อม ${folder}/ กับโจทย์แล้ว`,
+      nowFile: (file) => `$(file) ตอนนี้เชื่อมเฉพาะ ${file}`,
+      noSources: (folder) => `${folder}/ ไม่มีไฟล์โค้ดให้ส่ง`,
+      whichFile: (name) => `จะส่งไฟล์ไหนสำหรับ ${name}`,
+      oneFile: 'Grader รับครั้งละหนึ่งไฟล์ จึงส่งเฉพาะไฟล์นี้ เปลี่ยนได้ที่ส่วนโจทย์ปัจจุบัน',
+      onlyThisSent: (file) => `ส่งเฉพาะ ${file} (Grader รับครั้งละหนึ่งไฟล์)`,
+      whichRunFile: (name) => `โปรแกรมไหนใช้รันเทสของ ${name}`,
+      runFileDetail: 'เทสเคสเป็นของโปรแกรมที่มี main() (ไฟล์ทดสอบที่ให้มา) ซึ่ง include ไฟล์ของคุณ',
+      why: {
+        'named-in-run': (run) => `ระบุไว้ในคอมเมนต์ของ ${run}`,
+        student: (_run) => 'ไฟล์ที่ถูก include ชื่อ student.*',
+        stub: (_run) => 'ไฟล์ที่ถูก include และมีคอมเมนต์ "your code here"',
+        'only-main': (_run) => 'ไฟล์เดียวที่มี main()',
+        'main-name': (_run) => 'ไฟล์ที่มี main() และชื่อขึ้นต้นด้วย main',
+        chosen: (_run) => 'คุณเลือกเอง',
+        'only-file': (_run) => 'ไฟล์โค้ดไฟล์เดียวในโฟลเดอร์',
+      },
+    },
+
+    runTests: {
+      noTests: 'ยังไม่มีเทสเคสให้รัน โหลดเทสเคสก่อน',
+      noTestsShort: 'โหลดเทสเคสก่อน',
+    },
+
+    attachment: {
+      none: (name) => `${name} ไม่มีไฟล์แนบใน Grader`,
+      writeFailed: (why) => `บันทึกไฟล์แนบไม่ได้: ${why}`,
+      renameQ: (name, proposal) => `ดาวน์โหลด ${name} แล้ว เปลี่ยนชื่อเป็น ${proposal} ให้ตรงกับโจทย์ไหม`,
+      rename: 'เปลี่ยนชื่อ',
+      keepName: 'ใช้ชื่อเดิม',
+      extractQ: (zip, n, dir) => `${zip} มี ${n} ไฟล์ แตกไฟล์ลงโฟลเดอร์ใหม่ใน ${dir} ไหม`,
+      extractAndLink: (folder) => `แตกไฟล์ลง ${folder}/ และเชื่อมกับโจทย์`,
+      extractOnly: (folder) => `แตกไฟล์ลง ${folder}/ อย่างเดียว`,
+      contents: (list, n) =>
+        `ไฟล์: ${list}${n > 6 ? `, … (${n})` : ''} ไม่มีไฟล์ใดถูกเขียนทับ "เชื่อม" จะเปลี่ยนโจทย์เป็นโหมดโฟลเดอร์ ทุกไฟล์ในโฟลเดอร์จะแสดงโจทย์นี้`,
+      unsafePath: (name) => `ไฟล์ zip มีพาธที่ไม่ปลอดภัย (${name}) จึงไม่ได้แตกไฟล์`,
+      duplicate: (name) => `ไฟล์ zip มี ${name} ซ้ำสองครั้ง จึงไม่ได้แตกไฟล์`,
+      tooManyFiles: (n) => `ไฟล์ zip มีมากกว่า ${n} ไฟล์ จึงไม่ได้แตกไฟล์`,
+      tooBig: (mb) => `ไฟล์ใน zip รวมกันใหญ่กว่า ${mb} MB จึงไม่ได้แตกไฟล์`,
+      unreadable: (why) => `อ่านไฟล์ zip ไม่ได้ (${why}) จึงไม่ได้แตกไฟล์`,
+      empty: 'ไฟล์ zip ไม่มีไฟล์ข้างใน',
+      noFreeName: (name) => `หาชื่อโฟลเดอร์ที่ว่างสำหรับ ${name} ไม่ได้`,
+      exists: (path) => `${path} มีอยู่แล้ว ไม่มีอะไรถูกเขียนทับ`,
     },
 
     statementTab: (name) => `โจทย์: ${name}`,
@@ -454,11 +508,32 @@ export const TH: Strings = {
     bestScoreLowToHigh: 'คะแนนสูงสุด (น้อยไปมาก)',
     bestScoreHighToLow: 'คะแนนสูงสุด (มากไปน้อย)',
     recentlyOpened: 'เปิดล่าสุด',
+    downloadAttachment: 'ดาวน์โหลดไฟล์แนบ',
+    downloading: 'กำลังดาวน์โหลด…',
+    linkFolder: 'เชื่อมทั้งโฟลเดอร์',
+    linkFolderTip: 'เชื่อมทั้งโฟลเดอร์ (ทุกไฟล์ในโฟลเดอร์แสดงโจทย์นี้ ปุ่มส่งจะส่งไฟล์เดียวที่เลือกไว้)',
+    linkOnlyFile: 'เชื่อมเฉพาะไฟล์นี้',
+    folderLinked: (folder) => `โฟลเดอร์ที่คุณเชื่อมไว้: ${folder}`,
+    submits: 'ไฟล์ที่ส่ง',
+    submitFileTip: 'Grader รับครั้งละหนึ่งไฟล์ จะส่งเฉพาะไฟล์นี้',
+    submitFileAsk: 'จะถามตอนส่งครั้งแรก',
+    runs: 'ไฟล์ที่รัน',
+    runFileTip: 'โหลดเทสเคสให้โปรแกรมนี้ และปุ่มรันเทสจะรันโปรแกรมนี้ (ซึ่ง include ไฟล์ที่คุณส่ง)',
+    runFileAsk: 'จะถามตอนโหลดหรือรันเทส',
+    automatic: (file) => `อัตโนมัติ: ${file}`,
+    whyTip: (why) => `หาให้อัตโนมัติ: ${why}`,
+    runTests: 'รันเทส',
+    runTestsTip: 'รันเทสเคสที่โหลดไว้บนเครื่องของคุณ (Competitive Programming Helper)',
+    unlinkThisFolder: 'ยกเลิกการเชื่อมโฟลเดอร์นี้',
+    unlinkThisFolderTip: 'ยกเลิกการเชื่อมโฟลเดอร์นี้ (จับคู่อัตโนมัติจะไม่เชื่อมไฟล์ในโฟลเดอร์นี้อีก)',
+    dontMatchThisFolder: 'ไม่ต้องจับคู่โฟลเดอร์นี้',
+    dontMatchThisFolderTip: 'ไม่ต้องจับคู่โฟลเดอร์นี้ (จับคู่อัตโนมัติจะไม่เชื่อมไฟล์ในโฟลเดอร์นี้กับโจทย์อีก)',
   },
 
   W_SOURCE: {
     saved: 'เลือกโดยคุณ',
     filename: 'ตรงกับชื่อไฟล์',
+    folder: 'ตรงกับชื่อโฟลเดอร์',
     cph: 'ตรงกับข้อมูล CPH',
     suggested: 'แนะนำ',
   },
@@ -546,12 +621,14 @@ export const TH: Strings = {
     countedImproved: (before, after) => `คะแนนที่ได้ดีขึ้น: ${before} → ${after}`,
     countedKept: (score, best) => `ครั้งนี้ได้ ${score} คะแนนสูงสุด ${best} ยังเป็นคะแนนที่ได้`,
     countedUnchanged: (score) => `คะแนนที่ได้ไม่เปลี่ยน (${score})`,
+    downloadTooLarge: (mb) => `ไฟล์ใหญ่กว่า ${mb} MB จึงไม่ได้ดาวน์โหลด`,
   },
 
   MATCH_SOURCE: {
     saved: 'เลือกโดยคุณ',
     cph: 'ตรงกับข้อมูล CPH',
     filename: 'ตรงกับชื่อไฟล์',
+    folder: 'ตรงกับชื่อโฟลเดอร์',
     suggested: 'แนะนำ (คลิกเพื่อยืนยัน)',
   },
 };

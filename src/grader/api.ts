@@ -147,13 +147,25 @@ export class ApiClient {
   }
 
   /**
-   * Binary GET (statement PDF). 403 / 404 are returned as statuses, not thrown.
-   * Retries 429 / 5xx like `get`.
+   * Binary GET (statement PDF, attachment). 403 / 404 are returned as statuses, not thrown.
+   * Retries 429 / 5xx like `get`. `maxBytes`: a larger body is refused (Content-Length and real size).
    */
-  async getBytes(path: string): Promise<{ status: 200; bytes: Uint8Array } | { status: 403 | 404; error: string | null }> {
+  async getBytes(
+    path: string,
+    maxBytes = Infinity,
+  ): Promise<{ status: 200; bytes: Uint8Array; contentType: string | null; disposition: string | null } | { status: 403 | 404; error: string | null }> {
     for (let attempt = 0; ; attempt++) {
       const res = await this.raw('GET', path, undefined, true, undefined, true);
-      if (res.ok) return { status: 200, bytes: new Uint8Array(await res.arrayBuffer()) };
+      if (res.ok) {
+        const declared = Number(res.headers.get('content-length'));
+        if (declared > maxBytes) {
+          await res.body?.cancel().catch(() => {});
+          throw new GraderError(G.downloadTooLarge(Math.ceil(maxBytes / 1048576)));
+        }
+        const bytes = new Uint8Array(await res.arrayBuffer());
+        if (bytes.length > maxBytes) throw new GraderError(G.downloadTooLarge(Math.ceil(maxBytes / 1048576)));
+        return { status: 200, bytes, contentType: res.headers.get('content-type'), disposition: res.headers.get('content-disposition') };
+      }
       if (res.status === 403 || res.status === 404) {
         const body = (await this.json(res)) as { error?: string } | null;
         return { status: res.status, error: body?.error ?? null };

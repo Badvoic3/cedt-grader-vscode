@@ -5,7 +5,7 @@ import { filterProblems, sortProblems } from '../webview/filters';
 import { realFixture } from './helpers';
 
 const V = (id: number, status: ProblemView['status'], tags: string[] = [], name = `p${id}`): ProblemView => ({
-  id, name, fullName: name, status, tags, hasFile: false, hasTestcase: false, lastSubmissionTime: null, lastOpened: null,
+  id, name, fullName: name, status, tags, hasFile: false, hasTestcase: false, hasAttachment: false, lastSubmissionTime: null, lastOpened: null,
   score: { counted: null, best: null, latest: null, attempts: 0, penaltyLabel: null, rawSum: false, outOf: 100, source: 'api', latestBelowCounted: false },
 });
 

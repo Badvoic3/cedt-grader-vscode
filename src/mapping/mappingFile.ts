@@ -12,6 +12,18 @@ export interface MappingEntry {
   baseUrl?: string;
   /** Set when the mapped file was deleted / went missing; removed after 30 days (see mappingOps). */
   staleSince?: string;
+  /**
+   * Folder mode: the key is a folder and every file inside it belongs to the
+   * problem (a file's own link still wins). Submit sends `submitFile` only.
+   */
+  folder?: true;
+  /**
+   * Folder mode, the user's choices (relative to the folder, "/" separators):
+   * the file Submit sends, and the program CPH runs (test cases go to it).
+   * Missing → detected (src/mapping/folderRoles.ts), asked only when that fails.
+   */
+  submitFile?: string;
+  runFile?: string;
 }
 
 export interface MappingFileData {
@@ -49,10 +61,20 @@ export function parseMappingFile(text: string): MappingFileData {
         name: typeof e.name === 'string' ? e.name : '',
         ...(typeof e.baseUrl === 'string' ? { baseUrl: e.baseUrl } : {}),
         ...(typeof e.staleSince === 'string' ? { staleSince: e.staleSince } : {}),
+        ...(e.folder === true ? { folder: true as const } : {}),
+        ...(e.folder === true ? insideFolder('submitFile', e.submitFile) : {}),
+        ...(e.folder === true ? insideFolder('runFile', e.runFile) : {}),
       };
     }
   }
   return out;
+}
+
+/** A folder-relative path field, kept only when it stays inside the folder. */
+function insideFolder(key: 'submitFile' | 'runFile', v: unknown): Partial<MappingEntry> {
+  if (typeof v !== 'string') return {};
+  const rel = normalizeRelPath(v);
+  return rel && !rel.startsWith('..') ? { [key]: rel } : {};
 }
 
 export function serializeMappingFile(d: MappingFileData): string {

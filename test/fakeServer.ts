@@ -32,6 +32,8 @@ export class FakeGrader {
   /** Statement routes: 'pdf' → bytes, 403 hidden, 404 none. */
   pdf: 'pdf' | 403 | 404 = 'pdf';
   description: { markdown: boolean; description: string } | 403 | 404 = 404;
+  /** Attachment route (`files/attachment`): bytes + headers, or 404 (none). */
+  attachment: { bytes: Uint8Array; type: string; disposition: string | null } | 404 = 404;
   /** Make the next fetch reject like Node's fetch does (cause.code / TimeoutError). */
   rejectWith: unknown = null;
   /** Problems the grader no longer offers: every /api/v1/problems/{id}… request answers this status. */
@@ -110,6 +112,12 @@ export class FakeGrader {
     if (method === 'GET' && /^\/api\/v1\/problems\/\d+\/files\/pdf$/.test(p)) {
       if (this.pdf === 'pdf') return new Response(new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x2d]), { status: 200, headers: { 'content-type': 'application/pdf' } });
       return this.json(this.pdf, { error: this.pdf === 403 ? 'PDF statement not available for this problem' : 'PDF statement not found' });
+    }
+    if (method === 'GET' && /^\/api\/v1\/problems\/\d+\/files\/attachment$/.test(p)) {
+      if (this.attachment === 404) return this.json(404, { error: 'Attachment not found' });
+      const h: Record<string, string> = { 'content-type': this.attachment.type, 'content-length': String(this.attachment.bytes.length) };
+      if (this.attachment.disposition) h['content-disposition'] = this.attachment.disposition;
+      return new Response(new Uint8Array(this.attachment.bytes), { status: 200, headers: h });
     }
     if (method === 'GET' && /^\/api\/v1\/problems\/\d+\/description$/.test(p)) {
       if (typeof this.description === 'number') return this.json(this.description, { error: 'Description not available for this problem' });

@@ -20,6 +20,8 @@ import { TIMING } from '../shared/constants';
  * - nothing is fetched while the panel is hidden; pending loads run when it is shown
  * - no background polling, no prefetching of other problems
  * - offline / 429 / 5xx: keep cached data and flag it as possibly out of date
+ * - attachments: only on click, never cached (they are saved into the workspace);
+ *   the same problem in flight → same promise
  */
 export const HISTORY_TTL_MS = TIMING.historyTtlMs;
 export const SWITCH_DEBOUNCE_MS = TIMING.switchDebounceMs;
@@ -69,6 +71,7 @@ export class DataService {
   private timer: unknown = null;
   private pendingProblems = false;
   private readonly states = new Map<string, LoadState>();
+  private readonly downloads = new Map<number, ReturnType<GraderClient['getAttachment']>>();
   private readonly setTimer: NonNullable<DataServiceOptions['setTimer']>;
   private readonly clearTimer: NonNullable<DataServiceOptions['clearTimer']>;
   private readonly log: (line: string) => void;
@@ -253,6 +256,36 @@ export class DataService {
     this.pendingProblems = false;
     this.focused = null;
     this.onChange();
+  }
+
+  /**
+   * A problem's attachment (`files/attachment`), only when the user asks for
+   * it. Not cached; a second click while it is downloading shares the request.
+   * Errors are thrown to the caller (which shows them once).
+   */
+  downloadAttachment(problemId: number): ReturnType<GraderClient['getAttachment']> {
+    const key = `attachment:${problemId}`;
+    const inFlight = this.downloads.get(problemId);
+    if (inFlight) {
+      this.log(`cache dedup ${key} (request already in flight)`);
+      return inFlight;
+    }
+    this.log(`cache miss ${key} (never cached)`);
+    const p = this.opts
+      .client()
+      .getAttachment(problemId)
+      .then((v) => {
+        this.onSuccess();
+        return v;
+      })
+      .finally(() => this.downloads.delete(problemId));
+    this.downloads.set(problemId, p);
+    return p;
+  }
+
+  /** Is this problem's attachment downloading right now? */
+  isDownloading(problemId: number): boolean {
+    return this.downloads.has(problemId);
   }
 
   /** Track loading / stale / error per key; on network trouble keep the cached value. */

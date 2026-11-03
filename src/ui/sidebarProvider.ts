@@ -144,6 +144,18 @@ export class SidebarProvider implements vscode.WebviewViewProvider, vscode.Dispo
       case 'renameFileToProblem':
         await c.renameFileToProblem();
         return;
+      case 'downloadAttachment':
+        if (Number.isInteger(m.problemId)) await c.downloadAttachment(m.problemId);
+        return;
+      case 'toggleFolderMode':
+        await c.toggleFolderMode();
+        return;
+      case 'setFolderRole':
+        if ((m.role === 'submit' || m.role === 'run') && typeof m.file === 'string') await c.setFolderRole(m.role, m.file);
+        return;
+      case 'runTests':
+        await c.runTests();
+        return;
       case 'dismissLinkedNotice':
         await c.dismissLinkedNotice();
         return;

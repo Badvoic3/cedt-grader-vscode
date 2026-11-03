@@ -10,8 +10,8 @@ import {
   reverseIndex,
   serializeMappingFile,
 } from './mappingFile';
-import { affectedByDelete, expired, type LocatedEntry, planRename } from './mappingOps';
-import { normalizeAbsPath, normalizeRelPath, pathKey, remapPath } from './paths';
+import { affectedByDelete, expired, type LocatedEntry, nearestFolderLink, planRename, submitFileAfterMove, submitFileDeleted } from './mappingOps';
+import { isAtOrInside, normalizeAbsPath, normalizeRelPath, pathKey, remapPath } from './paths';
 import { type AutoMatch, autoAfterDelete, autoAfterRename } from './problemFiles';
 import { LIMITS } from '../shared/constants';
 import { KEYS } from '../shared/stateKeys';
@@ -56,7 +56,7 @@ export class MappingStore {
   }
 
   /** Remember that an open file matched a problem automatically (never over a manual link or "not linked"). */
-  async recordAuto(uri: vscode.Uri, problemId: number, how: 'cph' | 'filename' | 'suggested'): Promise<void> {
+  async recordAuto(uri: vscode.Uri, problemId: number, how: 'cph' | 'filename' | 'folder' | 'suggested'): Promise<void> {
     const k = pathKey(uri.fsPath);
     const list = this.autoMatches().filter((a) => pathKey(a.fsPath) !== k);
     list.push({ fsPath: normalizeAbsPath(uri.fsPath), problemId, how, at: Date.now() });
@@ -94,6 +94,34 @@ export class MappingStore {
   isUnlinked(uri: vscode.Uri): boolean {
     const { memento, key } = this.keyFor(uri);
     return !!memento.get<Record<string, string>>(UNLINKED_KEY, {})[key];
+  }
+
+  /** "Not linked" for this file or for a folder it is in ("Don't match this folder"). */
+  isUnlinkedHere(uri: vscode.Uri): boolean {
+    return this.isUnlinked(uri) || this.unlinkedPaths().some((u) => isAtOrInside(uri.fsPath, u));
+  }
+
+  /**
+   * The link that applies to a file: its own entry first, else the nearest
+   * folder link above it (folder mode). Same server only.
+   */
+  async resolve(uri: vscode.Uri, baseUrl: string): Promise<{ entry: MappingEntry; folder?: string } | undefined> {
+    const own = await this.get(uri, baseUrl);
+    if (own && !own.folder) return { entry: own };
+    const hit = nearestFolderLink(
+      (await this.allEntries()).filter((e) => !e.entry.baseUrl || e.entry.baseUrl === baseUrl),
+      uri.fsPath,
+    );
+    return hit ? { entry: hit.entry, folder: hit.fsPath } : undefined;
+  }
+
+  /** Folder mode: remember (or forget → detect again) the file Submit sends / the file CPH runs, relative to the folder. */
+  async setFolderRole(folder: vscode.Uri, baseUrl: string, role: 'submitFile' | 'runFile', rel: string | undefined): Promise<void> {
+    const e = await this.get(folder, baseUrl);
+    if (!e?.folder) return;
+    const rest = { ...e };
+    delete rest[role];
+    await this.set(folder, rel ? { ...rest, [role]: rel } : rest);
   }
 
   async setUnlinked(uri: vscode.Uri, on: boolean): Promise<void> {
@@ -145,8 +173,13 @@ export class MappingStore {
     }
   }
 
-  /** Files mapped to a problem (saved mappings only, no workspace scan). */
+  /** Files (and linked folders) mapped to a problem (saved mappings only, no workspace scan). */
   async filesFor(problemId: number, baseUrl: string): Promise<vscode.Uri[]> {
+    return ((await this.reverse(baseUrl)).get(problemId) ?? []).map((l) => l.uri);
+  }
+
+  /** Saved links of a problem, each marked file or folder (folder mode). */
+  async linksFor(problemId: number, baseUrl: string): Promise<{ uri: vscode.Uri; folder: boolean }[]> {
     return (await this.reverse(baseUrl)).get(problemId) ?? [];
   }
 
@@ -155,26 +188,27 @@ export class MappingStore {
     return new Set((await this.reverse(baseUrl)).keys());
   }
 
-  private async reverse(baseUrl: string): Promise<Map<number, vscode.Uri[]>> {
-    const seen = new Map<string, vscode.Uri>();
-    const out = new Map<number, vscode.Uri[]>();
-    const add = (id: number, uri: vscode.Uri) => {
+  private async reverse(baseUrl: string): Promise<Map<number, { uri: vscode.Uri; folder: boolean }[]>> {
+    const seen = new Set<string>();
+    const out = new Map<number, { uri: vscode.Uri; folder: boolean }[]>();
+    const add = (id: number, uri: vscode.Uri, folder: boolean) => {
       const k = pathKey(uri.fsPath);
       if (seen.has(k)) return;
-      seen.set(k, uri);
-      out.set(id, [...(out.get(id) ?? []), uri]);
+      seen.add(k);
+      out.set(id, [...(out.get(id) ?? []), { uri, folder }]);
     };
     for (const memento of [this.ctx.workspaceState, this.ctx.globalState]) {
       for (const e of Object.values(memento.get<Record<string, StateEntry>>(STATE_KEY, {}))) {
-        if ((!e.baseUrl || e.baseUrl === baseUrl) && !e.staleSince) add(e.problemId, vscode.Uri.file(e.fsPath));
+        if ((!e.baseUrl || e.baseUrl === baseUrl) && !e.staleSince) add(e.problemId, vscode.Uri.file(e.fsPath), !!e.folder);
       }
       for (const [fsPath, e] of Object.entries(this.legacy(memento))) {
-        if (!e.baseUrl || e.baseUrl === baseUrl) add(e.problemId, vscode.Uri.file(fsPath));
+        if (!e.baseUrl || e.baseUrl === baseUrl) add(e.problemId, vscode.Uri.file(fsPath), false);
       }
     }
     for (const folder of vscode.workspace.workspaceFolders ?? []) {
-      for (const [id, rels] of reverseIndex(await this.readFile(folder), baseUrl)) {
-        for (const rel of rels) add(id, vscode.Uri.joinPath(folder.uri, rel));
+      const data = await this.readFile(folder);
+      for (const [id, rels] of reverseIndex(data, baseUrl)) {
+        for (const rel of rels) add(id, vscode.Uri.joinPath(folder.uri, rel), !!data.files[rel]?.folder);
       }
     }
     return out;
@@ -206,6 +240,19 @@ export class MappingStore {
       await this.set(vscode.Uri.file(m.from), undefined);
       await this.set(vscode.Uri.file(m.to), m.entry);
     }
+    // Folder mode: the chosen submit / run file follows a rename inside its folder (moved out → detected again).
+    for (const e of await this.allEntries()) {
+      if (!e.entry.folder) continue;
+      let entry = e.entry;
+      for (const role of ['submitFile', 'runFile'] as const) {
+        const next = submitFileAfterMove(e.fsPath, entry[role], oldUri.fsPath, newUri.fsPath);
+        if (next === null) continue;
+        entry = { ...entry };
+        delete entry[role];
+        if (next) entry[role] = next;
+      }
+      if (entry !== e.entry) await this.set(vscode.Uri.file(e.fsPath), entry);
+    }
     // "Not linked" follows the file too.
     for (const memento of [this.ctx.workspaceState, this.ctx.globalState]) {
       for (const fsPath of Object.values(memento.get<Record<string, string>>(UNLINKED_KEY, {}))) {
@@ -221,8 +268,18 @@ export class MappingStore {
 
   /** A mapped file (or folder) was deleted: keep the mapping but mark it stale, so a moved file can reconnect. */
   async markDeleted(uri: vscode.Uri, now = new Date()): Promise<number> {
-    const hit = affectedByDelete(await this.allEntries(), uri.fsPath);
+    const all = await this.allEntries();
+    const hit = affectedByDelete(all, uri.fsPath);
     for (const e of hit) await this.set(vscode.Uri.file(e.fsPath), { ...e.entry, staleSince: now.toISOString() });
+    // Folder mode: a deleted submit / run file is detected (or asked) again.
+    for (const e of all) {
+      if (!e.entry.folder || e.entry.staleSince) continue;
+      const gone = (['submitFile', 'runFile'] as const).filter((r) => submitFileDeleted(e.fsPath, e.entry[r], uri.fsPath));
+      if (!gone.length) continue;
+      const rest = { ...e.entry };
+      for (const r of gone) delete rest[r];
+      await this.set(vscode.Uri.file(e.fsPath), rest);
+    }
     return hit.length;
   }
 
