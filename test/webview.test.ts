@@ -246,6 +246,7 @@ describe.runIf(existsSync(resolve(__dirname, '../esbuild.mjs')))('sidebar webvie
     expect(detail.textContent).toContain('2.461 s');
     expect(detail.textContent).toContain('130.88 MB');
     expect(detail.querySelectorAll('.evals tbody tr')).toHaveLength(1);
+    expect(detail.querySelector('.evals td.verdict')!.textContent).toBe(' Correct'); // the cell that may wrap
     const [openBtn, compareBtn] = [...detail.querySelectorAll<HTMLButtonElement>('button.btn')];
     openBtn.click();
     expect(sent.at(-1)).toEqual({ type: 'openSubmissionSource', submissionId: 2460977 });
@@ -497,9 +498,10 @@ describe.runIf(existsSync(resolve(__dirname, '../esbuild.mjs')))('sidebar webvie
     const pick = cur.querySelector<HTMLSelectElement>('#submit-file')!;
     expect([...pick.options].map((o) => o.textContent)).toEqual(['Automatic: student.h', 'main.cpp', 'student.h', 'vector.h']);
     expect(pick.dataset.tip).toContain('the included file named student.*');
+    expect(pick.dataset.tip).toContain('only this file is sent. Found automatically'); // one period, not two
     const runs = cur.querySelector<HTMLSelectElement>('#run-file')!;
     expect([...runs.options].map((o) => o.textContent)).toEqual(['Automatic: main.cpp', 'main.cpp']);
-    expect(cur.textContent).toContain('only this file is sent');
+    expect(cur.textContent).toContain('The grader takes one file per submission: only this file is sent.');
     const W = doc.defaultView as unknown as typeof globalThis;
     pick.value = 'vector.h';
     pick.dispatchEvent(new W.Event('change'));
@@ -569,6 +571,23 @@ describe.runIf(existsSync(resolve(__dirname, '../esbuild.mjs')))('sidebar webvie
     post({ ...loggedIn, layout: { sections: ['current'], compact: false } });
     doc.defaultView!.dispatchEvent(new doc.defaultView!.MessageEvent('message', { data: { type: 'focus', target: 'result' } }));
     expect(doc.querySelector<HTMLElement>('#sec-result')!.hidden).toBe(true);
+  });
+
+  it('layout: only the first visible section has no line above it (the hidden banner comes first in the DOM)', () => {
+    const { doc, post } = boot();
+    const firsts = () => [...doc.querySelectorAll<HTMLElement>('#app > details.section.first-visible')].map((d) => d.id);
+    post(loggedIn);
+    expect(doc.querySelector('#app > .banner')!.nextElementSibling).not.toBeNull(); // banner (hidden) before the sections
+    expect(firsts()).toEqual(['sec-account']);
+    post({ ...loggedIn, layout: { sections: ['history', 'current'], compact: false } });
+    expect(firsts()).toEqual(['sec-history']);
+    post({ ...loggedIn, layout: { sections: ['problems'], compact: true } });
+    expect(firsts()).toEqual(['sec-problems']);
+    post({ ...base, layout: { sections: ['problems'], compact: false } }); // logged out: Account comes back first
+    expect(firsts()).toEqual(['sec-account']);
+    const css = readFileSync(resolve(__dirname, '../webview/style.css'), 'utf8');
+    expect(css).toMatch(/\.section\.first-visible\s*\{\s*border-top:\s*none/);
+    expect(css).not.toMatch(/\.section:first-child/);
   });
 
   it('Thai: the panel is built in the language of <html lang> (texts from strings.th.ts)', () => {
@@ -890,6 +909,17 @@ describe.runIf(existsSync(resolve(__dirname, '../esbuild.mjs')))('sidebar webvie
     input.dispatchEvent(new (doc.defaultView as unknown as typeof globalThis).Event('input'));
     expect([...vp.children]).toEqual(rows);
     expect(rows.filter((r) => r.hidden)).toEqual([]);
+  });
+
+  it('panel CSS: selected row outline inside the row; score facts and verdicts never cut or scroll sideways', () => {
+    const css = readFileSync(resolve(__dirname, '../webview/style.css'), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
+    const rule = (sel: string) => [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].find((m) => m[1].trim() === sel)?.[2] ?? '';
+    // The scrolling list clips anything outside a row: the selected row's outline is drawn inside it.
+    expect(rule('.problem-row.mapped')).toMatch(/outline-offset:\s*-1px/);
+    // "Best 60", "-10 AI assist", …: each item stays on one line; whole items wrap.
+    expect(rule('.score-facts > :not(.mono)')).toMatch(/white-space:\s*nowrap/);
+    // History details: the verdict cell wraps, so the table fits a narrow panel.
+    expect(rule('.evals td.verdict')).toMatch(/white-space:\s*normal/);
   });
 
   it('problem list CSS: rows stay in normal flow (never absolute, never a fixed height)', () => {

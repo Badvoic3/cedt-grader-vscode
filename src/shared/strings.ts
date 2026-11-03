@@ -569,7 +569,7 @@ const EN_W = {
   linkOnlyFile: 'Link only this file',
   folderLinked: (folder: string) => `Folder linked by you: ${folder}`,
   submits: 'Submits',
-  submitFileTip: 'The grader takes one file per submission: only this file is sent',
+  submitFileTip: 'The grader takes one file per submission: only this file is sent.',
   submitFileAsk: 'Asked on the first submit',
   runs: 'Runs',
   runFileTip: 'Test cases are loaded for this program, and Run tests runs it (it includes the file you submit)',

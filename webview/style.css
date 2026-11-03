@@ -27,7 +27,7 @@ body {
 /* ---------------------------------------------------------------- sections */
 
 .section { border-top: 1px solid var(--vscode-sideBarSectionHeader-border, var(--hc-border)); }
-.section:first-child { border-top: none; }
+.section.first-visible { border-top: none; } /* set by applyLayout: the banner / prompt come first in the DOM */
 .section > summary {
   list-style: none;
   display: flex;
@@ -335,6 +335,7 @@ input::placeholder { color: var(--vscode-input-placeholderForeground); }
 .problem-row.mapped {
   --row-bg: var(--vscode-list-inactiveSelectionBackground);
   outline: 1px solid var(--vscode-list-focusOutline, transparent);
+  outline-offset: -1px; /* inside the row: the scrolling list clips anything outside it */
 }
 .problem-row:hover { --row-bg: var(--vscode-list-hoverBackground); }
 .problem-row > .pill { grid-column: 1; grid-row: 1; align-self: start; margin-top: 1px; }
@@ -380,6 +381,7 @@ input::placeholder { color: var(--vscode-input-placeholderForeground); }
   background: var(--vscode-editorWidget-background, transparent);
 }
 .score-facts { display: flex; flex-wrap: wrap; gap: 4px 10px; color: var(--muted); }
+.score-facts > :not(.mono) { white-space: nowrap; } /* whole items wrap, never "-10 AI | assist" */
 .score-facts strong { color: var(--vscode-foreground); font-variant-numeric: tabular-nums; }
 .penalty { color: var(--bad); font-weight: 600; }
 .improvement { color: var(--vscode-foreground); }
@@ -408,6 +410,12 @@ input::placeholder { color: var(--vscode-input-placeholderForeground); }
 .evals { border-collapse: collapse; font-size: 0.9em; width: 100%; }
 .evals th { text-align: left; font-weight: 600; color: var(--muted); padding: 1px 6px 1px 0; }
 .evals td { padding: 1px 6px 1px 0; white-space: nowrap; }
+/* The verdict ("Time Limit Exceed") wraps, so the numbers keep their room and the table fits a narrow panel. */
+.evals td { vertical-align: baseline; }
+.evals td.verdict { position: relative; padding-left: 9px; white-space: normal; }
+.evals td.verdict .mini { position: absolute; left: 0; top: 4px; } /* hanging: a wrapped verdict lines up after the tile */
+.evals th:last-child, .evals td:last-child { padding-right: 0; }
+@media (max-width: 300px) { .evals th, .evals td { padding-right: 4px; } }
 .evals .num { text-align: right; font-variant-numeric: tabular-nums; }
 
 /* ---------------------------------------------------------------- banner */

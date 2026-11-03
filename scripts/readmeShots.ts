@@ -66,9 +66,10 @@ function sample() {
     problem(1420, '03_Loop_11', '03_Loop_★_Sum_of_Digits', score(null), ['Loop']),
   ];
 
-  const verdicts = parseGraderComment('PPP-[PP]-');
+  // Test 4 timed out: History's details show a long verdict ("Time Limit Exceed") that has to fit a narrow panel.
+  const verdicts = parseGraderComment('PPPT[PP]-');
   const history: HistoryEntry[] = [
-    { submissionId: 2461102, number: 3, points: 71, status: 'done', comment: 'PPP-[PP]-', submittedAt: minutesAgo(5), language: 'C++', compileError: false, counted: true, verdicts },
+    { submissionId: 2461102, number: 3, points: 71, status: 'done', comment: 'PPPT[PP]-', submittedAt: minutesAgo(5), language: 'C++', compileError: false, counted: true, verdicts },
     { submissionId: 2460877, number: 2, points: 40, status: 'done', comment: 'PPP-[P-]-', submittedAt: minutesAgo(53), language: 'C++', compileError: false, counted: false, verdicts: parseGraderComment('PPP-[P-]-') },
     { submissionId: 2460512, number: 1, points: 0, status: 'compilation_error', comment: 'Compilation error', submittedAt: minutesAgo(70), language: 'C++', compileError: true, counted: false, verdicts: [] },
   ];
@@ -105,7 +106,7 @@ function sample() {
     submit: { enabled: true, busy: false, reason: null, label: S.submitLabel },
     result: {
       phase: 'done', problemId: 1360, problemName: '00_Intro_11', submissionId: 2461102, submissionUrl: `${BASE_URL}/submissions/2461102`,
-      number: 3, points: 71, comment: 'PPP-[PP]-', verdicts, compileError: false, compilerMessage: null,
+      number: 3, points: 71, comment: 'PPPT[PP]-', verdicts, compileError: false, compilerMessage: null,
       improvement: G.countedImproved(40, 71), message: null,
     },
     gradingElsewhere: null,

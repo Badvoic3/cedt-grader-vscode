@@ -834,7 +834,7 @@ function detailBox(d: SubmissionDetailView): HTMLElement {
       body.append(
         el('tr', {},
           el('td', { class: 'num' }, String(e.index)),
-          el('td', {}, el('span', { class: `mini v-${e.kind in VERDICT_LETTER ? e.kind : 'unknown'}`, 'aria-hidden': 'true', title: e.label }), ' ', e.label.replace(/^Test \d+: /, '')),
+          el('td', { class: 'verdict' }, el('span', { class: `mini v-${e.kind in VERDICT_LETTER ? e.kind : 'unknown'}`, 'aria-hidden': 'true', title: e.label }), ' ', e.label.replace(/^Test \d+: /, '')),
           el('td', { class: 'num' }, e.score === null ? '–' : fmt(e.score)),
           el('td', { class: 'num' }, seconds(e.timeMs)),
           el('td', { class: 'num' }, megabytes(e.memoryKb)),
@@ -1106,7 +1106,7 @@ function rolePicker(id: string, label: string, role: 'submit' | 'run', file: str
   const pick = el('select', {
     id,
     disabled: !files.length,
-    title: why && !chosen ? `${tip}. ${W.whyTip(why)}` : tip,
+    title: why && !chosen ? `${tip}${/[.!?]$/.test(tip) ? '' : '.'} ${W.whyTip(why)}` : tip,
     onchange: (e: Event) => send({ type: 'setFolderRole', role, file: (e.target as HTMLSelectElement).value }),
   });
   pick.append(el('option', { value: '', selected: !chosen }, detected ? W.automatic(detected) : askText));
@@ -1341,7 +1341,11 @@ function applyLayout(s: ViewState): void {
   if (key === sectionOrderKey) return;
   sectionOrderKey = key;
   const all: Record<SectionId, ReturnType<typeof section>> = { account: sAccount, current: sCurrent, result: sResult, history: sHistory, problems: sProblems };
-  for (const [id, sec] of Object.entries(all) as [SectionId, ReturnType<typeof section>][]) sec.details.hidden = !order.includes(id);
+  for (const [id, sec] of Object.entries(all) as [SectionId, ReturnType<typeof section>][]) {
+    sec.details.hidden = !order.includes(id);
+    // No line above the first visible section (the hidden banner / prompt come first, so :first-child never matches).
+    sec.details.classList.toggle('first-visible', id === order[0]);
+  }
   // Move only when the order changed (existing elements are moved, nothing is rebuilt).
   app.append(banner, promptBar, ...order.map((id) => all[id].details), ...(Object.keys(all) as SectionId[]).filter((id) => !order.includes(id)).map((id) => all[id].details));
 }
