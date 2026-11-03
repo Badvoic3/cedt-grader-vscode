@@ -98,9 +98,12 @@ describe('request discipline: attachments only on click', () => {
     await data.loadProblems();
     await data.loadHistory(201);
     expect(count()).toBe(0);
+    const all = () => server.count('GET', /./) + server.count('POST', /./);
+    const before = all();
     const [a, b] = await Promise.all([data.downloadAttachment(201), data.downloadAttachment(201)]);
     expect(a).toBe(b);
     expect(count()).toBe(1);
+    expect(all()).toBe(before + 1); // nothing else (no list, history or login request)
     expect(log.some((l) => l.includes('dedup') && l.includes('attachment:201'))).toBe(true);
     expect(data.isDownloading(201)).toBe(false);
     await data.downloadAttachment(201); // never cached: a new click downloads again

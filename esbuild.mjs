@@ -61,6 +61,8 @@ const host = await context({
   format: 'cjs',
   target: 'node20',
   external: ['vscode'],
+  // Node reads the bundle as UTF-8: keep the Thai texts as they are (\uXXXX escapes made it 60 KB larger).
+  charset: 'utf8',
   plugins: [copyHostPdfjs],
 });
 
@@ -80,6 +82,9 @@ const statement = await context({
   outfile: 'media/dist/statement.js',
   platform: 'browser',
   format: 'esm',
+  // A module script is always decoded as UTF-8. (The sidebar's classic script stays ASCII-escaped:
+  // its decoding would depend on the page encoding.)
+  charset: 'utf8',
   target: 'es2022',
 });
 

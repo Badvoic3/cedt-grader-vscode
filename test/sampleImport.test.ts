@@ -70,13 +70,16 @@ describe('statement source: the cache first, else the statement request once', (
   }
 
   it('cached (opened before): no request at all', async () => {
-    const { store, requests } = await setup();
+    const { server, store, requests } = await setup();
     await store.get(301); // the user opened the statement earlier
     expect(requests()).toBe(1);
+    const all = () => server.count('GET', /./) + server.count('POST', /./);
+    const before = all();
     const st = await store.cached(301);
     expect(st?.kind).toBe('pdf');
     expect(await readSampleTables((st as { bytes: Uint8Array }).bytes, await pdfjsLoader(PDFJS_DIR)())).toHaveLength(1);
     expect(requests()).toBe(1);
+    expect(all()).toBe(before); // pdf.js reads the bytes in the host: no request of any kind (no fonts, no CMaps)
   });
 
   it('not cached: the statement request once, then cached for the next time', async () => {

@@ -20,10 +20,61 @@ export function cleanName(s: string): string {
  * "-", "_" and "." are the same separator and repeats collapse.
  */
 export function normalizeName(s: string): string {
-  return cleanName(s)
+  const hit = NORMALIZED.get(s);
+  if (hit !== undefined) return hit;
+  const n = cleanName(s)
     .toLowerCase()
     .replace(/[\s\-_.]+/g, '_')
     .replace(/^_+|_+$/g, '');
+  remember(NORMALIZED, s, n);
+  return n;
+}
+
+/**
+ * Memo of the pure name helpers: the match index runs the matcher over up to
+ * 5 000 files against every problem, and normalizing the same ~300 problem
+ * names again for each file took ~1.7 s of the extension host's thread.
+ * Bounded: emptied when it grows past MEMO_MAX entries.
+ */
+const MEMO_MAX = 20_000;
+const NORMALIZED = new Map<string, string>();
+const TOKENS = new Map<string, Set<string>>();
+
+function remember<T>(memo: Map<string, T>, key: string, value: T): void {
+  if (memo.size >= MEMO_MAX) memo.clear();
+  memo.set(key, value);
+}
+
+/** Per problem object (the list's objects are reused for every file): normalized name, full name, pattern stem. */
+const PROBLEM_NAMES = new WeakMap<Problem, { name: string; full: string; pattern?: string; patternStem?: string }>();
+
+function namesOf(p: Problem): { name: string; full: string; pattern?: string; patternStem?: string } {
+  let n = PROBLEM_NAMES.get(p);
+  if (!n) {
+    n = { name: normalizeName(p.name), full: normalizeName(p.fullName) };
+    PROBLEM_NAMES.set(p, n);
+  }
+  return n;
+}
+
+/** The normalized name a problem's file gets from the file-name pattern ("{id}_{name}" → "1360_00_intro_11"). */
+function patternStem(pattern: string, p: Problem): string {
+  const n = namesOf(p);
+  if (n.pattern !== pattern || n.patternStem === undefined) {
+    n.pattern = pattern;
+    n.patternStem = normalizeName(stemFor(pattern, { id: p.id, cleanName: cleanName(p.name) }));
+  }
+  return n.patternStem;
+}
+
+/** The words of a normalized name (2+ characters), as compared by `similarity`. */
+function tokensOf(name: string): Set<string> {
+  let t = TOKENS.get(name);
+  if (!t) {
+    t = new Set(name.split('_').filter((x) => x.length >= 2));
+    remember(TOKENS, name, t);
+  }
+  return t;
 }
 
 /** File name without directory and (last) extension. */
@@ -123,11 +174,11 @@ export function resolveProblem(input: MatchInput): MatchResult {
 /** Problems whose name (or full name, or file-name pattern stem) normalizes to `stem`. */
 function exactHits(stem: string, problems: Problem[], pattern: string | undefined): Problem[] {
   if (!stem) return [];
-  let hits = problems.filter((p) => normalizeName(p.name) === stem);
-  if (!hits.length) hits = problems.filter((p) => normalizeName(p.fullName) === stem);
+  let hits = problems.filter((p) => namesOf(p).name === stem);
+  if (!hits.length) hits = problems.filter((p) => namesOf(p).full === stem);
   // A name made by the file-name pattern ("{id}_{name}.{ext}" → "1360_00_Intro_11") is exact too.
   if (!hits.length && !isDefaultPattern(pattern)) {
-    hits = problems.filter((p) => normalizeName(stemFor(pattern!, { id: p.id, cleanName: cleanName(p.name) })) === stem);
+    hits = problems.filter((p) => patternStem(pattern!, p) === stem);
   }
   return hits;
 }
@@ -144,12 +195,11 @@ export interface ScoredCandidate {
  */
 export function scoreCandidates(stem: string, problems: Problem[], folders: string[] = [], max: number = MATCH.maxCandidates): ScoredCandidate[] {
   if (!stem) return [];
-  const tokens = new Set(stem.split('_').filter((t) => t.length >= 2));
+  const tokens = tokensOf(stem);
   const dirs = folders.map(normalizeName).filter(Boolean);
   return problems
     .map((p) => {
-      const n = normalizeName(p.name);
-      const f = normalizeName(p.fullName);
+      const { name: n, full: f } = namesOf(p);
       let score = Math.max(similarity(stem, tokens, n), similarity(stem, tokens, f) * 0.9);
       if (score > 0 && dirs.length && (p.tags ?? []).some((t) => dirs.includes(normalizeName(t)))) score += MATCH.folderTagBonus;
       return { p, score: Math.min(1, score) };
@@ -179,7 +229,7 @@ export function suggest(stem: string, problems: Problem[], max: number = MATCH.m
 function similarity(stem: string, tokens: Set<string>, name: string): number {
   if (!name) return 0;
   if (name.includes(stem) || stem.includes(name)) return 0.9 * (Math.min(stem.length, name.length) / Math.max(stem.length, name.length)) + 0.1;
-  const other = new Set(name.split('_').filter((t) => t.length >= 2));
+  const other = tokensOf(name);
   if (!tokens.size || !other.size) return 0;
   let common = 0;
   for (const t of tokens) if (other.has(t)) common++;
