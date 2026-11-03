@@ -10,6 +10,9 @@
  *   changed.
  * - Heights are per row kind (e.g. with / without a second line), measured
  *   from rendered rows when layout is available, with fallbacks otherwise.
+ *   They are measured again whenever the list's width changes (a row's
+ *   height depends on it: narrow panels hide the second line), so heights
+ *   taken at another width never stick.
  */
 export interface VirtualListOptions<T> {
   key: (item: T) => string;
@@ -35,6 +38,7 @@ export class VirtualList<T> {
   private readonly cache = new Map<string, { version: string; el: HTMLElement }>();
   private readonly measured = new Map<string, number>();
   private frame = 0;
+  private width = 0;
 
   constructor(doc: Document, private readonly o: VirtualListOptions<T>) {
     this.viewport = doc.createElement('div');
@@ -54,6 +58,23 @@ export class VirtualList<T> {
         this.update();
       });
     });
+    const RO = doc.defaultView?.ResizeObserver;
+    if (RO) {
+      new RO(() => {
+        const w = this.viewport.clientWidth;
+        if (!w || w === this.width) return; // hidden (collapsed section / panel) or only the height changed
+        this.width = w;
+        this.remeasure();
+      }).observe(this.viewport);
+    }
+  }
+
+  /** Forget measured heights (width, font or layout changed) and lay the rows out again. */
+  remeasure(): void {
+    if (!this.measured.size) return;
+    this.measured.clear();
+    this.layout();
+    this.update();
   }
 
   get length(): number {

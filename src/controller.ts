@@ -17,6 +17,7 @@ import {
   GraderError,
   type Language,
   LanguageNotAllowedError,
+  languageForPath,
   languageNameForPath,
   NetworkError,
   ProblemUnavailableError,
@@ -161,6 +162,8 @@ export class GraderController implements vscode.Disposable {
   private mappedIds = new Set<number>();
   private testcasesBusy = false;
   private samplesBusy = false;
+  /** The problem the statement tab last followed (undefined: not yet). */
+  private followedProblemId: number | null | undefined = undefined;
   /** Statement PDFs / descriptions on disk (shared by the statement tabs and "Load sample cases"). */
   private readonly statementStore: StatementStore;
   /** pdf.js (legacy build, dist/pdfjs) for "Load sample cases": imported on first use only. */
@@ -1463,9 +1466,23 @@ export class GraderController implements vscode.Disposable {
     this.runTestCount = this.cph.installed && problem ? ((await readCphProblem(this.runUri()?.fsPath ?? '', this.cphSaveLocation()))?.tests.length ?? 0) : null;
     this.applyLanguageChoice();
     this.emit();
+    this.followStatement(uri, problem);
     // One problem only (the top suggestion at most, never several candidates).
     this.data.focusProblem(problem ? problem.id : null);
     if (!entry && !this.reconnectAsked.has(uri.fsPath)) void this.offerReconnect(uri);
+  }
+
+  /**
+   * An open statement tab follows the active source file's problem (when it
+   * changes; a problem chosen from a row's statement icon stays until then);
+   * no problem → that tab closes. Other files (.in, README, …) change nothing.
+   */
+  private followStatement(uri: vscode.Uri, problem: Problem | null): void {
+    if (!this.cfg.statementFollowsFile || !languageForPath(uri.fsPath)) return;
+    const id = problem?.id ?? null;
+    if (id === this.followedProblemId) return;
+    this.followedProblemId = id;
+    this.statements.follow(problem ? { problemId: problem.id, name: problem.name, outdated: this.unavailableIds.has(problem.id) ? S.statementOutdated : null } : null);
   }
 
   // ------------------------------------------------ files for a problem

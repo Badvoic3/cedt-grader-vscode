@@ -94,7 +94,7 @@ Renaming or moving a linked file in VS Code keeps the link. If you move files in
 
 ## Problem statements
 
-Click the PDF icon next to the problem to open its statement in a tab beside your code (pinch or Cmd/Ctrl +/- to zoom, Cmd/Ctrl 0 to fit width, page navigation, search with Cmd/Ctrl+F). The tab remembers its page and zoom and reopens after a restart. Statements are downloaded once and kept in VS Code's own storage (never in your project); the viewer's Refresh button downloads them again. Problems without a PDF show their text description. Set `cedtGrader.statementBeside` to `false` to open statements in the current editor group.
+Click the PDF icon next to the problem to open its statement in a tab beside your code (pinch or Cmd/Ctrl +/- to zoom, Cmd/Ctrl 0 to fit width, page navigation, search with Cmd/Ctrl+F). The tab remembers its page and zoom and reopens after a restart. Statements are downloaded once and kept in VS Code's own storage (never in your project); the viewer's Refresh button downloads them again. Problems without a PDF show their text description. An open statement tab follows your file: switching to another solution file shows that file's problem, and a file without a problem closes it (turn this off with `cedtGrader.statementFollowsFile`). Set `cedtGrader.statementBeside` to `false` to open statements in the current editor group.
 
 ## When the connection fails
 

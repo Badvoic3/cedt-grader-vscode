@@ -60,18 +60,22 @@ let saveTimer: ReturnType<typeof setTimeout> | null = null;
 function saveView(): void {
   if (!viewer || !persisted) return;
   if (saveTimer) clearTimeout(saveTimer);
-  saveTimer = setTimeout(() => {
-    if (!viewer || !persisted) return;
-    const v: StatementViewState = {
-      page: viewer.currentPageNumber,
-      scale: String(viewer.currentScaleValue),
-      scrollTop: container.scrollTop,
-      scrollLeft: container.scrollLeft,
-    };
-    persisted = { ...persisted, ...v };
-    vscode.setState(persisted);
-    send({ type: 'viewState', state: v });
-  }, PANEL.statementStateSaveMs);
+  saveTimer = setTimeout(saveViewNow, PANEL.statementStateSaveMs);
+}
+
+function saveViewNow(): void {
+  if (saveTimer) clearTimeout(saveTimer);
+  saveTimer = null;
+  if (!viewer || !persisted) return;
+  const v: StatementViewState = {
+    page: viewer.currentPageNumber,
+    scale: String(viewer.currentScaleValue),
+    scrollTop: container.scrollTop,
+    scrollLeft: container.scrollLeft,
+  };
+  persisted = { ...persisted, ...v };
+  vscode.setState(persisted);
+  send({ type: 'viewState', state: v, problemId: persisted.problemId });
 }
 
 /** Start the pdf.js worker from the media folder through a blob URL (CSP: worker-src blob:). */
@@ -204,6 +208,7 @@ window.addEventListener('message', (ev: MessageEvent<ToStatement>) => {
   titleEl.textContent = m.title;
   noteEl.textContent = m.note ?? '';
   noteEl.hidden = !m.note;
+  if (persisted && persisted.problemId !== m.problemId && saveTimer) saveViewNow(); // switched to another problem: keep the old one's view
   if (!persisted || persisted.problemId !== m.problemId) persisted = { problemId: m.problemId, name: m.name, page: 1, scale: 'page-width', scrollTop: 0, scrollLeft: 0 };
   vscode.setState(persisted);
   status.textContent = '';
