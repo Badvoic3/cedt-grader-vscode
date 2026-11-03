@@ -53,6 +53,9 @@ describe('host extraction (pdf.js legacy build)', () => {
       expect(existsSync(join(PDFJS_DIR, f))).toBe(true);
     }
     expect(readFileSync(join(__dirname, '..', '.vscodeignore'), 'utf8')).toContain('!dist/pdfjs/**');
+    // No CJK CMaps are packed (course statements embed their fonts), and the viewer asks for none.
+    expect(build).not.toMatch(/\/cmaps/);
+    expect(readFileSync(join(__dirname, '..', 'webview', 'statement.ts'), 'utf8')).not.toMatch(/cMapUrl/);
     // One worker file for the host and the statement viewer: both use the legacy build.
     expect(build.match(/copyFile\([^)]*pdf\.worker/g)).toHaveLength(1);
     expect(build).toContain('legacy/build/pdf.worker.min.mjs');

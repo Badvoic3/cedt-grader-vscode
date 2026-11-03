@@ -47,7 +47,7 @@
 - `.h` / `.hpp` headers count as C++ (`.h` as C when a problem takes C only).
 
 ### Packaging
-- The `.vsix` is smaller: 2.6 MB instead of 4.4 MB. The statement viewer and "Load samples" share one copy of pdf.js's worker (the viewer now uses pdf.js's legacy build, like "Load samples"), and the README's pictures, which load from GitHub, are no longer packed.
+- The `.vsix` is smaller: 1.7 MB instead of 4.4 MB. The statement viewer and "Load samples" share one copy of pdf.js's worker (the viewer now uses pdf.js's legacy build, like "Load samples"), the README's pictures, which load from GitHub, are no longer packed, and neither are pdf.js's Chinese / Japanese / Korean character maps (only PDFs with non-embedded CJK fonts need them).
 - The extension's matching of files to problems is about 8× faster in big workspaces (5 000 source files: 1.7 s → 0.2 s).
 
 ### Fixes

@@ -218,7 +218,7 @@ export class StatementPanels implements vscode.Disposable {
 <link rel="stylesheet" href="${uri('dist', 'statement.css')}">
 <title>Statement</title>
 </head>
-<body data-worker="${uri('dist', 'pdfjs', 'pdf.worker.min.mjs')}" data-cmaps="${uri('dist', 'pdfjs', 'cmaps')}/" data-fonts="${uri('dist', 'pdfjs', 'standard_fonts')}/">
+<body data-worker="${uri('dist', 'pdfjs', 'pdf.worker.min.mjs')}" data-fonts="${uri('dist', 'pdfjs', 'standard_fonts')}/">
 <div id="app"></div>
 <script nonce="${nonce}" type="module" src="${uri('dist', 'statement.js')}"></script>
 </body>

@@ -42,7 +42,8 @@ const copyAssets = {
       await copyFile(`${pdfjs}/legacy/build/pdf.worker.min.mjs`, 'media/dist/pdfjs/pdf.worker.min.mjs');
       await copyFile(`${pdfjs}/legacy/web/pdf_viewer.css`, 'media/dist/pdfjs/pdf_viewer.css');
       await cp(`${pdfjs}/legacy/web/images`, 'media/dist/pdfjs/images', { recursive: true });
-      await cp(`${pdfjs}/cmaps`, 'media/dist/pdfjs/cmaps', { recursive: true });
+      // No CMaps (pdf.js character maps, ~1 MB): only PDFs with non-embedded CJK fonts need them; course
+      // statements embed their fonts (decided 2026-11-04).
       await cp(`${pdfjs}/standard_fonts`, 'media/dist/pdfjs/standard_fonts', { recursive: true });
     });
   },

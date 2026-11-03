@@ -129,8 +129,6 @@ async function showPdf(data: Uint8Array): Promise<void> {
   const v = setupViewer();
   const doc = await pdfjsLib.getDocument({
     data,
-    cMapUrl: body.dataset.cmaps,
-    cMapPacked: true,
     standardFontDataUrl: body.dataset.fonts,
     isEvalSupported: false, // strict CSP: no eval
   }).promise;
