@@ -845,7 +845,7 @@ describe.runIf(existsSync(resolve(__dirname, '../esbuild.mjs')))('sidebar webvie
 
   it('inline prompt (no modal): text, detail and plain buttons answer by id', () => {
     const { doc, sent, post } = boot();
-    post({ ...loggedIn, prompt: { id: 7, text: 'Auto-detect found 104_exam67_1_P2 (from CPH data).', detail: null, tone: 'info', buttons: [{ id: 'switch', label: 'Switch to it', primary: true }, { id: 'keep', label: 'Keep current' }] } });
+    post({ ...loggedIn, prompt: { id: 7, text: 'Auto-detect found 104_exam67_1_P2 (from CPH data).', detail: null, tone: 'info', buttons: [{ id: 'switch', label: 'Switch to it', primary: true }, { id: 'keep', label: 'Keep current' }], near: null } });
     const bar = doc.querySelector<HTMLElement>('.prompt')!;
     expect(bar.hidden).toBe(false);
     expect(bar.textContent).toContain('Auto-detect found 104_exam67_1_P2 (from CPH data).');
@@ -853,6 +853,42 @@ describe.runIf(existsSync(resolve(__dirname, '../esbuild.mjs')))('sidebar webvie
     expect(sent.at(-1)).toEqual({ type: 'promptAnswer', id: 7, button: 'keep' });
     post({ ...loggedIn, prompt: null });
     expect(doc.querySelector<HTMLElement>('.prompt')!.hidden).toBe(true);
+  });
+
+  it('a question about submitting is shown right above the Submit button (at the top only when Current problem is hidden)', () => {
+    const { doc, sent, post } = boot();
+    const q = {
+      id: 9,
+      text: 'Which file do you submit to 00_Intro_11 (#1360)?',
+      detail: 'The grader takes one file per submission.',
+      tone: 'info' as const,
+      buttons: [{ id: 'target', label: 'Submit student.h', primary: true }, { id: 'open', label: 'Submit main.cpp (open file)' }, { id: 'cancel', label: 'Cancel' }],
+      near: 'submit' as const,
+    };
+    post({ ...loggedIn, prompt: q });
+    expect(doc.querySelector<HTMLElement>('.prompt:not(#submit-prompt)')!.hidden).toBe(true);
+    const box = doc.querySelector<HTMLElement>('#sec-current #submit-prompt')!;
+    expect(box.textContent).toContain('Which file do you submit');
+    expect(box.nextElementSibling?.id).toBe('submit-btn');
+    [...box.querySelectorAll<HTMLButtonElement>('button')].find((b) => b.textContent === 'Submit main.cpp (open file)')!.click();
+    expect(sent.at(-1)).toEqual({ type: 'promptAnswer', id: 9, button: 'open' });
+    post({ ...loggedIn, prompt: null });
+    expect(doc.querySelector('#submit-prompt')).toBeNull();
+    // Current problem hidden by the layout: the question goes to the top.
+    post({ ...loggedIn, layout: { sections: ['account', 'result', 'history', 'problems'], compact: false }, prompt: q });
+    expect(doc.querySelector('#submit-prompt')).toBeNull();
+    const bar = doc.querySelector<HTMLElement>('.prompt')!;
+    expect(bar.hidden).toBe(false);
+    expect(bar.textContent).toContain('Which file do you submit');
+  });
+
+  it('Result has no Resubmit button (Submit to Grader is the one way to submit)', () => {
+    const { doc, post } = boot();
+    post(loggedIn);
+    const sec = doc.querySelector('#sec-result')!;
+    expect(sec.querySelector('.score')).not.toBeNull(); // a finished result is shown
+    expect(sec.textContent).not.toMatch(/Resubmit/);
+    expect(sec.querySelector('.codicon-debug-restart')).toBeNull();
   });
 
   it('explicitly unlinked file: "Not linked to a problem" with Choose problem / Auto-detect', () => {
