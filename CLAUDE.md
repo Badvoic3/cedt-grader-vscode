@@ -149,6 +149,7 @@ Every icon-only button (`iconButton()` in `webview/main.ts`, `btn()` in `webview
 - CPH has no rename/delete handling; a renamed source orphans its `.prob` (we offer to move it).
 - Our imported tests: `id = 7e15 + grader testcase id` (`GRADER_ID_BASE`, marker that survives CPH re-saves); statement samples ("Load sample cases"): `id = 7.5e15 + n` (`STATEMENT_ID_BASE`, n = 1, 2, … in table order); backup `<file>.prob.bak`; own tests first and never removed; duplicates by input+output skipped (also between grader and statement cases); line endings `\n`.
 - Never modify CPH itself; only write `.prob` files in this exact format.
+- CPH's `cph.general.autoShowJudge` (default on) opens CPH's panel on every switch to a source file and can cover ours. `maybeAskCphAutoShow` (after `setActiveFile` and when the panel becomes visible; only while visible, CPH installed, no other prompt) asks once per session inline: **Turn it off** (`cphAutoShowScope`: updated at the level where it is on — folder / workspace / user), **Keep it** (this session), **Don't ask again** (`cedtGrader.cphAutoShowDismissed`). A question cancelled by a file switch or another prompt comes back later. This is the only CPH setting we ever change, and only on that click.
 
 ## Every place the extension touches CPH (map for the future built-in test runner)
 
@@ -167,7 +168,7 @@ The built-in runner (planned after v1.0, see `docs/v1.0-release-plan.md` "After 
 | Run tests | `GraderController.runTests` / `refreshRunTests` / `runTestCount`, `CPH_RUN_COMMAND` = `cph.runTestCases`, `ViewState.runTests`, webview "Run tests" button, command `cedtGrader.runTests` | Saves the folder, shows the run file, runs CPH's command (no arguments; runs the active editor, opens the file for every test, refuses `.h`). | **R** (the main reason for the runner) |
 | Folder roles | `src/mapping/folderRoles.ts` (run file = driver with `main()`, submit file = `student.h`), Submits / Runs dropdowns | Decides which file CPH runs and which file is submitted. | G (the runner compiles the run file while the submit file stays open) |
 | Renames / moves | `moveCphProblem`, `cphFilesAfterFolderRename` (`src/mapping/mappingOps.ts`), `S.moved.moveCph*` | CPH names `.prob` files after the full source path, so renames orphan them; we offer to move them. | K |
-| CPH's panel opening itself | `maybeAskCphAutoShow`, `cphAutoShowScope` (`src/cphIntegration.ts`), `KEYS.cphAutoShowDismissed`, `S.cphAutoShow` (PR #3) | Offers once to turn off `cph.general.autoShowJudge`, the only CPH setting we ever change. | R (unneeded when the runner is used) |
+| CPH's panel opening itself | `maybeAskCphAutoShow`, `cphAutoShowScope` (`src/cphIntegration.ts`), `KEYS.cphAutoShowDismissed`, `S.cphAutoShow` | Offers once to turn off `cph.general.autoShowJudge`, the only CPH setting we ever change. | R (unneeded when the runner is used) |
 | Searching files | `.cph` in `EXCLUDED_DIRS` (`src/mapping/findByName.ts`) | CPH's folder is never matched or indexed. | K |
 | Guarantees | `test/cphOptional.test.ts` | CPH is never a dependency; grader / data / ui / webview code never imports CPH modules; no "CPH" in titles. | K (add the same guarantees for the runner) |
 | Docs | README "Works with CPH" (EN + TH), the walkthrough step, "CPH is optional" / "CPH `.prob`" above | | update with the runner |

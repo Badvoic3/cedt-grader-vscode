@@ -31,7 +31,17 @@ import {
   problemStatus,
 } from './grader';
 import { dirname, join, relative, sep } from 'node:path';
-import { chooseTestcaseTarget, CPH_EXTENSION_ID, CPH_RUN_COMMAND, CphPresence, saveTestcasesAsFiles, testsFolderFor } from './cphIntegration';
+import {
+  chooseTestcaseTarget,
+  CPH_AUTO_SHOW_KEY,
+  CPH_AUTO_SHOW_SECTION,
+  CPH_EXTENSION_ID,
+  CPH_RUN_COMMAND,
+  cphAutoShowScope,
+  CphPresence,
+  saveTestcasesAsFiles,
+  testsFolderFor,
+} from './cphIntegration';
 import { detectFolderRoles, type FolderRoles, type RunWhy, type SubmitWhy, submitFor } from './mapping/folderRoles';
 import { stripGraderKey, TestcaseStore } from './data/testcaseStore';
 import { cleanupCache, clearCacheFiles, enforceLimit, formatBytes, scanCache, statementIds, totalBytes } from './data/cacheFiles';
@@ -78,6 +88,7 @@ const NEWFILE_LANG_KEY = KEYS.lastNewFileLanguage;
 const FILTER_KEY = KEYS.problemFilter;
 const OPENED_KEY = KEYS.recentlyOpened;
 const CPH_TIP_KEY = KEYS.cphTipDismissed;
+const CPH_AUTO_SHOW_DISMISSED_KEY = KEYS.cphAutoShowDismissed;
 const REMEMBER_KEY = KEYS.rememberPassword;
 
 type Listener = (s: ViewState) => void;
@@ -154,6 +165,8 @@ export class GraderController implements vscode.Disposable {
   private fileEventTimer: ReturnType<typeof setTimeout> | undefined;
   /** CPH tip: "Not now" hides it for this session. */
   private cphTipHidden = false;
+  /** The "CPH opens its panel on every switch" question was answered this session (or is showing). */
+  private cphAutoShowAsked = false;
   /** Inline question in the panel (calm alternative to modal dialogs). */
   private prompt: InlinePrompt | null = null;
   private promptResolve: ((v: string | undefined) => void) | null = null;
@@ -325,6 +338,7 @@ export class GraderController implements vscode.Disposable {
       void this.ensureLanguages();
       void this.ensureMe();
       void this.refreshLinkedFiles(); // the name search runs only while the panel shows the problem
+      void this.maybeAskCphAutoShow();
     }
   }
 
@@ -1257,6 +1271,43 @@ export class GraderController implements vscode.Disposable {
     this.emit();
   }
 
+  /**
+   * CPH's "Auto Show Judge" (on by default) opens CPH's panel on every switch to a
+   * source file, which can cover this one. Ask once per session, in the panel, only
+   * while the panel is visible and nothing else is being asked. A question cancelled
+   * by a file switch or another question comes back later; "Keep it" = this session,
+   * "Don't ask again" = never.
+   */
+  private async maybeAskCphAutoShow(): Promise<void> {
+    if (this.cphAutoShowAsked || this.prompt || !this.cph.installed || !this.fileUri || !this.data.isVisible()) return;
+    if (this.ctx.globalState.get<boolean>(CPH_AUTO_SHOW_DISMISSED_KEY, false)) return;
+    const cfg = vscode.workspace.getConfiguration(CPH_AUTO_SHOW_SECTION, this.fileUri);
+    const scope = cphAutoShowScope(cfg.inspect(CPH_AUTO_SHOW_KEY));
+    if (!scope) return;
+    this.cphAutoShowAsked = true;
+    const t = S.cphAutoShow;
+    const pick = await this.askInline(t.question, [
+      { id: 'off', label: t.turnOff, primary: true },
+      { id: 'keep', label: t.keep },
+      { id: 'never', label: t.never },
+    ], { detail: t.detail });
+    if (pick === undefined) {
+      this.cphAutoShowAsked = false; // replaced or cancelled by a file switch: ask again later
+      return;
+    }
+    if (pick === 'never') await this.ctx.globalState.update(CPH_AUTO_SHOW_DISMISSED_KEY, true);
+    if (pick !== 'off') return;
+    // Turn it off where it is turned on (a workspace value would override a user-level change).
+    const target =
+      scope === 'workspaceFolder' ? vscode.ConfigurationTarget.WorkspaceFolder : scope === 'workspace' ? vscode.ConfigurationTarget.Workspace : vscode.ConfigurationTarget.Global;
+    try {
+      await cfg.update(CPH_AUTO_SHOW_KEY, false, target);
+      void this.askInline(t.done, [{ id: 'ok', label: S.common.ok }]);
+    } catch (err) {
+      void this.askInline(t.failed(this.describe(err)), [{ id: 'ok', label: S.common.ok }], { tone: 'warn' });
+    }
+  }
+
   // --------------------------------------------------------------- account
 
   /**
@@ -1475,6 +1526,7 @@ export class GraderController implements vscode.Disposable {
     // One problem only (the top suggestion at most, never several candidates).
     this.data.focusProblem(problem ? problem.id : null);
     if (!entry && !this.reconnectAsked.has(uri.fsPath)) void this.offerReconnect(uri);
+    void this.maybeAskCphAutoShow();
   }
 
   /**
