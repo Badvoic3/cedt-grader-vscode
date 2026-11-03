@@ -12,7 +12,7 @@ import { type SectionId, visibleSections } from '../src/shared/layout';
 import { outOfFor, scoreText } from '../src/grader/score';
 import { groupLabel, verdictLegend } from '../src/grader/verdicts';
 import { menuLabelMax, middleEllipsis } from './text';
-import { VirtualList } from './virtualList';
+import { FlowList } from './flowList';
 import { PANEL, SERVER_SCORE_CAP } from '../src/shared/constants';
 import { filterProblems, matches, sorts, sortProblems } from './filters';
 import { cycleTopic, topicState } from '../src/shared/tags';
@@ -1008,22 +1008,24 @@ function problemRow(p: ProblemView, s: ViewState, where: 'picker' | 'list'): HTM
   // Tooltip: just the names (bold "name #id", the title below).
   main.dataset.tipTitle = `${p.name} #${p.id}`;
   main.dataset.tip = main.disabled ? W.openFileToLink(sub ? `${sub} · ` : '') : (sub ?? '');
-  // Icons as before the "…" menu (shown on hover / keyboard focus); right-click offers the same and more.
+  // Score pill in the first column (CSS grid; first in reading order stays the name). The icons float in
+  // over the row's bottom right on hover / keyboard focus, so they take no room from the name.
+  // Right-click offers the same and more.
   return withContextMenu(
     el('div', { class: `problem-row${mapped ? ' mapped' : ''}`, role: where === 'picker' ? 'option' : undefined, 'aria-selected': where === 'picker' ? String(mapped) : undefined },
       main,
       scorePill(p.score),
       el('span', { class: 'row-actions' },
+        // First (leftmost): the icons are right-aligned, so the other four stay in the same columns on every row.
+        p.hasAttachment
+          ? iconButton('cloud-download', W.downloadAttachment, () => send({ type: 'downloadAttachment', problemId: p.id }), { disabledReason: s.attachment.busy === p.id ? W.downloading : null })
+          : null,
         iconButton('copy', W.copyProblemName, () => send({ type: 'copyName', problemId: p.id })),
         p.hasFile
           ? iconButton('go-to-file', W.goToLinkedFile, () => send({ type: 'goToFile', problemId: p.id }))
           : iconButton('search', W.findMatchingFile, () => send({ type: 'findFile', problemId: p.id })),
         iconButton('new-file', W.newFileForThisProblem, () => send({ type: 'newFile', problemId: p.id })),
         iconButton('file-pdf', W.openStatement, () => send({ type: 'openStatement', problemId: p.id })),
-        // Last, so the other icons stay in the same columns on every row.
-        p.hasAttachment
-          ? iconButton('cloud-download', W.downloadAttachment, () => send({ type: 'downloadAttachment', problemId: p.id }), { disabledReason: s.attachment.busy === p.id ? W.downloading : null })
-          : null,
       ),
     ),
     () => rowMenuItems(p, state ?? s),
@@ -1118,20 +1120,17 @@ function folderLine(f: NonNullable<ViewState['folder']>): HTMLElement {
 }
 
 /**
- * Problem list: one persistent virtualized list (every problem reachable by
- * scrolling). Rows are keyed by problem id and rebuilt only when their own
- * data changed; an editor switch only updates the rows whose ✓ changed.
+ * Problem list: one persistent list, rows in normal flow (see flowList.ts).
+ * Rows are keyed by problem id and rebuilt only when their own data changed;
+ * an editor switch only updates the rows whose ✓ changed.
  */
 const problemVersion = (p: ProblemView) =>
-  JSON.stringify([p.name, p.fullName, p.score, p.status, p.hasFile, p.hasTestcase, p.hasAttachment, state?.attachment.busy === p.id, state?.problem?.id === p.id]);
+  JSON.stringify([p.name, p.fullName, p.score, p.status, p.tags, p.hasFile, p.hasTestcase, p.hasAttachment, state?.attachment.busy === p.id, state?.problem?.id === p.id]);
 let listSaveTimer: ReturnType<typeof setTimeout> | undefined;
-const problemList = new VirtualList<ProblemView>(document, {
+const problemList = new FlowList<ProblemView>(document, {
   key: (p) => String(p.id),
   version: problemVersion,
-  // Compact mode hides the second line (full name stays in the tooltip).
-  kind: (p) => (titleParts(p).subtitle && !compactOn ? 'two-line' : 'one-line'),
   render: (p) => problemRow(p, state!, 'list'),
-  fallbackHeight: (k) => (k === 'two-line' ? 38 : 24),
   maxHeight: PANEL.listMaxHeightPx,
   className: 'problem-list',
   onScroll: (top) => {
@@ -1155,10 +1154,21 @@ function problemHits(s: ViewState): ProblemView[] {
   return listHits;
 }
 
+/** Every problem's key: rows filtered out stay in the list, hidden, so clearing the filter is cheap. */
+let knownFor: ViewState['problems']['items'] | null = null;
+let known = new Set<string>();
+function knownKeys(s: ViewState): Set<string> {
+  if (s.problems.items !== knownFor) {
+    knownFor = s.problems.items;
+    known = new Set(s.problems.items.map((p) => String(p.id)));
+  }
+  return known;
+}
+
 /** Update the list rows in place (cheap; runs after every state push). */
 function syncProblemList(s: ViewState): void {
   if (!s.problems.loaded || !problemList.viewport.isConnected) return;
-  problemList.setItems(problemHits(s));
+  problemList.setItems(problemHits(s), knownKeys(s));
   if (!listRestored && ui.listScroll) {
     problemList.scrollTop = ui.listScroll;
   }
@@ -1184,7 +1194,7 @@ function renderProblems(s: ViewState): void {
   if (P.tags.length) b.append(tagFilter(P.filter, P.tags));
   const hits = problemHits(s);
   b.append(problemList.viewport);
-  problemList.setItems(hits);
+  problemList.setItems(hits, knownKeys(s));
   // The same viewport element is re-inserted: put the scroll position back.
   if (keepScroll && problemList.scrollTop !== keepScroll) problemList.scrollTop = keepScroll;
   listRestored = true;
@@ -1324,7 +1334,6 @@ function applyLayout(s: ViewState): void {
   if (compact !== compactOn) {
     compactOn = compact;
     document.body.classList.toggle('compact', compact);
-    problemList.remeasure(); // rows change height: measure and lay the list out again
     lastKeys.delete('problems');
   }
   const order = visibleSections(s.layout?.sections ?? [], s.account.status === 'logged-in');

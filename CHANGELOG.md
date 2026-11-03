@@ -3,6 +3,9 @@
 ## Unreleased
 
 ### Problem list
+- **New row layout; rows can no longer overlap.** Rows are now laid out by the browser, each exactly as tall as its content, at any panel width and in compact mode (before, rows with several tags could cover the next row and leave gaps elsewhere). The score is in a column on the left and the problem name, full name and tags use the rest of the width, so long names are cut much later. The row icons appear over the row's bottom right when you hover or focus it instead of always taking room; the download icon comes first so the others stay in the same place on every row.
+- **Keyboard:** the problem list is one Tab stop; ↑ / ↓ / Home / End move between problems, Tab goes on to that row's icons.
+- Compact mode: problem rows are a little taller (24 px) and easier to hit.
 - **Problems you never submitted show "–" in grey** (score pill and the current problem's counted score) instead of a red 0. A problem you submitted and scored 0 on stays red.
 - **Tags on every problem row**, as on the website (topics and other tags such as Graph, DFS, BFS). Hidden in compact mode.
 - **Topic pills have three states.** Click to cycle: show only that topic's problems (filled, ✓) → hide them (red, struck through) → off. The new setting **Topic Click Order** (`cedtGrader.panel.topicClickOrder`) puts "hide" first instead. Several pills can be set at once. A saved single-topic filter from an older version still works.
@@ -35,7 +38,7 @@
 - **Save test cases as files:** a save icon next to the problem name (and in its right-click menu, command "Save Test Cases as .in / .out Files") saves the grader's test cases as `.in` / `.out` files even when CPH is installed.
 - After loading test cases or samples into CPH, CPH is reloaded automatically when the file is already open in front; otherwise you stay where you are and **Reload in CPH** is offered as before. The reload now only ever closes its own placeholder tab.
 - Saving test cases or samples as `.in` / `.out` files now skips a case that is already in the `tests` folder under another name (for example a sample equal to grader case 1), as loading into CPH already did. Existing files are still never overwritten.
-- Problem list: rows no longer overlap after resizing or collapsing the panel (row heights are measured again when the width changes). The score pills line up on every row (the download icon moved last). "Find file by name" is now **Find a matching file**.
+- "Find file by name" is now **Find a matching file**.
 
 ### Sample cases from the statement
 - The statement icon is now a PDF icon (current problem, problem rows, menus). **Load test cases** has a shorter label; the details are in its tooltip.

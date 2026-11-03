@@ -109,7 +109,7 @@ const withAttachment = (extra: Partial<ViewState> = {}): ViewState => ({
   folderMode: { on: false, disabledReason: null },
   ...extra,
 });
-const row = (doc: Document, i: number) => doc.querySelectorAll('#sec-problems .problem-row')[i];
+const row = (doc: Document, i: number) => doc.querySelectorAll('#sec-problems .problem-row:not([hidden])')[i];
 const header = (doc: Document) => doc.querySelector('#sec-current .problem-field .field-label')!;
 
 describe.runIf(existsSync(resolve(__dirname, '../esbuild.mjs')))('sidebar webview', () => {
@@ -165,7 +165,7 @@ describe.runIf(existsSync(resolve(__dirname, '../esbuild.mjs')))('sidebar webvie
     expect(doc.querySelector('#sec-current .penalty')!.textContent).toBe('-10 AI assist');
     expect(doc.querySelector('#sec-result')!.textContent).toContain('Counted score improved: 40 → 70.');
     expect(doc.querySelectorAll('.history-row')).toHaveLength(2);
-    expect(doc.querySelectorAll('#sec-problems .problem-row')).toHaveLength(2);
+    expect(doc.querySelectorAll('#sec-problems .problem-row:not([hidden])')).toHaveLength(2);
   });
 
   it('submit / map / language actions post typed messages', () => {
@@ -289,7 +289,7 @@ describe.runIf(existsSync(resolve(__dirname, '../esbuild.mjs')))('sidebar webvie
     expect(banner.textContent).toContain('may be out of date');
     banner.querySelector<HTMLButtonElement>('button')!.click();
     expect(sent.at(-1)).toEqual({ type: 'retry' });
-    expect(doc.querySelector('#sec-problems .problem-row')).not.toBeNull(); // cached data still shown
+    expect(doc.querySelector('#sec-problems .problem-row:not([hidden])')).not.toBeNull(); // cached data still shown
     post(loggedIn);
     expect(doc.querySelector<HTMLElement>('.banner')!.hidden).toBe(true);
   });
@@ -381,7 +381,7 @@ describe.runIf(existsSync(resolve(__dirname, '../esbuild.mjs')))('sidebar webvie
     expect(btn.textContent).toBe(' Load test cases');
     expect(btn.getAttribute('data-tip')).toContain("CPH isn't installed");
     expect(doc.querySelector('#submit-btn')).not.toBeNull();
-    expect(doc.querySelectorAll('#sec-problems .problem-row')).toHaveLength(2);
+    expect(doc.querySelectorAll('#sec-problems .problem-row:not([hidden])')).toHaveLength(2);
     // "CPH" only appears where it is actually used (tooltips), not as visible UI text.
     expect(doc.body.textContent).not.toMatch(/CPH/);
   });
@@ -461,7 +461,8 @@ describe.runIf(existsSync(resolve(__dirname, '../esbuild.mjs')))('sidebar webvie
     header(doc).querySelector<HTMLButtonElement>('[aria-label="Download attachment"]')!.click();
     expect(sent.at(-1)).toEqual({ type: 'downloadAttachment', problemId: 1360 });
     const icons = [...row(doc, 1).querySelectorAll('.row-actions button')].map((b) => b.getAttribute('aria-label'));
-    expect(icons).toEqual(['Copy problem name', 'Find a matching file', 'New file for this problem', 'Open statement', 'Download attachment']);
+    // Download first: the icons are right-aligned, so the other four keep their columns on every row.
+    expect(icons).toEqual(['Download attachment', 'Copy problem name', 'Find a matching file', 'New file for this problem', 'Open statement']);
     expect(row(doc, 0).querySelector('[aria-label="Download attachment"]')).toBeNull();
     menuPick(doc, row(doc, 1), 'Download attachment');
     expect(sent.at(-1)).toEqual({ type: 'downloadAttachment', problemId: 1271 });
@@ -644,7 +645,7 @@ describe.runIf(existsSync(resolve(__dirname, '../esbuild.mjs')))('sidebar webvie
     segs[1].click();
     expect(sent.at(-1)).toEqual({ type: 'setFilter', filter: { status: 'unsolved', topic: null } });
     post({ ...st, problems: { ...st.problems, filter: { status: 'unsolved', topic: null } } });
-    expect(doc.querySelectorAll('#sec-problems .problem-row')).toHaveLength(1); // the untried one
+    expect(doc.querySelectorAll('#sec-problems .problem-row:not([hidden])')).toHaveLength(1); // the untried one
     expect(doc.querySelector('#sec-problems')!.textContent).toContain('1 of 2 problems');
     // Topic pill, three states (default order): not chosen → show only → hide → not chosen.
     const pill = () => doc.querySelector<HTMLButtonElement>('#sec-problems .topic')!;
@@ -656,14 +657,14 @@ describe.runIf(existsSync(resolve(__dirname, '../esbuild.mjs')))('sidebar webvie
     expect(pill().classList.contains('active')).toBe(true);
     expect(pill().querySelector('.codicon-check')).not.toBeNull();
     expect(pill().getAttribute('aria-label')).toBe('Showing only ComProg problems. Click to hide ComProg problems');
-    expect(doc.querySelectorAll('#sec-problems .problem-row')).toHaveLength(1); // only the ComProg one
+    expect(doc.querySelectorAll('#sec-problems .problem-row:not([hidden])')).toHaveLength(1); // only the ComProg one
     pill().click();
     expect(sent.at(-1)).toEqual({ type: 'setFilter', filter: { status: 'all', topic: null, topicsIn: [], topicsOut: ['ComProg'] } });
     post({ ...st, problems: { ...st.problems, filter: { status: 'all', topic: null, topicsIn: [], topicsOut: ['ComProg'] } } });
     expect(pill().classList.contains('excluded')).toBe(true);
     expect(pill().querySelector('.codicon-circle-slash')).not.toBeNull();
     expect(pill().getAttribute('aria-label')).toBe('Hiding ComProg problems. Click to stop filtering by ComProg');
-    expect(doc.querySelectorAll('#sec-problems .problem-row')).toHaveLength(1); // the ComProg one is hidden
+    expect(doc.querySelectorAll('#sec-problems .problem-row:not([hidden])')).toHaveLength(1); // the ComProg one is hidden
     pill().click();
     expect(sent.at(-1)).toEqual({ type: 'setFilter', filter: { status: 'all', topic: null, topicsIn: [], topicsOut: [] } });
     // Setting "hide first": the first click hides.
@@ -682,7 +683,7 @@ describe.runIf(existsSync(resolve(__dirname, '../esbuild.mjs')))('sidebar webvie
     const items = loggedIn.problems.items.map((p, i) => ({ ...p, tags: i === 0 ? ['ComProg', 'Graph', 'DFS'] : ['BFS'] }));
     const st = { ...loggedIn, problems: { ...loggedIn.problems, items, topics: [{ name: 'ComProg', description: null }], tags: ['BFS', 'DFS', 'Graph'] } };
     post(st);
-    const firstRow = doc.querySelector('#sec-problems .problem-row')!;
+    const firstRow = doc.querySelector('#sec-problems .problem-row:not([hidden])')!;
     expect([...firstRow.querySelectorAll('.problem-tags .tag')].map((t) => t.textContent)).toEqual(['ComProg', 'Graph', 'DFS']);
     expect(firstRow.querySelector('.problem-main')!.getAttribute('aria-label')).toContain('tags: ComProg, Graph, DFS');
     // closed: one toggle; open it
@@ -695,7 +696,7 @@ describe.runIf(existsSync(resolve(__dirname, '../esbuild.mjs')))('sidebar webvie
     boxes[2].click();
     expect(sent.at(-1)).toEqual({ type: 'setFilter', filter: { status: 'all', topic: null, tags: ['Graph'], tagMode: 'or' } });
     post({ ...st, problems: { ...st.problems, filter: { status: 'all', topic: null, tags: ['Graph', 'DFS'], tagMode: 'or' } } });
-    expect(doc.querySelectorAll('#sec-problems .problem-row')).toHaveLength(1);
+    expect(doc.querySelectorAll('#sec-problems .problem-row:not([hidden])')).toHaveLength(1);
     expect(doc.querySelector('#sec-problems .tag-toggle')!.textContent).toContain('Graph / DFS');
     // Any / All
     const all = [...doc.querySelectorAll<HTMLButtonElement>('#sec-problems .tag-menu .seg')].find((b) => b.textContent === 'All (AND)')!;
@@ -864,23 +865,94 @@ describe.runIf(existsSync(resolve(__dirname, '../esbuild.mjs')))('sidebar webvie
     expect(sent.at(-1)).toEqual({ type: 'unlinkLinkedFile', index: 0 });
   });
 
-  it('problem list: all 300 problems reachable (virtualized), plain count, no 150 limit', () => {
+  it('problem list: all 300 problems in normal flow (no positions or heights set), plain count, no 150 limit', () => {
     const { doc, post } = boot();
     const many = Array.from({ length: 300 }, (_, i) => ({ ...loggedIn.problems.items[1], id: 5000 + i, name: `p_${String(i).padStart(3, '0')}`, fullName: `Problem ${i}` }));
     post({ ...loggedIn, problem: null, problems: { ...loggedIn.problems, items: many } });
     const vp = doc.querySelector<HTMLElement>('#sec-problems .problem-list')!;
-    const rendered = vp.querySelectorAll('.problem-row').length;
-    expect(rendered).toBeGreaterThan(5);
-    expect(rendered).toBeLessThan(60); // only the rows in view + buffer
+    const rows = [...vp.children] as HTMLElement[];
+    expect(rows).toHaveLength(300);
+    expect(rows.map((r) => r.dataset.key)).toEqual(many.map((p) => String(p.id)));
+    // The browser lays the rows out: nothing positions them or fixes their height (that made rows overlap).
+    expect(rows.filter((r) => r.style.top || r.style.height || r.style.position)).toEqual([]);
     expect(doc.querySelector('#sec-problems .list-count')!.textContent).toBe('300 problems');
     expect(doc.querySelector('#sec-problems')!.textContent).not.toContain('Refine the filter');
-    // the inner height covers every row, so the last one is reachable
-    expect(parseFloat((vp.firstElementChild as HTMLElement).style.height)).toBe(300 * 38);
-    // filtered count
+    // filtered count; the remaining rows are the same elements, in order
     const input = doc.querySelector<HTMLInputElement>('#sec-problems input[type=search]')!;
     input.value = 'p_1';
     input.dispatchEvent(new (doc.defaultView as unknown as typeof globalThis).Event('input'));
     expect(doc.querySelector('#sec-problems .list-count')!.textContent).toBe('100 of 300 problems');
+    const left = [...doc.querySelectorAll('#sec-problems .problem-list > :not([hidden])')];
+    expect(left).toHaveLength(100);
+    expect(left.every((r) => rows.includes(r as HTMLElement))).toBe(true);
+    // cleared: the same 300 elements, in order, none hidden
+    input.value = '';
+    input.dispatchEvent(new (doc.defaultView as unknown as typeof globalThis).Event('input'));
+    expect([...vp.children]).toEqual(rows);
+    expect(rows.filter((r) => r.hidden)).toEqual([]);
+  });
+
+  it('problem list CSS: rows stay in normal flow (never absolute, never a fixed height)', () => {
+    const css = readFileSync(resolve(__dirname, '../webview/style.css'), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
+    const rules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((m) => ({ sel: m[1].trim(), body: m[2] }));
+    const rowRules = rules.filter((r) => /problem-(row|list)/.test(r.sel) && !/row-actions/.test(r.sel));
+    expect(rowRules.length).toBeGreaterThan(3);
+    for (const r of rowRules) {
+      expect(r.body, r.sel).not.toMatch(/position:\s*(absolute|fixed)/);
+      expect(r.body, r.sel).not.toMatch(/(^|[;\s])height:/);
+    }
+  });
+
+  it('problem list: one Tab stop (roving), ↑ / ↓ / Home / End move between rows, filtering moves the Tab stop', () => {
+    const { doc, post } = boot();
+    const many = Array.from({ length: 5 }, (_, i) => ({ ...loggedIn.problems.items[1], id: 5000 + i, name: `p_${i}`, fullName: `Problem ${i}` }));
+    post({ ...loggedIn, problem: null, problems: { ...loggedIn.problems, items: many } });
+    const vp = doc.querySelector<HTMLElement>('#sec-problems .problem-list')!;
+    const tabbable = () => [...vp.querySelectorAll<HTMLElement>('button')].filter((b) => b.tabIndex >= 0).map((b) => `${b.closest<HTMLElement>('.problem-row')!.dataset.key}:${b.getAttribute('aria-label')?.split(',')[0]}`);
+    expect(tabbable()).toEqual(['5000:p_0 #5000', '5000:Copy problem name', '5000:Find a matching file', '5000:New file for this problem', '5000:Open statement']);
+    const key = (k: string) => (doc.activeElement as HTMLElement).dispatchEvent(new (doc.defaultView as unknown as typeof globalThis).KeyboardEvent('keydown', { key: k, bubbles: true }));
+    vp.querySelector<HTMLElement>('.problem-main')!.focus();
+    key('ArrowDown');
+    expect(doc.activeElement!.getAttribute('aria-label')).toMatch(/^p_1 #5001/);
+    expect(tabbable()[0]).toBe('5001:p_1 #5001');
+    expect(tabbable().filter((t) => t.startsWith('5000:'))).toEqual([]);
+    key('End');
+    expect(doc.activeElement!.getAttribute('aria-label')).toMatch(/^p_4 #5004/);
+    key('ArrowDown'); // last row: stays
+    expect(doc.activeElement!.getAttribute('aria-label')).toMatch(/^p_4 #5004/);
+    key('Home');
+    key('ArrowUp'); // first row: stays
+    expect(doc.activeElement!.getAttribute('aria-label')).toMatch(/^p_0 #5000/);
+    // A click (focus) on another row moves the Tab stop there.
+    vp.querySelectorAll<HTMLElement>('.problem-main')[3].focus();
+    expect(tabbable()[0]).toBe('5003:p_3 #5003');
+    // The current row filtered out: the first remaining row gets the Tab stop.
+    const input = doc.querySelector<HTMLInputElement>('#sec-problems input[type=search]')!;
+    input.value = 'p_2';
+    input.dispatchEvent(new (doc.defaultView as unknown as typeof globalThis).Event('input'));
+    expect(tabbable()[0]).toBe('5002:p_2 #5002');
+  });
+
+  it('problem list: a filter keystroke over 292 problems is fast (cached rows are moved, not rebuilt)', () => {
+    const { doc, post } = boot();
+    const many = Array.from({ length: 292 }, (_, i) => ({ ...loggedIn.problems.items[1], id: 5000 + i, name: `p_${String(i).padStart(3, '0')}`, fullName: `Problem ${i}: a longer full name`, tags: ['DataAlgo', 'Graph', 'S-Path'].slice(0, i % 4) }));
+    post({ ...loggedIn, problem: null, problems: { ...loggedIn.problems, items: many } });
+    const input = doc.querySelector<HTMLInputElement>('#sec-problems input[type=search]')!;
+    const type = (v: string) => {
+      input.value = v;
+      input.dispatchEvent(new (doc.defaultView as unknown as typeof globalThis).Event('input'));
+    };
+    type('p'); // warm up
+    type('');
+    const times: number[] = [];
+    for (const v of ['p_1', 'p_', 'p_2', 'p', '', 'p_0', '']) {
+      const t = performance.now();
+      type(v);
+      times.push(performance.now() - t);
+    }
+    times.sort((a, b) => a - b);
+    expect(times[Math.floor(times.length / 2)]).toBeLessThan(10); // median keystroke, ms
+    expect(doc.querySelectorAll('#sec-problems .problem-list > :not([hidden])')).toHaveLength(292);
   });
 
   it('click a row near the bottom: after the file opens the scroll position is unchanged and the row shows ✓', () => {
@@ -917,6 +989,11 @@ describe.runIf(existsSync(resolve(__dirname, '../esbuild.mjs')))('sidebar webvie
     const vp = doc.querySelector<HTMLElement>('#sec-problems .problem-list')!;
     let top = 0;
     Object.defineProperty(vp, 'scrollTop', { get: () => top, set: (v: number) => { top = v; }, configurable: true });
+    Object.defineProperty(vp, 'clientHeight', { get: () => 420, configurable: true });
+    // jsdom has no layout: rows 38 px tall, in order (the browser lays them out in normal flow).
+    const proto = (doc.defaultView as unknown as typeof globalThis).HTMLElement.prototype;
+    Object.defineProperty(proto, 'offsetTop', { configurable: true, get(this: HTMLElement) { return this.parentElement === vp ? [...vp.children].indexOf(this) * 38 : 0; } });
+    Object.defineProperty(proto, 'offsetHeight', { configurable: true, get: () => 38 });
     post({ ...st, problem: { ...many[5], source: 'filename', sourceLabel: 'Matched by file name', unavailable: false } });
     expect(top).toBe(0); // already visible: no scroll
     post({ ...st, problem: { ...many[200], source: 'filename', sourceLabel: 'Matched by file name', unavailable: false } });
@@ -1103,7 +1180,7 @@ describe.runIf(existsSync(resolve(__dirname, '../esbuild.mjs')))('sidebar webvie
     const f = doc.querySelector<HTMLInputElement>('#sec-problems input[type=search]')!;
     f.value = 'expr';
     f.dispatchEvent(new dom.window.Event('input'));
-    expect(doc.querySelectorAll('#sec-problems .problem-row')).toHaveLength(1);
+    expect(doc.querySelectorAll('#sec-problems .problem-row:not([hidden])')).toHaveLength(1);
     expect(saved()).toMatchObject({ filter: 'expr' });
   });
 
