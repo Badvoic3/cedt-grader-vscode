@@ -128,6 +128,8 @@ export class GraderController implements vscode.Disposable {
   private notLinked = false;
   /** Folder mode: the folder link the active file belongs to (null: the file is on its own). */
   private folderLink: { fsPath: string; entry: MappingEntry } | null = null;
+  /** The folder is only matched by its name (not saved): folder mode as if linked; a choice saves the link. */
+  private folderMatched = false;
   /** Folder mode: the linked folder's source files (relative paths), the choices for the submit file. */
   private folderFiles: string[] = [];
   /** Folder mode: the folder's C/C++ texts and the detected submit / run files (folderRoles.ts). */
@@ -487,6 +489,31 @@ export class GraderController implements vscode.Disposable {
     return this.folderFiles.length === 1 ? { file: this.folderFiles[0], why: 'only-file' } : null;
   }
 
+  /** Folder mode for `link` (null = off): its source files, their texts and the detected roles. */
+  private async loadFolder(link: { fsPath: string; entry: MappingEntry } | null): Promise<void> {
+    this.folderLink = link;
+    this.folderFiles = link ? await this.folderSources(link.fsPath) : [];
+    this.folderTexts = link ? await this.folderTextsOf(link.fsPath, this.folderFiles) : new Map();
+    this.folderRoles = link ? detectFolderRoles(this.folderTexts) : null;
+  }
+
+  /**
+   * Remember the user's submit / run file for the folder (undefined = detect
+   * again). A folder only matched by its name gets its link saved with it.
+   */
+  private async saveFolderRole(key: 'submitFile' | 'runFile', rel: string | undefined): Promise<void> {
+    const link = this.folderLink;
+    if (!link) return;
+    const folder = vscode.Uri.file(link.fsPath);
+    if (this.folderMatched) {
+      if (!rel) return; // automatic already
+      await this.mapping.set(folder, { ...link.entry, [key]: rel });
+      this.folderMatched = false;
+      await this.refreshMappedIds();
+    } else await this.mapping.setFolderRole(folder, this.cfg.baseUrl, key, rel);
+    this.folderLink = { ...link, entry: { ...link.entry, [key]: rel } };
+  }
+
   /** The card's folder-mode block (submit / run file with why). */
   private folderView(): ViewState['folder'] {
     const link = this.folderLink;
@@ -496,6 +523,7 @@ export class GraderController implements vscode.Disposable {
     const why = (w: RoleWhy | undefined, run?: string) => (w ? S.folder.why[w](run ?? '') : null);
     return {
       path: `${vscode.workspace.asRelativePath(link.fsPath, false)}/`,
+      matched: this.folderMatched,
       submitFile: sub?.file ?? null,
       submitWhy: why(sub?.why, run?.file),
       submitChosen: sub?.why === 'chosen',
@@ -570,7 +598,7 @@ export class GraderController implements vscode.Disposable {
       return;
     }
     const entry = { problemId: problem.id, name: problem.name, baseUrl: this.cfg.baseUrl };
-    if (this.folderLink) {
+    if (this.folderLink && !this.folderMatched) {
       const folder = vscode.Uri.file(this.folderLink.fsPath);
       const keep = this.targetUri() ?? file;
       await this.mapping.set(folder, undefined);
@@ -633,7 +661,7 @@ export class GraderController implements vscode.Disposable {
   /** Folder mode: the user picks the submit / run file in the card ('' = automatic again). */
   async setFolderRole(role: 'submit' | 'run', rel: string): Promise<void> {
     if (!this.folderLink || (rel && !this.folderFiles.includes(rel))) return;
-    await this.mapping.setFolderRole(vscode.Uri.file(this.folderLink.fsPath), this.cfg.baseUrl, role === 'submit' ? 'submitFile' : 'runFile', rel || undefined);
+    await this.saveFolderRole(role === 'submit' ? 'submitFile' : 'runFile', rel || undefined);
     if (this.fileUri) await this.setActiveFile(this.fileUri);
   }
 
@@ -658,9 +686,7 @@ export class GraderController implements vscode.Disposable {
       pick = (await vscode.window.showQuickPick(files, { placeHolder: `${text} ${detail}` })) ?? undefined;
     }
     if (!pick) return null;
-    const key = role === 'submit' ? 'submitFile' : 'runFile';
-    await this.mapping.setFolderRole(vscode.Uri.file(link.fsPath), this.cfg.baseUrl, key, pick);
-    this.folderLink = { ...link, entry: { ...link.entry, [key]: pick } };
+    await this.saveFolderRole(role === 'submit' ? 'submitFile' : 'runFile', pick);
     return pick;
   }
 
@@ -1008,7 +1034,7 @@ export class GraderController implements vscode.Disposable {
       })(),
       folder: this.folderView(),
       runTests: this.cph.installed && problem && file ? { disabledReason: this.runTestCount ? null : S.runTests.noTestsShort } : null,
-      folderMode: problem && file ? { on: !!this.folderLink, disabledReason: this.folderLink ? null : this.folderModeTarget().reason } : null,
+      folderMode: problem && file ? { on: !!this.folderLink && !this.folderMatched, disabledReason: this.folderLink ? null : this.folderModeTarget().reason } : null,
       attachment: { busy: problem && this.data.isDownloading(problem.id) ? problem.id : null },
       cphTip:
         !this.cph.installed && !this.cphTipHidden && !this.ctx.globalState.get<boolean>(CPH_TIP_KEY, false) && !!problem?.hasTestcase,
@@ -1359,15 +1385,8 @@ export class GraderController implements vscode.Disposable {
     if (link?.folder && this.mapping.isUnlinkedHere(uri)) link = undefined;
     const entry = link?.entry;
     const unlinked = !entry && this.mapping.isUnlinkedHere(uri);
-    this.folderLink = link?.folder ? { fsPath: link.folder, entry: link.entry } : null;
-    this.folderFiles = this.folderLink ? await this.folderSources(this.folderLink.fsPath) : [];
-    this.folderTexts = this.folderLink ? await this.folderTextsOf(this.folderLink.fsPath, this.folderFiles) : new Map();
-    this.folderRoles = this.folderLink ? detectFolderRoles(this.folderTexts) : null;
-    // The chosen language belongs to the file Submit sends (folder mode: the folder's submit file).
-    const target = this.targetUri()?.fsPath;
-    if (changed || target !== targetBefore) {
-      this.selectedLanguageId = target ? (this.ctx.workspaceState.get<Record<string, number>>(LANGUAGE_KEY, {})[target] ?? null) : null;
-    }
+    await this.loadFolder(link?.folder ? { fsPath: link.folder, entry: link.entry } : null);
+    this.folderMatched = false;
     const list = this.data.problemList()?.problems;
     const cph = entry || unlinked ? null : await readCphProblem(uri.fsPath, this.cphSaveLocation());
     const m = unlinked
@@ -1400,6 +1419,18 @@ export class GraderController implements vscode.Disposable {
       this.matchInfo.suggestions = [...m.suggestions];
     }
     if (m.kind === 'match' && m.source === 'suggested') this.matchInfo.suggestions = [...m.suggestions];
+    // Matched by the name of its folder: the folder is a package like a linked folder (submit and
+    // run files detected), but nothing is saved until the user chooses something.
+    if (!this.folderLink && problem?.source === 'folder') {
+      await this.loadFolder({ fsPath: dirname(uri.fsPath), entry: { problemId: problem.id, name: problem.name, baseUrl: this.cfg.baseUrl, folder: true } });
+      this.folderMatched = true;
+      if (seq !== this.refreshSeq) return;
+    }
+    // The chosen language belongs to the file Submit sends (folder mode: the folder's submit file).
+    const target = this.targetUri()?.fsPath;
+    if (changed || target !== targetBefore) {
+      this.selectedLanguageId = target ? (this.ctx.workspaceState.get<Record<string, number>>(LANGUAGE_KEY, {})[target] ?? null) : null;
+    }
     // Opened from a problem row: show that problem as a temporary link ("Suggested · Use this")
     // unless the file already resolves to it. Saving it is up to the user.
     const temp = this.tempLink && this.tempLink.key === pathKey(uri.fsPath) && !entry && !unlinked ? this.problemById(this.tempLink.problemId) : undefined;
@@ -1915,7 +1946,7 @@ export class GraderController implements vscode.Disposable {
     // Folder mode / matched by the folder's name: the folder is unlinked ("not linked", sticky).
     const folder = this.folderLink ? vscode.Uri.file(this.folderLink.fsPath) : this.problem?.source === 'folder' ? vscode.Uri.joinPath(this.fileUri, '..') : null;
     if (folder) {
-      if (this.folderLink) await this.mapping.set(folder, undefined);
+      if (this.folderLink && !this.folderMatched) await this.mapping.set(folder, undefined);
       await this.mapping.setUnlinked(folder, true);
       this.tempLink = null;
       this.problem = null;
