@@ -11,6 +11,11 @@ export const EXTENSION_LANGUAGE: Readonly<Record<string, string>> = {
   '.cpp': 'C++',
   '.cc': 'C++',
   '.cxx': 'C++',
+  // Headers (folder mode: a package's file to submit is often a header). `.h` is C when only C is allowed.
+  '.h': 'C++',
+  '.hpp': 'C++',
+  '.hh': 'C++',
+  '.hxx': 'C++',
   '.c': 'C',
   '.py': 'Python',
   '.java': 'Java',
@@ -106,7 +111,9 @@ export function chooseLanguage(filePath: string, options: Language[], all: Langu
   if (byExt.length > 1) return { kind: 'ambiguous', candidates: byExt };
   const known = languagesByExt(filePath, all);
   if (known.length) return { kind: 'not-allowed', wanted: known[0].name, allowed: options };
-  const wanted = languageForPath(filePath);
+  let wanted = languageForPath(filePath);
+  // A `.h` header is C++ or C: C when the problem takes C but not C++.
+  if (fileExt(filePath) === 'h' && !matchLanguages('C++', options).length && matchLanguages('C', options).length) wanted = 'C';
   if (options.length === 1) {
     if (wanted && matchLanguages(wanted, options).length === 0) return { kind: 'not-allowed', wanted, allowed: options };
     return { kind: 'match', language: options[0] };

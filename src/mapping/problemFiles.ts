@@ -1,5 +1,5 @@
-import { basename } from 'node:path';
-import { pathKey, remapPath } from './paths';
+import { basename, dirname } from 'node:path';
+import { isAtOrInside, pathKey, remapPath } from './paths';
 import { S } from '../shared/strings';
 
 /**
@@ -14,25 +14,31 @@ import { S } from '../shared/strings';
  *    workspace's source files, opened or not (cached index), plus confident
  *    suggestions remembered while open (treated like links).
  * Excluded: files explicitly "not linked", and files manually linked to a
- * different problem (a manual link always wins).
+ * different problem (a manual link always wins); both also for folders.
+ *
+ * Folder mode: a linked folder, and files matched by the name of the folder
+ * they are in, count as ONE item (the folder), so a package (main.cpp +
+ * headers) is one "file" for the notice, the row click and the submit check.
  */
-export type LinkHow = 'chosen' | 'cph' | 'filename' | 'suggested';
+export type LinkHow = 'chosen' | 'cph' | 'filename' | 'folder' | 'suggested';
 
 export interface ProblemFile {
   fsPath: string;
   how: LinkHow;
+  /** A folder (folder link, or files matched by their folder's name). */
+  folder?: boolean;
 }
 
 export interface AutoMatch {
   fsPath: string;
   problemId: number;
   /** 'suggested': the open file's closest (not exact) match; used only to open files (row click), never counted as linked. */
-  how: 'cph' | 'filename' | 'suggested';
+  how: 'cph' | 'filename' | 'folder' | 'suggested';
   /** ms */
   at: number;
 }
 
-const RANK: Record<LinkHow, number> = { chosen: 0, cph: 1, filename: 2, suggested: 3 };
+const RANK: Record<LinkHow, number> = { chosen: 0, cph: 1, filename: 2, folder: 3, suggested: 4 };
 
 /**
  * The one stable order for files of a problem (notice, go-to-file pick,
@@ -47,31 +53,42 @@ export function mergeProblemFiles(opts: {
   problemId: number;
   /** Saved links for this problem. */
   chosen: string[];
+  /** Saved folder links for this problem (folder mode). */
+  chosenFolders?: string[];
   /** All remembered auto-matches (any problem). */
   auto: AutoMatch[];
   /** Files the one matcher (matchIndex.ts) assigns to this problem. */
-  matched: { fsPath: string; how: 'filename' | 'suggested' }[];
-  /** Files explicitly unlinked by the user. */
+  matched: { fsPath: string; how: 'filename' | 'folder' | 'suggested' }[];
+  /** Files (or folders) explicitly unlinked by the user. */
   unlinked: string[];
-  /** Files with a saved link to a different problem. */
+  /** Files (or folders) with a saved link to a different problem. */
   linkedElsewhere: string[];
   /** Include remembered (confident) suggestions; default true: they count like links. */
   includeSuggested?: boolean;
   caseInsensitive?: boolean;
 }): ProblemFile[] {
   const ci = opts.caseInsensitive;
-  const blocked = new Set([...opts.unlinked, ...opts.linkedElsewhere].map((p) => pathKey(p, ci)));
+  const blockedPaths = [...opts.unlinked, ...opts.linkedElsewhere];
+  const blocked = (p: string) => blockedPaths.some((b) => isAtOrInside(p, b, ci));
   const out = new Map<string, ProblemFile>();
-  const add = (fsPath: string, how: LinkHow) => {
-    const k = pathKey(fsPath, ci);
-    if (how !== 'chosen' && blocked.has(k)) return;
+  const add = (fsPath: string, how: LinkHow, folder = false) => {
+    if (how !== 'chosen' && blocked(fsPath)) return;
+    // Matched by its folder's name: the folder is the item.
+    const path = how === 'folder' && !folder ? dirname(fsPath) : fsPath;
+    const isFolder = folder || how === 'folder';
+    const k = pathKey(path, ci);
     const prev = out.get(k);
-    if (!prev || RANK[how] < RANK[prev.how]) out.set(k, { fsPath, how });
+    if (!prev || RANK[how] < RANK[prev.how]) out.set(k, { fsPath: path, how, ...(isFolder || prev?.folder ? { folder: true } : {}) });
   };
   for (const p of opts.chosen) add(p, 'chosen');
+  for (const p of opts.chosenFolders ?? []) add(p, 'chosen', true);
   for (const a of opts.auto) if (a.problemId === opts.problemId && (a.how !== 'suggested' || opts.includeSuggested !== false)) add(a.fsPath, a.how);
   for (const m of opts.matched) if (m.how !== 'suggested' || opts.includeSuggested !== false) add(m.fsPath, m.how);
-  return [...out.values()].sort((a, b) => comparePaths(a.fsPath, b.fsPath));
+  // A file inside one of the folders is already covered by it (unless chosen on its own).
+  const folders = [...out.values()].filter((f) => f.folder).map((f) => f.fsPath);
+  return [...out.values()]
+    .filter((f) => f.folder || f.how === 'chosen' || !folders.some((d) => isAtOrInside(f.fsPath, d, ci)))
+    .sort((a, b) => comparePaths(a.fsPath, b.fsPath));
 }
 
 /**
@@ -94,7 +111,7 @@ export function noticeDismissed(dismissed: Record<string, string>, problemId: nu
 
 export interface LinkedNotice {
   text: string;
-  files: { path: string; fsPath: string; current: boolean; how: LinkHow }[];
+  files: { path: string; fsPath: string; current: boolean; how: LinkHow; folder?: boolean }[];
 }
 
 /**
@@ -106,7 +123,13 @@ export interface LinkedNotice {
 export function linkedNotice(files: ProblemFile[], currentFsPath: string, rel: (fsPath: string) => string, caseInsensitive?: boolean): LinkedNotice | null {
   if (files.length < 2) return null;
   const cur = pathKey(currentFsPath, caseInsensitive);
-  const list = files.map((f) => ({ path: rel(f.fsPath), fsPath: f.fsPath, current: pathKey(f.fsPath, caseInsensitive) === cur, how: f.how }));
+  const list = files.map((f) => ({
+    path: f.folder ? `${rel(f.fsPath)}/` : rel(f.fsPath),
+    fsPath: f.fsPath,
+    current: f.folder ? isAtOrInside(currentFsPath, f.fsPath, caseInsensitive) : pathKey(f.fsPath, caseInsensitive) === cur,
+    how: f.how,
+    ...(f.folder ? { folder: true } : {}),
+  }));
   // Fixed order (workspace-relative path); the active file is only marked, never moved.
   list.sort((a, b) => comparePaths(a.path, b.path));
   const names = new Set(files.map((f) => pathKey(basename(f.fsPath), caseInsensitive)));

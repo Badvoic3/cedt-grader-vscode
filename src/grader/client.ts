@@ -1,5 +1,6 @@
 import { G } from '../shared/strings';
 import { ApiClient, type ApiLanguage, type ApiProblem, type ApiSubmission, type ApiSubmissionBrief } from './api';
+import { type Attachment, parseContentDisposition } from './attachment';
 import { isContestPage } from './contest';
 import { AuthError, GraderError, NetworkError, PollTimeoutError, SessionExpiredError } from './errors';
 import type { FetchLike, Logger } from './http';
@@ -20,7 +21,7 @@ import { parseGraderComment } from './verdicts';
 import { WebSession } from './web';
 
 export { DEFAULT_BASE_URL } from '../shared/constants';
-import { DEFAULT_BASE_URL, TIMING } from '../shared/constants';
+import { ATTACHMENT, DEFAULT_BASE_URL, TIMING } from '../shared/constants';
 
 export interface Credentials {
   username: string;
@@ -318,7 +319,19 @@ export class GraderClient {
   /** `GET /api/v1/problems/{id}/files/pdf`: 403 = PDF hidden for this problem, 404 = none. */
   async getStatementPdf(id: number): Promise<{ status: 200; bytes: Uint8Array } | { status: 403 | 404; error: string | null }> {
     assertId(id);
-    return this.authed(() => this.api.getBytes(`/api/v1/problems/${id}/files/pdf`));
+    const r = await this.authed(() => this.api.getBytes(`/api/v1/problems/${id}/files/pdf`));
+    return r.status === 200 ? { status: 200, bytes: r.bytes } : r;
+  }
+
+  /**
+   * `GET /api/v1/problems/{id}/files/attachment` (only on click): the file,
+   * its name (Content-Disposition) and type; 404 = no attachment.
+   */
+  async getAttachment(id: number): Promise<({ status: 200 } & Attachment) | { status: 403 | 404; error: string | null }> {
+    assertId(id);
+    const r = await this.authed(() => this.api.getBytes(`/api/v1/problems/${id}/files/attachment`, ATTACHMENT.maxDownloadBytes));
+    if (r.status !== 200) return r;
+    return { status: 200, bytes: r.bytes, filename: parseContentDisposition(r.disposition), contentType: r.contentType?.split(';')[0].trim().toLowerCase() || null };
   }
 
   /** `GET /api/v1/problems/{id}/description` → null on 403 / 404. */

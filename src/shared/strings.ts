@@ -19,6 +19,7 @@ export const plural = (n: number, one: string, many = `${one}s`): string => `${n
 const EN_HOW_LINKED = {
   chosen: 'chosen by you',
   filename: 'matched by file name',
+  folder: 'matched by folder name',
   cph: 'matched from CPH data',
   suggested: 'suggested',
 } as const;
@@ -27,6 +28,7 @@ const EN_HOW_LINKED = {
 const EN_PICK_HOW = {
   chosen: 'linked',
   filename: 'matched by file name',
+  folder: 'matched by folder name',
   cph: 'matched from CPH data',
   suggested: 'suggested',
 } as const;
@@ -120,7 +122,7 @@ const EN_S = {
     ambiguousKept: (n: number) => `Auto-detect found ${n} equally good matches; your choice is kept.`,
     noneKept: 'Auto-detect found no exact match; your choice is kept.',
     none: 'Auto-detect found no matching problem. Choose one from the list.',
-    how: { cph: 'from CPH data', filename: 'from the file name', suggested: 'suggested' } as Record<string, string>,
+    how: { cph: 'from CPH data', filename: 'from the file name', folder: 'from the folder name', suggested: 'suggested' } as Record<string, string>,
   },
 
   testcases: {
@@ -225,6 +227,7 @@ const EN_S = {
   match: {
     severalCould: 'Several problems could match this file. Choose one.',
     severalMatch: (cph: boolean) => `Several problems match this ${cph ? "file's CPH data" : 'file name'}. Choose one.`,
+    severalMatchFolder: 'Several problems match the name of this folder. Choose one.',
   },
 
   rename: {
@@ -237,6 +240,57 @@ const EN_S = {
       reserved: 'File names can’t contain : * ? " < > |',
     } as Record<string, string>,
     failed: (name: string) => `Couldn't rename the file to ${name}.`,
+  },
+
+  folder: {
+    openFile: 'Open a file of the folder first.',
+    outsideWorkspace: 'Only folders inside the open workspace can be linked.',
+    atRoot: 'This file is at the top of the workspace folder. Put it in its own folder to link a whole folder.',
+    replaceQ: (folder: string, old: string, name: string) => `${folder}/ is linked to ${old}. Link it to ${name} instead?`,
+    replace: 'Link to this problem',
+    nowFolder: (folder: string) => `$(folder) ${folder}/ is now linked to the problem`,
+    nowFile: (file: string) => `$(file) Only ${file} is linked now`,
+    noSources: (folder: string) => `${folder}/ has no source file to submit.`,
+    whichFile: (name: string) => `Which file do you submit for ${name}?`,
+    oneFile: 'The grader takes one file per submission, so only this file is sent. You can change it under Current problem.',
+    onlyThisSent: (file: string) => `Only ${file} is sent (the grader takes one file).`,
+    whichRunFile: (name: string) => `Which program runs the tests for ${name}?`,
+    runFileDetail: 'Test cases belong to the program with main() (the provided driver), which includes your file.',
+    why: {
+      'named-in-run': (run: string) => `named in a comment of ${run}`,
+      student: (_run: string) => 'the included file named student.*',
+      stub: (_run: string) => 'the included file with a "your code here" comment',
+      'only-main': (_run: string) => 'the only file with main()',
+      'main-name': (_run: string) => 'the file with main() named main*',
+      chosen: (_run: string) => 'your choice',
+      'only-file': (_run: string) => 'the only source file',
+    },
+  },
+
+  runTests: {
+    noTests: 'There are no test cases to run yet. Load the test cases first.',
+    noTestsShort: 'load the test cases first',
+  },
+
+  attachment: {
+    none: (name: string) => `${name} has no attachment on the grader.`,
+    writeFailed: (why: string) => `Couldn't save the attachment: ${why}`,
+    renameQ: (name: string, proposal: string) => `Downloaded ${name}. Rename it to ${proposal} to match the problem?`,
+    rename: 'Rename',
+    keepName: 'Keep the name',
+    extractQ: (zip: string, n: number, dir: string) => `${zip} has ${plural(n, 'file')}. Extract them into a new folder in ${dir}?`,
+    extractAndLink: (folder: string) => `Extract to ${folder}/ and link it`,
+    extractOnly: (folder: string) => `Extract to ${folder}/ only`,
+    contents: (list: string, n: number) =>
+      `Files: ${list}${n > 6 ? `, … (${n})` : ''}. Nothing is overwritten. "Link" puts the problem in folder mode: every file of the folder shows this problem.`,
+    unsafePath: (name: string) => `The zip contains an unsafe path (${name}), so nothing was extracted.`,
+    duplicate: (name: string) => `The zip contains ${name} twice, so nothing was extracted.`,
+    tooManyFiles: (n: number) => `The zip has more than ${n} files, so nothing was extracted.`,
+    tooBig: (mb: number) => `The zip's files add up to more than ${mb} MB, so nothing was extracted.`,
+    unreadable: (why: string) => `Couldn't read the zip (${why}), so nothing was extracted.`,
+    empty: 'The zip has no files.',
+    noFreeName: (name: string) => `Couldn't find a free folder name for ${name}.`,
+    exists: (path: string) => `${path} already exists; nothing was overwritten.`,
   },
 
   statementTab: (name: string) => `Statement: ${name}`,
@@ -454,12 +508,33 @@ const EN_W = {
   bestScoreLowToHigh: "Best score (low to high)",
   bestScoreHighToLow: "Best score (high to low)",
   recentlyOpened: "Recently opened",
+  downloadAttachment: 'Download attachment',
+  downloading: 'Downloading…',
+  linkFolder: 'Link the whole folder',
+  linkFolderTip: 'Link the whole folder (every file in it shows this problem; Submit sends one chosen file)',
+  linkOnlyFile: 'Link only this file',
+  folderLinked: (folder: string) => `Folder linked by you: ${folder}`,
+  submits: 'Submits',
+  submitFileTip: 'The grader takes one file per submission: only this file is sent',
+  submitFileAsk: 'Asked on the first submit',
+  runs: 'Runs',
+  runFileTip: 'Test cases are loaded for this program, and Run tests runs it (it includes the file you submit)',
+  runFileAsk: 'Asked when loading or running tests',
+  automatic: (file: string) => `Automatic: ${file}`,
+  whyTip: (why: string) => `Found automatically: ${why}`,
+  runTests: 'Run tests',
+  runTestsTip: 'Run the loaded test cases on your computer (Competitive Programming Helper)',
+  unlinkThisFolder: 'Unlink this folder',
+  unlinkThisFolderTip: "Unlink this folder (auto-detect won't link its files again)",
+  dontMatchThisFolder: "Don't match this folder",
+  dontMatchThisFolderTip: "Don't match this folder (auto-detect won't link its files to a problem again)",
 } as const;
 
 /** Match line under the problem selector. */
 const EN_W_SOURCE = {
   saved: 'Chosen by you',
   filename: 'Matched by file name',
+  folder: 'Matched by folder name',
   cph: 'Matched from CPH data',
   suggested: 'Suggested',
 } as const;
@@ -551,6 +626,7 @@ const EN_G = {
   countedImproved: (before: string | number, after: string | number) => `Counted score improved: ${before} → ${after}.`,
   countedKept: (score: string | number, best: string | number) => `This submission scored ${score}; your best, ${best}, still counts.`,
   countedUnchanged: (score: string | number) => `Counted score unchanged (${score}).`,
+  downloadTooLarge: (mb: number) => `The file is larger than ${mb} MB, so it wasn't downloaded.`,
 } as const;
 
 /** How the problem was chosen (`ViewState.problem.sourceLabel`). "from CPH" only when CPH data was actually used. */
@@ -558,6 +634,7 @@ const EN_MATCH_SOURCE = {
   saved: 'Chosen by you',
   cph: 'Matched from CPH data',
   filename: 'Matched by file name',
+  folder: 'Matched by folder name',
   suggested: 'Suggested — click to confirm',
 };
 

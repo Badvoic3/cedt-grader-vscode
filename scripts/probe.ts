@@ -3,6 +3,7 @@
  *
  *   npx tsx scripts/probe.ts [--list] [--problem <id>] [--fixtures]
  *   npx tsx scripts/probe.ts --problem <id> --submit path/to/sol.cpp [--language <id>]
+ *   npx tsx scripts/probe.ts --problem <id> --attachment   (status, type, file name, size; zip entry names; never the body)
  *
  * Credentials come from `.env` (GRADER_USER, GRADER_PASS, optional GRADER_BASE_URL).
  * Never prints passwords, tokens, cookies or CSRF tokens.
@@ -27,22 +28,25 @@ import {
   type SubmissionResult,
   WebSession,
 } from '../src/grader';
+import { attachmentKind, planZip } from '../src/mapping/attachment';
 
 interface Args {
   list: boolean;
   fixtures: boolean;
+  attachment: boolean;
   problem?: number;
   submit?: string;
   language?: number;
 }
 
 function parseArgs(argv: string[]): Args {
-  const a: Args = { list: false, fixtures: false };
+  const a: Args = { list: false, fixtures: false, attachment: false };
   for (let i = 0; i < argv.length; i++) {
     const k = argv[i];
     const next = () => argv[++i] ?? die(`Missing value for ${k}`);
     if (k === '--list') a.list = true;
     else if (k === '--fixtures') a.fixtures = true;
+    else if (k === '--attachment') a.attachment = true;
     else if (k === '--problem') a.problem = Number(next());
     else if (k === '--submit') a.submit = next();
     else if (k === '--language') a.language = Number(next());
@@ -53,6 +57,7 @@ function parseArgs(argv: string[]): Args {
   }
   if (a.problem !== undefined && !(Number.isInteger(a.problem) && a.problem > 0)) die('--problem must be a positive integer');
   if (a.submit && a.problem === undefined) die('--submit needs --problem <id>');
+  if (a.attachment && a.problem === undefined) die('--attachment needs --problem <id>');
   return a;
 }
 
@@ -179,6 +184,26 @@ async function main(): Promise<void> {
     console.log(`  ${tcs.length} testcase(s) visible`);
   } catch (e) {
     console.log(`  not available: ${e instanceof Error ? e.message : e}`);
+  }
+
+  // Attachment (only with --attachment): headers and zip entry names, never the body.
+  if (args.attachment) {
+    console.log(`\n[9b] GET /api/v1/problems/${pid}/files/attachment (has_attachment=${p.has_attachment})`);
+    const client = new GraderClient({ baseUrl, getStoredCredentials: async () => ({ username, password }), log });
+    await client.login({ username, password });
+    const a = await client.getAttachment(pid);
+    if (a.status !== 200) console.log(`  ${a.status}: ${a.error ?? '-'}`);
+    else {
+      console.log(`  200 type=${a.contentType ?? '-'} filename=${a.filename ?? '-'} bytes=${a.bytes.length} kind=${attachmentKind(a.filename, a.contentType, a.bytes)}`);
+      if (attachmentKind(a.filename, a.contentType, a.bytes) === 'zip') {
+        try {
+          const plan = planZip(a.bytes);
+          console.log(`  zip: ${plan.files.length} file(s)${plan.topFolder ? ` (top folder "${plan.topFolder}" stripped)` : ''}: ${plan.files.map((f) => f.rel).join(', ')}`);
+        } catch (e) {
+          console.log(`  zip refused: ${e instanceof Error ? e.message : e}`);
+        }
+      }
+    }
   }
 
   // 10. Optional submit (through GraderClient, like the extension).

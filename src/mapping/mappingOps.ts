@@ -1,7 +1,7 @@
 import { STALE_LINK_DAYS } from '../shared/constants';
-import { mkdir, readFile, rename, stat, writeFile } from 'node:fs/promises';
-import { basename, dirname } from 'node:path';
-import { pathKey, remapPath } from './paths';
+import { mkdir, readdir, readFile, rename, stat, writeFile } from 'node:fs/promises';
+import { basename, dirname, join, relative } from 'node:path';
+import { isAtOrInside, isInside, pathKey, remapPath } from './paths';
 import { cphProbPath, type CphProblem } from './cph';
 import type { MappingEntry } from './mappingFile';
 
@@ -30,6 +30,46 @@ export function planRename(entries: LocatedEntry[], oldPath: string, newPath: st
     }
   }
   return out;
+}
+
+/**
+ * Folder mode: the folder link a file belongs to, i.e. the nearest folder
+ * entry above it (non-stale). A file's own entry is checked by the caller first.
+ */
+export function nearestFolderLink(entries: LocatedEntry[], fsPath: string, caseInsensitive?: boolean): LocatedEntry | undefined {
+  let best: LocatedEntry | undefined;
+  for (const e of entries) {
+    if (!e.entry.folder || e.entry.staleSince || !isInside(fsPath, e.fsPath, caseInsensitive)) continue;
+    if (!best || e.fsPath.length > best.fsPath.length) best = e;
+  }
+  return best;
+}
+
+/** Absolute path of a folder link's submit file (null when not chosen yet). */
+export function submitFilePath(folderPath: string, submitFile: string | undefined): string | null {
+  if (!submitFile) return null;
+  const joiner = folderPath.includes('\\') && !folderPath.includes('/') ? '\\' : '/';
+  return `${folderPath.replace(/[\\/]+$/, '')}${joiner}${submitFile.split('/').join(joiner)}`;
+}
+
+/**
+ * A folder link's submit file after `oldPath` (a file or folder) moved to
+ * `newPath`: the new relative path, `undefined` when it left the folder (asked
+ * again on the next submit), or null when unaffected.
+ */
+export function submitFileAfterMove(folderPath: string, submitFile: string | undefined, oldPath: string, newPath: string, caseInsensitive?: boolean): string | undefined | null {
+  const abs = submitFilePath(folderPath, submitFile);
+  if (!abs) return null;
+  const moved = remapPath(abs, oldPath, newPath, caseInsensitive);
+  if (moved === null) return null;
+  if (!isInside(moved, folderPath, caseInsensitive)) return undefined;
+  return relative(folderPath, moved).split(/[\\/]/).join('/');
+}
+
+/** Was a folder link's submit file deleted (itself or a folder above it, inside the linked folder)? */
+export function submitFileDeleted(folderPath: string, submitFile: string | undefined, deletedPath: string, caseInsensitive?: boolean): boolean {
+  const abs = submitFilePath(folderPath, submitFile);
+  return !!abs && isAtOrInside(abs, deletedPath, caseInsensitive) && !isAtOrInside(folderPath, deletedPath, caseInsensitive);
 }
 
 /** Entries affected by deleting `deletedPath` (a file or a folder). */
@@ -86,8 +126,10 @@ export async function moveCphProblem(
   oldSrc: string,
   newSrc: string,
   saveLocation?: string,
+  /** Where the old .prob is now (a renamed folder took its `.cph/` along); default: where CPH put it. */
+  fromPath?: string,
 ): Promise<{ status: 'moved' | 'none' | 'target-exists'; from: string; to: string; backup?: string }> {
-  const from = cphProbPath(oldSrc, saveLocation);
+  const from = fromPath ?? cphProbPath(oldSrc, saveLocation);
   const to = cphProbPath(newSrc, saveLocation);
   if (!(await pathExists(from))) return { status: 'none', from, to };
   if (await pathExists(to)) return { status: 'target-exists', from, to };
@@ -98,4 +140,37 @@ export async function moveCphProblem(
   const backup = `${from}.bak`;
   await rename(from, backup); // the old file is kept as a backup
   return { status: 'moved', from, to, backup };
+}
+
+/**
+ * A folder was renamed: CPH files of the sources inside it are named after the
+ * OLD full path (md5), so CPH no longer finds them. Without a CPH save
+ * location they moved along (`<new folder>/…/.cph/`); with one they stayed
+ * there. Returns each orphaned file with the source's old and new path.
+ */
+export async function cphFilesAfterFolderRename(
+  oldFolder: string,
+  newFolder: string,
+  saveLocation?: string,
+): Promise<{ prob: string; oldSrc: string; newSrc: string }[]> {
+  let probs: string[];
+  if (saveLocation) {
+    probs = (await readdir(saveLocation).catch(() => [] as string[])).filter((f) => f.endsWith('.prob')).map((f) => join(saveLocation, f));
+  } else {
+    const all = await readdir(newFolder, { recursive: true }).catch(() => [] as string[]);
+    probs = all.map(String).filter((r) => /(^|[\\/])\.cph[\\/][^\\/]+\.prob$/.test(r)).map((r) => join(newFolder, r));
+  }
+  const out: { prob: string; oldSrc: string; newSrc: string }[] = [];
+  for (const prob of probs) {
+    let src: unknown;
+    try {
+      src = (JSON.parse(await readFile(prob, 'utf8')) as CphProblem).srcPath;
+    } catch {
+      continue;
+    }
+    if (typeof src !== 'string' || !isAtOrInside(src, oldFolder)) continue;
+    const newSrc = remapPath(src, oldFolder, newFolder);
+    if (newSrc && cphProbPath(newSrc, saveLocation) !== prob) out.push({ prob, oldSrc: src, newSrc });
+  }
+  return out;
 }

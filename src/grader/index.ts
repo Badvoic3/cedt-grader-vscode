@@ -13,3 +13,4 @@ export { WebSession } from './web';
 export { HttpSession, type FetchLike, type Logger, type HttpResult } from './http';
 export { Redactor, redactPatterns } from './redact';
 export { sanitizeHtml, sanitizeJson } from './sanitize';
+export * from './attachment';

@@ -46,6 +46,10 @@ const base: ViewState = {
   notLinked: false,
   prompt: null,
   testcases: { busy: false },
+  folder: null,
+  folderMode: null,
+  attachment: { busy: null },
+  runTests: null,
   cph: { installed: true },
   languages: { loading: false, items: [], selectedId: null, mismatch: null },
   connection: null,
@@ -60,7 +64,7 @@ const loggedIn: ViewState = {
   ...base,
   account: { status: 'logged-in', username: 'student', fullName: null, hasSavedPassword: true, rememberPassword: true, error: null },
   file: { path: 'grader/00 11 intro.cpp', name: '00 11 intro.cpp', languageGuess: 'C++', supported: true, renameTo: null },
-  problem: { id: 1360, name: '00_Intro_11', fullName: '<img src=x onerror=alert(1)>', score: score(70, { latest: 40, attempts: 3, latestBelowCounted: true, penaltyLabel: '-10 AI assist' }), source: 'saved', sourceLabel: 'saved', unavailable: false, hasFile: true, hasTestcase: true, status: 'solved', tags: ['ComProg'], lastSubmissionTime: null, lastOpened: null },
+  problem: { id: 1360, name: '00_Intro_11', fullName: '<img src=x onerror=alert(1)>', score: score(70, { latest: 40, attempts: 3, latestBelowCounted: true, penaltyLabel: '-10 AI assist' }), source: 'saved', sourceLabel: 'saved', unavailable: false, hasFile: true, hasTestcase: true, hasAttachment: false, status: 'solved', tags: ['ComProg'], lastSubmissionTime: null, lastOpened: null },
   languages: { loading: false, items: [{ id: 1, name: 'C' }, { id: 2, name: 'C++' }], selectedId: 2, mismatch: null },
   submit: { enabled: true, busy: false, reason: null, label: 'Submit to Grader' },
   result: {
@@ -82,7 +86,7 @@ const loggedIn: ViewState = {
       { submissionId: 2460900, number: 2, points: 0, status: 'compilation_error', comment: 'Compilation error', submittedAt: '2026-11-02T12:30:00+07:00', language: 'C++', compileError: true, counted: false, verdicts: [] },
     ],
   },
-  problems: { loading: false, loaded: true, items: [{ id: 1360, name: '00_Intro_11', fullName: 'Hello', score: score(100), hasFile: true, hasTestcase: true, status: 'solved', tags: ['ComProg'], lastSubmissionTime: '2026-11-01T10:00:00Z', lastOpened: 5 }, { id: 1271, name: '01_Expr_11', fullName: 'An Expression', score: score(null), hasFile: false, hasTestcase: false, status: 'untried', tags: [], lastSubmissionTime: null, lastOpened: null }], error: null, penaltyNote: null, stale: false, filter: { status: 'all', topic: null }, topics: [] },
+  problems: { loading: false, loaded: true, items: [{ id: 1360, name: '00_Intro_11', fullName: 'Hello', score: score(100), hasFile: true, hasTestcase: true, hasAttachment: false, status: 'solved', tags: ['ComProg'], lastSubmissionTime: '2026-11-01T10:00:00Z', lastOpened: 5 }, { id: 1271, name: '01_Expr_11', fullName: 'An Expression', score: score(null), hasFile: false, hasTestcase: false, hasAttachment: false, status: 'untried', tags: [], lastSubmissionTime: null, lastOpened: null }], error: null, penaltyNote: null, stale: false, filter: { status: 'all', topic: null }, topics: [] },
 };
 
 /** Open the "…" menu with this aria-label and click the item with this text. */
@@ -96,6 +100,14 @@ function menuPick(doc: Document, target: Element, item: string): void {
   rightClick(doc, target);
   [...doc.querySelectorAll<HTMLButtonElement>('.context-menu .menu-item')].find((b) => b.getAttribute('aria-label') === item)!.click();
 }
+/** `loggedIn` with an attachment on the current problem and on row 1. */
+const withAttachment = (extra: Partial<ViewState> = {}): ViewState => ({
+  ...loggedIn,
+  problem: { ...loggedIn.problem!, hasAttachment: true },
+  problems: { ...loggedIn.problems, items: loggedIn.problems.items.map((p, i) => (i === 1 ? { ...p, hasAttachment: true } : p)) },
+  folderMode: { on: false, disabledReason: null },
+  ...extra,
+});
 const row = (doc: Document, i: number) => doc.querySelectorAll('#sec-problems .problem-row')[i];
 const header = (doc: Document) => doc.querySelector('#sec-current .problem-field .field-label')!;
 
@@ -330,7 +342,7 @@ describe.runIf(existsSync(resolve(__dirname, '../esbuild.mjs')))('sidebar webvie
 
   it('suggested match: labelled as a guess, works like a link (score, history, test cases, statement), picker lists suggestions first', () => {
     const { doc, sent, post } = boot();
-    const sug = { id: 1271, name: '01_Expr_11', fullName: 'An Expression', score: score(null), hasFile: false, hasTestcase: true, status: 'untried' as const, tags: [], lastSubmissionTime: null, lastOpened: null };
+    const sug = { id: 1271, name: '01_Expr_11', fullName: 'An Expression', score: score(null), hasFile: false, hasTestcase: true, hasAttachment: false, status: 'untried' as const, tags: [], lastSubmissionTime: null, lastOpened: null };
     post({ ...loggedIn, problem: { ...sug, source: 'suggested', sourceLabel: 'Suggested — click to confirm', unavailable: false }, matching: { suggestions: [sug], ambiguous: null, note: null } });
     expect(doc.querySelector('#sec-current .source-line.source-suggested')!.textContent).toContain('Suggested');
     expect(doc.querySelector('#sec-current')!.textContent).toContain('Suggested from the file name');
@@ -350,7 +362,7 @@ describe.runIf(existsSync(resolve(__dirname, '../esbuild.mjs')))('sidebar webvie
 
   it('Phase 3: ambiguous match shows the note and the candidates', () => {
     const { doc, post } = boot();
-    const a = { id: 1, name: 'dup', fullName: 'Dup A', score: score(null), hasFile: false, hasTestcase: false, status: 'untried' as const, tags: [], lastSubmissionTime: null, lastOpened: null };
+    const a = { id: 1, name: 'dup', fullName: 'Dup A', score: score(null), hasFile: false, hasTestcase: false, hasAttachment: false, status: 'untried' as const, tags: [], lastSubmissionTime: null, lastOpened: null };
     const b = { ...a, id: 2, fullName: 'Dup B' };
     post({ ...loggedIn, problem: null, matching: { suggestions: [], ambiguous: [a, b], note: 'Several problems match this file name. Choose one.' } });
     expect(doc.querySelector('#sec-current')!.textContent).toContain('Several problems match this file name');
@@ -381,6 +393,10 @@ describe.runIf(existsSync(resolve(__dirname, '../esbuild.mjs')))('sidebar webvie
       { ...loggedIn, result: { ...loggedIn.result!, phase: 'error', message: 'x' }, submit: { ...loggedIn.submit, enabled: false, reason: 'Log in first.' } },
       { ...loggedIn, result: { ...loggedIn.result!, compileError: true, verdicts: [], compilerMessage: 'err' } },
       { ...loggedIn, testcases: { busy: true } },
+      // Attachment + folder mode: download icon (also busy), folder toggle (also disabled), submit-file select.
+      withAttachment({ folderMode: { on: false, disabledReason: 'This file is at the top of the workspace folder.' }, attachment: { busy: 1360 } }),
+      withAttachment({ folder: { path: 'pkg/', submitFile: 'student.h', submitWhy: 'the included file named student.*', submitChosen: false, runFile: 'main.cpp', runWhy: 'the only file with main()', runChosen: false, candidates: ['main.cpp', 'student.h', 'vector.h'], runCandidates: ['main.cpp'] }, folderMode: { on: true, disabledReason: null }, runTests: { disabledReason: 'load the test cases first' } }),
+      withAttachment({ folder: { ...({ path: 'pkg/', submitFile: 'student.h', submitWhy: 'the included file named student.*', submitChosen: false, runFile: 'main.cpp', runWhy: 'the only file with main()', runChosen: false, candidates: ['main.cpp', 'student.h', 'vector.h'], runCandidates: ['main.cpp'] }), submitFile: null, submitWhy: null, runFile: null, runWhy: null }, folderMode: { on: true, disabledReason: null }, runTests: { disabledReason: null } }),
       {
         ...loggedIn,
         history: {
@@ -404,6 +420,76 @@ describe.runIf(existsSync(resolve(__dirname, '../esbuild.mjs')))('sidebar webvie
       }
     }
     expect(problems).toEqual([]);
+  });
+
+  it('attachment: a download icon (header, row, right-click) only for problems that have one', () => {
+    const { doc, sent, post } = boot();
+    post({ ...loggedIn, folderMode: { on: false, disabledReason: null } });
+    expect(header(doc).querySelector('[aria-label="Download attachment"]')).toBeNull();
+    expect(row(doc, 1).querySelector('[aria-label="Download attachment"]')).toBeNull();
+    expect(rightClick(doc, row(doc, 1))).not.toContain('Download attachment');
+    post(withAttachment());
+    header(doc).querySelector<HTMLButtonElement>('[aria-label="Download attachment"]')!.click();
+    expect(sent.at(-1)).toEqual({ type: 'downloadAttachment', problemId: 1360 });
+    const icons = [...row(doc, 1).querySelectorAll('.row-actions button')].map((b) => b.getAttribute('aria-label'));
+    expect(icons).toEqual(['Copy problem name', 'Find file by name', 'New file for this problem', 'Download attachment', 'Open statement']);
+    expect(row(doc, 0).querySelector('[aria-label="Download attachment"]')).toBeNull();
+    menuPick(doc, row(doc, 1), 'Download attachment');
+    expect(sent.at(-1)).toEqual({ type: 'downloadAttachment', problemId: 1271 });
+    expect(rightClick(doc, header(doc))).toContain('Download attachment');
+    // While it downloads: disabled, and the tooltip says why.
+    post(withAttachment({ attachment: { busy: 1360 } }));
+    const busy = header(doc).querySelector<HTMLButtonElement>('[aria-label^="Download attachment"]')!;
+    expect(busy.disabled).toBe(true);
+    expect(busy.getAttribute('aria-label')).toBe('Download attachment (Downloading…)');
+  });
+
+  it('folder mode: visible toggle + header menu, folder line, submit-file dropdown, ✕ unlinks the folder', () => {
+    const { doc, sent, post } = boot();
+    post(withAttachment());
+    header(doc).querySelector<HTMLButtonElement>('[aria-label="Link the whole folder"]')!.click();
+    expect(sent.at(-1)).toEqual({ type: 'toggleFolderMode' });
+    expect(rightClick(doc, header(doc))).toContain('Link the whole folder');
+    // At the top of the workspace: disabled with the reason.
+    post(withAttachment({ folderMode: { on: false, disabledReason: 'This file is at the top of the workspace folder.' } }));
+    const off = header(doc).querySelector<HTMLButtonElement>('[aria-label^="Link the whole folder"]')!;
+    expect(off.disabled).toBe(true);
+    expect(off.dataset.tip).toContain('top of the workspace folder');
+    // In folder mode.
+    post(withAttachment({ folder: { path: 'pkg/', submitFile: 'student.h', submitWhy: 'the included file named student.*', submitChosen: false, runFile: 'main.cpp', runWhy: 'the only file with main()', runChosen: false, candidates: ['main.cpp', 'student.h', 'vector.h'], runCandidates: ['main.cpp'] }, folderMode: { on: true, disabledReason: null }, runTests: { disabledReason: null } }));
+    const cur = doc.querySelector('#sec-current')!;
+    expect(cur.querySelector('.source-line.source-folder')!.textContent).toBe('Folder linked by you: pkg/');
+    expect(header(doc).querySelector('[aria-label="Link only this file"]')).not.toBeNull();
+    expect(header(doc).querySelector('[aria-label^="Unlink this folder"]')).not.toBeNull();
+    expect(rightClick(doc, header(doc))).toEqual(expect.arrayContaining(['Link only this file', 'Unlink this folder']));
+    doc.dispatchEvent(new (doc.defaultView as unknown as typeof globalThis).KeyboardEvent('keydown', { key: 'Escape' }));
+    // Submits / Runs: detected files first ("Automatic: …", why in the tooltip); picking one is remembered.
+    const pick = cur.querySelector<HTMLSelectElement>('#submit-file')!;
+    expect([...pick.options].map((o) => o.textContent)).toEqual(['Automatic: student.h', 'main.cpp', 'student.h', 'vector.h']);
+    expect(pick.dataset.tip).toContain('the included file named student.*');
+    const runs = cur.querySelector<HTMLSelectElement>('#run-file')!;
+    expect([...runs.options].map((o) => o.textContent)).toEqual(['Automatic: main.cpp', 'main.cpp']);
+    expect(cur.textContent).toContain('only this file is sent');
+    const W = doc.defaultView as unknown as typeof globalThis;
+    pick.value = 'vector.h';
+    pick.dispatchEvent(new W.Event('change'));
+    expect(sent.at(-1)).toEqual({ type: 'setFolderRole', role: 'submit', file: 'vector.h' });
+    pick.value = '';
+    pick.dispatchEvent(new W.Event('change'));
+    expect(sent.at(-1)).toEqual({ type: 'setFolderRole', role: 'submit', file: '' }); // back to automatic
+    // Run tests (CPH installed): runs the driver; disabled until test cases are loaded.
+    [...cur.querySelectorAll<HTMLButtonElement>('button')].find((b) => b.textContent?.includes('Run tests'))!.click();
+    expect(sent.at(-1)).toEqual({ type: 'runTests' });
+    post(withAttachment({ folder: { path: 'pkg/', submitFile: 'student.h', submitWhy: 'the included file named student.*', submitChosen: false, runFile: 'main.cpp', runWhy: 'the only file with main()', runChosen: false, candidates: ['main.cpp', 'student.h', 'vector.h'], runCandidates: ['main.cpp'] }, folderMode: { on: true, disabledReason: null }, runTests: { disabledReason: 'load the test cases first' } }));
+    const run = [...cur.querySelectorAll<HTMLButtonElement>('button')].find((b) => b.textContent?.includes('Run tests'))!;
+    expect(run.disabled).toBe(true);
+    expect(run.dataset.tip).toContain('load the test cases first');
+    post({ ...withAttachment(), runTests: null });
+    expect([...cur.querySelectorAll('button')].some((b) => b.textContent?.includes('Run tests'))).toBe(false); // no CPH: no button
+    // Matched by the folder's name (no folder link): "Don't match this folder".
+    post({ ...withAttachment(), problem: { ...withAttachment().problem!, source: 'folder', sourceLabel: 'Matched by folder name' } });
+    expect(cur.querySelector('.source-line.source-folder')!.textContent).toBe('Matched by folder name');
+    expect(header(doc).querySelector('[aria-label^="Don\'t match this folder"]')).not.toBeNull();
   });
 
   it('troubleshooting link in the connection banner and under a login error; Result revealed after grading', () => {

@@ -10,6 +10,7 @@ import {
   type ConnectionProblem,
   countedScore,
   describeSubmitFailure,
+  type Attachment,
   type Credentials,
   describeImprovement,
   GraderClient,
@@ -28,8 +29,9 @@ import {
   summarize,
   problemStatus,
 } from './grader';
-import { dirname } from 'node:path';
-import { chooseTestcaseTarget, CPH_EXTENSION_ID, CphPresence, saveTestcasesAsFiles, testsFolderFor } from './cphIntegration';
+import { dirname, join, relative, sep } from 'node:path';
+import { chooseTestcaseTarget, CPH_EXTENSION_ID, CPH_RUN_COMMAND, CphPresence, saveTestcasesAsFiles, testsFolderFor } from './cphIntegration';
+import { detectFolderRoles, type FolderRoles, type RunWhy, type SubmitWhy, submitFor } from './mapping/folderRoles';
 import { TestcaseStore } from './data/testcaseStore';
 import { cleanupCache, clearCacheFiles, enforceLimit, formatBytes, scanCache, statementIds, totalBytes } from './data/cacheFiles';
 import { type BackupRecord, backupsToDelete, CLEAR_DEFAULTS, CLEAR_ORDER, type ClearCategory, keepIds, planClear, recordBackup } from './data/cacheClear';
@@ -40,16 +42,18 @@ import { chooseNewFileLanguage } from './mapping/newFileLanguage';
 import { BINARY_EXTS, excludeGlob, filterSourceFiles, rankCandidates, sourceGlob } from './mapping/findByName';
 import { buildMatchIndex, type IndexedFile, matchFile, OnceCache, type SourceFile } from './mapping/matchIndex';
 import { EXTENSION_LANGUAGE } from './grader/languages';
-import { stat as fsStat, readFile as fsReadFile, rm } from 'node:fs/promises';
+import { stat as fsStat, readFile as fsReadFile, readdir, rm } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
-import { dismissKey, type LocatedEntry, moveCphProblem, reconnectCandidates, remapPath } from './mapping/mappingOps';
-import { cleanName, fileNameFor, type MatchSource, placeholder, resolveProblem } from './mapping/match';
+import { cphFilesAfterFolderRename, dismissKey, type LocatedEntry, moveCphProblem, reconnectCandidates, remapPath, submitFilePath } from './mapping/mappingOps';
+import { cleanName, fileNameFor, folderNameFor, type MatchSource, placeholder, resolveProblem } from './mapping/match';
+import type { MappingEntry } from './mapping/mappingFile';
+import { attachmentKind, AttachmentError, fileToOpen, freeFolderName, planZip, submitCandidates, writeExtracted, writeNewFile } from './mapping/attachment';
 import { MappingStore } from './mapping/store';
 import { comparePaths, linkedNotice, mergeProblemFiles, noticeDismissed, noticeSignature, type ProblemFile } from './mapping/problemFiles';
-import { pathKey } from './mapping/paths';
+import { isAtOrInside, pathKey } from './mapping/paths';
 import { confirmSuggestion } from './mapping/suggestionGate';
 import { freeName, invalidFileName, nameMatchesProblem, renameProposal } from './mapping/renameToProblem';
-import { CACHE, LIMITS, TIMING, troubleshootingUrl, WEB_PATHS } from './shared/constants';
+import { ATTACHMENT, CACHE, LIMITS, TIMING, troubleshootingUrl, WEB_PATHS } from './shared/constants';
 import { needsSave, shouldRevealResult } from './shared/submitOptions';
 import { MATCH_SOURCE, PICK_HOW, S } from './shared/strings';
 import { KEYS } from './shared/stateKeys';
@@ -73,6 +77,13 @@ const CPH_TIP_KEY = KEYS.cphTipDismissed;
 const REMEMBER_KEY = KEYS.rememberPassword;
 
 type Listener = (s: ViewState) => void;
+
+/** Why a folder's submit / run file is what it is (tooltip in the card). */
+type RoleWhy = SubmitWhy | RunWhy | 'chosen' | 'only-file';
+/** C/C++ sources and headers (role detection reads these). */
+const CODE_FILE = /\.(c|cc|cpp|cxx|h|hh|hpp|hxx)$/i;
+/** C/C++ sources (run file choices). */
+const CODE_SOURCE = /\.(c|cc|cpp|cxx)$/i;
 
 /**
  * Single owner of the grader session and all UI state. All grader data goes
@@ -106,7 +117,7 @@ export class GraderController implements vscode.Disposable {
   private refreshSeq = 0;
   private changingUsername = false;
   /** Matching details for the active file (picker suggestions, ambiguous candidates, stale mapping). */
-  private matchInfo: { suggestions: Problem[]; ambiguous: Problem[] | null; ambiguousSource: 'cph' | 'filename' | 'suggested' | null } = {
+  private matchInfo: { suggestions: Problem[]; ambiguous: Problem[] | null; ambiguousSource: 'cph' | 'filename' | 'folder' | 'suggested' | null } = {
     suggestions: [],
     ambiguous: null,
     ambiguousSource: null,
@@ -115,6 +126,13 @@ export class GraderController implements vscode.Disposable {
   private readonly unavailableIds = new Set<number>();
   /** The active file was explicitly unlinked (auto-detection is off for it). */
   private notLinked = false;
+  /** Folder mode: the folder link the active file belongs to (null: the file is on its own). */
+  private folderLink: { fsPath: string; entry: MappingEntry } | null = null;
+  /** Folder mode: the linked folder's source files (relative paths), the choices for the submit file. */
+  private folderFiles: string[] = [];
+  /** Folder mode: the folder's C/C++ texts and the detected submit / run files (folderRoles.ts). */
+  private folderTexts = new Map<string, string>();
+  private folderRoles: FolderRoles | null = null;
   /** Files for the current problem (duplicate notice): saved links, remembered auto-matches, name matches. */
   private linkedFiles: ProblemFile[] = [];
   /**
@@ -447,6 +465,374 @@ export class GraderController implements vscode.Disposable {
     return fresh ? { ...fresh, source: this.problem.source } : this.problem;
   }
 
+  // ----------------------------------------------------------- folder mode
+
+  /**
+   * Folder mode: the file Submit sends and the file CPH runs (relative to the
+   * folder), with why: the user's choice, else detected (folderRoles.ts),
+   * else the folder's only source file; null = asked when needed.
+   */
+  private folderRole(role: 'submit' | 'run'): { file: string; why: RoleWhy } | null {
+    const link = this.folderLink;
+    if (!link) return null;
+    const has = (f: string | undefined) => !!f && this.folderFiles.some((x) => pathKey(x) === pathKey(f));
+    const chosen = role === 'submit' ? link.entry.submitFile : link.entry.runFile;
+    if (has(chosen)) return { file: chosen!, why: 'chosen' };
+    const roles = this.folderRoles;
+    if (role === 'run') return roles?.run ?? null;
+    // A run file chosen by the user decides which header is the submit file.
+    const runChosen = has(link.entry.runFile) ? submitFor(this.folderTexts, link.entry.runFile!) : null;
+    const detected = runChosen ?? roles?.submit ?? null;
+    if (detected) return detected;
+    return this.folderFiles.length === 1 ? { file: this.folderFiles[0], why: 'only-file' } : null;
+  }
+
+  /** The card's folder-mode block (submit / run file with why). */
+  private folderView(): ViewState['folder'] {
+    const link = this.folderLink;
+    if (!link) return null;
+    const sub = this.folderRole('submit');
+    const run = this.folderRole('run');
+    const why = (w: RoleWhy | undefined, run?: string) => (w ? S.folder.why[w](run ?? '') : null);
+    return {
+      path: `${vscode.workspace.asRelativePath(link.fsPath, false)}/`,
+      submitFile: sub?.file ?? null,
+      submitWhy: why(sub?.why, run?.file),
+      submitChosen: sub?.why === 'chosen',
+      runFile: run?.file ?? null,
+      runWhy: why(run?.why),
+      runChosen: run?.why === 'chosen',
+      candidates: this.folderFiles,
+      runCandidates: this.folderFiles.filter((f) => CODE_SOURCE.test(f)),
+    };
+  }
+
+  private submitFileRel(): string | null {
+    return this.folderRole('submit')?.file ?? null;
+  }
+
+  /** The file Submit sends: folder mode → the folder's submit file (null until known); otherwise the active file. */
+  private targetUri(): vscode.Uri | null {
+    if (!this.folderLink) return this.fileUri;
+    const p = submitFilePath(this.folderLink.fsPath, this.submitFileRel() ?? undefined);
+    return p ? vscode.Uri.file(p) : null;
+  }
+
+  /** The file test cases belong to and CPH runs: folder mode → the run file (null until known); otherwise the active file. */
+  private runUri(): vscode.Uri | null {
+    if (!this.folderLink) return this.fileUri;
+    const p = submitFilePath(this.folderLink.fsPath, this.folderRole('run')?.file);
+    return p ? vscode.Uri.file(p) : null;
+  }
+
+  /** Source files of a linked folder (relative, "/" separators, path order; build output and binaries skipped). */
+  private async folderSources(folder: string): Promise<string[]> {
+    const all = await readdir(folder, { recursive: true }).catch(() => [] as string[]);
+    const rels = all.slice(0, ATTACHMENT.maxEntries).map((r) => String(r).split(sep).join('/'));
+    const exts = this.allSourceExts();
+    return submitCandidates(filterSourceFiles(rels, exts), exts);
+  }
+
+  /** The C/C++ texts of a folder's source files (role detection), each read up to a size cap. */
+  private async folderTextsOf(folder: string, files: string[]): Promise<Map<string, string>> {
+    const out = new Map<string, string>();
+    for (const rel of files.filter((f) => CODE_FILE.test(f))) {
+      const p = join(folder, ...rel.split('/'));
+      const st = await fsStat(p).catch(() => null);
+      if (st && st.size <= ATTACHMENT.maxRoleFileBytes) out.set(rel, await fsReadFile(p, 'utf8').catch(() => ''));
+    }
+    return out;
+  }
+
+  /** The folder "Link the whole folder" would link for the active file, or why it can't. */
+  private folderModeTarget(): { dir: vscode.Uri | null; reason: string | null } {
+    const file = this.fileUri;
+    if (!file) return { dir: null, reason: S.folder.openFile };
+    const dir = vscode.Uri.joinPath(file, '..');
+    const ws = vscode.workspace.getWorkspaceFolder(file);
+    if (!ws) return { dir: null, reason: S.folder.outsideWorkspace };
+    if (pathKey(ws.uri.fsPath) === pathKey(dir.fsPath)) return { dir: null, reason: S.folder.atRoot };
+    return { dir, reason: null };
+  }
+
+  /**
+   * Switch the current problem between "this file" and "the whole folder"
+   * (command, header icon, header menu). File → folder: the active file's
+   * folder is linked; its submit / run files are detected (when no submit
+   * file is found, the active file is it). Folder → file: the folder link goes
+   * and the submit file (else the active file) is linked on its own.
+   */
+  async toggleFolderMode(): Promise<void> {
+    const file = this.fileUri;
+    const problem = this.currentProblem();
+    if (!file || !problem) {
+      void vscode.window.showInformationMessage(file ? S.submit.chooseFirst : S.submit.openToSubmit);
+      return;
+    }
+    const entry = { problemId: problem.id, name: problem.name, baseUrl: this.cfg.baseUrl };
+    if (this.folderLink) {
+      const folder = vscode.Uri.file(this.folderLink.fsPath);
+      const keep = this.targetUri() ?? file;
+      await this.mapping.set(folder, undefined);
+      await this.mapping.set(keep, entry);
+      await this.setActiveFile(file);
+      void vscode.window.setStatusBarMessage(S.folder.nowFile(keep.path.split('/').pop() ?? ''), TIMING.statusMessageMs);
+      return;
+    }
+    const { dir, reason } = this.folderModeTarget();
+    if (!dir) {
+      void this.askInline(reason ?? S.folder.atRoot, [{ id: 'ok', label: S.common.ok }]);
+      return;
+    }
+    const existing = await this.mapping.get(dir, this.cfg.baseUrl);
+    if (existing?.folder && existing.problemId !== problem.id) {
+      const pick = await this.askInline(S.folder.replaceQ(vscode.workspace.asRelativePath(dir), existing.name || `#${existing.problemId}`, problem.name), [
+        { id: 'replace', label: S.folder.replace, primary: true },
+        { id: 'cancel', label: S.common.cancel },
+      ]);
+      if (pick !== 'replace') return;
+    }
+    // Links of files inside to this same problem are now covered by the folder; links to other problems stay (they win).
+    for (const l of await this.mapping.linksFor(problem.id, this.cfg.baseUrl)) {
+      if (!l.folder && isAtOrInside(l.uri.fsPath, dir.fsPath)) await this.mapping.set(l.uri, undefined);
+    }
+    const files = await this.folderSources(dir.fsPath);
+    const detected = detectFolderRoles(await this.folderTextsOf(dir.fsPath, files)).submit;
+    const own = relative(dir.fsPath, file.fsPath).split(sep).join('/');
+    await this.mapping.set(dir, { ...entry, folder: true, ...(detected || files.length === 1 ? {} : { submitFile: own }) });
+    await this.mapping.setUnlinked(file, false); // an explicit choice clears "not linked"
+    this.tempLink = null;
+    await this.refreshMappedIds();
+    await this.setActiveFile(file);
+    void vscode.window.setStatusBarMessage(S.folder.nowFolder(vscode.workspace.asRelativePath(dir)), TIMING.statusMessageMs);
+  }
+
+  /**
+   * The file that stands for a folder item (row click, notice, newer-file
+   * check): its submit file (chosen or detected), else the run file, else
+   * the first source file; null when it has none.
+   */
+  private async folderItemFile(folder: string): Promise<string | null> {
+    if (!(await fsStat(folder).catch(() => null))?.isDirectory()) return null;
+    const e = await this.mapping.get(vscode.Uri.file(folder), this.cfg.baseUrl);
+    const files = await this.folderSources(folder);
+    if (!files.length) return null;
+    const chosen = e?.folder && e.submitFile && files.includes(e.submitFile) ? e.submitFile : null;
+    const roles = chosen ? null : detectFolderRoles(await this.folderTextsOf(folder, files));
+    const pick = chosen ?? roles?.submit?.file ?? roles?.run?.file ?? files[0];
+    return join(folder, ...pick.split('/'));
+  }
+
+  /** Open a file, or the stand-in file of a folder. */
+  private async openItem(fsPath: string): Promise<void> {
+    const file = (await this.folderItemFile(fsPath)) ?? fsPath;
+    if ((await fsStat(file).catch(() => null))?.isDirectory()) await vscode.commands.executeCommand('revealInExplorer', vscode.Uri.file(file));
+    else await vscode.window.showTextDocument(vscode.Uri.file(file));
+  }
+
+  /** Folder mode: the user picks the submit / run file in the card ('' = automatic again). */
+  async setFolderRole(role: 'submit' | 'run', rel: string): Promise<void> {
+    if (!this.folderLink || (rel && !this.folderFiles.includes(rel))) return;
+    await this.mapping.setFolderRole(vscode.Uri.file(this.folderLink.fsPath), this.cfg.baseUrl, role === 'submit' ? 'submitFile' : 'runFile', rel || undefined);
+    if (this.fileUri) await this.setActiveFile(this.fileUri);
+  }
+
+  /** Folder mode: ask once (only when detection found nothing) which file Submit sends / CPH runs. Saved with the folder link. */
+  private async askFolderRole(role: 'submit' | 'run', problem: Problem): Promise<string | null> {
+    const link = this.folderLink;
+    if (!link) return null;
+    const known = this.folderRole(role)?.file;
+    if (known) return known;
+    const files = role === 'submit' ? this.folderFiles : this.folderRoles?.runCandidates.length ? this.folderRoles.runCandidates : this.folderFiles.filter((f) => CODE_SOURCE.test(f));
+    if (!files.length) {
+      void this.askInline(S.folder.noSources(vscode.workspace.asRelativePath(link.fsPath)), [{ id: 'ok', label: S.common.ok }], { tone: 'warn' });
+      return null;
+    }
+    let pick: string | undefined;
+    const text = role === 'submit' ? S.folder.whichFile(problem.name) : S.folder.whichRunFile(problem.name);
+    const detail = role === 'submit' ? S.folder.oneFile : S.folder.runFileDetail;
+    if (files.length <= ATTACHMENT.maxInlineChoices) {
+      const id = await this.askInline(text, [...files.map((f, i) => ({ id: String(i), label: f })), { id: 'cancel', label: S.common.cancel }], { detail });
+      pick = id !== undefined && id !== 'cancel' ? files[Number(id)] : undefined;
+    } else {
+      pick = (await vscode.window.showQuickPick(files, { placeHolder: `${text} ${detail}` })) ?? undefined;
+    }
+    if (!pick) return null;
+    const key = role === 'submit' ? 'submitFile' : 'runFile';
+    await this.mapping.setFolderRole(vscode.Uri.file(link.fsPath), this.cfg.baseUrl, key, pick);
+    this.folderLink = { ...link, entry: { ...link.entry, [key]: pick } };
+    return pick;
+  }
+
+  // ----------------------------------------------------------- run tests (CPH)
+
+  /** Tests in CPH for the run file (null: CPH not installed / no file). Read on file switch and after loading test cases. */
+  private runTestCount: number | null = null;
+
+  private async refreshRunTests(): Promise<void> {
+    const run = this.runUri();
+    const before = this.runTestCount;
+    this.runTestCount = this.cph.installed && run ? ((await readCphProblem(run.fsPath, this.cphSaveLocation()))?.tests.length ?? 0) : null;
+    if (before !== this.runTestCount) this.emit();
+  }
+
+  /**
+   * "Run tests" (only with CPH): save the files of the folder (or the file),
+   * show the run file (CPH runs the active editor and reloads its tests only
+   * when the active editor changes), then CPH's run command. Folder mode runs
+   * the driver (main.cpp), which includes the submit file from the folder.
+   */
+  async runTests(): Promise<void> {
+    if (!this.cph.installed) return;
+    const problem = this.currentProblem();
+    if (this.folderLink && problem && !(await this.askFolderRole('run', problem))) return;
+    const run = this.runUri();
+    if (!run) {
+      void vscode.window.showInformationMessage(S.submit.openToSubmit);
+      return;
+    }
+    const tests = (await readCphProblem(run.fsPath, this.cphSaveLocation()))?.tests.length ?? 0;
+    if (!tests) {
+      const pick = await this.askInline(S.runTests.noTests, [
+        ...(problem?.hasTestcase ? [{ id: 'load', label: S.testcases.load, primary: true }] : []),
+        { id: 'cancel', label: S.common.cancel },
+      ]);
+      if (pick === 'load') await this.loadTestcases(false);
+      return;
+    }
+    const scope = this.folderLink?.fsPath;
+    for (const d of vscode.workspace.textDocuments) {
+      if (d.isDirty && !d.isUntitled && (scope ? isAtOrInside(d.uri.fsPath, scope) : d.uri.toString() === run.toString())) await d.save();
+    }
+    if (vscode.window.activeTextEditor?.document.uri.toString() === run.toString()) await this.reloadCph(run);
+    else await vscode.window.showTextDocument(run, { preview: false });
+    await vscode.commands.executeCommand(CPH_RUN_COMMAND);
+  }
+
+  // ----------------------------------------------------------- attachments
+
+  /**
+   * The problem's attachment (the website's "File"), only on click: a single
+   * file is saved next to the active file (or in the workspace root) and may
+   * be renamed to match the problem; a zip is extracted into a NEW folder,
+   * after one question that also offers folder mode. Never overwrites.
+   */
+  async downloadAttachment(problemId?: number): Promise<void> {
+    const id = problemId ?? this.currentProblem()?.id;
+    const p = id === undefined ? undefined : this.problemById(id);
+    if (!p) {
+      void vscode.window.showInformationMessage(S.submit.chooseFirst);
+      return;
+    }
+    const dir = (this.fileUri ? vscode.Uri.joinPath(this.fileUri, '..') : undefined) ?? vscode.workspace.workspaceFolders?.[0]?.uri;
+    if (!dir) {
+      void vscode.window.showInformationMessage(S.files.openFolderFirst);
+      return;
+    }
+    if (!(await this.ensureLoggedIn())) return;
+    let a: Awaited<ReturnType<DataService['downloadAttachment']>>;
+    try {
+      const pending = this.data.downloadAttachment(p.id);
+      this.emit(); // busy
+      a = await pending;
+    } catch (err) {
+      if (err instanceof ProblemUnavailableError) this.markUnavailable(p.id);
+      if (classifyConnectionError(err)) this.reportError(err, null);
+      else await this.tellInline(err, this.describe(err));
+      return;
+    } finally {
+      this.emit();
+    }
+    if (a.status !== 200) {
+      await this.tellInline(null, S.attachment.none(p.name));
+      return;
+    }
+    try {
+      if (attachmentKind(a.filename, a.contentType, a.bytes) === 'zip') await this.extractAttachment(p, dir, a);
+      else await this.saveAttachmentFile(p, dir, a);
+    } catch (err) {
+      await this.tellInline(err, err instanceof AttachmentError ? err.message : S.attachment.writeFailed(this.describe(err)));
+    }
+  }
+
+  /** An error the user should read once: inline in the panel, a toast only when the panel is hidden. */
+  private async tellInline(err: unknown, msg: string): Promise<void> {
+    this.log(`Attachment: ${msg}`);
+    if (this.data.isVisible()) void this.askInline(msg, [{ id: 'ok', label: S.common.ok }], { tone: 'warn' });
+    else await this.showError(err, msg);
+  }
+
+  /** A single-file attachment: saved under its own name (`_2` if taken), opened, then "Rename to match the problem?". */
+  private async saveAttachmentFile(p: Problem, dir: vscode.Uri, a: Attachment): Promise<void> {
+    const ext = a.filename?.includes('.') ? a.filename.split('.').pop()! : 'txt';
+    const desired = a.filename ?? fileNameFor(p.name, ext, this.cfg.fileNamePattern.pattern, p.id);
+    const name = await freeName(desired, (n) => exists(vscode.Uri.joinPath(dir, n).fsPath));
+    let target = vscode.Uri.joinPath(dir, name);
+    await writeNewFile(target.fsPath, a.bytes);
+    const source = this.allSourceExts().includes(ext.toLowerCase());
+    if (source) await this.mapping.set(target, { problemId: p.id, name: p.name, baseUrl: this.cfg.baseUrl });
+    await this.openDownloaded(target, source);
+    if (!source || nameMatchesProblem(target.fsPath, p.name, this.cfg.fileNamePattern.pattern, p.id)) return;
+    const proposal = await freeName(renameProposal(target.fsPath, p.name, this.cfg.fileNamePattern.pattern, p.id), (n) => exists(vscode.Uri.joinPath(dir, n).fsPath));
+    const pick = await this.askInline(S.attachment.renameQ(name, proposal), [
+      { id: 'rename', label: S.attachment.rename, primary: true },
+      { id: 'keep', label: S.attachment.keepName },
+    ]);
+    if (pick !== 'rename') return;
+    const to = vscode.Uri.joinPath(dir, proposal);
+    const edit = new vscode.WorkspaceEdit();
+    edit.renameFile(target, to, { overwrite: false });
+    if (await vscode.workspace.applyEdit(edit)) target = to; // links and editors follow (onDidRenameFiles)
+    else void vscode.window.showWarningMessage(S.rename.failed(proposal));
+  }
+
+  private async openDownloaded(uri: vscode.Uri, text: boolean): Promise<void> {
+    try {
+      if (text) await vscode.window.showTextDocument(uri);
+      else await vscode.commands.executeCommand('vscode.open', uri);
+    } catch {
+      await vscode.commands.executeCommand('revealInExplorer', uri);
+    }
+  }
+
+  /**
+   * A zip attachment: checked completely in memory first (paths, sizes), then
+   * one question: extract into "<problem name>/" and link it (folder mode),
+   * extract under its own name without linking, or cancel. A new folder only.
+   */
+  private async extractAttachment(p: Problem, dir: vscode.Uri, a: Attachment): Promise<void> {
+    const plan = planZip(a.bytes);
+    const taken = (n: string) => exists(vscode.Uri.joinPath(dir, n).fsPath);
+    const linkedName = await freeFolderName(folderNameFor(p.name, this.cfg.fileNamePattern.pattern, p.id), taken);
+    const ownStem = (plan.topFolder ?? (a.filename ?? 'attachment').replace(/\.zip$/i, '')).replace(/[\\/:*?"<>|\u0000-\u001f]/g, '_') || 'attachment';
+    const ownName = await freeFolderName(ownStem, taken);
+    const names = plan.files.map((f) => f.rel);
+    const pick = await this.askInline(
+      S.attachment.extractQ(a.filename ?? 'zip', plan.files.length, vscode.workspace.asRelativePath(dir) || '.'),
+      [
+        { id: 'link', label: S.attachment.extractAndLink(linkedName), primary: true },
+        ...(ownName !== linkedName ? [{ id: 'own', label: S.attachment.extractOnly(ownName) }] : []),
+        { id: 'cancel', label: S.common.cancel },
+      ],
+      { detail: S.attachment.contents(names.slice(0, 6).join(', '), names.length) },
+    );
+    if (pick !== 'link' && pick !== 'own') return;
+    const folder = vscode.Uri.joinPath(dir, pick === 'link' ? linkedName : ownName);
+    await writeExtracted(folder.fsPath, plan.files);
+    this.onFileEvent();
+    const candidates = submitCandidates(names, this.allSourceExts());
+    // Submit / run files are detected from the folder (folderRoles.ts); open the file to edit.
+    const roles = detectFolderRoles(new Map(plan.files.filter((f) => CODE_FILE.test(f.rel)).map((f) => [f.rel, new TextDecoder().decode(f.data)])));
+    if (pick === 'link') {
+      await this.mapping.set(folder, { problemId: p.id, name: p.name, baseUrl: this.cfg.baseUrl, folder: true });
+      await this.refreshMappedIds();
+    }
+    await vscode.commands.executeCommand('revealInExplorer', folder);
+    const open = roles.submit?.file ?? roles.run?.file ?? fileToOpen(plan.files, candidates);
+    if (open) await this.openDownloaded(vscode.Uri.joinPath(folder, ...open.split('/')), true);
+    else this.emit();
+  }
+
   // ----------------------------------------------------------- connection
 
   /**
@@ -507,10 +893,11 @@ export class GraderController implements vscode.Disposable {
 
   /** The file's language is not accepted by the mapped problem (e.g. a problem picked by mistake). */
   private languageMismatch(problem: Problem): { wanted: string; allowed: string[] } | null {
-    if (!this.fileUri || !this.languages.length) return null;
+    const target = this.targetUri();
+    if (!target || !this.languages.length) return null;
     const allowed = this.allowedLanguages(problem);
     if (!allowed.length) return null;
-    const c = chooseLanguage(this.fileUri.fsPath, allowed, this.languages);
+    const c = chooseLanguage(target.fsPath, allowed, this.languages);
     if (c.kind !== 'not-allowed') return null;
     return { wanted: c.wanted, allowed: allowed.map((l) => l.name) };
   }
@@ -525,6 +912,7 @@ export class GraderController implements vscode.Disposable {
       score: summarize(p),
       hasFile: this.mappedIds.has(p.id),
       hasTestcase: p.hasTestcase,
+      hasAttachment: p.hasAttachment,
       status: problemStatus(p),
       tags: p.tags ?? [],
       lastSubmissionTime: p.lastSubmissionTime,
@@ -534,7 +922,8 @@ export class GraderController implements vscode.Disposable {
 
   state(): ViewState {
     const file = this.fileUri;
-    const lang = file ? languageNameForPath(file.fsPath, this.languages) : null;
+    const target = this.targetUri();
+    const lang = target ? languageNameForPath(target.fsPath, this.languages) : null;
     const loggedIn = this.accountStatus === 'logged-in';
     const problem = this.currentProblem();
     const languagesLoading = this.data.cache.peek('languages') === undefined && loggedIn && !!problem && this.data.isVisible();
@@ -571,7 +960,8 @@ export class GraderController implements vscode.Disposable {
             name: file.path.split('/').pop() ?? '',
             languageGuess: lang,
             supported: lang !== null,
-            renameTo: problem && !problem.name.startsWith('#') && !nameMatchesProblem(file.fsPath, problem.name, this.cfg.fileNamePattern.pattern, problem.id) ? renameProposal(file.fsPath, problem.name, this.cfg.fileNamePattern.pattern, problem.id) : null,
+            // Folder mode / matched by the folder's name: the folder carries the name, not the file.
+            renameTo: problem && !this.folderLink && problem.source !== 'folder' && !problem.name.startsWith('#') && !nameMatchesProblem(file.fsPath, problem.name, this.cfg.fileNamePattern.pattern, problem.id) ? renameProposal(file.fsPath, problem.name, this.cfg.fileNamePattern.pattern, problem.id) : null,
           }
         : null,
       problem: problem ? { ...this.problemView(problem), source: problem.source, sourceLabel: MATCH_SOURCE[problem.source], unavailable } : null,
@@ -583,6 +973,10 @@ export class GraderController implements vscode.Disposable {
         const n = problem && file && !hidden ? linkedNotice(this.linkedFiles, file.fsPath, (f) => vscode.workspace.asRelativePath(f)) : null;
         return { linkedFiles: n ? n.files.map(({ path, current, how }) => ({ path, current, how })) : [], linkedNotice: n?.text ?? null };
       })(),
+      folder: this.folderView(),
+      runTests: this.cph.installed && problem && file ? { disabledReason: this.runTestCount ? null : S.runTests.noTestsShort } : null,
+      folderMode: problem && file ? { on: !!this.folderLink, disabledReason: this.folderLink ? null : this.folderModeTarget().reason } : null,
+      attachment: { busy: problem && this.data.isDownloading(problem.id) ? problem.id : null },
       cphTip:
         !this.cph.installed && !this.cphTipHidden && !this.ctx.globalState.get<boolean>(CPH_TIP_KEY, false) && !!problem?.hasTestcase,
       matching: {
@@ -591,7 +985,9 @@ export class GraderController implements vscode.Disposable {
         note: this.matchInfo.ambiguous
           ? this.matchInfo.ambiguousSource === 'suggested'
             ? S.match.severalCould
-            : S.match.severalMatch(this.matchInfo.ambiguousSource === 'cph')
+            : this.matchInfo.ambiguousSource === 'folder'
+              ? S.match.severalMatchFolder
+              : S.match.severalMatch(this.matchInfo.ambiguousSource === 'cph')
           : null,
       },
       testcases: { busy: this.testcasesBusy },
@@ -604,9 +1000,9 @@ export class GraderController implements vscode.Disposable {
       },
       connection: this.connection,
       submit: { enabled, busy: this.busy, reason, label: S.submitLabel },
-      result: file ? (this.results.get(file.fsPath) ?? null) : null,
+      result: target ? (this.results.get(target.fsPath) ?? null) : null,
       gradingElsewhere:
-        this.busy && this.gradingFile !== null && this.gradingFile !== file?.fsPath
+        this.busy && this.gradingFile !== null && this.gradingFile !== target?.fsPath
           ? (this.results.get(this.gradingFile)?.problemName ?? S.submit.anotherFile)
           : null,
       history: problem
@@ -915,18 +1311,30 @@ export class GraderController implements vscode.Disposable {
     const seq = ++this.refreshSeq;
     const changed = this.fileUri?.toString() !== uri.toString();
     this.fileUri = uri;
+    const targetBefore = this.targetUri()?.fsPath;
     if (changed) {
       this.cancelPrompt();
       if (this.tempLink && this.tempLink.key !== pathKey(uri.fsPath)) this.tempLink = null; // "for that action only"
-      this.selectedLanguageId = this.ctx.workspaceState.get<Record<string, number>>(LANGUAGE_KEY, {})[uri.fsPath] ?? null;
       this.languagesError = null;
       this.expandedSubmission = null;
     }
 
-    // Matching order: saved → CPH .prob → exact file name → suggestions (never saved automatically).
-    // An explicitly unlinked file is left alone ("Not linked to a problem").
-    const entry = await this.mapping.get(uri, this.cfg.baseUrl);
-    const unlinked = !entry && this.mapping.isUnlinked(uri);
+    // Matching order: saved (the file's own link, else its folder's link) → CPH .prob → exact file name
+    // → exact folder name → suggestions (never saved automatically).
+    // An explicitly unlinked file (or folder) is left alone ("Not linked to a problem").
+    let link = await this.mapping.resolve(uri, this.cfg.baseUrl);
+    if (link?.folder && this.mapping.isUnlinkedHere(uri)) link = undefined;
+    const entry = link?.entry;
+    const unlinked = !entry && this.mapping.isUnlinkedHere(uri);
+    this.folderLink = link?.folder ? { fsPath: link.folder, entry: link.entry } : null;
+    this.folderFiles = this.folderLink ? await this.folderSources(this.folderLink.fsPath) : [];
+    this.folderTexts = this.folderLink ? await this.folderTextsOf(this.folderLink.fsPath, this.folderFiles) : new Map();
+    this.folderRoles = this.folderLink ? detectFolderRoles(this.folderTexts) : null;
+    // The chosen language belongs to the file Submit sends (folder mode: the folder's submit file).
+    const target = this.targetUri()?.fsPath;
+    if (changed || target !== targetBefore) {
+      this.selectedLanguageId = target ? (this.ctx.workspaceState.get<Record<string, number>>(LANGUAGE_KEY, {})[target] ?? null) : null;
+    }
     const list = this.data.problemList()?.problems;
     const cph = entry || unlinked ? null : await readCphProblem(uri.fsPath, this.cphSaveLocation());
     const m = unlinked
@@ -937,7 +1345,7 @@ export class GraderController implements vscode.Disposable {
           filePath: uri.fsPath,
           problems: list,
           baseUrl: this.cfg.baseUrl,
-          folders: vscode.workspace.asRelativePath(vscode.Uri.joinPath(uri, '..'), false).split('/').filter((x) => x && x !== '.'),
+          folders: this.sourceFile(uri.fsPath).folders,
           namePattern: this.cfg.fileNamePattern.pattern,
         });
     this.notLinked = unlinked;
@@ -967,7 +1375,7 @@ export class GraderController implements vscode.Disposable {
       this.matchInfo = { suggestions: [temp, ...this.matchInfo.suggestions.filter((x) => x.id !== temp.id)], ambiguous: null, ambiguousSource: null };
     }
     // Remember automatic matches of open files (never over a manual link or "not linked").
-    if (!entry && !unlinked && m.kind === 'match' && (m.source === 'filename' || m.source === 'cph' || m.source === 'suggested')) await this.mapping.recordAuto(uri, m.problem.id, m.source);
+    if (!entry && !unlinked && m.kind === 'match' && (m.source === 'filename' || m.source === 'folder' || m.source === 'cph' || m.source === 'suggested')) await this.mapping.recordAuto(uri, m.problem.id, m.source);
     else if (!entry && list?.length && m.kind !== 'match') await this.mapping.dropAuto(uri);
     await this.refreshMappedIds();
     if (seq !== this.refreshSeq) return;
@@ -977,6 +1385,7 @@ export class GraderController implements vscode.Disposable {
     this.linkedFiles = problem ? await this.filesForProblem(problem.id, 'cached') : [];
     if (problem && !this.matchIndex.peek() && this.data.isVisible()) void this.refreshLinkedFiles();
     if (problem) await this.noteOpened(problem.id);
+    this.runTestCount = this.cph.installed && problem ? ((await readCphProblem(this.runUri()?.fsPath ?? '', this.cphSaveLocation()))?.tests.length ?? 0) : null;
     this.applyLanguageChoice();
     this.emit();
     // One problem only (the top suggestion at most, never several candidates).
@@ -1025,6 +1434,8 @@ export class GraderController implements vscode.Disposable {
     clearTimeout(this.fileEventTimer);
     this.fileEventTimer = setTimeout(() => {
       this.matchIndex.invalidate();
+      // Folder mode: files created / deleted / renamed → detect the submit / run files again (choices kept).
+      if (this.folderLink && this.fileUri) void this.setActiveFile(this.fileUri);
       if (this.data.isVisible()) void this.refreshLinkedFiles();
     }, TIMING.fileEventDebounceMs);
   }
@@ -1099,7 +1510,9 @@ export class GraderController implements vscode.Disposable {
           if (r.kind === 'match' && r.problem.id !== problemId) continue;
         }
       }
-      if (st) found.push({ uri: vscode.Uri.file(f.fsPath), t: st.mtimeMs, how: f.how });
+      // A folder (folder mode / matched by its name) opens its submit file or main file.
+      const open = st?.isDirectory() ? await this.folderItemFile(f.fsPath) : f.fsPath;
+      if (st && open) found.push({ uri: vscode.Uri.file(open), t: (await fsStat(open).catch(() => null))?.mtimeMs ?? st.mtimeMs, how: f.how });
       else if (f.how === 'chosen') gone.push(vscode.Uri.file(f.fsPath));
       else await this.mapping.deleteAuto(vscode.Uri.file(f.fsPath));
     }
@@ -1145,8 +1558,8 @@ export class GraderController implements vscode.Disposable {
   /** Problems with a file (saved links + remembered auto-matches), for the row menus. */
   private async refreshMappedIds(): Promise<void> {
     const ids = await this.mapping.mappedProblemIds(this.cfg.baseUrl);
-    const blocked = new Set(this.mapping.unlinkedPaths().map((p) => pathKey(p)));
-    for (const a of this.mapping.autoMatches()) if (!blocked.has(pathKey(a.fsPath))) ids.add(a.problemId);
+    const blocked = this.mapping.unlinkedPaths();
+    for (const a of this.mapping.autoMatches()) if (!blocked.some((u) => isAtOrInside(a.fsPath, u))) ids.add(a.problemId);
     this.mappedIds = ids;
   }
 
@@ -1319,14 +1732,20 @@ export class GraderController implements vscode.Disposable {
       }
     }
     await this.ctx.workspaceState.update(LANGUAGE_KEY, langs);
-    if (!moved.length) return;
-    this.log(`Updated ${moved.length} mapping(s) after a rename.`);
-    if (this.fileUri) await this.setActiveFile(this.fileUri);
-
-    // CPH names its file after the full source path and does not follow renames: offer once.
+    // CPH names its file after the full source path and does not follow renames. A renamed folder
+    // took its `.cph/` along (or the files stayed in CPH's save location): every source inside is orphaned.
     const save = this.cphSaveLocation();
-    const withCph = [];
-    for (const m of moved) if (await exists(cphProbPathFor(m.from, save))) withCph.push(m);
+    const inFolders: { prob: string; oldSrc: string; newSrc: string }[] = [];
+    for (const f of files) {
+      if ((await fsStat(f.newUri.fsPath).catch(() => null))?.isDirectory()) inFolders.push(...(await cphFilesAfterFolderRename(f.oldUri.fsPath, f.newUri.fsPath, save)));
+    }
+    if (moved.length) this.log(`Updated ${moved.length} mapping(s) after a rename.`);
+    if (this.fileUri && (moved.length || this.folderLink)) await this.setActiveFile(this.fileUri); // links / the folder's files may have moved
+
+    // Offer once (for files and folders together).
+    const taken = new Set(inFolders.map((x) => pathKey(x.oldSrc)));
+    const withCph: { from: string; to: string; prob?: string }[] = inFolders.map((x) => ({ from: x.oldSrc, to: x.newSrc, prob: x.prob }));
+    for (const m of moved) if (!taken.has(pathKey(m.from)) && (await exists(cphProbPathFor(m.from, save)))) withCph.push(m);
     if (!withCph.length) return;
     const yes = S.moved.moveCph;
     const pick = await vscode.window.showInformationMessage(
@@ -1338,7 +1757,7 @@ export class GraderController implements vscode.Disposable {
     let done = 0;
     let skipped = 0;
     for (const m of withCph) {
-      const r = await moveCphProblem(m.from, m.to, save);
+      const r = await moveCphProblem(m.from, m.to, save, m.prob);
       await this.recordBackup(r.backup);
       if (r.status === 'moved') done++;
       else if (r.status === 'target-exists') skipped++;
@@ -1346,6 +1765,7 @@ export class GraderController implements vscode.Disposable {
     void vscode.window.showInformationMessage(
       S.moved.movedCph(done, skipped),
     );
+    await this.refreshRunTests();
   }
 
   /**
@@ -1403,12 +1823,13 @@ export class GraderController implements vscode.Disposable {
 
   private applyLanguageChoice(): void {
     const problem = this.currentProblem();
-    if (!problem || !this.fileUri || !this.languages.length) return;
+    const target = this.targetUri();
+    if (!problem || !target || !this.languages.length) return;
     const allowed = this.allowedLanguages(problem);
     if (allowed.some((l) => l.id === this.selectedLanguageId)) {
       this.languagesError = null;
     } else {
-      const c = chooseLanguage(this.fileUri.fsPath, allowed, this.languages);
+      const c = chooseLanguage(target.fsPath, allowed, this.languages);
       this.selectedLanguageId = c.kind === 'match' ? c.language.id : null;
       this.languagesError = null; // a mismatch is reported once, by languageMismatch()
     }
@@ -1417,9 +1838,10 @@ export class GraderController implements vscode.Disposable {
   async selectLanguage(id: number): Promise<void> {
     this.selectedLanguageId = id;
     this.languagesError = null;
-    if (this.fileUri) {
+    const target = this.targetUri();
+    if (target) {
       const all = { ...this.ctx.workspaceState.get<Record<string, number>>(LANGUAGE_KEY, {}) };
-      all[this.fileUri.fsPath] = id;
+      all[target.fsPath] = id;
       await this.ctx.workspaceState.update(LANGUAGE_KEY, all);
     }
     this.emit();
@@ -1457,6 +1879,17 @@ export class GraderController implements vscode.Disposable {
    */
   async unmapCurrentFile(): Promise<void> {
     if (!this.fileUri) return;
+    // Folder mode / matched by the folder's name: the folder is unlinked ("not linked", sticky).
+    const folder = this.folderLink ? vscode.Uri.file(this.folderLink.fsPath) : this.problem?.source === 'folder' ? vscode.Uri.joinPath(this.fileUri, '..') : null;
+    if (folder) {
+      if (this.folderLink) await this.mapping.set(folder, undefined);
+      await this.mapping.setUnlinked(folder, true);
+      this.tempLink = null;
+      this.problem = null;
+      await this.refreshMappedIds();
+      await this.setActiveFile(this.fileUri);
+      return;
+    }
     // Works for every state: a chosen link is removed; a name / CPH match, a suggestion
     // or a temporary link just becomes "not linked" (sticky; auto-detect leaves it alone).
     await this.mapping.set(this.fileUri, undefined);
@@ -1544,14 +1977,15 @@ export class GraderController implements vscode.Disposable {
     const uri = this.fileUri;
     if (!uri) return;
     const entry = await this.mapping.get(uri, this.cfg.baseUrl);
-    await this.mapping.setUnlinked(uri, false); // Auto-detect clears "not linked"
+    await this.mapping.setUnlinked(uri, false); // Auto-detect clears "not linked" (also of folders above it)
+    for (const u of this.mapping.unlinkedPaths()) if (isAtOrInside(uri.fsPath, u)) await this.mapping.setUnlinked(vscode.Uri.file(u), false);
     const list = this.data.problemList()?.problems;
     if (!list) {
       await this.refreshProblems(false);
       if (!this.data.problemList()) return;
     }
     const cph = await readCphProblem(uri.fsPath, this.cphSaveLocation());
-    const m = resolveProblem({ savedProblemId: null, cph, filePath: uri.fsPath, problems: this.data.problemList()!.problems, baseUrl: this.cfg.baseUrl, namePattern: this.cfg.fileNamePattern.pattern });
+    const m = resolveProblem({ savedProblemId: null, cph, filePath: uri.fsPath, problems: this.data.problemList()!.problems, baseUrl: this.cfg.baseUrl, folders: this.sourceFile(uri.fsPath).folders, namePattern: this.cfg.fileNamePattern.pattern });
     const how = S.autoDetect.how;
     if (entry && m.kind === 'match' && m.problem.id !== entry.problemId) {
       const pick = await this.askInline(S.autoDetect.found(m.problem.name, how[m.source] ?? how.suggested), [
@@ -1582,7 +2016,7 @@ export class GraderController implements vscode.Disposable {
   private noticeFiles(): ProblemFile[] {
     const file = this.fileUri;
     if (!file) return [];
-    return linkedNotice(this.linkedFiles, file.fsPath, (f) => f)?.files.map(({ fsPath, how }) => ({ fsPath, how })) ?? [];
+    return linkedNotice(this.linkedFiles, file.fsPath, (f) => f)?.files.map(({ fsPath, how, folder }) => ({ fsPath, how, ...(folder ? { folder } : {}) })) ?? [];
   }
 
   /** Jump to one of the files for the current problem (index into the list the panel shows). */
@@ -1593,7 +2027,7 @@ export class GraderController implements vscode.Disposable {
       void this.goToFile(this.problem?.id ?? -1); // offers removing the stale link
       return;
     }
-    await vscode.window.showTextDocument(vscode.Uri.file(f.fsPath));
+    await this.openItem(f.fsPath);
   }
 
   /**
@@ -1603,14 +2037,14 @@ export class GraderController implements vscode.Disposable {
    */
   async unlinkLinkedFile(index: number): Promise<void> {
     const f = this.noticeFiles()[index];
-    if (!f || pathKey(f.fsPath) === pathKey(this.fileUri?.fsPath ?? '')) return;
+    if (!f || pathKey(f.fsPath) === pathKey(this.fileUri?.fsPath ?? '') || (f.folder && isAtOrInside(this.fileUri?.fsPath ?? '', f.fsPath))) return;
     await this.detachFile(f);
     if (this.fileUri) await this.setActiveFile(this.fileUri);
   }
 
   private async detachFile(f: ProblemFile): Promise<void> {
     const uri = vscode.Uri.file(f.fsPath);
-    if (f.how === 'chosen') await this.mapping.set(uri, undefined);
+    if (f.how === 'chosen') await this.mapping.set(uri, undefined); // a file or a folder link
     await this.mapping.dropAuto(uri);
     await this.mapping.setUnlinked(uri, true);
   }
@@ -1799,14 +2233,17 @@ export class GraderController implements vscode.Disposable {
    */
   async loadTestcases(refresh = false): Promise<void> {
     const problem = this.currentProblem();
-    const file = this.fileUri;
-    if (!problem || !file || this.testcasesBusy) return;
+    if (!problem || !this.fileUri || this.testcasesBusy) return;
+    // Folder mode: test cases belong to the run file (the driver), whichever file of the folder is open.
+    if (this.folderLink && !(await this.askFolderRole('run', problem))) return;
+    const file = this.runUri();
+    if (!file) return;
     if (!problem.hasTestcase) {
       void vscode.window.showInformationMessage(S.testcases.none(problem.name));
       return;
     }
     // Writing test cases for a guess: ask once (yes confirms the link).
-    if (!(await this.confirmSuggestedFor(file, problem, S.testcases.suggestedQ(problem.name, this.subtitleOf(problem)), S.testcases.load))) return;
+    if (!(await this.confirmSuggestedFor(this.fileUri, problem, S.testcases.suggestedQ(problem.name, this.subtitleOf(problem)), S.testcases.load))) return;
     if (!(await this.ensureLoggedIn())) return;
     this.testcasesBusy = true;
     this.emit();
@@ -1855,7 +2292,8 @@ export class GraderController implements vscode.Disposable {
           if (pick !== files) return;
           await this.ctx.workspaceState.update(TESTCASE_TARGET_KEY, 'files'); // remembered per workspace
         }
-        const folder = testsFolderFor(dirname(file.fsPath), problem.name);
+        // Folder mode: the folder already carries the problem's name → <folder>/tests.
+        const folder = this.folderLink ? join(this.folderLink.fsPath, 'tests') : testsFolderFor(dirname(file.fsPath), problem.name);
         if (!(await exists(folder))) {
           const create = S.testcases.createFolder;
           const ok = await vscode.window.showInformationMessage(
@@ -1890,6 +2328,7 @@ export class GraderController implements vscode.Disposable {
         cases: set.cases,
       });
       await this.recordBackup(result.backupPath);
+      await this.refreshRunTests(); // "Run tests" becomes available
       const parts = [S.testcases.savedCph(set.cases.length, total, tooLarge)];
       if (result.alreadyPresent) parts.push(S.testcases.alreadyPresent(result.alreadyPresent));
       if (result.updated) parts.push(S.testcases.updated(result.updated));
@@ -1978,8 +2417,9 @@ export class GraderController implements vscode.Disposable {
     if (!d) return;
     const name = d.sourceFilename || 'submission';
     const left = vscode.Uri.from({ scheme: SUBMISSION_SCHEME, path: `/${d.id}/${name}` });
-    const label = `${d.number !== null ? `Attempt ${d.number}` : `#${d.id}`} ↔ ${this.fileUri.path.split('/').pop()}`;
-    await vscode.commands.executeCommand('vscode.diff', left, this.fileUri, label);
+    const right = this.targetUri() ?? this.fileUri; // folder mode: the file Submit sends
+    const label = `${d.number !== null ? `Attempt ${d.number}` : `#${d.id}`} ↔ ${right.path.split('/').pop()}`;
+    await vscode.commands.executeCommand('vscode.diff', left, right, label);
   }
 
   /** Content for `cedt-grader-submission:/<id>/<file>` URIs (cache only, no request). */
@@ -1995,10 +2435,7 @@ export class GraderController implements vscode.Disposable {
       void vscode.window.showInformationMessage(S.submit.alreadyGrading);
       return;
     }
-    const fileUri = this.fileUri;
-    const editor = vscode.window.visibleTextEditors.find((e) => e.document.uri.toString() === fileUri?.toString());
-    const doc = editor?.document ?? (fileUri ? await vscode.workspace.openTextDocument(fileUri) : undefined);
-    if (!doc || !fileUri) {
+    if (!this.fileUri) {
       void vscode.window.showInformationMessage(S.submit.openToSubmit);
       return;
     }
@@ -2008,6 +2445,16 @@ export class GraderController implements vscode.Disposable {
       if (!this.problem) return;
     }
     const problem = this.currentProblem()!;
+    // Folder mode: the folder's submit file (asked once), whichever file of the folder is open.
+    if (this.folderLink && !(await this.askFolderRole('submit', problem))) return;
+    const fileUri = this.targetUri();
+    const doc = fileUri
+      ? (vscode.workspace.textDocuments.find((d) => d.uri.toString() === fileUri.toString()) ?? (await vscode.workspace.openTextDocument(fileUri).then((d) => d, () => undefined)))
+      : undefined;
+    if (!doc || !fileUri) {
+      void vscode.window.showInformationMessage(S.submit.openToSubmit);
+      return;
+    }
     const key = fileUri.fsPath;
     const fileName = fileUri.path.split('/').pop() ?? '';
 
@@ -2052,11 +2499,15 @@ export class GraderController implements vscode.Disposable {
       }
 
       // Another file linked to the same problem changed more recently? Ask (drafts are normal).
-      const others = (await this.filesForProblem(problem.id, 'run')).filter((f) => pathKey(f.fsPath) !== pathKey(fileUri.fsPath)).map((f) => vscode.Uri.file(f.fsPath));
-      if (others.length) {
+      // Folder mode: the linked folder (or the folder of the matched files) is "this one".
+      const others = (await this.filesForProblem(problem.id, 'run'))
+        .filter((f) => (f.folder ? !isAtOrInside(fileUri.fsPath, f.fsPath) : pathKey(f.fsPath) !== pathKey(fileUri.fsPath)))
+        .map((f) => f.fsPath);
+      const otherFiles = await Promise.all(others.map(async (f) => vscode.Uri.file((await this.folderItemFile(f)) ?? f)));
+      if (otherFiles.length) {
         const mine = doc.isDirty ? Date.now() : ((await fsStat(fileUri.fsPath).catch(() => null))?.mtimeMs ?? 0);
         let newest: { uri: vscode.Uri; t: number } | null = null;
-        for (const u of others) {
+        for (const u of otherFiles) {
           const t = (await fsStat(u.fsPath).catch(() => null))?.mtimeMs ?? 0;
           if (t > mine && (!newest || t > newest.t)) newest = { uri: u, t };
         }
@@ -2076,7 +2527,7 @@ export class GraderController implements vscode.Disposable {
 
       // A suggested (unconfirmed) match always asks, even with confirmations off.
       if (problem.source === 'suggested') {
-        if (!(await this.confirmSuggestedFor(fileUri, problem, S.submit.suggestedQ(problem.name, this.subtitleOf(problem)), S.submit.submit))) return;
+        if (!(await this.confirmSuggestedFor(this.fileUri ?? fileUri, problem, S.submit.suggestedQ(problem.name, this.subtitleOf(problem)), S.submit.submit))) return;
         warned = true;
       }
 
@@ -2087,7 +2538,7 @@ export class GraderController implements vscode.Disposable {
             { id: 'submit', label: S.submit.submit, primary: true },
             { id: 'cancel', label: S.common.cancel },
           ],
-          { detail: S.submit.confirmOff },
+          { detail: this.folderLink ? `${S.folder.onlyThisSent(fileName)} ${S.submit.confirmOff}` : S.submit.confirmOff },
         );
         if (pick !== 'submit') return;
       }
@@ -2151,7 +2602,7 @@ export class GraderController implements vscode.Disposable {
     const updated = this.currentProblem();
     const after = updated ? countedScore(updated.bestScore, updated.list?.cost ?? 0, updated.list?.rawSum ?? false) : null;
     this.updateResult(key, { improvement: describeImprovement(countedBefore, after, final.points) });
-    if (shouldRevealResult({ revealResultAfterSubmit: this.cfg.revealResultAfterSubmit, gradedFile: key, activeFile: this.fileUri?.fsPath ?? null })) {
+    if (shouldRevealResult({ revealResultAfterSubmit: this.cfg.revealResultAfterSubmit, gradedFile: key, activeFile: this.targetUri()?.fsPath ?? null })) {
       this.focusTarget?.('result');
     }
   }
@@ -2250,7 +2701,7 @@ export class GraderController implements vscode.Disposable {
   async showLastResult(): Promise<void> {
     await vscode.commands.executeCommand('cedtGrader.panel.focus');
     const problem = this.currentProblem();
-    const key = this.fileUri?.fsPath;
+    const key = this.targetUri()?.fsPath;
     if (!problem || !key || this.busy) return;
     if (!(await this.ensureLoggedIn())) return;
     const items = (await this.data.loadHistory(problem.id)) ?? [];
@@ -2266,7 +2717,7 @@ export class GraderController implements vscode.Disposable {
   }
 
   async showCompilerMessage(): Promise<void> {
-    const key = this.fileUri?.fsPath;
+    const key = this.targetUri()?.fsPath;
     const r = key ? this.results.get(key) : undefined;
     if (!r?.compileError) return;
     const doc = await vscode.workspace.openTextDocument({ content: r.compilerMessage ?? '', language: 'log' });
