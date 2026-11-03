@@ -374,7 +374,7 @@ describe.runIf(existsSync(resolve(__dirname, '../esbuild.mjs')))('sidebar webvie
     const { doc, post } = boot();
     post({ ...loggedIn, cph: { installed: false } });
     const btn = [...doc.querySelectorAll<HTMLButtonElement>('#sec-current button')].find((b) => b.textContent?.includes('Load test cases'))!;
-    expect(btn.textContent).toBe(' Load test cases');
+    expect(btn.textContent).toBe(' Load test cases from the grader');
     expect(btn.getAttribute('data-tip')).toContain("CPH isn't installed");
     expect(doc.querySelector('#submit-btn')).not.toBeNull();
     expect(doc.querySelectorAll('#sec-problems .problem-row')).toHaveLength(2);
@@ -395,8 +395,8 @@ describe.runIf(existsSync(resolve(__dirname, '../esbuild.mjs')))('sidebar webvie
       { ...loggedIn, testcases: { busy: true } },
       // Attachment + folder mode: download icon (also busy), folder toggle (also disabled), submit-file select.
       withAttachment({ folderMode: { on: false, disabledReason: 'This file is at the top of the workspace folder.' }, attachment: { busy: 1360 } }),
-      withAttachment({ folder: { path: 'pkg/', submitFile: 'student.h', submitWhy: 'the included file named student.*', submitChosen: false, runFile: 'main.cpp', runWhy: 'the only file with main()', runChosen: false, candidates: ['main.cpp', 'student.h', 'vector.h'], runCandidates: ['main.cpp'] }, folderMode: { on: true, disabledReason: null }, runTests: { disabledReason: 'load the test cases first' } }),
-      withAttachment({ folder: { ...({ path: 'pkg/', submitFile: 'student.h', submitWhy: 'the included file named student.*', submitChosen: false, runFile: 'main.cpp', runWhy: 'the only file with main()', runChosen: false, candidates: ['main.cpp', 'student.h', 'vector.h'], runCandidates: ['main.cpp'] }), submitFile: null, submitWhy: null, runFile: null, runWhy: null }, folderMode: { on: true, disabledReason: null }, runTests: { disabledReason: null } }),
+      withAttachment({ folder: { path: 'pkg/', matched: false, submitFile: 'student.h', submitWhy: 'the included file named student.*', submitChosen: false, runFile: 'main.cpp', runWhy: 'the only file with main()', runChosen: false, candidates: ['main.cpp', 'student.h', 'vector.h'], runCandidates: ['main.cpp'] }, folderMode: { on: true, disabledReason: null }, runTests: { disabledReason: 'load the test cases first' } }),
+      withAttachment({ folder: { ...({ path: 'pkg/', matched: false, submitFile: 'student.h', submitWhy: 'the included file named student.*', submitChosen: false, runFile: 'main.cpp', runWhy: 'the only file with main()', runChosen: false, candidates: ['main.cpp', 'student.h', 'vector.h'], runCandidates: ['main.cpp'] }), submitFile: null, submitWhy: null, runFile: null, runWhy: null }, folderMode: { on: true, disabledReason: null }, runTests: { disabledReason: null } }),
       {
         ...loggedIn,
         history: {
@@ -456,7 +456,7 @@ describe.runIf(existsSync(resolve(__dirname, '../esbuild.mjs')))('sidebar webvie
     expect(off.disabled).toBe(true);
     expect(off.dataset.tip).toContain('top of the workspace folder');
     // In folder mode.
-    post(withAttachment({ folder: { path: 'pkg/', submitFile: 'student.h', submitWhy: 'the included file named student.*', submitChosen: false, runFile: 'main.cpp', runWhy: 'the only file with main()', runChosen: false, candidates: ['main.cpp', 'student.h', 'vector.h'], runCandidates: ['main.cpp'] }, folderMode: { on: true, disabledReason: null }, runTests: { disabledReason: null } }));
+    post(withAttachment({ folder: { path: 'pkg/', matched: false, submitFile: 'student.h', submitWhy: 'the included file named student.*', submitChosen: false, runFile: 'main.cpp', runWhy: 'the only file with main()', runChosen: false, candidates: ['main.cpp', 'student.h', 'vector.h'], runCandidates: ['main.cpp'] }, folderMode: { on: true, disabledReason: null }, runTests: { disabledReason: null } }));
     const cur = doc.querySelector('#sec-current')!;
     expect(cur.querySelector('.source-line.source-folder')!.textContent).toBe('Folder linked by you: pkg/');
     expect(header(doc).querySelector('[aria-label="Link only this file"]')).not.toBeNull();
@@ -480,7 +480,7 @@ describe.runIf(existsSync(resolve(__dirname, '../esbuild.mjs')))('sidebar webvie
     // Run tests (CPH installed): runs the driver; disabled until test cases are loaded.
     [...cur.querySelectorAll<HTMLButtonElement>('button')].find((b) => b.textContent?.includes('Run tests'))!.click();
     expect(sent.at(-1)).toEqual({ type: 'runTests' });
-    post(withAttachment({ folder: { path: 'pkg/', submitFile: 'student.h', submitWhy: 'the included file named student.*', submitChosen: false, runFile: 'main.cpp', runWhy: 'the only file with main()', runChosen: false, candidates: ['main.cpp', 'student.h', 'vector.h'], runCandidates: ['main.cpp'] }, folderMode: { on: true, disabledReason: null }, runTests: { disabledReason: 'load the test cases first' } }));
+    post(withAttachment({ folder: { path: 'pkg/', matched: false, submitFile: 'student.h', submitWhy: 'the included file named student.*', submitChosen: false, runFile: 'main.cpp', runWhy: 'the only file with main()', runChosen: false, candidates: ['main.cpp', 'student.h', 'vector.h'], runCandidates: ['main.cpp'] }, folderMode: { on: true, disabledReason: null }, runTests: { disabledReason: 'load the test cases first' } }));
     const run = [...cur.querySelectorAll<HTMLButtonElement>('button')].find((b) => b.textContent?.includes('Run tests'))!;
     expect(run.disabled).toBe(true);
     expect(run.dataset.tip).toContain('load the test cases first');
@@ -490,6 +490,16 @@ describe.runIf(existsSync(resolve(__dirname, '../esbuild.mjs')))('sidebar webvie
     post({ ...withAttachment(), problem: { ...withAttachment().problem!, source: 'folder', sourceLabel: 'Matched by folder name' } });
     expect(cur.querySelector('.source-line.source-folder')!.textContent).toBe('Matched by folder name');
     expect(header(doc).querySelector('[aria-label^="Don\'t match this folder"]')).not.toBeNull();
+    // ...and its files are detected like a linked folder's (nothing saved until a choice): Submits / Runs shown,
+    // the match line stays "Matched by folder name", the folder icon still offers to link it.
+    post({
+      ...withAttachment({ folder: { path: 'pkg/', matched: true, submitFile: 'student.h', submitWhy: 'the included file named student.*', submitChosen: false, runFile: 'main.cpp', runWhy: 'the only file with main()', runChosen: false, candidates: ['main.cpp', 'student.h'], runCandidates: ['main.cpp'] }, folderMode: { on: false, disabledReason: null } }),
+      problem: { ...withAttachment().problem!, source: 'folder', sourceLabel: 'Matched by folder name' },
+    });
+    expect(cur.querySelector('.source-line.source-folder')!.textContent).toBe('Matched by folder name');
+    expect([...cur.querySelector<HTMLSelectElement>('#submit-file')!.options].map((o) => o.textContent)).toEqual(['Automatic: student.h', 'main.cpp', 'student.h']);
+    expect(header(doc).querySelector('[aria-label^="Don\'t match this folder"]')).not.toBeNull();
+    expect(header(doc).querySelector('[aria-label^="Link the whole folder"]')).not.toBeNull();
   });
 
   it('troubleshooting link in the connection banner and under a login error; Result revealed after grading', () => {
@@ -845,7 +855,7 @@ describe.runIf(existsSync(resolve(__dirname, '../esbuild.mjs')))('sidebar webvie
 
   it('inline prompt (no modal): text, detail and plain buttons answer by id', () => {
     const { doc, sent, post } = boot();
-    post({ ...loggedIn, prompt: { id: 7, text: 'Auto-detect found 104_exam67_1_P2 (from CPH data).', detail: null, tone: 'info', buttons: [{ id: 'switch', label: 'Switch to it', primary: true }, { id: 'keep', label: 'Keep current' }] } });
+    post({ ...loggedIn, prompt: { id: 7, text: 'Auto-detect found 104_exam67_1_P2 (from CPH data).', detail: null, tone: 'info', buttons: [{ id: 'switch', label: 'Switch to it', primary: true }, { id: 'keep', label: 'Keep current' }], near: null } });
     const bar = doc.querySelector<HTMLElement>('.prompt')!;
     expect(bar.hidden).toBe(false);
     expect(bar.textContent).toContain('Auto-detect found 104_exam67_1_P2 (from CPH data).');
@@ -853,6 +863,42 @@ describe.runIf(existsSync(resolve(__dirname, '../esbuild.mjs')))('sidebar webvie
     expect(sent.at(-1)).toEqual({ type: 'promptAnswer', id: 7, button: 'keep' });
     post({ ...loggedIn, prompt: null });
     expect(doc.querySelector<HTMLElement>('.prompt')!.hidden).toBe(true);
+  });
+
+  it('a question about submitting is shown right above the Submit button (at the top only when Current problem is hidden)', () => {
+    const { doc, sent, post } = boot();
+    const q = {
+      id: 9,
+      text: 'Which file do you submit to 00_Intro_11 (#1360)?',
+      detail: 'The grader takes one file per submission.',
+      tone: 'info' as const,
+      buttons: [{ id: 'target', label: 'Submit student.h', primary: true }, { id: 'open', label: 'Submit main.cpp (open file)' }, { id: 'cancel', label: 'Cancel' }],
+      near: 'submit' as const,
+    };
+    post({ ...loggedIn, prompt: q });
+    expect(doc.querySelector<HTMLElement>('.prompt:not(#submit-prompt)')!.hidden).toBe(true);
+    const box = doc.querySelector<HTMLElement>('#sec-current #submit-prompt')!;
+    expect(box.textContent).toContain('Which file do you submit');
+    expect(box.nextElementSibling?.id).toBe('submit-btn');
+    [...box.querySelectorAll<HTMLButtonElement>('button')].find((b) => b.textContent === 'Submit main.cpp (open file)')!.click();
+    expect(sent.at(-1)).toEqual({ type: 'promptAnswer', id: 9, button: 'open' });
+    post({ ...loggedIn, prompt: null });
+    expect(doc.querySelector('#submit-prompt')).toBeNull();
+    // Current problem hidden by the layout: the question goes to the top.
+    post({ ...loggedIn, layout: { sections: ['account', 'result', 'history', 'problems'], compact: false }, prompt: q });
+    expect(doc.querySelector('#submit-prompt')).toBeNull();
+    const bar = doc.querySelector<HTMLElement>('.prompt')!;
+    expect(bar.hidden).toBe(false);
+    expect(bar.textContent).toContain('Which file do you submit');
+  });
+
+  it('Result has no Resubmit button (Submit to Grader is the one way to submit)', () => {
+    const { doc, post } = boot();
+    post(loggedIn);
+    const sec = doc.querySelector('#sec-result')!;
+    expect(sec.querySelector('.score')).not.toBeNull(); // a finished result is shown
+    expect(sec.textContent).not.toMatch(/Resubmit/);
+    expect(sec.querySelector('.codicon-debug-restart')).toBeNull();
   });
 
   it('explicitly unlinked file: "Not linked to a problem" with Choose problem / Auto-detect', () => {
