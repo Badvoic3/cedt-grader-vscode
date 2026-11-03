@@ -282,7 +282,7 @@ The sidebar (`cedtGrader` Activity Bar container, view `cedtGrader.panel`) is th
   - match line under the selector ("Chosen by you" / "Matched by file name" / "Matched from CPH data"; a suggestion is a muted "Suggested from the file name · Use this"; choosing from the dropdown confirms too); notes for ambiguous / stale mappings;
   - "Not linked to a problem" (Choose problem / Auto-detect) after "Unlink this file": the file is stored as explicitly unlinked (`cedtGrader.unlinked`), so auto-detection leaves it alone until the user chooses or auto-detects;
   - "files for this problem" notice (see Problem links);
-  - one grid (`.test-buttons`: equal widths = the widest button's natural width, `--btn-w` measured by `equalWidths`; side by side when they fit, stacked otherwise): "Load test cases" (when `has_testcase`; for a suggestion it asks once first; CPH or files) "Load samples" (every problem; see "Sample cases from the statement") and **Run tests**; details in the tooltips;
+  - one grid (`.test-buttons`: equal widths = the widest button's natural width, `--btn-w` measured by `equalWidths`; side by side when they fit, stacked otherwise): "Load test cases" (when `has_testcase`; for a suggestion it asks once first; CPH or files) "Load samples" (every problem; see "Sample cases from the statement"); **Run tests** below them, full width like Submit (`.run-tests`, `grid-column: 1 / -1`, not measured); details in the tooltips;
   - counted-score card (counted, best, latest, attempts, penalty, "your best still counts");
   - language dropdown;
   - folder mode: **Submits** and **Runs** dropdowns ("Automatic: <detected file>" + why in the tooltip, or "asked when needed") + "only this file is sent";

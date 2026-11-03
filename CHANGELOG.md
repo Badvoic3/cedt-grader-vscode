@@ -19,7 +19,7 @@
 - An open statement tab switches to the problem of the source file you switch to (in place, without taking focus; a tab already showing that problem is brought forward instead) and closes when that file has no problem. Test inputs, READMEs and other non-source files change nothing. Setting `cedtGrader.statementFollowsFile` (on by default).
 
 ### Test cases
-- **Load test cases**, **Load samples** and **Run tests** have the same width: side by side when they fit, stacked when the panel is narrow.
+- **Load test cases** and **Load samples** have the same width: side by side when they fit, stacked when the panel is narrow. **Run tests** is below them, as wide as the panel (like Submit).
 - **Save test cases as files:** a save icon next to the problem name (and in its right-click menu, command "Save Test Cases as .in / .out Files") saves the grader's test cases as `.in` / `.out` files even when CPH is installed.
 - After loading test cases or samples into CPH, CPH is reloaded automatically when the file is already open in front; otherwise you stay where you are and **Reload in CPH** is offered as before. The reload now only ever closes its own placeholder tab.
 - Problem list: rows no longer overlap after resizing or collapsing the panel (row heights are measured again when the width changes). The score pills line up on every row (the download icon moved last). "Find file by name" is now **Find a matching file**.

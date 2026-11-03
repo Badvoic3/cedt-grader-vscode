@@ -99,6 +99,7 @@ function equalWidths(row: HTMLElement): void {
   raf(() => {
     let w = 0;
     for (const b of row.children as HTMLCollectionOf<HTMLElement>) {
+      if (b.classList.contains('run-tests')) continue;
       b.style.width = 'max-content';
       w = Math.max(w, b.getBoundingClientRect().width);
       b.style.width = '';
@@ -601,8 +602,8 @@ function renderCurrent(s: ViewState): void {
         el('p', { class: 'small muted' }, W.submitFileTip),
       );
     }
-    // Test-case buttons, all the same width: the grader's (when it has them), the statement's
-    // example table (every problem), Run tests; side by side when they fit, stacked otherwise.
+    // Test-case buttons, the same width: the grader's (when it has them) and the statement's
+    // example table (every problem), side by side when they fit, stacked otherwise; Run tests below, full width.
     const tests = el('div', { class: 'test-buttons' });
     if (p.hasTestcase) {
       tests.append(
@@ -629,7 +630,9 @@ function renderCurrent(s: ViewState): void {
     );
     // Run tests (CPH installed only): the run file in folder mode, else this file.
     if (s.runTests) {
-      tests.append(button([icon('play'), ' ', W.runTests], () => send({ type: 'runTests' }), { disabled: !!s.runTests.disabledReason, title: s.runTests.disabledReason ? `${W.runTestsTip} (${s.runTests.disabledReason})` : W.runTestsTip }));
+      const run = button([icon('play'), ' ', W.runTests], () => send({ type: 'runTests' }), { disabled: !!s.runTests.disabledReason, title: s.runTests.disabledReason ? `${W.runTestsTip} (${s.runTests.disabledReason})` : W.runTestsTip });
+      run.classList.add('run-tests'); // full width, like Submit
+      tests.append(run);
     }
     b.append(tests);
     equalWidths(tests);
