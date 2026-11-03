@@ -84,18 +84,6 @@ export function detectFolderRoles(files: ReadonlyMap<string, string>): FolderRol
   return { run, submit: submitFor(files, run.file), runCandidates };
 }
 
-/**
- * The run file of a folder that isn't the active one (statement sample
- * import): the user's choice while it still exists → detected → the only
- * C/C++ source; null = ask. `files`: the folder's source files; `texts`: as
- * for detectFolderRoles.
- */
-export function runFileFor(files: readonly string[], texts: ReadonlyMap<string, string>, chosen?: string): string | null {
-  if (chosen && files.includes(chosen)) return chosen;
-  const sources = files.filter((f) => SOURCE.test(f));
-  return detectFolderRoles(texts).run?.file ?? (sources.length === 1 ? sources[0] : null);
-}
-
 /** The submit file for a given run file (also used when the user chose the run file). */
 export function submitFor(files: ReadonlyMap<string, string>, run: string): FolderRoles['submit'] {
   const closure = includeClosure(files, run);

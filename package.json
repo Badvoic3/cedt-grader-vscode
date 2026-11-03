@@ -199,6 +199,12 @@
         "icon": "$(beaker)"
       },
       {
+        "command": "cedtGrader.loadSampleCases",
+        "title": "%command.loadSampleCases.title%",
+        "category": "%command.category%",
+        "icon": "$(file-pdf)"
+      },
+      {
         "command": "cedtGrader.clearCache",
         "title": "%command.clearCache.title%",
         "category": "%command.category%",

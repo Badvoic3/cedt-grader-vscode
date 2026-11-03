@@ -9,9 +9,6 @@ import { W } from '../src/shared/strings';
 import { pdfjsLib } from './pdfjs-global';
 import { EventBus, PDFFindController, PDFLinkService, PDFViewer } from 'pdfjs-dist/web/pdf_viewer.mjs';
 import type { FromStatement, StatementViewState, ToStatement } from '../src/ui/statementPanel';
-import { extractSampleTables } from './sampleExtract';
-import type { SampleTable } from './sampleTables';
-import { renderSamples, type SamplesState } from './samplesPreview';
 import { buildToolbar, el } from './statementToolbar';
 import { installTooltips } from './tooltip';
 import { clampScale, handleZoomWheel, zoomKey } from './zoom';
@@ -39,7 +36,6 @@ const tb = buildToolbar({
   nextMatch: () => find(true, false),
   refresh: () => send({ type: 'refresh' }),
   openInBrowser: () => send({ type: 'openInBrowser' }),
-  importSamples: () => void toggleSamples(),
 });
 const { toolbar, pageInput, pageCount, zoomLabel, search, matches, titleEl } = tb;
 const container = el('div', { id: 'viewerContainer', tabindex: '0' }, el('div', { id: 'viewer', class: 'pdfViewer' }));
@@ -47,15 +43,12 @@ const textView = el('div', { class: 'text-view' });
 const status = el('div', { class: 'status', role: 'status' });
 const noteEl = el('div', { class: 'note', role: 'status' });
 noteEl.hidden = true;
-const samplesEl = el('div', { class: 'samples-host' });
-app.append(toolbar, noteEl, status, container, textView, samplesEl);
+app.append(toolbar, noteEl, status, container, textView);
 installTooltips(document);
 
 // -------------------------------------------------------------------- pdf
 
 let viewer: PDFViewer | null = null;
-/** The document shown (the sample reader uses it: no second parse, no request). */
-let pdfDoc: Awaited<ReturnType<typeof pdfjsLib.getDocument>['promise']> | null = null;
 let eventBus: EventBus | null = null;
 let linkService: PDFLinkService | null = null;
 let workerReady: Promise<void> | null = null;
@@ -137,7 +130,6 @@ async function showPdf(data: Uint8Array): Promise<void> {
     standardFontDataUrl: body.dataset.fonts,
     isEvalSupported: false, // strict CSP: no eval
   }).promise;
-  pdfDoc = doc;
   v.setDocument(doc);
   linkService!.setDocument(doc, null);
   pageCount.textContent = `/ ${doc.numPages}`;
@@ -186,11 +178,6 @@ search.addEventListener('keydown', (e) => {
   }
 });
 window.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape' && samplesOpen) {
-    e.preventDefault();
-    closeSamples();
-    return;
-  }
   if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'f' && body.classList.contains('mode-pdf')) {
     e.preventDefault();
     search.focus();
@@ -205,51 +192,6 @@ window.addEventListener('keydown', (e) => {
   }
 });
 
-// ------------------------------------------- sample cases (experimental)
-
-/** Read once per document; the drawer shows the preview, Import sends the cases to the extension. */
-let samples: Promise<SampleTable[]> | null = null;
-let samplesOpen = false;
-
-function showSamples(state: SamplesState | null): void {
-  samplesOpen = !!state;
-  samplesEl.replaceChildren(
-    ...(state
-      ? [
-          renderSamples(state, {
-            close: () => closeSamples(),
-            importCases: (cases) => {
-              if (persisted) send({ type: 'importSamples', problemId: persisted.problemId, cases });
-              closeSamples();
-            },
-          }),
-        ]
-      : []),
-  );
-}
-
-function closeSamples(): void {
-  if (!samplesOpen) return;
-  showSamples(null);
-  tb.samplesBtn.focus();
-}
-
-async function toggleSamples(): Promise<void> {
-  if (samplesOpen) return closeSamples();
-  const doc = pdfDoc;
-  if (!doc) return;
-  showSamples({ kind: 'reading' });
-  samples ??= extractSampleTables(doc, pdfjsLib.OPS);
-  try {
-    const tables = await samples;
-    if (samplesOpen && pdfDoc === doc) showSamples({ kind: 'tables', tables });
-  } catch (err) {
-    samples = null;
-    if (samplesOpen && pdfDoc === doc) showSamples({ kind: 'error', why: err instanceof Error ? err.message : String(err) });
-  }
-  samplesEl.querySelector<HTMLElement>('.samples .text-btn.primary, .samples .tb')?.focus();
-}
-
 // --------------------------------------------------------------- messages
 
 function mode(m: 'loading' | 'pdf' | 'html' | 'message'): void {
@@ -259,11 +201,6 @@ function mode(m: 'loading' | 'pdf' | 'html' | 'message'): void {
 window.addEventListener('message', (ev: MessageEvent<ToStatement>) => {
   const m = ev.data;
   if (!m || typeof m !== 'object') return;
-  if (m.type === 'loading' || m.type === 'pdf') {
-    showSamples(null); // a new document: read its tables again when asked
-    samples = null;
-    pdfDoc = null;
-  }
   titleEl.textContent = m.title;
   noteEl.textContent = m.note ?? '';
   noteEl.hidden = !m.note;

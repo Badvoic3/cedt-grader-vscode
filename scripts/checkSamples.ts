@@ -1,6 +1,8 @@
 /*
- * Local check of the experimental sample-table reader on real statement PDFs.
- * Not part of `npm test` (course PDFs are never committed). Reads only local files.
+ * Local check of "Load sample cases" on real statement PDFs, through the host
+ * code path (src/data/pdfSamples.ts with the pdf.js files the build copies to
+ * dist/pdfjs: run `npm run build` first). Not part of `npm test` (course PDFs
+ * are never committed). Reads only local files.
  *
  *   npx tsx scripts/checkSamples.ts <dir with *.pdf> [expected.json]
  *
@@ -8,9 +10,8 @@
  */
 import { readdirSync, readFileSync } from 'node:fs';
 import { basename, join } from 'node:path';
-import { getDocument, OPS } from 'pdfjs-dist/legacy/build/pdf.mjs';
-import { extractSampleTables } from '../webview/sampleExtract';
-import type { SampleTable } from '../webview/sampleTables';
+import { pdfjsLoader, readSampleTables } from '../src/data/pdfSamples';
+import type { SampleTable } from '../src/data/sampleTables';
 
 const [dir, expectedPath] = process.argv.slice(2);
 if (!dir) {
@@ -19,16 +20,20 @@ if (!dir) {
 }
 const expected: Record<string, SampleTable[]> | null = expectedPath ? JSON.parse(readFileSync(expectedPath, 'utf8')) : null;
 async function main(): Promise<number> {
+  const pdfjs = await pdfjsLoader(join(__dirname, '..', 'dist', 'pdfjs'))();
   const files = readdirSync(dir!)
     .filter((f) => f.toLowerCase().endsWith('.pdf'))
     .sort();
   let withCases = 0;
   let cases = 0;
   let mismatches = 0;
+  let slowest = 0;
+  const started = Date.now();
   for (const f of files) {
-    const doc = await getDocument({ data: new Uint8Array(readFileSync(join(dir!, f))), isEvalSupported: false, verbosity: 0 }).promise;
-    const got = await extractSampleTables(doc as never, OPS);
-    await doc.destroy();
+    const t0 = Date.now();
+    const got = await readSampleTables(new Uint8Array(readFileSync(join(dir!, f))), pdfjs);
+    const ms = Date.now() - t0;
+    slowest = Math.max(slowest, ms);
     const n = got.reduce((a, t) => a + t.cases.length, 0);
     if (n) withCases++;
     cases += n;
@@ -40,9 +45,10 @@ async function main(): Promise<number> {
       if (!same) mismatches++;
       mark = same ? 'ok' : `MISMATCH (expected ${want.reduce((a, t) => a + t.cases.length, 0)} cases)`;
     }
-    console.log(`${stem.padEnd(14)} tables=${got.length} cases=${n} ${mark}`);
+    console.log(`${stem.padEnd(14)} tables=${got.length} cases=${n} ${String(ms).padStart(5)} ms ${mark}`);
   }
   console.log(`\n${withCases}/${files.length} PDFs with sample cases, ${cases} cases${expected ? `, ${mismatches} mismatch(es)` : ''}`);
+  console.log(`total ${Date.now() - started} ms, slowest PDF ${slowest} ms`);
   return mismatches ? 1 : 0;
 }
 

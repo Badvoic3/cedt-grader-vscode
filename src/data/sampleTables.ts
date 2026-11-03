@@ -1,8 +1,8 @@
 /*
- * Experimental: sample input/output tables read from a statement PDF.
+ * "Load sample cases": the example input/output tables of a statement PDF.
  *
  * Pure functions over plain arrays (pdf.js operator lists and text items are
- * turned into these by webview/sampleExtract.ts), so the geometry and the
+ * turned into these by src/data/pdfSamples.ts), so the geometry and the
  * cell rules are unit tested in Node and the local check script
  * (scripts/checkSamples.ts) runs the same code on real PDFs.
  *

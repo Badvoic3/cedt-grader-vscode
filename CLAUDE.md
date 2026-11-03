@@ -30,7 +30,7 @@ An unofficial homework tool: a standalone VS Code extension that submits the act
 
 ```bash
 npm test             # vitest: grader layer (fake API + web server), cache/request counts, scores, verdicts, matching/links/CPH, jsdom webviews
-npm run build        # tsc --noEmit + esbuild (dist/extension.js, media/dist/webview.js|css, statement viewer, codicons, pdf.js)
+npm run build        # tsc --noEmit + esbuild (dist/extension.js + dist/pdfjs (host pdf.js, legacy build), media/dist/webview.js|css, statement viewer, codicons, pdf.js)
 npm run typecheck    # tsc --noEmit only (there is no separate linter; strict TS with noUnused* is the lint)
 npm run watch        # esbuild watch
 npm run package      # vsce package (its vscode:prepublish runs the production build, which empties dist/ + media/dist/ first: no source maps) → cedt-grader-submit-<version>.vsix
@@ -77,7 +77,7 @@ npx tsx scripts/probe.ts [--list] [--problem <ID>] [--fixtures] [--submit file] 
 - `src/ui/sidebarProvider.ts`: `WebviewViewProvider`; CSP with nonce, `localResourceRoots: [media]`.
 - `src/ui/statusBar.ts`: status bar shortcut that reveals the panel (warning icon while the connection banner is up).
 - `src/ui/statementPanel.ts` + `webview/statement.ts`: "Statement: <problem>" editor tabs (bundled pdf.js 4.10 viewer: zoom, fit width, pages, text selection, search; description fallback rendered with markdown-it `html: false`).
-- Statement sample cases (**experimental**, see "Statement sample cases" below): `webview/sampleTables.ts` (pure: rules → grids → cells → main-font runs → sample tables), `webview/sampleExtract.ts` (pdf.js adapter, also used by `scripts/checkSamples.ts`), `webview/samplesPreview.ts` (preview drawer), `src/mapping/sampleImport.ts` (host validation, numbering).
+- "Load sample cases" (see "Sample cases from the statement" below): `src/data/sampleTables.ts` (pure: rules → grids → cells → main-font runs → sample tables), `src/data/pdfSamples.ts` (pdf.js legacy build in the host, loaded on first use; also used by `scripts/checkSamples.ts`), `src/mapping/sampleImport.ts` (numbering).
 - `webview/main.ts`, `webview/style.css`: plain DOM sidebar, bundled to `media/dist/` (git-ignored).
   - Sections re-render only when their slice of `ViewState` changed (`sectionKeys`); `forceRender()` after local UI changes.
   - `webview/tooltip.ts`: the one custom tooltip (`data-tip`; `el()` maps `title` → `data-tip`). Never use native `title`.
@@ -146,7 +146,7 @@ Every icon-only button (`iconButton()` in `webview/main.ts`, `btn()` in `webview
 - JSON `{name, url, interactive, memoryLimit, timeLimit, group, tests:[{input, output, id}], srcPath, local?, customCheckerPath?}`, written by CPH with plain `JSON.stringify`.
 - CPH re-reads a `.prob` only on `onDidChangeActiveTextEditor` (no reload command; commands: runTestCases, submitToCodeForces, compileWithoutRunning) and saves its in-memory problem back, so after writing a `.prob` the user must switch to the file before running tests ("Reload in CPH" does that by briefly showing a placeholder tab).
 - CPH has no rename/delete handling; a renamed source orphans its `.prob` (we offer to move it).
-- Our imported tests: `id = 7e15 + grader testcase id` (`GRADER_ID_BASE`, marker that survives CPH re-saves); statement samples (experimental): `id = 7.5e15 + n` (`STATEMENT_ID_BASE`, n = 1, 2, … in preview order); backup `<file>.prob.bak`; own tests first and never removed; duplicates by input+output skipped (also between grader and statement cases); line endings `\n`.
+- Our imported tests: `id = 7e15 + grader testcase id` (`GRADER_ID_BASE`, marker that survives CPH re-saves); statement samples ("Load sample cases"): `id = 7.5e15 + n` (`STATEMENT_ID_BASE`, n = 1, 2, … in table order); backup `<file>.prob.bak`; own tests first and never removed; duplicates by input+output skipped (also between grader and statement cases); line endings `\n`.
 - Never modify CPH itself; only write `.prob` files in this exact format.
 
 ## Folder mode and attachments
@@ -234,7 +234,7 @@ Every icon-only button (`iconButton()` in `webview/main.ts`, `btn()` in `webview
   - The statement CSP adds `worker-src blob:` (pdf.js worker fetched from `media/dist/pdfjs` and started from a blob URL), `connect-src` for the extension's own resources, and `'unsafe-inline'` styles (pdf.js sets inline styles). `isEvalSupported: false`.
 - **Messages appear once:** connection problems go to the banner only (sections show "may be out of date", no inline error, no toast). Other errors are inline; a toast is shown only when the sidebar is hidden. A language mismatch is one hint + a disabled Submit with a tooltip.
 - **Offline:** no retry loops. Polling stops after 2 consecutive network errors and resumes on Retry or the next successful request (`pendingPoll`). Submit failures say whether anything was sent (`describeSubmitFailure`).
-- **Dependencies:** keep them minimal. Runtime: `cheerio/slim`, `tough-cookie`, `markdown-it`, `fflate` (zip attachments; chosen by the user over a hand-written reader), Node fetch. Bundled at build time: `pdfjs-dist`, `@vscode/codicons`. Dev: esbuild, TypeScript, vitest, jsdom, tsx, vsce.
+- **Dependencies:** keep them minimal. Runtime: `cheerio/slim`, `tough-cookie`, `markdown-it`, `fflate` (zip attachments; chosen by the user over a hand-written reader), Node fetch. Bundled at build time: `pdfjs-dist` (statement viewer; its legacy build is also copied to `dist/pdfjs` for "Load sample cases" in the host), `@vscode/codicons`. Dev: esbuild, TypeScript, vitest, jsdom, tsx, vsce.
 
 ## Cache and storage
 
@@ -281,7 +281,7 @@ The sidebar (`cedtGrader` Activity Bar container, view `cedtGrader.panel`) is th
   - match line under the selector ("Chosen by you" / "Matched by file name" / "Matched from CPH data"; a suggestion is a muted "Suggested from the file name · Use this"; choosing from the dropdown confirms too); notes for ambiguous / stale mappings;
   - "Not linked to a problem" (Choose problem / Auto-detect) after "Unlink this file": the file is stored as explicitly unlinked (`cedtGrader.unlinked`), so auto-detection leaves it alone until the user chooses or auto-detects;
   - "files for this problem" notice (see Problem links);
-  - "Load test cases" (when `has_testcase`; for a suggestion it asks once first; CPH or files);
+  - "Load test cases" (when `has_testcase`; for a suggestion it asks once first; CPH or files), then "Load sample cases from the statement" (every problem; see "Sample cases from the statement");
   - counted-score card (counted, best, latest, attempts, penalty, "your best still counts");
   - language dropdown;
   - folder mode: **Submits** and **Runs** dropdowns ("Automatic: <detected file>" + why in the tooltip, or "asked when needed") + "only this file is sent";
@@ -293,15 +293,14 @@ The sidebar (`cedtGrader` Activity Bar container, view `cedtGrader.panel`) is th
 - **Inline questions** (`askInline` → `ViewState.prompt`, plain buttons under the banner, long labels wrap inside the box; cancelled on file switch; questions about submitting have `near: 'submit'` and are shown right above the Submit button instead, scrolled into view, Current problem opened; at the top only when that section is hidden by the layout): submit confirmation, suggested-match submit, newer linked file, auto-detect result, unlink other files, reconnect after a move, stale link. Native modal dialogs only for what can't be undone or loses data: overwrite a file, Clear Cached Data, the exam warning.
 - **Context menus** (`withContextMenu` in `webview/main.ts`): always in addition to visible icons, never instead. Long labels are cut in the middle (`webview/text.ts`), full label in tooltip + aria-label.
 
-### Statement sample cases (experimental)
+### Sample cases from the statement
 
-- **Button:** beaker icon in the statement toolbar (`btn()`, `pdf-only`: hidden for the description fallback). No sidebar button, no command. Click → drawer (`samplesPreview.ts`): "Reading…", then the warning ("experimental … may be missing or misread"), every case (input / output, monospace, `textContent` only), "Notes removed: check this case" for `annotated`, **Import** / **Cancel**; none → "No sample table found in this PDF." Esc closes. Read once per document (`samples` promise, reset on a new `pdf` / `loading` message).
-- **No network:** reads the pdf.js document already shown (`getOperatorList` + `getTextContent` per page); fonts from `page.commonObjs.get(id, cb)` (async in the browser; 1 s fallback to the id). CSP unchanged, `isEvalSupported: false`.
+- **Button:** "Load sample cases from the statement" in the Current problem card right after "Load test cases", for every selected problem (also `has_testcase` false); tooltip = the light note ("Reads the example table … may be read wrong, so check the cases"; a text button, so its label is the accessible name and the tooltip its description). Command `cedtGrader.loadSampleCases`. Not in the Problems row menu (Load test cases isn't either). `ViewState.samples.busy` → "Reading the statement…". No warning dialog, no preview.
+- **Flow** (`GraderController.loadSampleCases`): like Load test cases: folder mode → `askFolderRole('run')` → `runUri()`; a suggestion asks once (`confirmSuggestedFor`). PDF: `StatementStore.cached(id)` (no request) → else `ensureLoggedIn` + `StatementStore.get(id)` = the statement request once, cached (the same as opening the statement; description fallback included). Not a PDF (403/404, description) → inline "This problem's statement has no PDF to read."; no table → inline "No example table found in the statement." (`tellInline`: toast only when the panel is hidden).
+- **Reading in the host** (`src/data/pdfSamples.ts`): pdf.js **legacy** build, NOT bundled into `dist/extension.js`: the build copies `pdf.min.mjs` + `pdf.worker.min.mjs` from `pdfjs-dist/legacy/build` to `dist/pdfjs/` (`.vscodeignore` keeps `dist/pdfjs/**`); `pdfjsLoader(dir)` `import()`s them by file URL on the first click (esbuild keeps a non-literal `import()`), sets `GlobalWorkerOptions.workerSrc` (Node = pdf.js "fake worker" in this thread), `isEvalSupported: false`, no font / CMap URLs (no request). Bytes are copied (pdf.js may detach them). Per page `getOperatorList` + `getTextContent` (text only on pages with grids); fonts from `page.commonObjs.get(id, cb)` (1 s fallback to the id). ~10–90 ms per course PDF. Works without `process.getBuiltinModule` (VS Code 1.90's Node 20.9): pdf.js then prints three "Cannot polyfill" warnings to the extension host console.
 - **Algorithm** (`sampleTables.ts`, ported from a prototype checked on 47 + 3 real PDFs): `constructPath` rects / lines under the CTM, tagged by the next paint op (`endPath` drops). Thin filled rects (≤ 3 pt) = rules; stroked rects = cell boxes; big filled rects (shading) and page-sized rects ignored. Collinear pieces merged (±1.5 pt, gaps ≤ 4 pt), H < 10 / V < 6 pt dropped. Grids by union-find (TOL 2.5; ≥ 2 ys, ≥ 3 xs). Items by centre; a grid ≤ 24 pt below one with the same xs joins it; a header-less table on the next page with the same xs continues it. Main font = `<name without ABCDEF+>@<size>` with most ASCII characters below row 1. Runs split at gap > 3h or font change after gap > 0.5h; kept if main-font text or starting within 1.5h of the cell's left edge. Header = Thai letters or input/output; `// …` with Thai → removed, `annotated`; case = input + ≥ 97 % ASCII; table = 2–3 columns, ≥ half the body rows valid. Thai is detected, never read (broken ToUnicode).
-- **Message:** `FromStatement` `{ type: 'importSamples', problemId, cases }` (statement messages live in `statementPanel.ts`). The panel drops it unless `problemId` is its own, `validateSampleCases` (strings only, `SAMPLES.maxCases` 50, `SAMPLES.maxCaseChars` 20 000, non-empty input) → `GraderController.importStatementSamples` (null → "unexpected data").
-- **Target** (`sampleTarget`): the active file's problem → like Load test cases (folder mode: `askFolderRole('run')` → `runUri()`; a suggestion asks once). Another problem → `filesForProblem(id, 'run', false)`; a folder item → `folderRunFile` (`runFileFor`: chosen → detected → only C/C++ source → QuickPick, saved on a folder link); several → QuickPick; none → inline "Link to <file>" / "Create a new file", then looked up again once.
-- **Write:** shared with Load test cases (`testcaseTarget`, `testsFolder`, `confirmTestsFolder`): CPH → `importIntoCph(…, idBase: STATEMENT_ID_BASE)`, backup recorded, `refreshRunTests`, "Reload in CPH"; files → `saveTestcasesAsFiles(folder, cases, 'sample')` = `tests/sample<n>.in|out` (never collides with grader `<n>.in`). Texts end with one `\n`.
-- **Check on real PDFs** (local only, course PDFs never committed): `npx tsx scripts/checkSamples.ts <dir> [expected.json]` → per-PDF counts and mismatches.
+- **Write:** shared with Load test cases (`testcaseTarget`, `testsFolder`, `confirmTestsFolder`): CPH → `importIntoCph(…, idBase: STATEMENT_ID_BASE)`, backup recorded, `refreshRunTests`, "Reload in CPH"; files → `saveTestcasesAsFiles(folder, cases, 'sample')` = `tests/sample<n>.in|out` (never collides with grader `<n>.in`). Texts end with one `\n`. Result: "Loaded N sample cases from the statement." + "Notes were removed from M cases, so check them." when some were `annotated`, then the CPH / files details.
+- **Check on real PDFs** (local only, course PDFs never committed; `npm run build` first, it reads `dist/pdfjs`): `npx tsx scripts/checkSamples.ts <dir> [expected.json]` → per-PDF counts, time and mismatches.
 
 Statement viewer (`webview/statement.ts`, `webview/zoom.ts`): pinch (Ctrl+wheel) zooms around the cursor via `PDFViewer.updateScale({origin})` with `preventDefault`; Cmd/Ctrl + / - / 0; page/zoom/scroll kept in webview state (serializer, restart) and globalState (`cedtGrader.statementView`, reopen); `retainContextWhenHidden`; `registerWebviewPanelSerializer('cedtGrader.statement')` reopens tabs after restart from the disk cache (no request).
 
@@ -325,7 +324,7 @@ Statement viewer (`webview/statement.ts`, `webview/zoom.ts`): pinch (Ctrl+wheel)
 | "Files for this problem" rules and notice wording | `src/mapping/problemFiles.ts` |
 | Folders never searched | `EXCLUDED_DIRS` in `src/mapping/findByName.ts` |
 | Attachment caps (download size, zip entries / total size, inline submit-file buttons) | `ATTACHMENT` in `src/shared/constants.ts`; extraction rules `src/mapping/attachment.ts` |
-| Statement sample import (experimental): caps / table rules | `SAMPLES` in `src/shared/constants.ts`; thresholds at the top of `webview/sampleTables.ts` |
+| "Load sample cases": table rules | thresholds at the top of `src/data/sampleTables.ts`; pdf.js files `PDFJS_FILES` in `src/data/pdfSamples.ts` + `copyHostPdfjs` in `esbuild.mjs` |
 | Settings | `package.json` `contributes.configuration` + `src/config.ts` |
 
 No course- or problem-specific names in code (problem names come from the server; `test/scalability.test.ts` checks).
@@ -355,7 +354,7 @@ Every release must keep data written by older versions working (`test/upgrade.te
 - Undo of "Rename file to match the problem" relies on VS Code's undo for WorkspaceEdit file operations (checked by hand, not by a test).
 - The controller (vscode-dependent) has no unit tests; its rules are kept in pure, tested helpers (`problemFiles.ts`, `suggestionGate.ts`, `match.ts`, `mappingOps.ts`, `paths.ts`) and the webview is tested in jsdom.
 - English only; texts are already in `src/shared/strings.ts`, ready for Phase 6.
-- Statement sample import (experimental) reads only ruled tables with a text layer: scanned PDFs and borderless tables give nothing; a note set in the data font and aligned left in the cell is kept as data; a 2–3 column plain-ASCII table that isn't a sample (e.g. function arguments → result) would be offered as cases (the preview is the safeguard). Its Thai texts are in `TH_REVIEW`.
+- "Load sample cases" reads only ruled tables with a text layer: scanned PDFs and borderless tables give nothing; a note set in the data font and aligned left in the cell is kept as data; a 2–3 column plain-ASCII table that isn't a sample (e.g. function arguments → result) would be loaded as cases (the tooltip asks to check them; CPH duplicates / `sample<n>` files keep it easy to undo). Parsing runs in the extension host thread (fake worker; ~10–90 ms per statement). Its Thai texts are in `TH_REVIEW`.
 
 ## Releasing
 
@@ -380,4 +379,4 @@ Every release must keep data written by older versions working (`test/upgrade.te
 
 - Phase 6: done (v0.7.0, confirmed 2026-11-03, released on GitHub). Marketplace publishing waits for the user's publisher account (see Releasing).
 
-Commands (kept for keybindings; the panel is the primary interface): `cedtGrader.login`, `logout`, `submit`, `chooseProblem`, `clearMapping`, `loadTestcases`, `showLastResult`, `openStatement`, `refreshProblems`, `refreshHistory`, `showRequestLog`, `clearCache`, `openWalkthrough`, `openSettings`, `renameFileToProblem`, `downloadAttachment`, `toggleFolderMode`, `runTests`, `focus`.
+Commands (kept for keybindings; the panel is the primary interface): `cedtGrader.login`, `logout`, `submit`, `chooseProblem`, `clearMapping`, `loadTestcases`, `loadSampleCases`, `showLastResult`, `openStatement`, `refreshProblems`, `refreshHistory`, `showRequestLog`, `clearCache`, `openWalkthrough`, `openSettings`, `renameFileToProblem`, `downloadAttachment`, `toggleFolderMode`, `runTests`, `focus`.

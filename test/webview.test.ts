@@ -46,6 +46,7 @@ const base: ViewState = {
   notLinked: false,
   prompt: null,
   testcases: { busy: false },
+  samples: { busy: false },
   folder: null,
   folderMode: null,
   attachment: { busy: null },
@@ -380,6 +381,26 @@ describe.runIf(existsSync(resolve(__dirname, '../esbuild.mjs')))('sidebar webvie
     expect(doc.querySelectorAll('#sec-problems .problem-row')).toHaveLength(2);
     // "CPH" only appears where it is actually used (tooltips), not as visible UI text.
     expect(doc.body.textContent).not.toMatch(/CPH/);
+  });
+
+  it('Load sample cases: next to Load test cases, for every problem (also without grader test cases), with the light note', () => {
+    const { doc, sent, post } = boot();
+    const labels = () => [...doc.querySelectorAll('#sec-current button.btn')].map((b) => b.textContent?.trim());
+    post(loggedIn);
+    const l = labels();
+    expect(l.indexOf('Load sample cases from the statement')).toBe(l.indexOf('Load test cases from the grader') + 1);
+    const tip = 'Reads the example table in the problem statement (PDF). An unusual layout may be read wrong, so check the cases.';
+    const btn = () => [...doc.querySelectorAll<HTMLButtonElement>('#sec-current button')].find((b) => b.dataset.tip === tip)!;
+    expect(btn().textContent?.trim()).toBe('Load sample cases from the statement');
+    expect(btn().hasAttribute('title')).toBe(false);
+    btn().click();
+    expect(sent.at(-1)).toEqual({ type: 'loadSampleCases' });
+    post({ ...loggedIn, problem: { ...loggedIn.problem!, hasTestcase: false } });
+    expect(labels()).not.toContain('Load test cases from the grader');
+    expect(btn()).toBeTruthy();
+    post({ ...loggedIn, samples: { busy: true } });
+    expect(btn().disabled).toBe(true);
+    expect(btn().textContent?.trim()).toBe('Reading the statement…');
   });
 
   it('accessibility: every icon-only button has a tooltip and the same aria-label; disabled buttons say why', () => {

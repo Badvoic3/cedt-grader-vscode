@@ -202,6 +202,8 @@ export interface ViewState {
     note: string | null;
   };
   testcases: { busy: boolean };
+  /** "Load sample cases" is reading the statement. */
+  samples: { busy: boolean };
   /** CPH (optional) installed and enabled. */
   cph: { installed: boolean };
   languages: {
@@ -274,6 +276,7 @@ export type FromWebview =
   | { type: 'goToFile'; problemId: number }
   | { type: 'findFile'; problemId: number }
   | { type: 'loadTestcases' }
+  | { type: 'loadSampleCases' }
   | { type: 'confirmProblem'; problemId: number }
   | { type: 'setFilter'; filter: ProblemFilter }
   | { type: 'autoDetect' }

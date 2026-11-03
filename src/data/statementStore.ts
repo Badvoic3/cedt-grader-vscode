@@ -49,6 +49,13 @@ export class StatementStore {
     return p;
   }
 
+  /** The cached statement, or null (never a request). */
+  async cached(problemId: number): Promise<Statement | null> {
+    const st = await this.readCache(problemId);
+    if (st) this.log(`cache hit  statement:${problemId} (disk)`);
+    return st;
+  }
+
   private async fetch(problemId: number): Promise<Statement> {
     const c = this.client();
     const pdf = await c.getStatementPdf(problemId);

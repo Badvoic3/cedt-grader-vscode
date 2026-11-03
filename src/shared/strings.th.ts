@@ -18,12 +18,10 @@ import type { Strings } from './strings';
  * when a new text is translated without review.
  */
 export const TH_REVIEW: readonly string[] = [
-  // Experimental statement sample import (2026-11-03): not reviewed yet.
+  // "Load sample cases" (2026-11-03): not reviewed yet.
   'S.samples',
-  'W.importSamplesTip',
-  'W.samplesWarning',
-  'W.samplesNoneDetail',
-  'W.samplesAnnotated',
+  'W.loadSampleCases',
+  'W.loadSampleCasesTip',
 ];
 
 export const TH: Strings = {
@@ -164,16 +162,16 @@ export const TH: Strings = {
     },
 
     samples: {
-      invalid: 'นำเข้าตัวอย่างจากโจทย์ไม่ได้ (ข้อมูลไม่ถูกต้อง)',
-      importLabel: 'นำเข้าตัวอย่าง',
-      suggestedQ: (name, sub) => `นำเข้าตัวอย่างจากโจทย์ ${name}${sub ? ` (${sub})` : ''} ไปที่ไฟล์นี้ไหม`,
-      noFile: (name) => `ยังไม่มีไฟล์ที่ลิงก์กับ ${name} ลิงก์หรือสร้างไฟล์คำตอบก่อนนำเข้าตัวอย่าง`,
-      pickFile: (name) => `นำเข้าตัวอย่างของ ${name} ไปที่ไฟล์ไหน`,
+      load: 'โหลดตัวอย่าง',
+      suggestedQ: (name, sub) => `โหลดตัวอย่างจากโจทย์ ${name}${sub ? ` (${sub})` : ''} ไปที่ไฟล์นี้ไหม`,
+      noPdf: 'โจทย์ข้อนี้ไม่มีไฟล์ PDF ให้อ่าน',
+      none: 'ไม่พบตารางตัวอย่างในโจทย์',
+      loaded: (n) => `โหลดตัวอย่างจากโจทย์ ${n} ข้อ`,
+      annotated: (n) => ` ตัดหมายเหตุออกจาก ${n} ข้อ ควรตรวจอีกครั้ง`,
       whereTo: (n) => `อ่านตัวอย่างจากโจทย์ได้ ${n} ข้อ จะเก็บไว้ที่ไหน`,
-      savedFiles: (written, total, folder, extra) =>
-        `บันทึก ${written} จาก ${total} ตัวอย่างไว้ที่ ${folder}/ (sample1.in, sample1.out, …)${extra ? ` (${extra})` : ''}`,
-      savedCph: (n) => `บันทึกลง CPH แล้ว: ตัวอย่างจากโจทย์ ${n} ข้อ`,
-      failed: (why) => `นำเข้าตัวอย่างไม่ได้: ${why}`,
+      savedFiles: (written, folder, extra) => `บันทึก ${written} ข้อไว้ที่ ${folder}/ (sample1.in, sample1.out, …)${extra ? ` (${extra})` : ''}`,
+      savedCph: (parts) => `บันทึกลง CPH แล้ว: ${parts}`,
+      failed: (why) => `โหลดตัวอย่างไม่ได้: ${why}`,
     },
 
     cache: {
@@ -405,6 +403,9 @@ export const TH: Strings = {
     downloadingTestCases: 'กำลังดาวน์โหลด test case ของ Grader…',
     loadTestCasesCphTip: 'ดาวน์โหลด test case ของ Grader ลง CPH',
     loadTestCasesFilesTip: 'ดาวน์โหลด test case ของ Grader แล้วบันทึกเป็นไฟล์ .in / .out (ยังไม่ได้ติดตั้ง CPH)',
+    loadSampleCases: 'โหลดตัวอย่างจากโจทย์',
+    readingSampleCases: 'กำลังอ่านโจทย์…',
+    loadSampleCasesTip: 'อ่านตารางตัวอย่างในไฟล์โจทย์ (PDF) ถ้าโจทย์จัดหน้าแปลก ๆ อาจอ่านผิดได้ ควรตรวจ test case อีกครั้ง',
     languageNotAccepted: (language) => `โจทย์นี้ไม่รับภาษา ${language} เลือกโจทย์ผิดหรือเปล่า?`,
     change: 'เปลี่ยน',
     acceptedLanguages: (languages) => `ภาษาที่รับ: ${languages}`,
@@ -511,21 +512,6 @@ export const TH: Strings = {
     matchOf: (current, total) => `${current} จาก ${total}`,
     loadingStatement: 'กำลังโหลดโจทย์…',
     pdfError: (why) => `แสดง PDF ไม่ได้: ${why}`,
-    importSamplesTip: 'นำเข้าตัวอย่าง test case จากโจทย์นี้ (ทดลอง)',
-    samplesReading: 'กำลังอ่านตารางตัวอย่าง…',
-    samplesTitle: (n) => `ตัวอย่าง test case จากโจทย์นี้ (${n})`,
-    samplesWarning: 'ฟีเจอร์ทดลอง: อ่าน test case จากตารางใน PDF อาจขาดหรืออ่านผิดได้ ตรวจทุกข้อก่อนนำเข้า',
-    samplesNone: 'ไม่พบตารางตัวอย่างใน PDF นี้',
-    samplesNoneDetail: 'อ่านได้เฉพาะตารางที่มีเส้นขอบและเลือกข้อความได้ ไม่รองรับหน้าที่สแกนมาหรือตารางที่ไม่มีเส้นขอบ',
-    samplesCase: (n, page) => `ข้อ ${n} · หน้า ${page}`,
-    samplesInput: 'Input',
-    samplesOutput: 'Output',
-    samplesEmpty: '(ว่าง)',
-    samplesAnnotated: 'ตัดหมายเหตุออกแล้ว ตรวจข้อนี้อีกครั้ง',
-    samplesImport: 'นำเข้า',
-    samplesCancel: 'ยกเลิก',
-    samplesClose: 'ปิด',
-    samplesError: (why) => `อ่านตารางตัวอย่างไม่ได้: ${why}`,
     sectionAccount: 'บัญชี',
     sectionCurrent: 'โจทย์ปัจจุบัน',
     sectionResult: 'ผลตรวจ',

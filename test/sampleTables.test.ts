@@ -1,5 +1,5 @@
 /**
- * Experimental statement sample reader (webview/sampleTables.ts) on synthetic
+ * Statement sample reader (src/data/sampleTables.ts) on synthetic
  * segments and text items shaped like the course PDFs (Word tables). The real
  * PDFs are checked locally with scripts/checkSamples.ts (never committed).
  */
@@ -20,7 +20,7 @@ import {
   type Seg,
   type Table,
   type TextItem,
-} from '../webview/sampleTables';
+} from '../src/data/sampleTables';
 
 const OPS: PathOps = {
   save: 10, restore: 11, transform: 12, constructPath: 91, moveTo: 13, lineTo: 14, curveTo: 15, curveTo2: 16, curveTo3: 17, closePath: 18, rectangle: 19,

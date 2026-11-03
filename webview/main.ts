@@ -590,6 +590,14 @@ function renderCurrent(s: ViewState): void {
         ),
       );
     }
+    // The statement's example table: for every problem (also without grader test cases).
+    b.append(
+      button(
+        s.samples.busy ? [icon('loading', 'codicon-modifier-spin'), ' ', W.readingSampleCases] : [icon('file-pdf'), ' ', W.loadSampleCases],
+        () => send({ type: 'loadSampleCases' }),
+        { disabled: s.samples.busy, title: W.loadSampleCasesTip },
+      ),
+    );
     // Run tests (CPH installed only): the run file in folder mode, else this file.
     if (s.runTests) {
       b.append(button([icon('play'), ' ', W.runTests], () => send({ type: 'runTests' }), { disabled: !!s.runTests.disabledReason, title: s.runTests.disabledReason ? `${W.runTestsTip} (${s.runTests.disabledReason})` : W.runTestsTip }));
@@ -1192,7 +1200,7 @@ function sectionKeys(s: ViewState): Record<string, string> {
     banner: j([s.connection, s.problems.loaded, s.history.items.length > 0]),
     prompt: j([s.prompt, promptNearSubmit(s)]),
     account: j([s.account, s.baseUrl, showLoginForm]),
-    current: j([promptNearSubmit(s) ? s.prompt : null, s.notLinked, s.linkedNotice, s.linkedFiles, s.file, s.problem, s.languages, s.submit, s.matching, s.testcases, s.cph, s.gradingElsewhere, s.folder, s.folderMode, s.attachment, s.runTests, pickerOpen, pickerOpen ? s.problems : s.problems.loaded]),
+    current: j([promptNearSubmit(s) ? s.prompt : null, s.notLinked, s.linkedNotice, s.linkedFiles, s.file, s.problem, s.languages, s.submit, s.matching, s.testcases, s.samples, s.cph, s.gradingElsewhere, s.folder, s.folderMode, s.attachment, s.runTests, pickerOpen, pickerOpen ? s.problems : s.problems.loaded]),
     result: j([s.result, legendOpen === 'result', s.problem?.score.rawSum]),
     history: j([pid, s.history, legendOpen === 'history', s.problem?.score.rawSum]),
     problems: j([{ ...s.problems, items: s.problems.items.length }, ui.filter, s.attachment]),

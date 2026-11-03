@@ -13,6 +13,18 @@ if (production) {
   await rm('media/dist', { recursive: true, force: true });
 }
 
+// pdf.js legacy (Node) build for "Load sample cases" in the extension host: its own
+// files, imported at runtime on first use (src/data/pdfSamples.ts), so they never weigh on activation.
+const copyHostPdfjs = {
+  name: 'copy-host-pdfjs',
+  setup(build) {
+    build.onEnd(async () => {
+      await mkdir('dist/pdfjs', { recursive: true });
+      for (const f of ['pdf.min.mjs', 'pdf.worker.min.mjs']) await copyFile(`node_modules/pdfjs-dist/legacy/build/${f}`, `dist/pdfjs/${f}`);
+    });
+  },
+};
+
 const copyAssets = {
   name: 'copy-webview-assets',
   setup(build) {
@@ -49,6 +61,7 @@ const host = await context({
   format: 'cjs',
   target: 'node20',
   external: ['vscode'],
+  plugins: [copyHostPdfjs],
 });
 
 const webview = await context({
