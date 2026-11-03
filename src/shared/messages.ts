@@ -188,7 +188,8 @@ export interface ViewState {
   /** The file was explicitly unlinked: "Not linked to a problem" (auto-detection off). */
   notLinked: boolean;
   /** Inline question with plain buttons (instead of a modal dialog). */
-  prompt: { id: number; text: string; detail: string | null; tone: 'info' | 'warn'; buttons: { id: string; label: string; primary?: boolean }[] } | null;
+  /** Inline question; `near: 'submit'` = about submitting, shown right above the Submit button. */
+  prompt: { id: number; text: string; detail: string | null; tone: 'info' | 'warn'; buttons: { id: string; label: string; primary?: boolean }[]; near: 'submit' | null } | null;
   /** How the active file was (or wasn't) matched. */
   matching: {
     /** Closest candidates, shown first in the picker (never saved automatically). */
@@ -254,7 +255,6 @@ export type FromWebview =
   | { type: 'loginSaved' }
   | { type: 'logout' }
   | { type: 'submit' }
-  | { type: 'resubmit' }
   | { type: 'selectLanguage'; languageId: number }
   | { type: 'mapProblem'; problemId: number }
   | { type: 'unmapProblem' }

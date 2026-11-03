@@ -310,19 +310,31 @@ const banner = el('div', { class: 'banner', role: 'alert', hidden: true });
 const promptBar = el('div', { class: 'prompt', role: 'status', hidden: true });
 app.append(banner, promptBar, sAccount.details, sCurrent.details, sResult.details, sHistory.details, sProblems.details);
 
-/** Inline question with plain buttons (instead of a modal dialog). */
-function renderPrompt(s: ViewState): void {
-  const q = s.prompt;
-  promptBar.hidden = !q;
-  promptBar.replaceChildren();
-  if (!q) return;
-  promptBar.className = `prompt notice${q.tone === 'warn' ? ' warn' : ''}`;
-  appendChildren(promptBar, [
+/** A question about submitting goes right above the Submit button (when Current problem is shown). */
+function promptNearSubmit(s: ViewState): boolean {
+  return s.prompt?.near === 'submit' && !sCurrent.details.hidden;
+}
+
+/** The contents of an inline question: text, detail, plain buttons. */
+function fillPrompt(box: HTMLElement, q: NonNullable<ViewState['prompt']>): void {
+  box.className = `prompt notice${q.tone === 'warn' ? ' warn' : ''}`;
+  appendChildren(box, [
     el('div', { class: 'row' }, icon(q.tone === 'warn' ? 'warning' : 'info'), el('span', { class: 'grow' }, q.text)),
     q.detail ? el('p', { class: 'small muted' }, q.detail) : null,
     el('div', { class: 'row gap' }, ...q.buttons.map((b) => button(b.label, () => send({ type: 'promptAnswer', id: q.id, button: b.id }), { kind: b.primary ? 'primary' : 'secondary' }))),
   ]);
 }
+
+/** Inline question with plain buttons (instead of a modal dialog), under the banner. */
+function renderPrompt(s: ViewState): void {
+  const q = promptNearSubmit(s) ? null : s.prompt;
+  promptBar.hidden = !q;
+  promptBar.replaceChildren();
+  if (q) fillPrompt(promptBar, q);
+}
+
+/** The question shown above Submit that was last scrolled into view (only new ones are). */
+let revealedPrompt: number | null = null;
 
 /** One banner for connection problems, with Retry (or Log in). Cached data stays visible below it. */
 function renderBanner(s: ViewState): void {
@@ -611,6 +623,13 @@ function renderCurrent(s: ViewState): void {
     );
   }
 
+  if (promptNearSubmit(s) && s.prompt) {
+    const box = el('div', { id: 'submit-prompt', role: 'status' });
+    fillPrompt(box, s.prompt);
+    b.append(box);
+    sCurrent.details.open = true;
+  }
+
   const sub = s.submit;
   b.append(
     el('button', { class: 'btn big', type: 'button', id: 'submit-btn', disabled: !sub.enabled, title: sub.reason ?? undefined, onclick: () => send({ type: 'submit' }), 'aria-describedby': sub.reason ? 'submit-reason' : undefined },
@@ -724,7 +743,6 @@ function renderResult(s: ViewState): void {
     b.append(el('div', { class: r.phase === 'error' ? 'error' : 'notice' }, icon(r.phase === 'error' ? 'error' : 'clock'), ' ', r.message ?? ''));
   }
   if (r.phase !== 'submitting' && r.phase !== 'grading') {
-    b.append(el('div', { class: 'row gap' }, button([icon('debug-restart'), ' ', W.resubmit], () => send({ type: 'resubmit' }), { disabled: !s.submit.enabled, title: s.submit.reason ?? W.resubmitTip })));
   }
 }
 
@@ -1172,10 +1190,10 @@ function sectionKeys(s: ViewState): Record<string, string> {
   const pid = s.problem?.id ?? null;
   return {
     banner: j([s.connection, s.problems.loaded, s.history.items.length > 0]),
-    prompt: j([s.prompt]),
+    prompt: j([s.prompt, promptNearSubmit(s)]),
     account: j([s.account, s.baseUrl, showLoginForm]),
-    current: j([s.notLinked, s.linkedNotice, s.linkedFiles, s.file, s.problem, s.languages, s.submit, s.matching, s.testcases, s.cph, s.gradingElsewhere, s.folder, s.folderMode, s.attachment, s.runTests, pickerOpen, pickerOpen ? s.problems : s.problems.loaded]),
-    result: j([s.result, s.submit.enabled, s.submit.reason, legendOpen === 'result', s.problem?.score.rawSum]),
+    current: j([promptNearSubmit(s) ? s.prompt : null, s.notLinked, s.linkedNotice, s.linkedFiles, s.file, s.problem, s.languages, s.submit, s.matching, s.testcases, s.cph, s.gradingElsewhere, s.folder, s.folderMode, s.attachment, s.runTests, pickerOpen, pickerOpen ? s.problems : s.problems.loaded]),
+    result: j([s.result, legendOpen === 'result', s.problem?.score.rawSum]),
     history: j([pid, s.history, legendOpen === 'history', s.problem?.score.rawSum]),
     problems: j([{ ...s.problems, items: s.problems.items.length }, ui.filter, s.attachment]),
   };
@@ -1227,8 +1245,11 @@ function render(): void {
   syncProblemList(state);
   // Persistent inputs survive re-render; restore focus if it was on one of them.
   if (active instanceof HTMLInputElement && document.body.contains(active) && document.activeElement !== active) active.focus();
-  // A re-render never moves the panel.
+  // A re-render never moves the panel, except to show a new question above Submit.
   if (document.scrollingElement && document.scrollingElement.scrollTop !== pageScroll) document.scrollingElement.scrollTop = pageScroll;
+  const nearSubmit = promptNearSubmit(state) ? state.prompt : null;
+  if (nearSubmit && revealedPrompt !== nearSubmit.id) document.getElementById('submit-prompt')?.scrollIntoView?.({ block: 'nearest' });
+  revealedPrompt = nearSubmit?.id ?? null;
   tooltip.refresh();
 }
 

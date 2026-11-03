@@ -22,6 +22,9 @@
 ### Fixes
 - Test cases: the last line `KEY: …` in the expected outputs of problems with a provided `main.cpp` is left out when loading them (only the grader's own main prints it, so local runs always failed). Loading again updates tests loaded before.
 - "Load test cases" without CPH no longer keeps spinning after the files are saved; "Download Again" in the result message works again. The button says the test cases come from the grader ("Load test cases from the grader").
+- Questions about submitting (confirm, which file, newer file, suggested match) appear right above the **Submit to Grader** button instead of at the top of the panel.
+- Folder mode: with another file of the folder open (e.g. `main.cpp`), Submit asks **Submit student.h** or **Submit main.cpp (open file)**. The answer is remembered for the folder (shown under **Submits**), so it is asked once; with "Confirm Before Submit" on it is the confirm question.
+- The **Resubmit** button under Result is gone: **Submit to Grader** is the one way to submit.
 - Long answers in the panel's questions (e.g. long folder names when extracting a zip) wrap instead of running out of the box; the extract choices say which name the folder gets ("Name it after the problem (…/) and link it" / "Keep the original name (…/), don't link").
 
 ## 0.7.0 — Phase 6 (language and customization)
