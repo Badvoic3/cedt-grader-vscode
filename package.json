@@ -375,6 +375,11 @@
           "default": true,
           "description": "%config.statementBeside.description%"
         },
+        "cedtGrader.statementFollowsFile": {
+          "type": "boolean",
+          "default": true,
+          "description": "%config.statementFollowsFile.description%"
+        },
         "cedtGrader.defaultLanguage": {
           "type": "string",
           "default": "C++",

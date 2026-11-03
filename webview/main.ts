@@ -86,6 +86,29 @@ function button(label: Child, onclick: () => void, opts: { kind?: 'primary' | 's
   return el('button', { class: `btn ${opts.kind ?? 'secondary'}`, type: 'button', disabled: opts.disabled, title: opts.title, onclick }, label);
 }
 
+/**
+ * Buttons of a `.test-buttons` grid get one width: the widest one's natural
+ * width (labels differ per language), via `--btn-w` (needs layout: measured
+ * on the next frame; skipped while hidden).
+ */
+let lastBtnW = '';
+function equalWidths(row: HTMLElement): void {
+  if (lastBtnW) row.style.setProperty('--btn-w', lastBtnW); // the section is rebuilt on re-render: no flicker
+  const raf = window.requestAnimationFrame?.bind(window);
+  if (!raf) return;
+  raf(() => {
+    let w = 0;
+    for (const b of row.children as HTMLCollectionOf<HTMLElement>) {
+      b.style.width = 'max-content';
+      w = Math.max(w, b.getBoundingClientRect().width);
+      b.style.width = '';
+    }
+    if (!w) return;
+    lastBtnW = `${Math.ceil(w)}px`;
+    row.style.setProperty('--btn-w', lastBtnW);
+  });
+}
+
 export interface MenuItem {
   icon: string;
   label: string;
@@ -578,8 +601,9 @@ function renderCurrent(s: ViewState): void {
         el('p', { class: 'small muted' }, W.submitFileTip),
       );
     }
-    // Test cases on one row: the grader's (when it has them) and the statement's example table (every problem).
-    const tests = el('div', { class: 'row gap test-buttons' });
+    // Test-case buttons, all the same width: the grader's (when it has them), the statement's
+    // example table (every problem), Run tests; side by side when they fit, stacked otherwise.
+    const tests = el('div', { class: 'test-buttons' });
     if (p.hasTestcase) {
       tests.append(
         button(
@@ -603,11 +627,12 @@ function renderCurrent(s: ViewState): void {
         { disabled: s.samples.busy, title: s.samples.busy ? W.readingStatementTip : W.loadSampleCasesTip },
       ),
     );
-    b.append(tests);
     // Run tests (CPH installed only): the run file in folder mode, else this file.
     if (s.runTests) {
-      b.append(button([icon('play'), ' ', W.runTests], () => send({ type: 'runTests' }), { disabled: !!s.runTests.disabledReason, title: s.runTests.disabledReason ? `${W.runTestsTip} (${s.runTests.disabledReason})` : W.runTestsTip }));
+      tests.append(button([icon('play'), ' ', W.runTests], () => send({ type: 'runTests' }), { disabled: !!s.runTests.disabledReason, title: s.runTests.disabledReason ? `${W.runTestsTip} (${s.runTests.disabledReason})` : W.runTestsTip }));
     }
+    b.append(tests);
+    equalWidths(tests);
   }
 
   const mm = p ? s.languages.mismatch : null;
@@ -1225,7 +1250,8 @@ function applyLayout(s: ViewState): void {
   if (compact !== compactOn) {
     compactOn = compact;
     document.body.classList.toggle('compact', compact);
-    lastKeys.delete('problems'); // rows change height: lay the list out again
+    problemList.remeasure(); // rows change height: measure and lay the list out again
+    lastKeys.delete('problems');
   }
   const order = visibleSections(s.layout?.sections ?? [], s.account.status === 'logged-in');
   const key = order.join(',');

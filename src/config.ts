@@ -14,6 +14,8 @@ export interface GraderConfig {
   debugRequests: boolean;
   /** Open problem statements beside the code (ViewColumn.Beside). */
   statementBeside: boolean;
+  /** An open statement tab follows the active file's problem (closes for a source file with none). */
+  statementFollowsFile: boolean;
   /** Language for new files when the active file's language isn't permitted (default C++). */
   defaultLanguage: string;
   /** Size limit of downloaded files (statements, test cases), in MB. */
@@ -58,6 +60,7 @@ export function readConfig(): GraderConfig {
     confirmBeforeSubmit: c.get<boolean>('confirmBeforeSubmit', true),
     debugRequests: c.get<boolean>('debugRequests', false) === true,
     statementBeside: c.get<boolean>('statementBeside', true) !== false,
+    statementFollowsFile: c.get<boolean>('statementFollowsFile', true) !== false,
     defaultLanguage: String(c.get<string>('defaultLanguage', 'C++') || 'C++'),
     displayLanguage: ((v) => (v === 'th' || v === 'auto' ? v : 'en'))(c.get<string>('displayLanguage', 'en')),
     saveBeforeSubmit: c.get<boolean>('saveBeforeSubmit', true) !== false,
