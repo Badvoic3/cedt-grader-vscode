@@ -277,6 +277,16 @@ const EN_S = {
     noTestsShort: 'load the test cases first',
   },
 
+  cphAutoShow: {
+    question: 'CPH opens its own panel every time you switch to a source file, which can hide this panel. Turn that off?',
+    detail: 'This changes CPH\'s setting "Auto Show Judge". You can still open CPH yourself, and turn the setting back on in VS Code\'s settings.',
+    turnOff: 'Turn it off',
+    keep: 'Keep it',
+    never: "Don't ask again",
+    done: 'CPH no longer opens its panel by itself.',
+    failed: (why: string) => `Couldn't change CPH's setting: ${why}`,
+  },
+
   attachment: {
     none: (name: string) => `${name} has no attachment on the grader.`,
     writeFailed: (why: string) => `Couldn't save the attachment: ${why}`,

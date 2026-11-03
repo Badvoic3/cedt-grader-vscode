@@ -197,6 +197,7 @@ This is an unofficial homework tool. If a problem looks like part of an exam, th
 - **Load test cases** saves the grader's cases into the file's CPH problem ("Saved to CPH"): your own CPH tests stay first, the old CPH file is backed up (`.bak`), and loading again doesn't duplicate anything. CPH only re-reads tests when you switch to the file, so use **Reload in CPH** (or switch tabs) before running them.
 - **Renames:** after renaming a file in VS Code, the extension offers to move its CPH tests to the new name (CPH itself doesn't follow renames).
 - Both extensions add a button to the editor title bar: CPH's runs your tests locally; ours (☁) submits to the grader.
+- **CPH's panel covering this one:** CPH opens its own panel every time you switch to a source file (its setting "Auto Show Judge", on by default). The panel asks once whether to turn that off (**Turn it off** / **Keep it** / **Don't ask again**); you can still open CPH yourself.
 
 The extension never changes CPH itself and doesn't require it. Disabling CPH switches "Load test cases" to saving files.
 
