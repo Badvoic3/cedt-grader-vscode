@@ -308,14 +308,17 @@ describe.runIf(existsSync(resolve(__dirname, '../esbuild.mjs')))('sidebar webvie
     expect(cur.querySelector('.combo .source-icon')).toBeNull(); // not inside the dropdown any more
     // All header icons visible again, in the original order.
     expect([...header(doc).querySelectorAll('button')].map((b) => b.getAttribute('aria-label'))).toEqual([
-      'Open statement', 'Copy problem name', 'Open on the grader website', 'Auto-detect the problem for this file again', "Unlink this file (removes your choice; auto-detect won't link it again)",
+      'Open statement', 'Copy problem name', 'Open on the grader website', "Save the grader's test cases as .in / .out files", 'Auto-detect the problem for this file again', "Unlink this file (removes your choice; auto-detect won't link it again)",
     ]);
     expect([...cur.querySelectorAll('button')].some((b) => b.textContent === 'Change')).toBe(false); // removed: same as the dropdown
     expect(cur.querySelector('[aria-label^="More actions"]')).toBeNull(); // no "…" menu
     header(doc).querySelector<HTMLButtonElement>('[aria-label="Copy problem name"]')!.click();
     expect(sent.at(-1)).toEqual({ type: 'copyName', problemId: 1360 });
     // Right-click on the header: the same actions.
-    expect(rightClick(doc, header(doc))).toEqual(['Open statement', 'Copy problem name', 'Open on the grader website', 'Auto-detect the problem for this file again', 'Unlink this file']);
+    expect(rightClick(doc, header(doc))).toEqual(['Open statement', 'Copy problem name', 'Open on the grader website', "Save the grader's test cases as .in / .out files", 'Auto-detect the problem for this file again', 'Unlink this file']);
+    doc.dispatchEvent(new (doc.defaultView as unknown as typeof globalThis).KeyboardEvent('keydown', { key: 'Escape' }));
+    header(doc).querySelector<HTMLButtonElement>(`[aria-label="Save the grader's test cases as .in / .out files"]`)!.click();
+    expect(sent.at(-1)).toEqual({ type: 'loadTestcases', asFiles: true });
     doc.dispatchEvent(new (doc.defaultView as unknown as typeof globalThis).KeyboardEvent('keydown', { key: 'Escape' }));
     expect(doc.querySelector('.context-menu')).toBeNull();
     [...cur.querySelectorAll<HTMLButtonElement>('button')].find((b) => b.textContent?.includes('Load test cases'))!.click();
@@ -325,12 +328,12 @@ describe.runIf(existsSync(resolve(__dirname, '../esbuild.mjs')))('sidebar webvie
     // Row icons as before the "…" menu (same icons, order, tooltips).
     const icons = (r: Element) => [...r.querySelectorAll('.row-actions button')].map((b) => b.getAttribute('aria-label'));
     expect(icons(row(doc, 0))).toEqual(['Copy problem name', 'Go to linked file', 'New file for this problem', 'Open statement']); // has a mapped file
-    expect(icons(row(doc, 1))).toEqual(['Copy problem name', 'Find file by name', 'New file for this problem', 'Open statement']);
+    expect(icons(row(doc, 1))).toEqual(['Copy problem name', 'Find a matching file', 'New file for this problem', 'Open statement']);
     row(doc, 1).querySelector<HTMLButtonElement>('[aria-label="New file for this problem"]')!.click();
     expect(sent.at(-1)).toEqual({ type: 'newFile', problemId: 1271 });
     // Right-click: the same actions plus linking the open file and the website.
     expect(rightClick(doc, row(doc, 1))).toEqual([
-      'Link to 00 11 intro.cpp', 'Copy problem name', 'Find file by name', 'New file for this problem', 'Open statement', 'Open on the grader website',
+      'Link to 00 11 intro.cpp', 'Copy problem name', 'Find a matching file', 'New file for this problem', 'Open statement', 'Open on the grader website',
     ]);
     menuPick(doc, row(doc, 1), 'Open on the grader website');
     expect(sent.at(-1)).toEqual({ type: 'openProblemInBrowser', problemId: 1271 });
@@ -452,7 +455,7 @@ describe.runIf(existsSync(resolve(__dirname, '../esbuild.mjs')))('sidebar webvie
     header(doc).querySelector<HTMLButtonElement>('[aria-label="Download attachment"]')!.click();
     expect(sent.at(-1)).toEqual({ type: 'downloadAttachment', problemId: 1360 });
     const icons = [...row(doc, 1).querySelectorAll('.row-actions button')].map((b) => b.getAttribute('aria-label'));
-    expect(icons).toEqual(['Copy problem name', 'Find file by name', 'New file for this problem', 'Download attachment', 'Open statement']);
+    expect(icons).toEqual(['Copy problem name', 'Find a matching file', 'New file for this problem', 'Open statement', 'Download attachment']);
     expect(row(doc, 0).querySelector('[aria-label="Download attachment"]')).toBeNull();
     menuPick(doc, row(doc, 1), 'Download attachment');
     expect(sent.at(-1)).toEqual({ type: 'downloadAttachment', problemId: 1271 });

@@ -22,6 +22,7 @@
   "command.toggleFolderMode.title": "Switch Between Linking This File and the Whole Folder",
   "command.loadTestcases.title": "Load Test Cases from the Grader",
   "command.loadSampleCases.title": "Load Sample Cases from the Statement",
+  "command.saveTestcasesAsFiles.title": "Save Test Cases as .in / .out Files",
   "command.clearCache.title": "Clear Cached Data…",
   "command.openWalkthrough.title": "Get Started",
   "command.openTroubleshooting.title": "Troubleshooting",

@@ -117,7 +117,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider, vscode.Dispo
         if (Number.isInteger(m.problemId)) await c.findFileByName(m.problemId);
         return;
       case 'loadTestcases':
-        await c.loadTestcases(false);
+        await c.loadTestcases(false, m.asFiles === true);
         return;
       case 'loadSampleCases':
         await c.loadSampleCases();

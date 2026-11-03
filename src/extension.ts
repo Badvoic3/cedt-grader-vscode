@@ -75,6 +75,7 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
     vscode.commands.registerCommand('cedtGrader.toggleFolderMode', () => controller.toggleFolderMode()),
     vscode.commands.registerCommand('cedtGrader.runTests', () => controller.runTests()),
     vscode.commands.registerCommand('cedtGrader.loadTestcases', () => controller.loadTestcases(false)),
+    vscode.commands.registerCommand('cedtGrader.saveTestcasesAsFiles', () => controller.loadTestcases(false, true)),
     vscode.commands.registerCommand('cedtGrader.loadSampleCases', () => controller.loadSampleCases()),
     vscode.commands.registerCommand('cedtGrader.showRequestLog', () => controller.showRequestLog()),
     vscode.commands.registerCommand('cedtGrader.clearCache', () => controller.clearCachedData()),

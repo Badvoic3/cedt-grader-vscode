@@ -1,6 +1,6 @@
 import { dirname, extname, sep } from 'node:path';
 
-/** Folders never searched ("Find file by name"). */
+/** Folders never searched ("Find a matching file"). */
 export const EXCLUDED_DIRS = ['node_modules', '.git', '.cph', 'bin', 'build', 'out', 'dist', 'target', '.vscode-test'];
 /** Never source files. */
 export const BINARY_EXTS = new Set(['bin', 'o', 'obj', 'out', 'exe', 'zip', 'jar', 'class', 'a', 'so', 'dylib', 'dll', 'pdf']);

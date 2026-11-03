@@ -513,6 +513,10 @@ function renderCurrent(s: ViewState): void {
         p?.hasAttachment
           ? iconButton('cloud-download', W.downloadAttachment, () => send({ type: 'downloadAttachment', problemId: p.id }), { disabledReason: s.attachment.busy === p.id ? W.downloading : null })
           : null,
+        // The grader's test cases as .in / .out files (also with CPH installed).
+        p?.hasTestcase
+          ? iconButton('save-as', W.saveTestcasesAsFiles, () => send({ type: 'loadTestcases', asFiles: true }), { disabledReason: s.testcases.busy ? W.downloadingTestCases : null })
+          : null,
         p && s.folderMode
           ? iconButton(s.folderMode.on ? 'file' : 'folder', s.folderMode.on ? W.linkOnlyFile : W.linkFolder, () => send({ type: 'toggleFolderMode' }), { disabledReason: s.folderMode.disabledReason })
           : null,
@@ -892,6 +896,9 @@ function headerMenuItems(p: ViewState['problem']): MenuItem[] {
     ...(p?.hasAttachment
       ? [{ icon: 'cloud-download', label: W.downloadAttachment, onclick: () => send({ type: 'downloadAttachment', problemId: p.id }), disabledReason: state?.attachment.busy === p.id ? W.downloading : null }]
       : []),
+    ...(p?.hasTestcase
+      ? [{ icon: 'save-as', label: W.saveTestcasesAsFiles, onclick: () => send({ type: 'loadTestcases', asFiles: true }), disabledReason: state?.testcases.busy ? W.downloadingTestCases : null }]
+      : []),
     ...(p && state?.folderMode
       ? [{
           icon: state.folderMode.on ? 'file' : 'folder',
@@ -925,12 +932,12 @@ function rowMenuItems(p: ProblemView, s: ViewState): MenuItem[] {
     { icon: 'copy', label: W.copyProblemName, onclick: () => send({ type: 'copyName', problemId: p.id }) },
     p.hasFile
       ? { icon: 'go-to-file', label: W.goToLinkedFile, onclick: () => send({ type: 'goToFile', problemId: p.id }) }
-      : { icon: 'search', label: W.findFileByName, onclick: () => send({ type: 'findFile', problemId: p.id }) },
+      : { icon: 'search', label: W.findMatchingFile, onclick: () => send({ type: 'findFile', problemId: p.id }) },
     { icon: 'new-file', label: W.newFileForThisProblem, onclick: () => send({ type: 'newFile', problemId: p.id }) },
+    { icon: 'file-pdf', label: W.openStatement, onclick: () => send({ type: 'openStatement', problemId: p.id }) },
     ...(p.hasAttachment
       ? [{ icon: 'cloud-download', label: W.downloadAttachment, onclick: () => send({ type: 'downloadAttachment', problemId: p.id }), disabledReason: s.attachment.busy === p.id ? W.downloading : null }]
       : []),
-    { icon: 'file-pdf', label: W.openStatement, onclick: () => send({ type: 'openStatement', problemId: p.id }) },
     { icon: 'globe', label: W.openOnTheGraderWebsite, onclick: () => send({ type: 'openProblemInBrowser', problemId: p.id }) },
   ];
 }
@@ -973,12 +980,13 @@ function problemRow(p: ProblemView, s: ViewState, where: 'picker' | 'list'): HTM
         iconButton('copy', W.copyProblemName, () => send({ type: 'copyName', problemId: p.id })),
         p.hasFile
           ? iconButton('go-to-file', W.goToLinkedFile, () => send({ type: 'goToFile', problemId: p.id }))
-          : iconButton('search', W.findFileByName, () => send({ type: 'findFile', problemId: p.id })),
+          : iconButton('search', W.findMatchingFile, () => send({ type: 'findFile', problemId: p.id })),
         iconButton('new-file', W.newFileForThisProblem, () => send({ type: 'newFile', problemId: p.id })),
+        iconButton('file-pdf', W.openStatement, () => send({ type: 'openStatement', problemId: p.id })),
+        // Last, so the other icons stay in the same columns on every row.
         p.hasAttachment
           ? iconButton('cloud-download', W.downloadAttachment, () => send({ type: 'downloadAttachment', problemId: p.id }), { disabledReason: s.attachment.busy === p.id ? W.downloading : null })
           : null,
-        iconButton('file-pdf', W.openStatement, () => send({ type: 'openStatement', problemId: p.id })),
       ),
     ),
     () => rowMenuItems(p, state ?? s),
