@@ -294,10 +294,11 @@ input::placeholder { color: var(--vscode-input-placeholderForeground); }
 
 /* ----------------------------------------------------------- history/list */
 
-.history, .problem-list { display: flex; flex-direction: column; }
-.problem-list { display: block; position: relative; max-height: 420px; overflow-y: auto; overscroll-behavior: contain; }
-.vlist-inner { position: relative; width: 100%; }
-.problem-list .vrow { position: absolute; left: 0; right: 0; box-sizing: border-box; }
+.history { display: flex; flex-direction: column; }
+/* Rows in normal flow (webview/flowList.ts): each row is as tall as its content, so rows never overlap.
+   position: relative = rows' offsetTop is measured from the list's top (revealNearest). */
+.problem-list { display: flex; flex-direction: column; gap: 1px; position: relative; overflow-y: auto; overscroll-behavior: contain; }
+.problem-list > [hidden] { display: none; } /* filtered out (kept for a cheap filter reset) */
 
 .history-row {
   display: flex;
@@ -316,25 +317,35 @@ input::placeholder { color: var(--vscode-input-placeholderForeground); }
 }
 .history-row:hover { background: var(--vscode-list-hoverBackground); }
 
+/* Problem rows (approved layout "A"): score pill in the first column, then name / full name / tags at the
+   full remaining width; the icons float over the bottom right on hover / focus (.row-actions below).
+   --row-bg = the row's own background, painted behind the floating icons too. */
 .problem-row {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  padding: 0 2px;
+  --row-bg: transparent;
+  position: relative;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  column-gap: 7px;
+  flex: none;
+  padding: 3px 4px 4px 3px;
   border-radius: var(--radius);
   min-width: 0;
+  background: var(--row-bg);
 }
-.problem-row:hover { background: var(--vscode-list-hoverBackground); }
 .problem-row.mapped {
-  background: var(--vscode-list-inactiveSelectionBackground);
+  --row-bg: var(--vscode-list-inactiveSelectionBackground);
   outline: 1px solid var(--vscode-list-focusOutline, transparent);
 }
+.problem-row:hover { --row-bg: var(--vscode-list-hoverBackground); }
+.problem-row > .pill { grid-column: 1; grid-row: 1; align-self: start; margin-top: 1px; }
 .problem-main {
+  grid-column: 2;
+  grid-row: 1;
   display: flex;
   flex-direction: column;
-  flex: 1 1 auto;
+  gap: 1px;
   min-width: 0;
-  padding: 2px 0;
+  padding: 0;
   border: none;
   color: inherit;
   background: transparent;
@@ -347,10 +358,9 @@ input::placeholder { color: var(--vscode-input-placeholderForeground); }
 .problem-name .codicon { font-size: 12px; margin-right: 2px; vertical-align: -2px; color: var(--ok); }
 .problem-full { font-size: 0.9em; }
 
-/* Narrow sidebars: keep everything in one column, drop secondary text first. */
+/* Narrow sidebars: keep everything in one column. */
 @media (max-width: 220px) {
   .section-body { padding-left: 12px; padding-right: 8px; }
-  .problem-full { display: none; }
   .score { font-size: 1.25em; }
 }
 
@@ -429,11 +439,24 @@ input::placeholder { color: var(--vscode-input-placeholderForeground); }
 .test-buttons .btn { min-width: 0; overflow: hidden; }
 .btn.wide { width: 100%; }
 .row-actions { display: inline-flex; flex: none; opacity: 0; transition: opacity 0.1s; }
-/* Same width on every row (room for all five icons, the optional download last), so the score pills line up. */
-.problem-row .row-actions { width: calc(5 * 22px); }
+/* Problem rows: the icons float over the row's bottom right (the full name / tags line), so the name keeps
+   the row's width. The fade + background (row colour over the sidebar's, for see-through hover colours)
+   keeps the text below from showing through. Hidden icons don't take clicks. */
+.problem-row .row-actions {
+  position: absolute;
+  right: 2px;
+  bottom: 2px;
+  padding-left: 14px;
+  pointer-events: none;
+  border-radius: var(--radius);
+  background:
+    linear-gradient(to right, transparent, var(--row-bg) 14px),
+    linear-gradient(to right, transparent, var(--vscode-sideBar-background, var(--vscode-editor-background)) 14px);
+}
 .problem-row .pill { min-width: calc(3ch + 12px); font-variant-numeric: tabular-nums; }
-.problem-row:hover .row-actions, .problem-row:focus-within .row-actions { opacity: 1; }
-@media (hover: none) { .row-actions { opacity: 1; } }
+.problem-row:hover .row-actions, .problem-row:focus-within .row-actions { opacity: 1; pointer-events: auto; }
+@media (hover: none) { .row-actions, .problem-row .row-actions { opacity: 1; pointer-events: auto; } }
+@media (prefers-reduced-motion: reduce) { .row-actions { transition: none; } }
 .picker-group { padding: 4px 4px 2px; text-transform: uppercase; font-size: 10px; letter-spacing: 0.04em; }
 
 
@@ -493,8 +516,8 @@ input::placeholder { color: var(--vscode-input-placeholderForeground); }
 .tag-menu-head { align-items: center; }
 .tag-list { display: flex; flex-wrap: wrap; gap: 2px 10px; max-height: 9.5em; overflow-y: auto; }
 .tag-option { display: inline-flex; align-items: center; gap: 4px; min-width: 0; max-width: 100%; cursor: pointer; font-size: 0.9em; }
-/* Tags on each problem row. */
-.problem-tags { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 2px; }
+/* Tags on each problem row (they wrap; the row grows with them). */
+.problem-tags { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 1px; }
 .problem-tags .tag { padding: 0 5px; border-radius: 8px; font-size: 0.8em; line-height: 1.5; color: var(--vscode-badge-foreground); background: var(--vscode-badge-background); opacity: 0.85; }
 
 /* ---------------------------------------------------------- problem header */
@@ -596,6 +619,10 @@ body.compact .score-facts { gap: 0 8px; }
 body.compact #sec-result .score { font-size: 1.2em; }
 body.compact .problem-full { display: none; }
 body.compact .problem-tags { display: none; }
+/* One-line problem rows, a little roomier than the rest of compact mode (24 px, icons centred). */
+body.compact .problem-row { align-items: center; min-height: 24px; padding-top: 2px; padding-bottom: 2px; }
+body.compact .problem-row > .pill { align-self: center; margin-top: 0; }
+body.compact .problem-row .row-actions { top: 50%; bottom: auto; transform: translateY(-50%); }
 body.compact .btn.big { min-height: 26px; padding: 3px 10px; font-size: 1em; }
 body.compact .tile { width: 12px; height: 12px; font-size: 8px; }
 body.compact .history-row { padding: 1px 4px; }
