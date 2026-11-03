@@ -37,3 +37,55 @@ export function cleanTagFilter(tags: unknown, mode: unknown): { tags: string[]; 
   for (const t of list) if (!unique.has(key(t))) unique.set(key(t), t);
   return { tags: [...unique.values()].slice(0, 50), tagMode: mode === 'and' ? 'and' : 'or' };
 }
+
+// ------------------------------------------------------------ topic pills
+
+/** A topic pill: not chosen, hide problems with it ('out'), or show only problems with it ('in'). */
+export type TopicState = 'off' | 'out' | 'in';
+
+interface TopicFilter {
+  /** Older saved filters: one topic, shown only. */
+  topic?: string | null;
+  topicsIn?: string[];
+  topicsOut?: string[];
+}
+
+/** Shown-only and hidden topics of a filter (an older `topic` counts as shown-only). */
+export function topicSets(f: TopicFilter): { inc: string[]; exc: string[] } {
+  const inc = f.topicsIn ?? (f.topic ? [f.topic] : []);
+  const exc = f.topicsOut ?? [];
+  return { inc, exc: exc.filter((t) => !inc.some((i) => key(i) === key(t))) };
+}
+
+export function topicState(f: TopicFilter, name: string): TopicState {
+  const { inc, exc } = topicSets(f);
+  if (inc.some((t) => key(t) === key(name))) return 'in';
+  if (exc.some((t) => key(t) === key(name))) return 'out';
+  return 'off';
+}
+
+/** Click on a pill: not chosen → hide → show only → not chosen. Clears the older single `topic`. */
+export function cycleTopic(f: TopicFilter, name: string): { topic: null; topicsIn: string[]; topicsOut: string[] } {
+  const state = topicState(f, name);
+  const { inc, exc } = topicSets(f);
+  const without = (list: string[]) => list.filter((t) => key(t) !== key(name));
+  if (state === 'off') return { topic: null, topicsIn: inc, topicsOut: [...exc, name] };
+  if (state === 'out') return { topic: null, topicsIn: [...inc, name], topicsOut: without(exc) };
+  return { topic: null, topicsIn: without(inc), topicsOut: exc };
+}
+
+/** Does a problem pass the topic pills? At least one shown-only topic (if any), and no hidden one. */
+export function matchesTopics(problemTags: string[] | undefined, f: TopicFilter): boolean {
+  const { inc, exc } = topicSets(f);
+  const have = new Set((problemTags ?? []).map(key));
+  if (inc.length && !inc.some((t) => have.has(key(t)))) return false;
+  return !exc.some((t) => have.has(key(t)));
+}
+
+/** A stored filter's topic part, cleaned (an older `topic` becomes a shown-only topic). */
+export function cleanTopicFilter(f: { topic?: unknown; topicsIn?: unknown; topicsOut?: unknown }): { topic: null; topicsIn: string[]; topicsOut: string[] } {
+  const legacy = typeof f.topic === 'string' && f.topic.trim() ? [f.topic] : [];
+  const inc = cleanTagFilter(f.topicsIn ?? legacy, 'or').tags;
+  const exc = cleanTagFilter(f.topicsOut, 'or').tags.filter((t) => !inc.some((i) => key(i) === key(t)));
+  return { topic: null, topicsIn: inc, topicsOut: exc };
+}

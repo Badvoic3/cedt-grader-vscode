@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { parseTopicTags, problemStatus } from '../src/grader';
 import type { ProblemView } from '../src/shared/messages';
 import { filterProblems, sortProblems } from '../webview/filters';
-import { cleanTagFilter, matchesTags, otherTags } from '../src/shared/tags';
+import { cleanTagFilter, cleanTopicFilter, cycleTopic, matchesTags, otherTags, topicState } from '../src/shared/tags';
 import { realFixture } from './helpers';
 
 const V = (id: number, status: ProblemView['status'], tags: string[] = [], name = `p${id}`): ProblemView => ({
@@ -118,5 +118,39 @@ describe('other tags: the "Tags" dropdown (several at once, Any / All)', () => {
   it('a stored filter is cleaned: strings only, no duplicates, mode defaults to OR', () => {
     expect(cleanTagFilter(['Graph', ' graph ', 3, '', 'DFS'], 'xor')).toEqual({ tags: ['Graph', 'DFS'], tagMode: 'or' });
     expect(cleanTagFilter(undefined, 'and')).toEqual({ tags: [], tagMode: 'and' });
+  });
+});
+
+describe('topic pills: not chosen → hide → show only → not chosen', () => {
+  const items = [V(1, 'solved', ['ComProg']), V(2, 'untried', ['DataAlgo', 'Graph']), V(3, 'untried', ['DigLo']), V(4, 'untried', [])];
+  const ids = (f: Parameters<typeof filterProblems>[1]) => filterProblems(items, f, '').map((p) => p.id);
+  const off = { status: 'all' as const, topic: null };
+
+  it('a click cycles the state and keeps the other pills', () => {
+    const a = cycleTopic(off, 'ComProg');
+    expect(a).toEqual({ topic: null, topicsIn: [], topicsOut: ['ComProg'] });
+    expect(topicState(a, 'ComProg')).toBe('out');
+    const b = cycleTopic({ ...a, topicsOut: ['ComProg', 'DigLo'] }, 'ComProg');
+    expect(b).toEqual({ topic: null, topicsIn: ['ComProg'], topicsOut: ['DigLo'] });
+    expect(topicState(b, 'ComProg')).toBe('in');
+    expect(cycleTopic(b, 'ComProg')).toEqual({ topic: null, topicsIn: [], topicsOut: ['DigLo'] });
+  });
+  it('hide: problems with that topic are left out (problems without tags stay)', () => {
+    expect(ids({ ...off, topicsOut: ['ComProg'] })).toEqual([2, 3, 4]);
+    expect(ids({ ...off, topicsOut: ['ComProg', 'DigLo'] })).toEqual([2, 4]);
+  });
+  it('show only: problems with at least one shown topic', () => {
+    expect(ids({ ...off, topicsIn: ['DataAlgo'] })).toEqual([2]);
+    expect(ids({ ...off, topicsIn: ['DataAlgo', 'DigLo'] })).toEqual([2, 3]);
+  });
+  it('both, and together with the Tags dropdown', () => {
+    expect(ids({ ...off, topicsIn: ['DataAlgo', 'DigLo'], topicsOut: ['DigLo'] })).toEqual([2, 3]); // shown-only wins over hidden for the same topic
+    expect(ids({ ...off, topicsOut: ['ComProg'], tags: ['Graph'] })).toEqual([2]);
+  });
+  it('older saved filters: one `topic` = show only; cleaned into the new fields', () => {
+    expect(ids({ status: 'all', topic: 'ComProg' })).toEqual([1]);
+    expect(topicState({ topic: 'ComProg' }, 'ComProg')).toBe('in');
+    expect(cleanTopicFilter({ topic: 'ComProg' })).toEqual({ topic: null, topicsIn: ['ComProg'], topicsOut: [] });
+    expect(cleanTopicFilter({ topic: 'X', topicsIn: ['A', 'a', 3], topicsOut: ['A', 'B'] })).toEqual({ topic: null, topicsIn: ['A'], topicsOut: ['B'] });
   });
 });

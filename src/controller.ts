@@ -71,7 +71,7 @@ import { ATTACHMENT, CACHE, LIMITS, TIMING, troubleshootingUrl, WEB_PATHS } from
 import { needsSave, shouldRevealResult } from './shared/submitOptions';
 import { HOW_LINKED, MATCH_SOURCE, PICK_HOW, S } from './shared/strings';
 import { KEYS } from './shared/stateKeys';
-import { cleanTagFilter, otherTags } from './shared/tags';
+import { cleanTagFilter, cleanTopicFilter, otherTags } from './shared/tags';
 import { currentLang, dateLocale, resolveLang, setLanguage } from './shared/i18n';
 import type { HistoryEntry, ProblemFilter, ProblemView, ResultView, SubmissionDetailView, ViewState } from './shared/messages';
 
@@ -1188,7 +1188,7 @@ export class GraderController implements vscode.Disposable {
     const sorts = ['default', 'name-asc', 'name-desc', 'latest', 'score-asc', 'score-desc', 'recent'];
     await this.ctx.workspaceState.update(FILTER_KEY, {
       status: valid.includes(f.status) ? f.status : 'all',
-      topic: f.topic || null,
+      ...cleanTopicFilter(f),
       sort: f.sort && sorts.includes(f.sort) ? f.sort : 'default',
       ...cleanTagFilter(f.tags, f.tagMode),
     });

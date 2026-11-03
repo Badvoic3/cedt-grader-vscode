@@ -15,6 +15,7 @@ import { menuLabelMax, middleEllipsis } from './text';
 import { VirtualList } from './virtualList';
 import { PANEL, SERVER_SCORE_CAP } from '../src/shared/constants';
 import { filterProblems, matches, sorts, sortProblems } from './filters';
+import { cycleTopic, topicState } from '../src/shared/tags';
 import { installTooltips } from './tooltip';
 import type { FromWebview, HistoryEntry, ProblemFilter, ProblemView, ScoreView, SubmissionDetailView, ToWebview, VerdictView, ViewState } from '../src/shared/messages';
 
@@ -1221,15 +1222,21 @@ function sortSelect(f: ProblemFilter): HTMLElement {
   return sel;
 }
 
+/**
+ * Topic pills, three states each (click cycles): not chosen → hide problems
+ * with the topic → show only problems with it. Colour + icon show the state.
+ */
 function topicFilter(f: ProblemFilter, topics: { name: string; description: string | null }[]): HTMLElement {
   return el('div', { class: 'topics', role: 'group', 'aria-label': W.filterProblemsByTopic },
-    ...topics.map((t) =>
-      el('button', {
-        class: `topic${f.topic === t.name ? ' active' : ''}`, type: 'button', 'aria-pressed': String(f.topic === t.name),
-        title: W.topicTip(t.description, t.name, f.topic === t.name),
-        onclick: () => send({ type: 'setFilter', filter: { ...f, topic: f.topic === t.name ? null : t.name } }),
-      }, t.name),
-    ),
+    ...topics.map((t) => {
+      const state = topicState(f, t.name);
+      const tip = W.topicTip(t.description, t.name, state);
+      return el('button', {
+        class: `topic${state === 'in' ? ' active' : state === 'out' ? ' excluded' : ''}`, type: 'button',
+        title: tip, 'aria-label': tip, 'data-focus': `topic:${t.name}`,
+        onclick: () => send({ type: 'setFilter', filter: { ...f, ...cycleTopic(f, t.name) } }),
+      }, state === 'in' ? icon('check') : state === 'out' ? icon('circle-slash') : null, t.name);
+    }),
   );
 }
 
