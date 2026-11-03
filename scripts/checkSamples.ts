@@ -1,7 +1,7 @@
 /*
  * Local check of "Load sample cases" on real statement PDFs, through the host
  * code path (src/data/pdfSamples.ts with the pdf.js files the build copies to
- * dist/pdfjs: run `npm run build` first). Not part of `npm test` (course PDFs
+ * dist/pdfjs and media/dist/pdfjs: run `npm run build` first). Not part of `npm test` (course PDFs
  * are never committed). Reads only local files.
  *
  *   npx tsx scripts/checkSamples.ts <dir with *.pdf> [expected.json]
@@ -20,7 +20,7 @@ if (!dir) {
 }
 const expected: Record<string, SampleTable[]> | null = expectedPath ? JSON.parse(readFileSync(expectedPath, 'utf8')) : null;
 async function main(): Promise<number> {
-  const pdfjs = await pdfjsLoader(join(__dirname, '..', 'dist', 'pdfjs'))();
+  const pdfjs = await pdfjsLoader(join(__dirname, '..', 'dist', 'pdfjs'), join(__dirname, '..', 'media', 'dist', 'pdfjs'))();
   const files = readdirSync(dir!)
     .filter((f) => f.toLowerCase().endsWith('.pdf'))
     .sort();

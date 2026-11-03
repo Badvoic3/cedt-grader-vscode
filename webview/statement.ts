@@ -7,7 +7,7 @@ import { PANEL } from '../src/shared/constants';
 import './lang'; // first: sets the display language before anything below builds elements
 import { W } from '../src/shared/strings';
 import { pdfjsLib } from './pdfjs-global';
-import { EventBus, PDFFindController, PDFLinkService, PDFViewer } from 'pdfjs-dist/web/pdf_viewer.mjs';
+import { EventBus, PDFFindController, PDFLinkService, PDFViewer } from 'pdfjs-dist/legacy/web/pdf_viewer.mjs';
 import type { FromStatement, StatementViewState, ToStatement } from '../src/ui/statementPanel';
 import { buildToolbar, el } from './statementToolbar';
 import { installTooltips } from './tooltip';

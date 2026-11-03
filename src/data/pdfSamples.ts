@@ -5,8 +5,10 @@ import { addPageTables, fontId, gridsOf, pathSegments, samplesFrom, type PathOps
 /*
  * "Load sample cases": read the example tables of a statement PDF in the
  * extension host with the pdf.js legacy build (Node). pdf.js is not part of
- * dist/extension.js: its own files are copied to dist/pdfjs/ by the build and
- * imported on first use only, so activation never loads them. In Node pdf.js
+ * dist/extension.js: its library is copied to dist/pdfjs/ by the build and
+ * imported on first use only, so activation never loads it. The worker module
+ * is the statement viewer's (media/dist/pdfjs, the same legacy build), so it
+ * is packed once. In Node pdf.js
  * runs its "fake worker" (the worker module imported into this thread).
  * Nothing here sends a request: no font or CMap URLs are given.
  */
@@ -38,16 +40,19 @@ export interface Pdfjs {
   GlobalWorkerOptions: { workerSrc: string };
 }
 
-/** File names of pdf.js's legacy (Node) build, in node_modules/pdfjs-dist/legacy/build and in dist/pdfjs. */
+/** File names of pdf.js's legacy build (node_modules/pdfjs-dist/legacy/build): the library in dist/pdfjs, the worker in media/dist/pdfjs. */
 export const PDFJS_FILES = { lib: 'pdf.min.mjs', worker: 'pdf.worker.min.mjs' } as const;
 
-/** Loads pdf.js from `dir` on the first call (later calls share it; a failed load is tried again next time). */
-export function pdfjsLoader(dir: string): () => Promise<Pdfjs> {
+/**
+ * Loads pdf.js on the first call (later calls share it; a failed load is tried
+ * again next time): the library from `dir`, the worker module from `workerDir`.
+ */
+export function pdfjsLoader(dir: string, workerDir = dir): () => Promise<Pdfjs> {
   let loading: Promise<Pdfjs> | null = null;
   return () =>
     (loading ??= (async () => {
       const lib = (await import(pathToFileURL(join(dir, PDFJS_FILES.lib)).href)) as Pdfjs;
-      lib.GlobalWorkerOptions.workerSrc = pathToFileURL(join(dir, PDFJS_FILES.worker)).href;
+      lib.GlobalWorkerOptions.workerSrc = pathToFileURL(join(workerDir, PDFJS_FILES.worker)).href;
       return lib;
     })().catch((err: unknown) => {
       loading = null;

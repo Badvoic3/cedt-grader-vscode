@@ -155,7 +155,7 @@ export class GraderController implements vscode.Disposable {
     this.tests = new TestCases(
       this.host,
       new TestcaseStore(ctx.globalStorageUri.fsPath, () => this.client, (l) => this.requestLog(l), (p) => this.cache.written(p)),
-      pdfjsLoader(vscode.Uri.joinPath(ctx.extensionUri, 'dist', 'pdfjs').fsPath),
+      pdfjsLoader(vscode.Uri.joinPath(ctx.extensionUri, 'dist', 'pdfjs').fsPath, vscode.Uri.joinPath(ctx.extensionUri, 'media', 'dist', 'pdfjs').fsPath),
     );
     this.data.onChange = () => this.emit();
     this.data.onError = (e, key) => {

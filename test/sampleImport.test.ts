@@ -21,7 +21,7 @@ const ok = [
   { input: '3\n1 2 3', output: '6', annotated: false },
   { input: '1\n5', output: '5', annotated: true },
 ];
-/** The same files the build copies to dist/pdfjs. */
+/** The same files the build copies to dist/pdfjs (library) and media/dist/pdfjs (worker). */
 const PDFJS_DIR = join(__dirname, '..', 'node_modules', 'pdfjs-dist', 'legacy', 'build');
 
 describe('host extraction (pdf.js legacy build)', () => {
@@ -53,6 +53,11 @@ describe('host extraction (pdf.js legacy build)', () => {
       expect(existsSync(join(PDFJS_DIR, f))).toBe(true);
     }
     expect(readFileSync(join(__dirname, '..', '.vscodeignore'), 'utf8')).toContain('!dist/pdfjs/**');
+    // One worker file for the host and the statement viewer: both use the legacy build.
+    expect(build.match(/copyFile\([^)]*pdf\.worker/g)).toHaveLength(1);
+    expect(build).toContain('legacy/build/pdf.worker.min.mjs');
+    expect(readFileSync(join(__dirname, '..', 'webview', 'pdfjs-global.ts'), 'utf8')).toMatch(/from 'pdfjs-dist\/legacy\/build\/pdf\.mjs'/);
+    expect(readFileSync(join(__dirname, '..', 'webview', 'statement.ts'), 'utf8')).toMatch(/from 'pdfjs-dist\/legacy\/web\/pdf_viewer\.mjs'/);
     const srcFiles = readdirSync(join(__dirname, '..', 'src'), { recursive: true, encoding: 'utf8' }).filter((f) => f.endsWith('.ts'));
     for (const f of srcFiles) expect(readFileSync(join(__dirname, '..', 'src', f), 'utf8')).not.toMatch(/from ['"]pdfjs-dist/);
   });

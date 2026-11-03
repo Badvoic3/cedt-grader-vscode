@@ -46,6 +46,10 @@
 - **Matched by folder name:** when a file's own name matches no problem, the name of the folder it is in is tried with the same rules (exact name first, then a confident suggestion), so any file in a folder named like a problem resolves to it. Same matcher both ways (clicking a problem finds those files; a folder counts as one item in "files for this problem").
 - `.h` / `.hpp` headers count as C++ (`.h` as C when a problem takes C only).
 
+### Packaging
+- The `.vsix` is smaller: 2.6 MB instead of 4.4 MB. The statement viewer and "Load samples" share one copy of pdf.js's worker (the viewer now uses pdf.js's legacy build, like "Load samples"), and the README's pictures, which load from GitHub, are no longer packed.
+- The extension's matching of files to problems is about 8× faster in big workspaces (5 000 source files: 1.7 s → 0.2 s).
+
 ### Fixes
 - Test cases: the last line `KEY: …` in the expected outputs of problems with a provided `main.cpp` is left out when loading them (only the grader's own main prints it, so local runs always failed). Loading again updates tests loaded before.
 - "Load test cases" without CPH no longer keeps spinning after the files are saved; "Download Again" in the result message works again. The button says the test cases come from the grader ("Load test cases from the grader").

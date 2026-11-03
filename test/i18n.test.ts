@@ -232,9 +232,10 @@ describe('READMEs', () => {
       }
     }
   });
-  it('both READMEs and the pictures are packaged; links are rewritten to the public GitHub repo (the Marketplace needs web addresses)', () => {
+  it('both READMEs are packaged; links are rewritten to the public GitHub repo, so the pictures load from there and are not packed', () => {
     const ignore = read('.vscodeignore');
-    for (const line of ['!README.md', '!README.th.md', '!media/readme/**']) expect(ignore).toContain(line);
+    for (const line of ['!README.md', '!README.th.md']) expect(ignore).toContain(line);
+    expect(ignore).not.toContain('media/readme'); // the packed README points at GitHub: packed pictures were never shown
     const pkg = JSON.parse(read('package.json'));
     for (const script of [pkg.scripts.package, pkg.scripts.publish]) expect(script).not.toContain('--no-rewrite-relative-links');
     expect(pkg.repository.url).toMatch(/^https:\/\/github\.com\//);

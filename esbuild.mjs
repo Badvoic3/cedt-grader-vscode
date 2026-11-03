@@ -13,14 +13,15 @@ if (production) {
   await rm('media/dist', { recursive: true, force: true });
 }
 
-// pdf.js legacy (Node) build for "Load sample cases" in the extension host: its own
-// files, imported at runtime on first use (src/data/pdfSamples.ts), so they never weigh on activation.
+// pdf.js legacy build for "Load sample cases" in the extension host: its library,
+// imported at runtime on first use (src/data/pdfSamples.ts), so it never weighs on activation.
+// Its worker is the statement viewer's (media/dist/pdfjs, the same legacy build): packed once.
 const copyHostPdfjs = {
   name: 'copy-host-pdfjs',
   setup(build) {
     build.onEnd(async () => {
       await mkdir('dist/pdfjs', { recursive: true });
-      for (const f of ['pdf.min.mjs', 'pdf.worker.min.mjs']) await copyFile(`node_modules/pdfjs-dist/legacy/build/${f}`, `dist/pdfjs/${f}`);
+      await copyFile('node_modules/pdfjs-dist/legacy/build/pdf.min.mjs', 'dist/pdfjs/pdf.min.mjs');
     });
   },
 };
@@ -34,12 +35,13 @@ const copyAssets = {
       await copyFile('node_modules/@vscode/codicons/dist/codicon.ttf', 'media/dist/codicon.ttf');
       await copyFile('webview/style.css', 'media/dist/webview.css');
       await copyFile('webview/statement.css', 'media/dist/statement.css');
-      // pdf.js assets for the statement viewer (bundled; never loaded from a CDN).
+      // pdf.js assets for the statement viewer (bundled; never loaded from a CDN). The legacy build,
+      // like the host's: this worker also serves "Load sample cases" (src/data/pdfSamples.ts).
       const pdfjs = 'node_modules/pdfjs-dist';
       await mkdir('media/dist/pdfjs', { recursive: true });
-      await copyFile(`${pdfjs}/build/pdf.worker.min.mjs`, 'media/dist/pdfjs/pdf.worker.min.mjs');
-      await copyFile(`${pdfjs}/web/pdf_viewer.css`, 'media/dist/pdfjs/pdf_viewer.css');
-      await cp(`${pdfjs}/web/images`, 'media/dist/pdfjs/images', { recursive: true });
+      await copyFile(`${pdfjs}/legacy/build/pdf.worker.min.mjs`, 'media/dist/pdfjs/pdf.worker.min.mjs');
+      await copyFile(`${pdfjs}/legacy/web/pdf_viewer.css`, 'media/dist/pdfjs/pdf_viewer.css');
+      await cp(`${pdfjs}/legacy/web/images`, 'media/dist/pdfjs/images', { recursive: true });
       await cp(`${pdfjs}/cmaps`, 'media/dist/pdfjs/cmaps', { recursive: true });
       await cp(`${pdfjs}/standard_fonts`, 'media/dist/pdfjs/standard_fonts', { recursive: true });
     });
