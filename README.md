@@ -55,7 +55,7 @@ Click the **CEDT Grader** icon in the Activity Bar. The sidebar has five section
 | **History** | Every submission for this problem (website ones too), with time, language, score and verdicts; the one that counts is marked. Click one for per-test results, runtime, memory and the compiler message, to **open that version** in a new editor, or to **compare it with your current file**. |
 | **Problems** | Lists all your problems (every one, however many) with their counted score. Filter by status (All / Unsolved / In progress / Solved, like the website), by topic, or by name/id, and sort (name, latest submission, best score, recently opened). Click a problem to open its file (or create / find / link one); hover a row for its icons, or right-click it for all actions. The list stays where you scrolled. |
 
-Typical flow: open `sol.cpp` → pick the problem once (it is remembered) → **Submit** → confirm. That's two clicks for every later submission.
+Typical flow: open `sol.cpp` → pick the problem once (it is remembered) → **Submit**. A file whose problem was found automatically asks once before its first submit; after that, and for problems you picked yourself, **Submit** sends right away.
 
 **Current problem.** The file name, the problem it belongs to and how it was chosen (here: *Matched by file name*), the icons for the statement, copying the name, the grader website, Auto-detect and ✕, then your counted score, the language and **Submit to Grader**.
 
@@ -122,7 +122,7 @@ With **Remember password on this computer** on, your password is kept in the OS 
 | `cedtGrader.baseUrl` | `https://cedt-grader.nattee.net` | Another cafe-grader server. User settings only. |
 | `cedtGrader.username` | | Filled in when you log in from the panel. |
 | `cedtGrader.pollIntervalSeconds` | `5` | How often to check while grading (minimum 3). Polling only runs after a submission and stops after 3 minutes. |
-| `cedtGrader.confirmBeforeSubmit` | `true` | Ask before each submission. |
+| `cedtGrader.confirmBeforeSubmit` | `true` | Ask once before submitting a file whose problem was matched automatically (file name, folder name, CPH data). Submitting saves the match as your choice ("Chosen by you"), so it isn't asked again. Problems you chose yourself are never asked; suggestions always are. |
 | `cedtGrader.saveBeforeSubmit` | `true` | Save the file before submitting (after you confirm), so the grader gets exactly what is on disk. Save actions such as format on save run first. If saving fails, nothing is submitted. |
 | `cedtGrader.revealResultAfterSubmit` | `true` | When grading finishes, open the **Result** section and scroll it into view. Keyboard focus stays in your editor. |
 | `cedtGrader.statementBeside` | `true` | Open statements beside your code. |

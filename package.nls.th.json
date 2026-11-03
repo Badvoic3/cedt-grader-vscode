@@ -43,7 +43,7 @@
   "config.baseUrl.description": "URL ของเซิร์ฟเวอร์ cafe-grader-web อ่านจากการตั้งค่าผู้ใช้ (User) เท่านั้น workspace จึงเปลี่ยนปลายทางที่รหัสผ่านถูกส่งไปไม่ได้",
   "config.username.description": "ชื่อผู้ใช้ Grader ของคุณ รหัสผ่านเก็บไว้ใน keychain ของระบบปฏิบัติการ (VS Code SecretStorage) ไม่เคยเก็บในการตั้งค่า",
   "config.pollIntervalSeconds.description": "จำนวนวินาทีระหว่างการเช็กสถานะขณะรอตรวจ (อย่างน้อย 3) เช็กเฉพาะหลัง Submit และหยุดหลังจาก 3 นาที",
-  "config.confirmBeforeSubmit.description": "ถามยืนยันก่อน Submit ทุกครั้ง",
+  "config.confirmBeforeSubmit.description": "ถามยืนยันหนึ่งครั้งก่อน Submit ไฟล์ที่ระบบจับคู่โจทย์ให้อัตโนมัติ (จากชื่อไฟล์ ชื่อโฟลเดอร์ หรือข้อมูล CPH) เมื่อ Submit แล้วจะบันทึกเป็นโจทย์ที่คุณเลือกเอง จึงไม่ถามอีก โจทย์ที่คุณเลือกเองจะไม่ถามเลย ส่วนโจทย์ที่ระบบแนะนำจะถามทุกครั้ง",
   "config.saveBeforeSubmit.description": "บันทึกไฟล์ก่อน Submit เพื่อให้ Grader ได้โค้ดเดียวกับที่บันทึกไว้ในเครื่อง การทำงานตอนบันทึก เช่น format on save จะทำก่อน ปิดไว้ถ้าต้องการส่งข้อความใน editor โดยไม่บันทึก",
   "config.revealResultAfterSubmit.description": "เมื่อตรวจเสร็จ ให้เปิดส่วน **ผลตรวจ** ในแผงและเลื่อนให้เห็น เคอร์เซอร์ยังอยู่ใน editor เหมือนเดิม",
   "config.debugRequests.description": "บันทึกทุก request ที่ส่งไป Grader (method, path, status) และ cache hit/miss ลงใน output channel **CEDT Grader: Requests** เพื่อตรวจจำนวน request ไม่บันทึกรหัสผ่านหรือ token",

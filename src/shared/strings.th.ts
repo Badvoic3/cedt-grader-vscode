@@ -25,6 +25,8 @@ export const TH_REVIEW: readonly string[] = [
   'W.readingStatementTip',
   'W.saveTestcasesAsFiles',
   'W.findMatchingFile',
+  // Submit asks once per automatic match (2026-11-03): not reviewed yet.
+  'S.submit.confirmOnce',
 ];
 
 export const TH: Strings = {
@@ -213,7 +215,7 @@ export const TH: Strings = {
       submit: 'Submit',
       chooseAnother: 'เลือกโจทย์อื่น',
       confirmQ: (file, name, id, lang) => `Submit ${file} ไปที่ ${name} (#${id})${lang ? ` เป็นภาษา ${lang}` : ''} ไหม?`,
-      confirmOff: 'ปิดคำถามนี้ได้ในการตั้งค่า ("CEDT Grader: Confirm Before Submit")',
+      confirmOnce: (how) => `ไฟล์นี้${how} เมื่อ Submit แล้วจะเชื่อมไฟล์นี้กับโจทย์ไว้ ครั้งต่อไปจะไม่ถามอีก`,
       whichFileQ: (name, id) => `จะส่งไฟล์ไหนไปที่ ${name} (#${id})`,
       submitNamed: (file) => `ส่ง ${file}`,
       submitOpen: (file) => `ส่ง ${file} (ไฟล์ที่เปิดอยู่)`,
