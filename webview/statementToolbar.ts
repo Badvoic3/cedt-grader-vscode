@@ -26,8 +26,6 @@ export interface ToolbarHandlers {
   nextMatch(): void;
   refresh(): void;
   openInBrowser(): void;
-  /** Experimental: read the PDF's sample tables (PDF only). */
-  importSamples(): void;
 }
 
 export function buildToolbar(h: ToolbarHandlers) {
@@ -53,16 +51,13 @@ export function buildToolbar(h: ToolbarHandlers) {
     btn('arrow-down', W.nextMatchTip, h.nextMatch),
     matches,
   );
-  const samplesBtn = btn('beaker', W.importSamplesTip, h.importSamples);
-  samplesBtn.classList.add('pdf-only');
   const toolbar = el('div', { class: 'toolbar', role: 'toolbar', 'aria-label': W.statement },
     titleEl,
     pdfTools,
     el('span', { class: 'grow' }),
-    samplesBtn,
     btn('refresh', W.refreshStatementTip, h.refresh),
     btn('globe', W.openInBrowser, h.openInBrowser),
   );
-  return { toolbar, pageInput, pageCount, zoomLabel, search, matches, titleEl, samplesBtn };
+  return { toolbar, pageInput, pageCount, zoomLabel, search, matches, titleEl };
 }import { W } from '../src/shared/strings';
 

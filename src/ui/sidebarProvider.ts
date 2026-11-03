@@ -119,6 +119,9 @@ export class SidebarProvider implements vscode.WebviewViewProvider, vscode.Dispo
       case 'loadTestcases':
         await c.loadTestcases(false);
         return;
+      case 'loadSampleCases':
+        await c.loadSampleCases();
+        return;
       case 'setFilter':
         if (m.filter && typeof m.filter === 'object') await c.setProblemFilter(m.filter);
         return;

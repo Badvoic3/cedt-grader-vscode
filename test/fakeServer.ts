@@ -31,6 +31,8 @@ export class FakeGrader {
   webSessions = new Set<string>();
   /** Statement routes: 'pdf' → bytes, 403 hidden, 404 none. */
   pdf: 'pdf' | 403 | 404 = 'pdf';
+  /** Body of the 'pdf' statement (default: just the `%PDF-` magic). */
+  pdfBytes: Uint8Array = new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x2d]);
   description: { markdown: boolean; description: string } | 403 | 404 = 404;
   /** Attachment route (`files/attachment`): bytes + headers, or 404 (none). */
   attachment: { bytes: Uint8Array; type: string; disposition: string | null } | 404 = 404;
@@ -110,7 +112,7 @@ export class FakeGrader {
     if (method === 'GET' && p === '/api/v1/problems') return this.json(200, this.problems);
     if (method === 'GET' && p === '/api/v1/languages') return this.json(200, this.languages);
     if (method === 'GET' && /^\/api\/v1\/problems\/\d+\/files\/pdf$/.test(p)) {
-      if (this.pdf === 'pdf') return new Response(new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x2d]), { status: 200, headers: { 'content-type': 'application/pdf' } });
+      if (this.pdf === 'pdf') return new Response(this.pdfBytes.slice(), { status: 200, headers: { 'content-type': 'application/pdf' } });
       return this.json(this.pdf, { error: this.pdf === 403 ? 'PDF statement not available for this problem' : 'PDF statement not found' });
     }
     if (method === 'GET' && /^\/api\/v1\/problems\/\d+\/files\/attachment$/.test(p)) {

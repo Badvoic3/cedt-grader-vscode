@@ -15,7 +15,7 @@ import { cphProbPath, type CphProblem } from './cph';
  * updates those in place; the user's own tests are never touched.
  */
 export const GRADER_ID_BASE = 7_000_000_000_000_000; // 7e15: a safe integer, far above CPH ms-timestamp ids (~1.8e12)
-/** Cases imported from a statement's sample table (experimental): STATEMENT_ID_BASE + their number (1, 2, …). */
+/** Cases read from the statement's example table ("Load sample cases"): STATEMENT_ID_BASE + their number (1, 2, …). */
 export const STATEMENT_ID_BASE = 7_500_000_000_000_000; // 7.5e15: above every grader marker, below MAX_SAFE_INTEGER (~9e15)
 
 export interface GraderCase {
