@@ -522,7 +522,7 @@ function renderCurrent(s: ViewState): void {
       ),
       combo,
       pickerOpen ? (renderPickerList(s), pickerBox) : null,
-      p ? (s.folder ? folderLine(s.folder) : sourceLine(p.source, p.id, p.name)) : null,
+      p ? (s.folder && !s.folder.matched ? folderLine(s.folder) : sourceLine(p.source, p.id, p.name)) : null,
       p && s.file?.renameTo
         ? el('div', { class: 'row source-line small muted' },
             icon('edit'),
@@ -901,7 +901,7 @@ function headerMenuItems(p: ViewState['problem']): MenuItem[] {
 
 /** ✕: "Unlink this file / folder" for a link, "Don't match this file / folder" for a match. */
 function unlinkLabel(p: NonNullable<ViewState['problem']>, s: ViewState, long: boolean): string {
-  if (s.folder) return long ? W.unlinkThisFolderTip : W.unlinkThisFolder;
+  if (s.folder && !s.folder.matched) return long ? W.unlinkThisFolderTip : W.unlinkThisFolder;
   if (p.source === 'folder') return long ? W.dontMatchThisFolderTip : W.dontMatchThisFolder;
   if (p.source === 'saved') return long ? W.unlinkThisFileTip : W.unlinkThisFile;
   return long ? W.dontMatchThisFileTip : W.dontMatchThisFile;

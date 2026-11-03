@@ -163,6 +163,8 @@ export interface ViewState {
    */
   folder: {
     path: string;
+    /** Only matched by the folder's name (not saved): the match line stays "Matched by folder name"; choosing a file saves the link. */
+    matched: boolean;
     submitFile: string | null;
     /** Why this submit file ("named in main.cpp", "student.*", "stub comment", "your choice"…); null when not known. */
     submitWhy: string | null;
