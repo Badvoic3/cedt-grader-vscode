@@ -147,6 +147,7 @@ Every icon-only button (`iconButton()` in `webview/main.ts`, `btn()` in `webview
 - CPH has no rename/delete handling; a renamed source orphans its `.prob` (we offer to move it).
 - Our imported tests: `id = 7e15 + grader testcase id` (marker that survives CPH re-saves); backup `<file>.prob.bak`; own tests first and never removed; duplicates by input+output skipped; line endings `\n`.
 - Never modify CPH itself; only write `.prob` files in this exact format.
+- CPH's `cph.general.autoShowJudge` (default on) opens CPH's panel on every switch to a source file and can cover ours. `maybeAskCphAutoShow` (after `setActiveFile` and when the panel becomes visible; only while visible, CPH installed, no other prompt) asks once per session inline: **Turn it off** (`cphAutoShowScope`: updated at the level where it is on — folder / workspace / user), **Keep it** (this session), **Don't ask again** (`cedtGrader.cphAutoShowDismissed`). A question cancelled by a file switch or another prompt comes back later. This is the only CPH setting we ever change, and only on that click.
 
 ## Folder mode and attachments
 

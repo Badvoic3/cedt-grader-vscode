@@ -2,7 +2,7 @@ import { mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, relative } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { chooseTestcaseTarget, CPH_EXTENSION_ID, CphPresence, saveTestcasesAsFiles, testsFolderFor } from '../src/cphIntegration';
+import { chooseTestcaseTarget, cphAutoShowScope, CPH_EXTENSION_ID, CphPresence, saveTestcasesAsFiles, testsFolderFor } from '../src/cphIntegration';
 import { resolveProblem } from '../src/mapping/match';
 import { readCphProblem } from '../src/mapping/cph';
 import { manifest } from './helpers';
@@ -43,6 +43,25 @@ describe('where test cases go', () => {
   it('CPH absent → ask once, then the remembered choice', () => {
     expect(chooseTestcaseTarget(false, undefined)).toBe('ask');
     expect(chooseTestcaseTarget(false, 'files')).toBe('files');
+  });
+});
+
+describe("CPH's auto-show setting (the panel offers to turn it off)", () => {
+  it('unset everywhere = CPH default (on); a missing default counts as on', () => {
+    expect(cphAutoShowScope({ defaultValue: true })).toBe('default');
+    expect(cphAutoShowScope({})).toBe('default');
+  });
+  it('off at the most specific level that is set → null (nothing to ask)', () => {
+    expect(cphAutoShowScope({ defaultValue: true, globalValue: false })).toBeNull();
+    expect(cphAutoShowScope({ defaultValue: true, globalValue: true, workspaceValue: false })).toBeNull();
+  });
+  it('reports where it is on, so it is turned off at that level', () => {
+    expect(cphAutoShowScope({ defaultValue: true, globalValue: true })).toBe('global');
+    expect(cphAutoShowScope({ defaultValue: true, globalValue: false, workspaceValue: true })).toBe('workspace');
+    expect(cphAutoShowScope({ defaultValue: true, workspaceValue: false, workspaceFolderValue: true })).toBe('workspaceFolder');
+  });
+  it('setting not registered (CPH missing) → nothing to ask', () => {
+    expect(cphAutoShowScope(undefined)).toBeNull();
   });
 });
 
