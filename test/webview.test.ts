@@ -374,7 +374,7 @@ describe.runIf(existsSync(resolve(__dirname, '../esbuild.mjs')))('sidebar webvie
     const { doc, post } = boot();
     post({ ...loggedIn, cph: { installed: false } });
     const btn = [...doc.querySelectorAll<HTMLButtonElement>('#sec-current button')].find((b) => b.textContent?.includes('Load test cases'))!;
-    expect(btn.textContent).toBe(' Load test cases');
+    expect(btn.textContent).toBe(' Load test cases from the grader');
     expect(btn.getAttribute('data-tip')).toContain("CPH isn't installed");
     expect(doc.querySelector('#submit-btn')).not.toBeNull();
     expect(doc.querySelectorAll('#sec-problems .problem-row')).toHaveLength(2);

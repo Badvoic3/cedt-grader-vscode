@@ -32,7 +32,7 @@ import {
 import { dirname, join, relative, sep } from 'node:path';
 import { chooseTestcaseTarget, CPH_EXTENSION_ID, CPH_RUN_COMMAND, CphPresence, saveTestcasesAsFiles, testsFolderFor } from './cphIntegration';
 import { detectFolderRoles, type FolderRoles, type RunWhy, type SubmitWhy, submitFor } from './mapping/folderRoles';
-import { TestcaseStore } from './data/testcaseStore';
+import { stripGraderKey, TestcaseStore } from './data/testcaseStore';
 import { cleanupCache, clearCacheFiles, enforceLimit, formatBytes, scanCache, statementIds, totalBytes } from './data/cacheFiles';
 import { type BackupRecord, backupsToDelete, CLEAR_DEFAULTS, CLEAR_ORDER, type ClearCategory, keepIds, planClear, recordBackup } from './data/cacheClear';
 import { cphProbPath as cphProbPathFor, readCphProblem } from './mapping/cph';
@@ -2247,6 +2247,13 @@ export class GraderController implements vscode.Disposable {
     if (!(await this.ensureLoggedIn())) return;
     this.testcasesBusy = true;
     this.emit();
+    // The spinner is for the download only; the questions and the final notification
+    // (which stays open until dismissed) come after it.
+    const downloaded = () => {
+      if (!this.testcasesBusy) return;
+      this.testcasesBusy = false;
+      this.emit();
+    };
     try {
       const res = await vscode.window.withProgress(
         { location: vscode.ProgressLocation.Notification, title: S.testcases.progressTitle(problem.name), cancellable: true },
@@ -2265,6 +2272,7 @@ export class GraderController implements vscode.Disposable {
         },
       );
       this.connectionOk();
+      downloaded();
       if (res.status === 'not-available') {
         void vscode.window.showInformationMessage(S.testcases.notAllowed(problem.name));
         return;
@@ -2272,6 +2280,9 @@ export class GraderController implements vscode.Disposable {
       const { set } = res;
       const total = set.cases.length + set.truncated.length;
       const tooLarge = set.truncated.length ? S.testcases.tooLarge(set.truncated.length) : '';
+      const programText = await fsReadFile(file.fsPath, 'utf8').catch(() => '');
+      const { cases, key } = stripGraderKey(set.cases, programText);
+      const keyNote = key ? S.testcases.keyRemoved : '';
       const refetch = S.testcases.downloadAgain;
 
       const target = chooseTestcaseTarget(this.cph.installed, this.ctx.workspaceState.get<'files'>(TESTCASE_TARGET_KEY));
@@ -2302,14 +2313,14 @@ export class GraderController implements vscode.Disposable {
           );
           if (ok !== create) return;
         }
-        const r = await saveTestcasesAsFiles(folder, set.cases);
+        const r = await saveTestcasesAsFiles(folder, cases);
         const extra = [r.unchanged ? S.testcases.unchanged(r.unchanged) : '', r.keptExisting ? S.testcases.keptExisting(r.keptExisting) : '']
           .filter(Boolean)
           .join(', ');
         const open = S.testcases.showFolder;
         const install = S.common.installCph;
         const pick = await vscode.window.showInformationMessage(
-          S.testcases.savedFiles(r.written, total, vscode.workspace.asRelativePath(folder), tooLarge, extra),
+          S.testcases.savedFiles(r.written, total, vscode.workspace.asRelativePath(folder), tooLarge, extra) + keyNote,
           open,
           install,
           ...(res.fromCache ? [refetch] : []),
@@ -2325,7 +2336,7 @@ export class GraderController implements vscode.Disposable {
         saveLocation: this.cphSaveLocation(),
         problemName: cleanName(problem.name),
         problemUrl: this.url(WEB_PATHS.problem(problem.id)),
-        cases: set.cases,
+        cases,
       });
       await this.recordBackup(result.backupPath);
       await this.refreshRunTests(); // "Run tests" becomes available
@@ -2335,7 +2346,7 @@ export class GraderController implements vscode.Disposable {
       if (result.added) parts.push(S.testcases.added(result.added));
       const reload = S.testcases.reloadCph;
       const pick = await vscode.window.showInformationMessage(
-        S.testcases.cphDone(parts.join('; '), !!result.backupPath),
+        S.testcases.cphDone(parts.join('; '), !!result.backupPath) + keyNote,
         reload,
         ...(res.fromCache ? [refetch] : []),
       );
@@ -2345,8 +2356,7 @@ export class GraderController implements vscode.Disposable {
       if (classifyConnectionError(err)) this.reportError(err, () => this.loadTestcases(refresh));
       else void vscode.window.showErrorMessage(S.testcases.failed(this.describe(err)));
     } finally {
-      this.testcasesBusy = false;
-      this.emit();
+      downloaded();
     }
   }
 

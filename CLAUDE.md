@@ -64,7 +64,7 @@ npx tsx scripts/probe.ts [--list] [--problem <ID>] [--fixtures] [--submit file] 
   - `cache.ts`: `RequestCache` (session / TTL / final-only entries, in-flight de-duplication).
   - `dataService.ts`: `DataService` (problems, languages, history, details; debounce, visibility, after-submit refresh, stale-on-error; reports failures to the controller's banner). `downloadAttachment` (on click only, never cached, in-flight dedup; errors go to the caller).
   - `statementStore.ts`: statement PDF / description cache in `globalStorage/statements/<host>/<id>.pdf|json`.
-  - `testcaseStore.ts`: grader test cases per problem in `globalStorage/testcases/<host>/<id>.json` (downloaded one at a time; truncated cases listed, never imported).
+  - `testcaseStore.ts`: grader test cases per problem in `globalStorage/testcases/<host>/<id>.json` (downloaded one at a time; truncated cases listed, never imported). `stripGraderKey`: problems with a provided driver end every expected output with `KEY: <token>` (printed by the grader's own main; seen live on an attachment problem, absent on a problem without one); removed when importing (CPH / files) only if every case has the same key and the run file doesn't contain it; the cache keeps the grader's text.
   - `cacheFiles.ts`: downloaded-file housekeeping (see "Cache and storage"): `scanCache`, `touch` (LRU marker = mtime), `writeAtomic`, `pickLru` / `pickExpired`, `enforceLimit`, `cleanupCache`, `clearCacheFiles`.
   - `cacheClear.ts`: "Clear Cached Data" categories (`CLEAR_ORDER`, `CLEAR_DEFAULTS`), `planClear` (which keys / actions per checkbox), backup records (`recordBackup`, `backupsToDelete`).
 - `src/controller.ts`: session, mapping and UI state (results per file, expanded history entry). All grader data goes through `DataService`. Commands, sidebar and status bar all go through the controller.
@@ -115,7 +115,7 @@ npx tsx scripts/probe.ts [--list] [--problem <ID>] [--fixtures] [--submit file] 
 | Poll | `GET /api/v1/submissions/{id}` | `status`: `done`/`compilation_error`/`grader_error` are final. Also `points`, `grader_comment` (`PP-T[Px]`), `compiler_message`. |
 | History | `GET /api/v1/problems/{id}/submissions` | All regular submissions, newest first, incl. website ones. |
 | Detail | `GET /api/v1/submissions/{id}` | `source` (own only), `source_filename`, `max_runtime` ms, `peak_memory` KB, `evaluations[{testcase_id, result, score, time ms, memory KB}]`. |
-| Test cases | `GET /api/v1/problems/{id}/testcases` (403 = not allowed), `GET /api/v1/testcases/{id}/input`, `/sol` | text/plain; student `preview` access truncates large files: `X-Testcase-Truncated: true`, `X-Testcase-Byte-Size`. Never import a truncated case. |
+| Test cases | `GET /api/v1/problems/{id}/testcases` (403 = not allowed), `GET /api/v1/testcases/{id}/input`, `/sol` | text/plain; student `preview` access truncates large files: `X-Testcase-Truncated: true`, `X-Testcase-Byte-Size`. Never import a truncated case. Driver problems: last line `KEY: <token>` (see `stripGraderKey`). |
 | Statement | `GET /api/v1/problems/{id}/files/pdf` | 403 = PDF hidden, 404 = none → fallback `GET /api/v1/problems/{id}/description` `{markdown, description}`. |
 | Attachment | `GET /api/v1/problems/{id}/files/attachment` | The website's "File" (`has_attachment`). `send_data` with the stored `Content-Type` and `Content-Disposition: attachment; filename="…"; filename*=UTF-8''…`. 404 = none. Seen live: `.dig` (`application/xml`), `.cpp` (`text/x-c++src`), `.zip` packages (`application/zip`: flat or one top folder, `__MACOSX` junk, `.cbp`, sometimes binaries/PDFs; stored/deflate). Only on click; capped at 20 MB. Probe: `--problem <id> --attachment` (headers + zip entry names, never the body). |
 | Me | `GET /api/v1/me` | `full_name` for the Account section, once per session after a token restore. |
@@ -287,7 +287,7 @@ The sidebar (`cedtGrader` Activity Bar container, view `cedtGrader.panel`) is th
 - **Result** (active file only): live status, points, verdict tiles, compiler message, improvement line, Resubmit.
 - **History** (API): every submission with relative/exact time, language, score, mini verdict strip, counted marker; expand for details (per test, runtime, memory, compiler message) and "Open this version" / "Compare with current file" (`cedt-grader-submission:` read-only documents, served from the cache).
 - **Problems:** counted score per problem; virtualized, every problem reachable by scrolling; count "292 problems" / "127 of 292 problems". The list element is persistent: scroll position survives re-renders, data refresh and hide/show (`listScroll` in webview state); an editor switch only updates rows whose ✓ changed. No scroll after a row click; when the user opens a file themselves the active row is revealed with a minimal ("nearest") scroll. Row click opens the problem's file(s) via `filesForProblem(…, includeSuggested)` — saved links, remembered auto-matches, name matches and suggestions (opening never links) — (several → pick in path order labeled linked / matched by file name / suggested; missing → offer to remove the stale link; none → Link to <current file> / Create a new file / Find a file by name / Open statement; never links by itself). Row icons on hover / keyboard focus: copy name, go to file or find file by name, new file, download attachment (only with `hasAttachment`), statement. Right-click on a row: the same plus "Link to <file>" and "Open on the grader website". Row tooltip: bold "name #id" + full name only.
-- **Inline questions** (`askInline` → `ViewState.prompt`, plain buttons under the banner; cancelled on file switch): submit confirmation, suggested-match submit, newer linked file, auto-detect result, unlink other files, reconnect after a move, stale link. Native modal dialogs only for what can't be undone or loses data: overwrite a file, Clear Cached Data, the exam warning.
+- **Inline questions** (`askInline` → `ViewState.prompt`, plain buttons under the banner, long labels wrap inside the box; cancelled on file switch): submit confirmation, suggested-match submit, newer linked file, auto-detect result, unlink other files, reconnect after a move, stale link. Native modal dialogs only for what can't be undone or loses data: overwrite a file, Clear Cached Data, the exam warning.
 - **Context menus** (`withContextMenu` in `webview/main.ts`): always in addition to visible icons, never instead. Long labels are cut in the middle (`webview/text.ts`), full label in tooltip + aria-label.
 
 Statement viewer (`webview/statement.ts`, `webview/zoom.ts`): pinch (Ctrl+wheel) zooms around the cursor via `PDFViewer.updateScale({origin})` with `preventDefault`; Cmd/Ctrl + / - / 0; page/zoom/scroll kept in webview state (serializer, restart) and globalState (`cedtGrader.statementView`, reopen); `retainContextWhenHidden`; `registerWebviewPanelSerializer('cedtGrader.statement')` reopens tabs after restart from the disk cache (no request).
@@ -315,6 +315,17 @@ Statement viewer (`webview/statement.ts`, `webview/zoom.ts`): pinch (Ctrl+wheel)
 | Settings | `package.json` `contributes.configuration` + `src/config.ts` |
 
 No course- or problem-specific names in code (problem names come from the server; `test/scalability.test.ts` checks).
+
+## Upgrading from an older version
+
+Every release must keep data written by older versions working (`test/upgrade.test.ts` checks the v0.7.0 shapes):
+- **`.cedt-grader.json`:** new fields are optional (`folder`, `submitFile`, `runFile`); an old file parses the same, never becomes a folder link, and is written back byte for byte. Never rename or repurpose an existing field; bump `version` only with a reader for the old one.
+- **workspaceState / globalState:** keys only in `src/shared/stateKeys.ts`; a changed shape gets a new key (e.g. the problem list's `.v2`) or a normalizer (`normalizeProblem` fills fields older saved lists lack). Legacy keys are still read (`KEYS.legacyMapping`, fsPath link keys).
+- **Caches:** `globalStorage` JSON keeps its format; anything unreadable is treated as a cache miss, never an error.
+- **CPH files:** our imported tests are recognised by their id (`GRADER_ID_BASE` + grader id), so a re-import updates tests written by an older version (e.g. ones with the `KEY:` line) instead of adding duplicates.
+- **Settings:** never rename a setting; add a new one and read the old one as fallback.
+- The 0.6.x → 0.7.0 publisher change (`cedt-student` → `Badvoic3`) makes a separate extension: VS Code keeps its globalState / secrets / workspaceState apart, so users log in again and lose links that were only in workspaceState (`.cedt-grader.json` links survive). The CHANGELOG / README say to uninstall the old one first.
+- Downgrading is not supported: an older version drops the folder fields when it rewrites `.cedt-grader.json`.
 
 ## Known limitations
 
