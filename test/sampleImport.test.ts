@@ -89,14 +89,21 @@ describe('statement source: the cache first, else the statement request once', (
     expect(requests()).toBe(1);
   });
 
-  it('no PDF (403 / 404): the statement is not a PDF, so there is nothing to read', async () => {
-    const { server, store } = await setup();
+  it('no PDF (403 / 404): the statement is not a PDF, so there is nothing to read; the cache says so without a request', async () => {
+    const { server, store, requests } = await setup();
+    expect(await store.cachedKind(303)).toBeNull(); // unknown: the button stays
     server.pdf = 404;
     server.description = 404;
     expect((await store.get(303)).kind).toBe('none');
     server.pdf = 403;
     server.description = { markdown: true, description: '# Sum' };
     expect((await store.get(304)).kind).toBe('description');
+    const before = requests();
+    expect([await store.cachedKind(303), await store.cachedKind(304)]).toEqual(['other', 'other']); // the button hides
+    server.pdf = 'pdf';
+    await store.get(305);
+    expect(await store.cachedKind(305)).toBe('pdf');
+    expect(requests()).toBe(before + 1);
   });
 });
 

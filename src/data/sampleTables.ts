@@ -66,6 +66,12 @@ export interface SampleCase {
 export interface SampleTable {
   page: number;
   cases: SampleCase[];
+  /**
+   * Body rows of this sample table that could not be read as a case (no
+   * input, or not ASCII): the read is incomplete. Only set when > 0 (never
+   * the case for a correctly read table in the 50 checked statements).
+   */
+  skipped?: number;
 }
 
 /** The pdf.js `OPS` codes this module reads (passed in: no pdf.js import here). */
@@ -390,8 +396,12 @@ export function samplesFrom(tables: Table[]): SampleTable[] {
       })
       .filter((c) => c.input && asciiShare(c.input + c.output) > ASCII_MIN);
     const ok = cols >= 2 && cols <= 3 && cases.length > 0 && cases.length >= body.length / 2;
-    if (ok && !header && prev && prev.pageNo === t.pageNo - 1 && sameXs(prev.xs, t.xs)) out[out.length - 1].cases.push(...cases);
-    else if (ok) out.push({ page: t.pageNo, cases });
+    const skipped = body.length - cases.length;
+    if (ok && !header && prev && prev.pageNo === t.pageNo - 1 && sameXs(prev.xs, t.xs)) {
+      const last = out[out.length - 1];
+      last.cases.push(...cases);
+      if (skipped) last.skipped = (last.skipped ?? 0) + skipped;
+    } else if (ok) out.push(skipped ? { page: t.pageNo, cases, skipped } : { page: t.pageNo, cases });
     prev = ok ? t : null;
   }
   return out;

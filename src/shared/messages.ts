@@ -202,8 +202,8 @@ export interface ViewState {
     note: string | null;
   };
   testcases: { busy: boolean };
-  /** "Load sample cases" is reading the statement. */
-  samples: { busy: boolean };
+  /** "Load sample cases" is reading the statement; available = false when the cached statement is not a PDF. */
+  samples: { busy: boolean; available: boolean };
   /** CPH (optional) installed and enabled. */
   cph: { installed: boolean };
   languages: {

@@ -164,6 +164,16 @@ describe('which tables are samples', () => {
     expect(samplesFrom([six, quotes])).toEqual([]);
   });
 
+  it('rows of a sample table that cannot be read are counted (an incomplete read: nothing is loaded)', () => {
+    const t = table([['Input', 'Output'], ['1', '2'], ['3', '4'], ['', '9'], ['ข้อมูล 5', '6']]);
+    expect(samplesFrom([t])).toEqual([{ page: 1, cases: [{ input: '1', output: '2', annotated: false }, { input: '3', output: '4', annotated: false }], skipped: 2 }]);
+    // A continued table on the next page adds its own skipped rows.
+    const next = table([['5', '6'], ['', 'x'], ['7', '8']], 2, 2);
+    expect(samplesFrom([table([['Input', 'Output'], ['1', '2']]), next])[0].skipped).toBe(1);
+    // A complete table carries no `skipped` at all (the expected JSON of the checked PDFs stays the same).
+    expect(samplesFrom([table([['Input', 'Output'], ['1', '2']])])[0]).not.toHaveProperty('skipped');
+  });
+
   it('needs an input in at least half the body rows; a Thai-text table is not a sample', () => {
     expect(samplesFrom([table([['Input', 'Output'], ['', 'x'], ['', 'y'], ['1', '2']])])).toEqual([]);
     expect(samplesFrom([table([['ตัวอย่าง', 'คำอธิบาย'], ['ข้อความภาษาไทย', 'อธิบาย']])])).toEqual([]);

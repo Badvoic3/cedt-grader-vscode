@@ -162,6 +162,8 @@ export class GraderController implements vscode.Disposable {
   private mappedIds = new Set<number>();
   private testcasesBusy = false;
   private samplesBusy = false;
+  /** The cached statement of the current problem is not a PDF (no "Load samples" button). Unknown = false. */
+  private statementNoPdf = false;
   /** The problem the statement tab last followed (undefined: not yet). */
   private followedProblemId: number | null | undefined = undefined;
   /** Statement PDFs / descriptions on disk (shared by the statement tabs and "Load sample cases"). */
@@ -209,7 +211,10 @@ export class GraderController implements vscode.Disposable {
       this.reportError(e, () => this.reloadKey(key));
     };
     this.data.onSuccess = () => this.connectionOk();
-    this.statementStore = new StatementStore(ctx.globalStorageUri.fsPath, () => this.client, (l) => this.requestLog(l), (p) => this.cacheWritten(p));
+    this.statementStore = new StatementStore(ctx.globalStorageUri.fsPath, () => this.client, (l) => this.requestLog(l), (p) => {
+      this.cacheWritten(p);
+      void this.refreshStatementKind();
+    });
     this.pdfjs = pdfjsLoader(vscode.Uri.joinPath(ctx.extensionUri, 'dist', 'pdfjs').fsPath);
     this.statements = new StatementPanels(
       ctx.extensionUri,
@@ -1063,7 +1068,7 @@ export class GraderController implements vscode.Disposable {
           : null,
       },
       testcases: { busy: this.testcasesBusy },
-      samples: { busy: this.samplesBusy },
+      samples: { busy: this.samplesBusy, available: !this.statementNoPdf },
       cph: { installed: this.cph.installed },
       languages: {
         loading: languagesLoading,
@@ -1463,6 +1468,7 @@ export class GraderController implements vscode.Disposable {
     this.linkedFiles = problem ? await this.filesForProblem(problem.id, 'cached') : [];
     if (problem && !this.matchIndex.peek() && this.data.isVisible()) void this.refreshLinkedFiles();
     if (problem) await this.noteOpened(problem.id);
+    this.statementNoPdf = problem ? (await this.statementStore.cachedKind(problem.id)) === 'other' : false;
     this.runTestCount = this.cph.installed && problem ? ((await readCphProblem(this.runUri()?.fsPath ?? '', this.cphSaveLocation()))?.tests.length ?? 0) : null;
     this.applyLanguageChoice();
     this.emit();
@@ -1759,6 +1765,7 @@ export class GraderController implements vscode.Disposable {
     if (plan.cacheFiles) {
       freed += (await clearCacheFiles(this.cacheRoot())).bytes;
       this.data.forgetDetails();
+      await this.refreshStatementKind();
     }
     if (plan.staleLinks) await this.mapping.removeStale();
     if (plan.allLinks) skippedDirty = (await this.mapping.emptyMappingFiles()).skippedDirty;
@@ -2462,6 +2469,15 @@ export class GraderController implements vscode.Disposable {
 
   // ------------------------------------------------------- sample cases
 
+  /** "Load samples" is hidden only when the cache says the statement is not a PDF (no request to find out). */
+  private async refreshStatementKind(): Promise<void> {
+    const id = this.problem?.id;
+    const noPdf = id ? (await this.statementStore.cachedKind(id)) === 'other' : false;
+    if (noPdf === this.statementNoPdf || id !== this.problem?.id) return;
+    this.statementNoPdf = noPdf;
+    this.emit();
+  }
+
   /**
    * "Load sample cases": the example input/output table of the problem's
    * statement PDF, read in the host (src/data/pdfSamples.ts). The PDF comes
@@ -2489,6 +2505,7 @@ export class GraderController implements vscode.Disposable {
         this.connectionOk();
       }
       if (st.kind !== 'pdf') {
+        this.statementNoPdf = true; // the button goes away (and stays away for this problem while cached)
         void this.tellInline(null, S.samples.noPdf);
         return;
       }
@@ -2504,6 +2521,14 @@ export class GraderController implements vscode.Disposable {
     const found = tables.flatMap((t) => t.cases);
     if (!found.length) {
       void this.tellInline(null, S.samples.none);
+      return;
+    }
+    // A sample table with rows that couldn't be read is an incomplete read: load nothing (not into
+    // CPH, not as files) rather than part of the cases. Misread text that still looks like a case
+    // can't be detected; the tooltip asks to check the cases.
+    const skipped = tables.reduce((n, t) => n + (t.skipped ?? 0), 0);
+    if (skipped) {
+      void this.tellInline(null, S.samples.incomplete(skipped));
       return;
     }
     const annotated = found.filter((c) => c.annotated).length;
