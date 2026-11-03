@@ -22,6 +22,7 @@ export const TH_REVIEW: readonly string[] = [
   'S.samples',
   'W.loadSampleCases',
   'W.loadSampleCasesTip',
+  'W.readingStatementTip',
 ];
 
 export const TH: Strings = {
@@ -398,14 +399,15 @@ export const TH: Strings = {
     loading: 'กำลังโหลด…',
     chooseLanguage: 'เลือกภาษา…',
     language: 'ภาษา',
-    loadingTestCases: 'กำลังดาวน์โหลดจาก Grader…',
-    loadTestCases: 'โหลด test case จาก Grader',
+    loadingTestCases: 'กำลังดาวน์โหลด…',
+    loadTestCases: 'โหลด test case',
     downloadingTestCases: 'กำลังดาวน์โหลด test case ของ Grader…',
     loadTestCasesCphTip: 'ดาวน์โหลด test case ของ Grader ลง CPH',
     loadTestCasesFilesTip: 'ดาวน์โหลด test case ของ Grader แล้วบันทึกเป็นไฟล์ .in / .out (ยังไม่ได้ติดตั้ง CPH)',
-    loadSampleCases: 'โหลดตัวอย่างจากโจทย์',
-    readingSampleCases: 'กำลังอ่านโจทย์…',
-    loadSampleCasesTip: 'อ่านตารางตัวอย่างในไฟล์โจทย์ (PDF) ถ้าโจทย์จัดหน้าแปลก ๆ อาจอ่านผิดได้ ควรตรวจ test case อีกครั้ง',
+    loadSampleCases: 'โหลดตัวอย่าง',
+    readingSampleCases: 'กำลังอ่าน…',
+    readingStatementTip: 'กำลังอ่านตารางตัวอย่างในโจทย์…',
+    loadSampleCasesTip: 'โหลด test case จากตารางตัวอย่างในไฟล์โจทย์ (PDF) ใช้ได้กับโจทย์ที่ไม่มี test case ของ Grader ด้วย ถ้าโจทย์จัดหน้าแปลก ๆ อาจอ่านผิดได้ ควรตรวจ test case อีกครั้ง',
     languageNotAccepted: (language) => `โจทย์นี้ไม่รับภาษา ${language} เลือกโจทย์ผิดหรือเปล่า?`,
     change: 'เปลี่ยน',
     acceptedLanguages: (languages) => `ภาษาที่รับ: ${languages}`,

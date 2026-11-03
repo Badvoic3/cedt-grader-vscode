@@ -375,7 +375,7 @@ describe.runIf(existsSync(resolve(__dirname, '../esbuild.mjs')))('sidebar webvie
     const { doc, post } = boot();
     post({ ...loggedIn, cph: { installed: false } });
     const btn = [...doc.querySelectorAll<HTMLButtonElement>('#sec-current button')].find((b) => b.textContent?.includes('Load test cases'))!;
-    expect(btn.textContent).toBe(' Load test cases from the grader');
+    expect(btn.textContent).toBe(' Load test cases');
     expect(btn.getAttribute('data-tip')).toContain("CPH isn't installed");
     expect(doc.querySelector('#submit-btn')).not.toBeNull();
     expect(doc.querySelectorAll('#sec-problems .problem-row')).toHaveLength(2);
@@ -383,24 +383,23 @@ describe.runIf(existsSync(resolve(__dirname, '../esbuild.mjs')))('sidebar webvie
     expect(doc.body.textContent).not.toMatch(/CPH/);
   });
 
-  it('Load sample cases: next to Load test cases, for every problem (also without grader test cases), with the light note', () => {
+  it('Load samples: on one row with Load test cases, for every problem (also without grader test cases), the note in the tooltip', () => {
     const { doc, sent, post } = boot();
-    const labels = () => [...doc.querySelectorAll('#sec-current button.btn')].map((b) => b.textContent?.trim());
+    const row = () => [...doc.querySelectorAll('#sec-current .test-buttons button.btn')].map((b) => b.textContent?.trim());
     post(loggedIn);
-    const l = labels();
-    expect(l.indexOf('Load sample cases from the statement')).toBe(l.indexOf('Load test cases from the grader') + 1);
-    const tip = 'Reads the example table in the problem statement (PDF). An unusual layout may be read wrong, so check the cases.';
-    const btn = () => [...doc.querySelectorAll<HTMLButtonElement>('#sec-current button')].find((b) => b.dataset.tip === tip)!;
-    expect(btn().textContent?.trim()).toBe('Load sample cases from the statement');
+    expect(row()).toEqual(['Load test cases', 'Load samples']);
+    const tip = 'Load the sample cases from the example table in the problem statement (PDF), also for problems without grader test cases. An unusual layout may be read wrong, so check the cases.';
+    const btn = () => doc.querySelectorAll<HTMLButtonElement>('#sec-current .test-buttons button.btn')[row().length - 1];
+    expect(btn().dataset.tip).toBe(tip);
     expect(btn().hasAttribute('title')).toBe(false);
     btn().click();
     expect(sent.at(-1)).toEqual({ type: 'loadSampleCases' });
     post({ ...loggedIn, problem: { ...loggedIn.problem!, hasTestcase: false } });
-    expect(labels()).not.toContain('Load test cases from the grader');
-    expect(btn()).toBeTruthy();
+    expect(row()).toEqual(['Load samples']);
     post({ ...loggedIn, samples: { busy: true } });
     expect(btn().disabled).toBe(true);
-    expect(btn().textContent?.trim()).toBe('Reading the statement…');
+    expect(btn().textContent?.trim()).toBe('Reading…');
+    expect(btn().dataset.tip).toBe('Reading the example table in the statement…');
   });
 
   it('accessibility: every icon-only button has a tooltip and the same aria-label; disabled buttons say why', () => {
