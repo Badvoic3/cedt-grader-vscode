@@ -6,6 +6,7 @@ import * as cheerio from 'cheerio/slim';
 import MarkdownIt from 'markdown-it';
 import * as vscode from 'vscode';
 import type { Statement, StatementStore } from '../data/statementStore';
+import { type SampleCase, validateSampleCases } from '../mapping/sampleImport';
 
 /** Page, zoom and scroll of a statement tab. */
 export interface StatementViewState {
@@ -36,7 +37,9 @@ export type FromStatement =
   | { type: 'ready' }
   | { type: 'refresh' }
   | { type: 'openInBrowser' }
-  | { type: 'viewState'; state: StatementViewState };
+  | { type: 'viewState'; state: StatementViewState }
+  /** Experimental: sample cases read from the PDF's tables (untrusted: validated in the host). */
+  | { type: 'importSamples'; problemId: number; cases: SampleCase[] };
 
 const VIEW_KEY = KEYS.statementView;
 
@@ -59,6 +62,8 @@ export class StatementPanels implements vscode.Disposable {
       beside: () => boolean;
       openInBrowser: (problemId: number) => void;
       onError: (err: unknown) => string;
+      /** Experimental: import sample cases read from this statement (null = the message was not valid). */
+      importSamples: (problemId: number, name: string, cases: SampleCase[] | null) => void;
     },
   ) {}
 
@@ -136,6 +141,7 @@ export class StatementPanels implements vscode.Disposable {
       if (m?.type === 'ready') void load(false);
       else if (m?.type === 'refresh') void load(true);
       else if (m?.type === 'openInBrowser') this.opts.openInBrowser(problemId);
+      else if (m?.type === 'importSamples') this.opts.importSamples(problemId, name, m.problemId === problemId ? validateSampleCases(m.cases) : null);
       else if (m?.type === 'viewState') {
         const all = { ...this.opts.memento.get<Record<string, StatementViewState>>(VIEW_KEY, {}), [problemId]: m.state };
         void this.opts.memento.update(VIEW_KEY, all);

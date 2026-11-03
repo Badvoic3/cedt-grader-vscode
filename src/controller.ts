@@ -31,12 +31,13 @@ import {
 } from './grader';
 import { dirname, join, relative, sep } from 'node:path';
 import { chooseTestcaseTarget, CPH_EXTENSION_ID, CPH_RUN_COMMAND, CphPresence, saveTestcasesAsFiles, testsFolderFor } from './cphIntegration';
-import { detectFolderRoles, type FolderRoles, type RunWhy, type SubmitWhy, submitFor } from './mapping/folderRoles';
+import { detectFolderRoles, type FolderRoles, runFileFor, type RunWhy, type SubmitWhy, submitFor } from './mapping/folderRoles';
 import { TestcaseStore } from './data/testcaseStore';
 import { cleanupCache, clearCacheFiles, enforceLimit, formatBytes, scanCache, statementIds, totalBytes } from './data/cacheFiles';
 import { type BackupRecord, backupsToDelete, CLEAR_DEFAULTS, CLEAR_ORDER, type ClearCategory, keepIds, planClear, recordBackup } from './data/cacheClear';
 import { cphProbPath as cphProbPathFor, readCphProblem } from './mapping/cph';
-import { importIntoCph } from './mapping/cphImport';
+import { type GraderCase, importIntoCph, STATEMENT_ID_BASE } from './mapping/cphImport';
+import { type SampleCase, sampleCasesToImport } from './mapping/sampleImport';
 import { createFileNoOverwrite, pathExists as exists } from './mapping/newFile';
 import { chooseNewFileLanguage } from './mapping/newFileLanguage';
 import { BINARY_EXTS, excludeGlob, filterSourceFiles, rankCandidates, sourceGlob } from './mapping/findByName';
@@ -207,6 +208,7 @@ export class GraderController implements vscode.Disposable {
           this.reportError(e, null);
           return classifyConnectionError(e)?.message ?? this.describe(e);
         },
+        importSamples: (id, name, cases) => void this.importStatementSamples(id, name, cases),
       },
     );
     // A late (deferred) list load: re-resolve the open file (local only: mapping file and CPH .prob).
@@ -2274,34 +2276,11 @@ export class GraderController implements vscode.Disposable {
       const tooLarge = set.truncated.length ? S.testcases.tooLarge(set.truncated.length) : '';
       const refetch = S.testcases.downloadAgain;
 
-      const target = chooseTestcaseTarget(this.cph.installed, this.ctx.workspaceState.get<'files'>(TESTCASE_TARGET_KEY));
-      if (target !== 'cph') {
-        if (target === 'ask') {
-          const files = S.testcases.saveAsFiles;
-          const install = S.common.installCph;
-          const pick = await vscode.window.showInformationMessage(
-            S.testcases.whereTo(set.cases.length),
-            { detail: S.testcases.whereToDetail },
-            files,
-            install,
-          );
-          if (pick === install) {
-            await vscode.commands.executeCommand('extension.open', CPH_EXTENSION_ID);
-            return;
-          }
-          if (pick !== files) return;
-          await this.ctx.workspaceState.update(TESTCASE_TARGET_KEY, 'files'); // remembered per workspace
-        }
-        // Folder mode: the folder already carries the problem's name → <folder>/tests.
-        const folder = this.folderLink ? join(this.folderLink.fsPath, 'tests') : testsFolderFor(dirname(file.fsPath), problem.name);
-        if (!(await exists(folder))) {
-          const create = S.testcases.createFolder;
-          const ok = await vscode.window.showInformationMessage(
-            S.testcases.createFolderQ(vscode.workspace.asRelativePath(folder), set.cases.length),
-            create,
-          );
-          if (ok !== create) return;
-        }
+      const target = await this.testcaseTarget(S.testcases.whereTo(set.cases.length));
+      if (!target) return;
+      if (target === 'files') {
+        const folder = this.testsFolder(file, this.folderLink?.fsPath ?? null, problem.name);
+        if (!(await this.confirmTestsFolder(folder, set.cases.length))) return;
         const r = await saveTestcasesAsFiles(folder, set.cases);
         const extra = [r.unchanged ? S.testcases.unchanged(r.unchanged) : '', r.keptExisting ? S.testcases.keptExisting(r.keptExisting) : '']
           .filter(Boolean)
@@ -2348,6 +2327,155 @@ export class GraderController implements vscode.Disposable {
       this.testcasesBusy = false;
       this.emit();
     }
+  }
+
+  /** Where test cases go: CPH's .prob when installed, else files (asked once per workspace, remembered); null = cancelled. */
+  private async testcaseTarget(question: string): Promise<'cph' | 'files' | null> {
+    const target = chooseTestcaseTarget(this.cph.installed, this.ctx.workspaceState.get<'files'>(TESTCASE_TARGET_KEY));
+    if (target !== 'ask') return target;
+    const files = S.testcases.saveAsFiles;
+    const install = S.common.installCph;
+    const pick = await vscode.window.showInformationMessage(question, { detail: S.testcases.whereToDetail }, files, install);
+    if (pick === install) await vscode.commands.executeCommand('extension.open', CPH_EXTENSION_ID);
+    if (pick !== files) return null;
+    await this.ctx.workspaceState.update(TESTCASE_TARGET_KEY, 'files'); // remembered per workspace
+    return 'files';
+  }
+
+  /** `tests/` for a file's cases. Folder mode: the folder already carries the problem's name → `<folder>/tests`. */
+  private testsFolder(file: vscode.Uri, folder: string | null, problemName: string): string {
+    return folder ? join(folder, 'tests') : testsFolderFor(dirname(file.fsPath), problemName);
+  }
+
+  /** Creating the tests folder is confirmed first. */
+  private async confirmTestsFolder(folder: string, n: number): Promise<boolean> {
+    if (await exists(folder)) return true;
+    const create = S.testcases.createFolder;
+    return (await vscode.window.showInformationMessage(S.testcases.createFolderQ(vscode.workspace.asRelativePath(folder), n), create)) === create;
+  }
+
+  // ------------------------------------------- statement samples (experimental)
+
+  /**
+   * Experimental: sample cases the statement viewer read from the PDF's
+   * tables (already validated by the panel; null = invalid message). Same
+   * targets and rules as "Load test cases": folder mode → the run file; CPH
+   * .prob (ids STATEMENT_ID_BASE + n, backup recorded) or `tests/sample<n>.in|out`.
+   * No request: the cases come from the PDF on screen.
+   */
+  async importStatementSamples(problemId: number, name: string, raw: SampleCase[] | null): Promise<void> {
+    if (!raw) {
+      void vscode.window.showErrorMessage(S.samples.invalid);
+      return;
+    }
+    if (this.testcasesBusy) return;
+    const problemName = this.problemById(problemId)?.name ?? name;
+    const target = await this.sampleTarget(problemId, problemName, true);
+    if (!target) return;
+    const cases: GraderCase[] = sampleCasesToImport(raw);
+    this.testcasesBusy = true;
+    this.emit();
+    try {
+      const where = await this.testcaseTarget(S.samples.whereTo(cases.length));
+      if (!where) return;
+      if (where === 'files') {
+        const folder = this.testsFolder(target.file, target.folder, problemName);
+        if (!(await this.confirmTestsFolder(folder, cases.length))) return;
+        const r = await saveTestcasesAsFiles(folder, cases, 'sample');
+        const extra = [r.unchanged ? S.testcases.unchanged(r.unchanged) : '', r.keptExisting ? S.testcases.keptExisting(r.keptExisting) : '']
+          .filter(Boolean)
+          .join(', ');
+        const open = S.testcases.showFolder;
+        const pick = await vscode.window.showInformationMessage(S.samples.savedFiles(r.written, cases.length, vscode.workspace.asRelativePath(folder), extra), open);
+        if (pick === open) await vscode.commands.executeCommand('revealInExplorer', vscode.Uri.file(folder));
+        return;
+      }
+      const result = await importIntoCph({
+        srcPath: target.file.fsPath,
+        saveLocation: this.cphSaveLocation(),
+        problemName: cleanName(problemName),
+        problemUrl: this.url(WEB_PATHS.problem(problemId)),
+        cases,
+        idBase: STATEMENT_ID_BASE,
+      });
+      await this.recordBackup(result.backupPath);
+      await this.refreshRunTests();
+      const parts = [S.samples.savedCph(cases.length)];
+      if (result.alreadyPresent) parts.push(S.testcases.alreadyPresent(result.alreadyPresent));
+      if (result.updated) parts.push(S.testcases.updated(result.updated));
+      if (result.added) parts.push(S.testcases.added(result.added));
+      const reload = S.testcases.reloadCph;
+      const pick = await vscode.window.showInformationMessage(S.testcases.cphDone(parts.join('; '), !!result.backupPath), reload);
+      if (pick === reload) await this.reloadCph(target.file);
+    } catch (err) {
+      void vscode.window.showErrorMessage(S.samples.failed(this.describe(err)));
+    } finally {
+      this.testcasesBusy = false;
+      this.emit();
+    }
+  }
+
+  /**
+   * The file a statement's samples go to (and its folder in folder mode).
+   * The active file's problem: like "Load test cases" (folder mode → run file;
+   * a suggestion asks once). Another problem: its linked / matched files
+   * (several → pick; a folder → its run file); none → link the active file or
+   * create one, then look again (once).
+   */
+  private async sampleTarget(problemId: number, name: string, askIfNone: boolean): Promise<{ file: vscode.Uri; folder: string | null } | null> {
+    const current = this.currentProblem();
+    if (current?.id === problemId && this.fileUri) {
+      if (this.folderLink) {
+        if (!(await this.askFolderRole('run', current))) return null;
+        const run = this.runUri();
+        return run ? { file: run, folder: this.folderLink.fsPath } : null;
+      }
+      if (!(await this.confirmSuggestedFor(this.fileUri, current, S.samples.suggestedQ(current.name, this.subtitleOf(current)), S.samples.importLabel))) return null;
+      return { file: this.fileUri, folder: null };
+    }
+    const items: { file: vscode.Uri; folder: string | null; how: ProblemFile['how'] }[] = [];
+    for (const f of await this.filesForProblem(problemId, 'run', false)) {
+      const st = await fsStat(f.fsPath).catch(() => null);
+      if (!st) continue;
+      if (!st.isDirectory()) items.push({ file: vscode.Uri.file(f.fsPath), folder: null, how: f.how });
+      else {
+        const run = await this.folderRunFile(f.fsPath, name);
+        if (run) items.push({ file: vscode.Uri.file(run), folder: f.fsPath, how: f.how });
+      }
+    }
+    if (items.length === 1) return items[0];
+    if (items.length > 1) {
+      const pick = await vscode.window.showQuickPick(
+        items.map((i) => ({ label: vscode.workspace.asRelativePath(i.file), description: PICK_HOW[i.how], i })),
+        { placeHolder: S.samples.pickFile(name) },
+      );
+      return pick?.i ?? null;
+    }
+    if (!askIfNone) return null;
+    const fileName = this.fileUri?.path.split('/').pop();
+    const pick = await this.askInline(S.samples.noFile(name), [
+      ...(this.fileUri ? [{ id: 'link', label: S.files.linkTo(fileName ?? ''), primary: true }] : []),
+      { id: 'new', label: S.files.createNew },
+      { id: 'cancel', label: S.common.cancel },
+    ]);
+    if (pick === 'link') await this.mapCurrentFile(problemId);
+    else if (pick === 'new') await this.newFileForProblem(problemId);
+    else return null;
+    return this.sampleTarget(problemId, name, false);
+  }
+
+  /** A folder's run file (not the active folder): chosen → detected → the only C/C++ source → asked (saved when it is a folder link). */
+  private async folderRunFile(folder: string, problemName: string): Promise<string | null> {
+    const uri = vscode.Uri.file(folder);
+    const entry = await this.mapping.get(uri, this.cfg.baseUrl);
+    const files = await this.folderSources(folder);
+    const sources = files.filter((f) => CODE_SOURCE.test(f));
+    let run = runFileFor(files, await this.folderTextsOf(folder, files), entry?.folder ? entry.runFile : undefined);
+    if (!run && sources.length) {
+      run = (await vscode.window.showQuickPick(sources, { placeHolder: `${S.folder.whichRunFile(problemName)} ${S.folder.runFileDetail}` })) ?? null;
+      if (run && entry?.folder) await this.mapping.setFolderRole(uri, this.cfg.baseUrl, 'runFile', run);
+    }
+    return run ? join(folder, ...run.split('/')) : null;
   }
 
   /**

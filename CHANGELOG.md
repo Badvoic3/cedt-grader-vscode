@@ -15,6 +15,10 @@
 - Renaming a folder now offers to move the CPH test cases of the files inside it (CPH names them after the full path).
 - Folder links follow folder renames; the submit file follows renames inside the folder. ✕ unlinks the folder.
 
+### Statement sample cases (experimental)
+- **Import sample cases from this statement** (beaker icon in the statement viewer, PDF statements only): reads the sample input/output table of the PDF on screen and shows each case in a preview with a warning first: it is **experimental** and may miss or misread cases (cases where a note was removed are marked "check this case"; "No sample table found in this PDF" when there is none). **Import** writes them like **Load test cases**: into the file's CPH tests (own tests kept first, `.bak` backup, duplicates skipped) or, without CPH, as `tests/sample1.in`, `sample1.out`, … (never overwriting). In folder mode they go to the run file (`main.cpp`). Nothing is downloaded: the PDF is already open.
+- Works on ruled tables with selectable text. Checked by hand against 50 course statements: every stdin/stdout sample table was read (95 cases); statements without one gave nothing.
+
 ### Matching
 - **Matched by folder name:** when a file's own name matches no problem, the name of the folder it is in is tried with the same rules (exact name first, then a confident suggestion), so any file in a folder named like a problem resolves to it. Same matcher both ways (clicking a problem finds those files; a folder counts as one item in "files for this problem").
 - `.h` / `.hpp` headers count as C++ (`.h` as C when a problem takes C only).

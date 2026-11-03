@@ -68,10 +68,11 @@ export interface SaveFilesResult {
 }
 
 /**
- * Write `<num>.in` / `<num>.out` per case. Line endings `\n`, trailing
- * newlines kept. Existing files are never overwritten.
+ * Write `<prefix><num>.in` / `<prefix><num>.out` per case. Line endings `\n`,
+ * trailing newlines kept. Existing files are never overwritten. Statement
+ * samples use the prefix `sample` so they never collide with grader cases.
  */
-export async function saveTestcasesAsFiles(folder: string, cases: GraderCase[]): Promise<SaveFilesResult> {
+export async function saveTestcasesAsFiles(folder: string, cases: GraderCase[], prefix = ''): Promise<SaveFilesResult> {
   await mkdir(folder, { recursive: true });
   let written = 0;
   let unchanged = 0;
@@ -80,7 +81,7 @@ export async function saveTestcasesAsFiles(folder: string, cases: GraderCase[]):
     let caseWritten = false;
     let caseKept = false;
     for (const [ext, text] of [['in', c.input], ['out', c.output]] as const) {
-      const path = join(folder, `${c.num}.${ext}`);
+      const path = join(folder, `${prefix}${c.num}.${ext}`);
       const content = normalizeEol(text);
       let existing: string | null = null;
       try {
