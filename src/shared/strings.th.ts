@@ -27,6 +27,18 @@ export const TH_REVIEW: readonly string[] = [
   'W.findMatchingFile',
   // Submit asks once per automatic match (2026-11-03): not reviewed yet.
   'S.submit.confirmOnce',
+  // Tags dropdown and row tags (2026-11-03): not reviewed yet.
+  'W.tagsFilter',
+  'W.tagsChosen',
+  'W.tagsFilterTip',
+  'W.tagMatch',
+  'W.tagMatchAny',
+  'W.tagMatchAll',
+  'W.tagMatchAnyTip',
+  'W.tagMatchAllTip',
+  'W.clearTags',
+  'W.clearTagsTip',
+  'W.problemTags',
 ];
 
 export const TH: Strings = {
@@ -513,6 +525,17 @@ export const TH: Strings = {
     filterProblemsByStatus: 'กรองโจทย์ตามสถานะ',
     sortProblems: 'เรียงโจทย์',
     filterProblemsByTopic: 'กรองโจทย์ตามหัวข้อ',
+    tagsFilter: 'แท็ก',
+    tagsChosen: (names) => `แท็ก: ${names}`,
+    tagsFilterTip: 'กรองโจทย์ตามแท็กอื่น ๆ (เลือกได้หลายแท็ก)',
+    tagMatch: 'เงื่อนไข',
+    tagMatchAny: 'อย่างน้อยหนึ่ง (OR)',
+    tagMatchAll: 'ทุกแท็ก (AND)',
+    tagMatchAnyTip: 'แสดงโจทย์ที่มีแท็กที่เลือกอย่างน้อยหนึ่งแท็ก',
+    tagMatchAllTip: 'แสดงโจทย์ที่มีแท็กที่เลือกครบทุกแท็ก',
+    clearTags: 'ล้าง',
+    clearTagsTip: 'ยกเลิกการเลือกแท็กทั้งหมด',
+    problemTags: (names) => `แท็ก: ${names}`,
     pageNumber: 'หมายเลขหน้า',
     zoomLevel: 'ระดับการซูม',
     findInStatement: 'ค้นหาในโจทย์',

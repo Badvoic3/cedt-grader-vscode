@@ -200,7 +200,8 @@ The built-in runner (planned after v1.0, see `docs/v1.0-release-plan.md` "After 
 ## Problem list and verdicts (as on the website)
 
 - Status (`problemStatus`): solved = submitted and best ≥ 100; inprogress = submitted and best < 100; untried = none. Filters All / Unsolved / In progress / Solved, persisted per workspace (`cedtGrader.problemFilter`).
-- Topics: `/main/list` `.topic-badge` pills (`Tag.where(kind: 'topic')`, `parseTopicTags`); the API `tags` (names only) is the fallback.
+- Topics: `/main/list` `.topic-badge` pills (`Tag.where(kind: 'topic')`, `parseTopicTags`), one at a time. Unknown (no web session) → no pills.
+- Other tags (`src/shared/tags.ts`, pure, tested): every problem row shows all its API `tags` (hidden in compact mode). The **Tags** dropdown (`tagFilter` in `webview/main.ts`) lists every tag that isn't a topic pill (`otherTags`, case-insensitive; all tags when topics are unknown; chosen tags stay listed), several at once, `tagMode` **Any (OR)** (default) / **All (AND)** (`matchesTags`), combined with status, topic and search. Stored in the filter (`tags`, `tagMode`, optional; `cleanTagFilter` in `setProblemFilter`).
 - Verdicts (`src/grader/verdicts.ts`): codes in `RESULT_CODE` order `? P - s T M x E !`; strip only if it matches the website's `VERDICT_STRING_RE`; groups `[...]` = box with `groupLabel()` (website text); otherwise plain `[text]`. Legend popover "Reading the results".
 - Header: `titleParts()` drops a repeated `name:` prefix from `full_name`; match source as a text line under the selector.
 - Sorting (`webview/filters.ts` `sortProblems`): default / name A–Z, Z–A (numeric) / latest submission / best score ↑↓ / recently opened (`cedtGrader.recentlyOpened` in workspaceState); stored in the filter (`sort`).

@@ -53,7 +53,7 @@ Click the **CEDT Grader** icon in the Activity Bar. The sidebar has five section
 | **Current problem** | Follows the file you are editing. Pick its grader problem from the searchable list (name or id), see your **counted score**, choose a language (only languages this problem allows are shown), then press **Submit to Grader**. Icons next to the problem: statement, copy name, open on the grader website, auto-detect, unlink. |
 | **Result** | Shows live status while grading, then the points, a coloured tile per test as on the website (hover a tile or a box for details; **?** explains the colours), the compiler message if compilation failed, whether your counted score improved and a link to the submission. Submit again with **Submit to Grader**. |
 | **History** | Every submission for this problem (website ones too), with time, language, score and verdicts; the one that counts is marked. Click one for per-test results, runtime, memory and the compiler message, to **open that version** in a new editor, or to **compare it with your current file**. |
-| **Problems** | Lists all your problems (every one, however many) with their counted score. Filter by status (All / Unsolved / In progress / Solved, like the website), by topic, or by name/id, and sort (name, latest submission, best score, recently opened). Click a problem to open its file (or create / find / link one); hover a row for its icons, or right-click it for all actions. The list stays where you scrolled. |
+| **Problems** | Lists all your problems (every one, however many) with their counted score. Each row shows the problem's tags. Filter by status (All / Unsolved / In progress / Solved, like the website), by topic, by other tags (the **Tags** dropdown: tick several, match **Any (OR)** or **All (AND)**), or by name/id, and sort (name, latest submission, best score, recently opened). Click a problem to open its file (or create / find / link one); hover a row for its icons, or right-click it for all actions. The list stays where you scrolled. |
 
 Typical flow: open `sol.cpp` → pick the problem once (it is remembered) → **Submit**. A file whose problem was found automatically asks once before its first submit; after that, and for problems you picked yourself, **Submit** sends right away.
 
@@ -69,7 +69,7 @@ Typical flow: open `sol.cpp` → pick the problem once (it is remembered) → **
 
 <img src="media/readme/history.png" width="340" alt="History with submission 3 expanded: per-test results, score, time and memory, and the buttons Open this version and Compare with current file">
 
-**Problems.** Every problem with its counted score. Filter by status or topic, search, sort; a ✓ marks the problem of the file you have open.
+**Problems.** Every problem with its counted score and its tags. Filter by status, topic or other tags (several at once, any or all of them), search, sort; a ✓ marks the problem of the file you have open.
 
 <img src="media/readme/problems.png" width="340" alt="Problems list with the filters All, Unsolved, In progress and Solved, a search box, sorting, topic chips and seven problems with their counted scores">
 

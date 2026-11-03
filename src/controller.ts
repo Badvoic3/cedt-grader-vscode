@@ -71,6 +71,7 @@ import { ATTACHMENT, CACHE, LIMITS, TIMING, troubleshootingUrl, WEB_PATHS } from
 import { needsSave, shouldRevealResult } from './shared/submitOptions';
 import { HOW_LINKED, MATCH_SOURCE, PICK_HOW, S } from './shared/strings';
 import { KEYS } from './shared/stateKeys';
+import { cleanTagFilter, otherTags } from './shared/tags';
 import { currentLang, dateLocale, resolveLang, setLanguage } from './shared/i18n';
 import type { HistoryEntry, ProblemFilter, ProblemView, ResultView, SubmissionDetailView, ViewState } from './shared/messages';
 
@@ -1107,6 +1108,7 @@ export class GraderController implements vscode.Disposable {
         error: pState.error,
         filter: this.problemFilter(),
         topics: this.topics(list),
+        tags: otherTags(list?.problems ?? [], this.topics(list), this.problemFilter().tags ?? []),
         penaltyNote:
           !list || list.listStatus === 'loaded'
             ? null
@@ -1188,17 +1190,15 @@ export class GraderController implements vscode.Disposable {
       status: valid.includes(f.status) ? f.status : 'all',
       topic: f.topic || null,
       sort: f.sort && sorts.includes(f.sort) ? f.sort : 'default',
+      ...cleanTagFilter(f.tags, f.tagMode),
     });
     this.emit();
   }
 
   /** Topic pills: the website's topic tags when known, otherwise every tag in use. */
+  /** Topic pills: the website's topic tags (from /main/list). Unknown → none, and every tag goes to the "Tags" dropdown. */
   private topics(list: import('./grader').ProblemList | undefined): { name: string; description: string | null }[] {
-    if (!list) return [];
-    if (list.topics && list.topics.length) return list.topics;
-    const names = new Set<string>();
-    for (const p of list.problems) for (const t of p.tags ?? []) names.add(t);
-    return [...names].sort((a, b) => a.localeCompare(b)).map((name) => ({ name, description: null }));
+    return list?.topics?.length ? list.topics : [];
   }
 
   private allowedLanguages(p: Pick<Problem, 'permittedLanguageIds'>): Language[] {
