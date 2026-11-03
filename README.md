@@ -139,7 +139,7 @@ The list keeps its scroll position.
 
 Some problems come as a package: a provided `main.cpp` that runs the tests, and a file you edit, such as `student.h`. Folder mode links the whole folder to the problem.
 
-<!-- Picture to take: media/readme/folder-mode.png, the Current problem card in folder mode (Folder linked by you, Submits, Runs, Run tests, Submit to Grader). Add it here as an <img> with alt text once the file exists. -->
+<img src="media/readme/folder-mode.png" width="340" alt="Current problem in folder mode: student.h open, Folder linked by you: grader/07_Class_12/, Submits Automatic: student.h, Runs Automatic: main.cpp, the note that only this file is sent, Load test cases, Load samples, Run tests and Submit to Grader">
 
 **Download the attachment.** For problems with an attachment (the website's "File"), click **Download attachment** on the current problem or on a problem row. It is downloaded only when you click.
 
