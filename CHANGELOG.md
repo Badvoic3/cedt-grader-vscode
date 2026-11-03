@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+### Problem list
+- **Tags on every problem row**, as on the website (topics and other tags such as Graph, DFS, BFS). Hidden in compact mode.
+- **Topic pills have three states.** Click to cycle: show only that topic's problems (filled, ✓) → hide them (red, struck through) → off. The new setting **Topic Click Order** (`cedtGrader.panel.topicClickOrder`) puts "hide" first instead. Several pills can be set at once. A saved single-topic filter from an older version still works.
+- **Filter by other tags:** a **Tags** dropdown next to the topic pills lists every tag that isn't a topic. Tick several and match **Any (OR)** or **All (AND)**. It combines with the status filter, the topic pill and the search, and is remembered per workspace. When the website's topic list can't be read, every tag is in the dropdown instead of showing as pills.
+
+### Submitting
+- **Confirm Before Submit asks once, not every time.** A file whose problem was matched automatically (file name, folder name or CPH data) asks once before its first submit. Submitting saves the match as your choice ("Chosen by you"), so later submits go straight through. Problems you chose yourself are never asked; suggestions still always ask. In folder mode, the "which file?" question is also asked only until the folder's submit file is chosen.
+
+### CPH's panel
+- With CPH installed and its setting "Auto Show Judge" on (CPH's default), CPH opens its panel on every switch to a source file and can cover this one. The panel now asks once, inside the panel: **Turn it off** (changes CPH's setting where it is on), **Keep it** (asks again next session) or **Don't ask again**.
+
 ### Attachments
 - **Download attachment** (the website's "File"): a cloud-download icon on the current problem and on problem rows (and in their right-click menus, plus the command "Download Problem Attachment"), only for problems that have an attachment. Downloaded only when you click, through the grader's API (`GET /api/v1/problems/{id}/files/attachment`).
 - A single file (e.g. a `.dig` or `.cpp` template) is saved next to the active file (or in the workspace root) under its own name, opened, and the panel offers to rename it to match the problem. Nothing is ever overwritten (`_2`, `_3`, …).

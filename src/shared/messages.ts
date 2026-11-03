@@ -55,8 +55,16 @@ export type ProblemSort = 'default' | 'name-asc' | 'name-desc' | 'latest' | 'sco
 
 export interface ProblemFilter {
   status: 'all' | 'unsolved' | 'inprogress' | 'solved';
-  /** Topic tag name, or null for all topics. */
+  /** Older saved filters: one topic, shown only (read as `topicsIn`; new filters store null). */
   topic: string | null;
+  /** Topic pills set to "show only problems with this topic" (any of them). Optional: older saved filters lack it. */
+  topicsIn?: string[];
+  /** Topic pills set to "hide problems with this topic". */
+  topicsOut?: string[];
+  /** Other tags chosen in the "Tags" dropdown (none = no tag filter). Optional: older saved filters lack it. */
+  tags?: string[];
+  /** How several chosen tags combine: 'or' = any of them (default), 'and' = all of them. */
+  tagMode?: 'and' | 'or';
   /** List order (default = grader order). */
   sort?: ProblemSort;
 }
@@ -242,8 +250,12 @@ export interface ViewState {
     error: string | null;
     /** Persisted per workspace. */
     filter: ProblemFilter;
-    /** Topic pills (the website's topic tags, or all tags when unknown). */
+    /** Topic pills: the website's topic tags (empty when unknown; then every tag is in `tags`). */
     topics: { name: string; description: string | null }[];
+    /** The "Tags" dropdown: every other tag of the problems (`otherTags`), selected ones included. */
+    tags: string[];
+    /** What the first click on a topic pill does (setting `cedtGrader.panel.topicClickOrder`). Optional for older test states. */
+    topicClickOrder?: 'showFirst' | 'hideFirst';
     /** Note when hint/AI penalties could not be read from /main/list. */
     penaltyNote: string | null;
   };

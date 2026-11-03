@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { confirmSuggestion, type GateAnswer } from '../src/mapping/suggestionGate';
+import { confirmSuggestion, submitQuestion, type GateAnswer } from '../src/mapping/suggestionGate';
 
 /** Simulates the active file's link: write actions (submit, load test cases) on a suggestion. */
 function harness(answer: GateAnswer) {
@@ -50,5 +50,31 @@ describe('write actions on a suggested match', () => {
       expect(ok).toBe(true);
       expect(asked).toBe(0);
     }
+  });
+});
+
+describe('the question before Submit', () => {
+  const q = (source: string, confirmBeforeSubmit = true, answered = false) => submitQuestion({ source, confirmBeforeSubmit, answered });
+
+  it('chosen by you (saved file or folder link): never asked, whatever the setting', () => {
+    expect(q('saved')).toBeNull();
+    expect(q('saved', false)).toBeNull();
+  });
+  it('automatic matches: asked once while "Confirm Before Submit" is on', () => {
+    for (const source of ['filename', 'folder', 'cph']) {
+      expect(q(source)).toBe('confirmOnce');
+      expect(q(source, false)).toBeNull();
+    }
+  });
+  it('after Submit the link is saved, so the next submit sees "saved" and asks nothing', () => {
+    expect(q('filename')).toBe('confirmOnce');
+    expect(q('saved')).toBeNull();
+  });
+  it('suggestions always ask, even with confirmations off or another question answered', () => {
+    expect(q('suggested', false)).toBe('suggested');
+    expect(q('suggested', true, true)).toBe('suggested');
+  });
+  it('another question already covered it (exam warning, which file in folder mode): not asked again', () => {
+    expect(q('filename', true, true)).toBeNull();
   });
 });

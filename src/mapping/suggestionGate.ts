@@ -25,3 +25,20 @@ export async function confirmSuggestion(opts: {
   if (a === 'choose') await opts.chooseAnother();
   return false;
 }
+
+/**
+ * Which question Submit asks about the problem before sending (pure):
+ * - a suggestion (not confirmed) → the suggestion question, always (even with confirmations off);
+ * - chosen by the user (a saved file or folder link) → nothing, ever;
+ * - an automatic match (file name, folder name, CPH data) → one confirmation while
+ *   "Confirm Before Submit" is on; answering Submit saves the link, so it becomes
+ *   "Chosen by you" and is not asked again.
+ * `answered`: another question just covered it (the exam warning, or folder mode's "which file").
+ */
+export type SubmitQuestion = 'suggested' | 'confirmOnce' | null;
+
+export function submitQuestion(o: { source: string; confirmBeforeSubmit: boolean; answered: boolean }): SubmitQuestion {
+  if (o.source === 'suggested') return 'suggested';
+  if (o.source === 'saved' || o.answered) return null;
+  return o.confirmBeforeSubmit ? 'confirmOnce' : null;
+}

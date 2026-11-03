@@ -473,7 +473,29 @@ input::placeholder { color: var(--vscode-input-placeholderForeground); }
 }
 .topic:hover { background: var(--vscode-list-hoverBackground); }
 .topic.active { color: var(--vscode-button-foreground); background: var(--vscode-button-background); border-color: transparent; }
+/* Hidden topic: red outline and text, struck through (colour + icon + line, not colour alone). */
+.topic.excluded {
+  color: var(--vscode-errorForeground, #f14c4c); border-color: var(--vscode-errorForeground, #f14c4c);
+  background: var(--vscode-inputValidation-errorBackground, transparent); text-decoration: line-through;
+}
+.topic .codicon { font-size: 12px; vertical-align: -2px; margin-right: 2px; }
 .segmented .seg:focus-visible, .topic:focus-visible { outline: 1px solid var(--vscode-focusBorder); outline-offset: -1px; }
+/* "Tags" dropdown (other tags, several at once, Any / All). */
+.tag-filter { display: flex; flex-direction: column; gap: 4px; }
+.tag-toggle {
+  display: flex; align-items: center; gap: 4px; max-width: 100%; align-self: flex-start; padding: 1px 8px; border-radius: 10px;
+  border: 1px solid var(--vscode-input-border, var(--border)); color: inherit; background: transparent; font: inherit; font-size: 0.85em; cursor: pointer;
+}
+.tag-toggle:hover { background: var(--vscode-list-hoverBackground); }
+.tag-toggle.active { color: var(--vscode-button-foreground); background: var(--vscode-button-background); border-color: transparent; }
+.tag-toggle:focus-visible { outline: 1px solid var(--vscode-focusBorder); outline-offset: -1px; }
+.tag-menu { display: flex; flex-direction: column; gap: 4px; padding: 6px; border: 1px solid var(--vscode-widget-border, var(--border)); border-radius: var(--radius); }
+.tag-menu-head { align-items: center; }
+.tag-list { display: flex; flex-wrap: wrap; gap: 2px 10px; max-height: 9.5em; overflow-y: auto; }
+.tag-option { display: inline-flex; align-items: center; gap: 4px; min-width: 0; max-width: 100%; cursor: pointer; font-size: 0.9em; }
+/* Tags on each problem row. */
+.problem-tags { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 2px; }
+.problem-tags .tag { padding: 0 5px; border-radius: 8px; font-size: 0.8em; line-height: 1.5; color: var(--vscode-badge-foreground); background: var(--vscode-badge-background); opacity: 0.85; }
 
 /* ---------------------------------------------------------- problem header */
 
@@ -573,6 +595,7 @@ body.compact .score-card .score { font-size: 1.1em; }
 body.compact .score-facts { gap: 0 8px; }
 body.compact #sec-result .score { font-size: 1.2em; }
 body.compact .problem-full { display: none; }
+body.compact .problem-tags { display: none; }
 body.compact .btn.big { min-height: 26px; padding: 3px 10px; font-size: 1em; }
 body.compact .tile { width: 12px; height: 12px; font-size: 8px; }
 body.compact .history-row { padding: 1px 4px; }

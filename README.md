@@ -53,9 +53,9 @@ Click the **CEDT Grader** icon in the Activity Bar. The sidebar has five section
 | **Current problem** | Follows the file you are editing. Pick its grader problem from the searchable list (name or id), see your **counted score**, choose a language (only languages this problem allows are shown), then press **Submit to Grader**. Icons next to the problem: statement, copy name, open on the grader website, auto-detect, unlink. |
 | **Result** | Shows live status while grading, then the points, a coloured tile per test as on the website (hover a tile or a box for details; **?** explains the colours), the compiler message if compilation failed, whether your counted score improved and a link to the submission. Submit again with **Submit to Grader**. |
 | **History** | Every submission for this problem (website ones too), with time, language, score and verdicts; the one that counts is marked. Click one for per-test results, runtime, memory and the compiler message, to **open that version** in a new editor, or to **compare it with your current file**. |
-| **Problems** | Lists all your problems (every one, however many) with their counted score. Filter by status (All / Unsolved / In progress / Solved, like the website), by topic, or by name/id, and sort (name, latest submission, best score, recently opened). Click a problem to open its file (or create / find / link one); hover a row for its icons, or right-click it for all actions. The list stays where you scrolled. |
+| **Problems** | Lists all your problems (every one, however many) with their counted score. Each row shows the problem's tags. Filter by status (All / Unsolved / In progress / Solved, like the website), by topic (click a topic pill to cycle: show only that topic's problems, hide them, back to off; the order is a setting), by other tags (the **Tags** dropdown: tick several, match **Any (OR)** or **All (AND)**), or by name/id, and sort (name, latest submission, best score, recently opened). Click a problem to open its file (or create / find / link one); hover a row for its icons, or right-click it for all actions. The list stays where you scrolled. |
 
-Typical flow: open `sol.cpp` → pick the problem once (it is remembered) → **Submit** → confirm. That's two clicks for every later submission.
+Typical flow: open `sol.cpp` → pick the problem once (it is remembered) → **Submit**. A file whose problem was found automatically asks once before its first submit; after that, and for problems you picked yourself, **Submit** sends right away.
 
 **Current problem.** The file name, the problem it belongs to and how it was chosen (here: *Matched by file name*), the icons for the statement, copying the name, the grader website, Auto-detect and ✕, then your counted score, the language and **Submit to Grader**.
 
@@ -69,7 +69,7 @@ Typical flow: open `sol.cpp` → pick the problem once (it is remembered) → **
 
 <img src="media/readme/history.png" width="340" alt="History with submission 3 expanded: per-test results, score, time and memory, and the buttons Open this version and Compare with current file">
 
-**Problems.** Every problem with its counted score. Filter by status or topic, search, sort; a ✓ marks the problem of the file you have open.
+**Problems.** Every problem with its counted score and its tags. Filter by status, topic or other tags (several at once, any or all of them), search, sort; a ✓ marks the problem of the file you have open.
 
 <img src="media/readme/problems.png" width="340" alt="Problems list with the filters All, Unsolved, In progress and Solved, a search box, sorting, topic chips and seven problems with their counted scores">
 
@@ -119,10 +119,11 @@ With **Remember password on this computer** on, your password is kept in the OS 
 | `cedtGrader.displayLanguage` | `en` | Language of the panel and messages: English, ไทย (Thai), or Follow VS Code. See [Language](#language). |
 | `cedtGrader.panel.sections` | all, in order | Which panel sections to show and in what order (Account, Current problem, Result, History, Problems). Remove one to hide it. Account always comes back while you are logged out. |
 | `cedtGrader.panel.compact` | `false` | Compact panel: tighter spacing, the counted score on one line, one-line problem rows (full name in the tooltip), smaller verdict tiles. |
+| `cedtGrader.panel.topicClickOrder` | `showFirst` | What the first click on a topic pill does: `showFirst` = show only that topic's problems (second click hides them), `hideFirst` = hide them first (second click shows only them). The third click turns the filter off. |
 | `cedtGrader.baseUrl` | `https://cedt-grader.nattee.net` | Another cafe-grader server. User settings only. |
 | `cedtGrader.username` | | Filled in when you log in from the panel. |
 | `cedtGrader.pollIntervalSeconds` | `5` | How often to check while grading (minimum 3). Polling only runs after a submission and stops after 3 minutes. |
-| `cedtGrader.confirmBeforeSubmit` | `true` | Ask before each submission. |
+| `cedtGrader.confirmBeforeSubmit` | `true` | Ask once before submitting a file whose problem was matched automatically (file name, folder name, CPH data). Submitting saves the match as your choice ("Chosen by you"), so it isn't asked again. Problems you chose yourself are never asked; suggestions always are. |
 | `cedtGrader.saveBeforeSubmit` | `true` | Save the file before submitting (after you confirm), so the grader gets exactly what is on disk. Save actions such as format on save run first. If saving fails, nothing is submitted. |
 | `cedtGrader.revealResultAfterSubmit` | `true` | When grading finishes, open the **Result** section and scroll it into view. Keyboard focus stays in your editor. |
 | `cedtGrader.statementBeside` | `true` | Open statements beside your code. |
@@ -197,6 +198,7 @@ This is an unofficial homework tool. If a problem looks like part of an exam, th
 - **Load test cases** saves the grader's cases into the file's CPH problem ("Saved to CPH"): your own CPH tests stay first, the old CPH file is backed up (`.bak`), and loading again doesn't duplicate anything. CPH only re-reads tests when you switch to the file; when that file is already open in front, the extension does this for you, otherwise use **Reload in CPH** (or switch to the file) before running them.
 - **Renames:** after renaming a file in VS Code, the extension offers to move its CPH tests to the new name (CPH itself doesn't follow renames).
 - Both extensions add a button to the editor title bar: CPH's runs your tests locally; ours (☁) submits to the grader.
+- **CPH's panel covering this one:** CPH opens its own panel every time you switch to a source file (its setting "Auto Show Judge", on by default). The panel asks once whether to turn that off (**Turn it off** / **Keep it** / **Don't ask again**); you can still open CPH yourself.
 
 The extension never changes CPH itself and doesn't require it. Disabling CPH switches "Load test cases" to saving files.
 

@@ -205,7 +205,8 @@ const EN_S = {
     submit: 'Submit',
     chooseAnother: 'Choose another problem',
     confirmQ: (file: string, name: string, id: number, lang: string | null) => `Submit ${file} to ${name} (#${id})${lang ? ` as ${lang}` : ''}?`,
-    confirmOff: 'You can turn this question off in Settings ("CEDT Grader: Confirm Before Submit").',
+    /** Detail under the one-time question for an automatic match; `how` is HOW_LINKED (e.g. "matched by file name"). */
+    confirmOnce: (how: string) => `This file was ${how}. Submitting links it to this problem, so you won't be asked again.`,
     whichFileQ: (name: string, id: number) => `Which file do you submit to ${name} (#${id})?`,
     submitNamed: (file: string) => `Submit ${file}`,
     submitOpen: (file: string) => `Submit ${file} (open file)`,
@@ -291,6 +292,16 @@ const EN_S = {
   runTests: {
     noTests: 'There are no test cases to run yet. Load the test cases first.',
     noTestsShort: 'load the test cases first',
+  },
+
+  cphAutoShow: {
+    question: 'CPH opens its own panel every time you switch to a source file, which can hide this panel. Turn that off?',
+    detail: 'This changes CPH\'s setting "Auto Show Judge". You can still open CPH yourself, and turn the setting back on in VS Code\'s settings.',
+    turnOff: 'Turn it off',
+    keep: 'Keep it',
+    never: "Don't ask again",
+    done: 'CPH no longer opens its panel by itself.',
+    failed: (why: string) => `Couldn't change CPH's setting: ${why}`,
   },
 
   attachment: {
@@ -495,6 +506,19 @@ const EN_W = {
   filterProblemsByStatus: "Filter problems by status",
   sortProblems: "Sort problems",
   filterProblemsByTopic: "Filter problems by topic",
+  /** "Tags" dropdown (the problems' other tags, several at once). */
+  tagsFilter: 'Tags',
+  tagsChosen: (names: string) => `Tags: ${names}`,
+  tagsFilterTip: 'Filter by other tags of the problems (several at once)',
+  tagMatch: 'Match',
+  tagMatchAny: 'Any (OR)',
+  tagMatchAll: 'All (AND)',
+  tagMatchAnyTip: 'Show problems that have at least one of the chosen tags',
+  tagMatchAllTip: 'Show problems that have every chosen tag',
+  clearTags: 'Clear',
+  clearTagsTip: 'Untick all tags',
+  /** Screen-reader text for the tags on a problem row. */
+  problemTags: (names: string) => `tags: ${names}`,
   pageNumber: "Page number",
   zoomLevel: "Zoom level",
   findInStatement: "Find in statement",
@@ -523,8 +547,13 @@ const EN_W = {
   compilationError: 'Compilation error',
   points: (n: string) => `${n} points`,
   graded: 'Graded',
-  topicTip: (description: string | null, topic: string, active: boolean) =>
-    `${description ? `${description}. ` : ''}${active ? 'Click again to show all topics' : `Show only ${topic} problems`}`,
+  /** Topic pill tooltip (also its aria-label): the state, then what the next click does (order from the setting). */
+  topicTip: (description: string | null, topic: string, state: 'off' | 'out' | 'in', order: 'showFirst' | 'hideFirst') => {
+    const next = (order === 'hideFirst' ? { off: 'out', out: 'in', in: 'off' } : { off: 'in', in: 'out', out: 'off' })[state];
+    const now = state === 'in' ? `Showing only ${topic} problems. ` : state === 'out' ? `Hiding ${topic} problems. ` : `${topic}: `;
+    const click = next === 'in' ? `click to show only ${topic} problems` : next === 'out' ? `click to hide ${topic} problems` : `click to stop filtering by ${topic}`;
+    return `${description ? `${description}. ` : ''}${now}${state === 'off' ? click : click[0].toUpperCase() + click.slice(1)}`;
+  },
   defaultOrder: "Default order",
   nameAZ: "Name A–Z",
   nameZA: "Name Z–A",

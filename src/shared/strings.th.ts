@@ -25,6 +25,21 @@ export const TH_REVIEW: readonly string[] = [
   'W.readingStatementTip',
   'W.saveTestcasesAsFiles',
   'W.findMatchingFile',
+  // Submit asks once per automatic match (2026-11-03): not reviewed yet.
+  'S.submit.confirmOnce',
+  // Tags dropdown and row tags (2026-11-03): not reviewed yet.
+  'W.tagsFilter',
+  'W.tagsChosen',
+  'W.tagsFilterTip',
+  'W.tagMatch',
+  'W.tagMatchAny',
+  'W.tagMatchAll',
+  'W.tagMatchAnyTip',
+  'W.tagMatchAllTip',
+  'W.clearTags',
+  'W.clearTagsTip',
+  'W.problemTags',
+  'W.topicTip',
 ];
 
 export const TH: Strings = {
@@ -213,7 +228,7 @@ export const TH: Strings = {
       submit: 'Submit',
       chooseAnother: 'เลือกโจทย์อื่น',
       confirmQ: (file, name, id, lang) => `Submit ${file} ไปที่ ${name} (#${id})${lang ? ` เป็นภาษา ${lang}` : ''} ไหม?`,
-      confirmOff: 'ปิดคำถามนี้ได้ในการตั้งค่า ("CEDT Grader: Confirm Before Submit")',
+      confirmOnce: (how) => `ไฟล์นี้${how} เมื่อ Submit แล้วจะเชื่อมไฟล์นี้กับโจทย์ไว้ ครั้งต่อไปจะไม่ถามอีก`,
       whichFileQ: (name, id) => `จะส่งไฟล์ไหนไปที่ ${name} (#${id})`,
       submitNamed: (file) => `ส่ง ${file}`,
       submitOpen: (file) => `ส่ง ${file} (ไฟล์ที่เปิดอยู่)`,
@@ -299,6 +314,16 @@ export const TH: Strings = {
     runTests: {
       noTests: 'ยังไม่มีเทสเคสให้รัน โหลดเทสเคสก่อน',
       noTestsShort: 'โหลดเทสเคสก่อน',
+    },
+
+    cphAutoShow: {
+      question: 'CPH จะเปิดแผงของตัวเองทุกครั้งที่สลับไปไฟล์โค้ด ซึ่งอาจบังแผงนี้ ปิดการทำงานนี้ไหม?',
+      detail: 'จะเปลี่ยนการตั้งค่า "Auto Show Judge" ของ CPH คุณยังเปิด CPH เองได้ และเปิดการตั้งค่านี้กลับได้ในการตั้งค่าของ VS Code',
+      turnOff: 'ปิด',
+      keep: 'เปิดไว้เหมือนเดิม',
+      never: 'ไม่ต้องถามอีก',
+      done: 'CPH จะไม่เปิดแผงของตัวเองอัตโนมัติแล้ว',
+      failed: (why) => `เปลี่ยนการตั้งค่าของ CPH ไม่สำเร็จ: ${why}`,
     },
 
     attachment: {
@@ -501,6 +526,17 @@ export const TH: Strings = {
     filterProblemsByStatus: 'กรองโจทย์ตามสถานะ',
     sortProblems: 'เรียงโจทย์',
     filterProblemsByTopic: 'กรองโจทย์ตามหัวข้อ',
+    tagsFilter: 'แท็ก',
+    tagsChosen: (names) => `แท็ก: ${names}`,
+    tagsFilterTip: 'กรองโจทย์ตามแท็กอื่น ๆ (เลือกได้หลายแท็ก)',
+    tagMatch: 'เงื่อนไข',
+    tagMatchAny: 'อย่างน้อยหนึ่ง (OR)',
+    tagMatchAll: 'ทุกแท็ก (AND)',
+    tagMatchAnyTip: 'แสดงโจทย์ที่มีแท็กที่เลือกอย่างน้อยหนึ่งแท็ก',
+    tagMatchAllTip: 'แสดงโจทย์ที่มีแท็กที่เลือกครบทุกแท็ก',
+    clearTags: 'ล้าง',
+    clearTagsTip: 'ยกเลิกการเลือกแท็กทั้งหมด',
+    problemTags: (names) => `แท็ก: ${names}`,
     pageNumber: 'หมายเลขหน้า',
     zoomLevel: 'ระดับการซูม',
     findInStatement: 'ค้นหาในโจทย์',
@@ -529,8 +565,12 @@ export const TH: Strings = {
     compilationError: 'Compile error',
     points: (n) => `${n} คะแนน`,
     graded: 'ตรวจแล้ว',
-    topicTip: (description, topic, active) =>
-      `${description ? `${description} ` : ''}${active ? 'คลิกอีกครั้งเพื่อแสดงทุกหัวข้อ' : `แสดงเฉพาะโจทย์หัวข้อ ${topic}`}`,
+    topicTip: (description, topic, state, order) => {
+      const next = (order === 'hideFirst' ? { off: 'out', out: 'in', in: 'off' } : { off: 'in', in: 'out', out: 'off' })[state];
+      const now = state === 'in' ? `แสดงเฉพาะโจทย์หัวข้อ ${topic} อยู่ ` : state === 'out' ? `ซ่อนโจทย์หัวข้อ ${topic} อยู่ ` : `${topic}: `;
+      const click = next === 'in' ? `คลิกเพื่อแสดงเฉพาะโจทย์หัวข้อ ${topic}` : next === 'out' ? `คลิกเพื่อซ่อนโจทย์หัวข้อ ${topic}` : `คลิกเพื่อเลิกกรองหัวข้อ ${topic}`;
+      return `${description ? `${description} ` : ''}${now}${click}`;
+    },
     defaultOrder: 'ลำดับเดิม',
     nameAZ: 'ชื่อ A–Z',
     nameZA: 'ชื่อ Z–A',

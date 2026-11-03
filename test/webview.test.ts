@@ -58,7 +58,7 @@ const base: ViewState = {
   result: null,
   gradingElsewhere: null,
   history: { loading: false, stale: false, error: null, items: [], expanded: null },
-  problems: { loading: false, loaded: false, stale: false, items: [], error: null, penaltyNote: null, filter: { status: 'all', topic: null }, topics: [] },
+  problems: { loading: false, loaded: false, stale: false, items: [], error: null, penaltyNote: null, filter: { status: 'all', topic: null }, topics: [], tags: [] },
 };
 
 const loggedIn: ViewState = {
@@ -87,7 +87,7 @@ const loggedIn: ViewState = {
       { submissionId: 2460900, number: 2, points: 0, status: 'compilation_error', comment: 'Compilation error', submittedAt: '2026-11-02T12:30:00+07:00', language: 'C++', compileError: true, counted: false, verdicts: [] },
     ],
   },
-  problems: { loading: false, loaded: true, items: [{ id: 1360, name: '00_Intro_11', fullName: 'Hello', score: score(100), hasFile: true, hasTestcase: true, hasAttachment: false, status: 'solved', tags: ['ComProg'], lastSubmissionTime: '2026-11-01T10:00:00Z', lastOpened: 5 }, { id: 1271, name: '01_Expr_11', fullName: 'An Expression', score: score(null), hasFile: false, hasTestcase: false, hasAttachment: false, status: 'untried', tags: [], lastSubmissionTime: null, lastOpened: null }], error: null, penaltyNote: null, stale: false, filter: { status: 'all', topic: null }, topics: [] },
+  problems: { loading: false, loaded: true, items: [{ id: 1360, name: '00_Intro_11', fullName: 'Hello', score: score(100), hasFile: true, hasTestcase: true, hasAttachment: false, status: 'solved', tags: ['ComProg'], lastSubmissionTime: '2026-11-01T10:00:00Z', lastOpened: 5 }, { id: 1271, name: '01_Expr_11', fullName: 'An Expression', score: score(null), hasFile: false, hasTestcase: false, hasAttachment: false, status: 'untried', tags: [], lastSubmissionTime: null, lastOpened: null }], error: null, penaltyNote: null, stale: false, filter: { status: 'all', topic: null }, topics: [], tags: [] },
 };
 
 /** Open the "…" menu with this aria-label and click the item with this text. */
@@ -634,9 +634,70 @@ describe.runIf(existsSync(resolve(__dirname, '../esbuild.mjs')))('sidebar webvie
     post({ ...st, problems: { ...st.problems, filter: { status: 'unsolved', topic: null } } });
     expect(doc.querySelectorAll('#sec-problems .problem-row')).toHaveLength(1); // the untried one
     expect(doc.querySelector('#sec-problems')!.textContent).toContain('1 of 2 problems');
-    doc.querySelector<HTMLButtonElement>('#sec-problems .topic')!.click();
-    expect(sent.at(-1)).toEqual({ type: 'setFilter', filter: { status: 'unsolved', topic: 'ComProg' } });
+    // Topic pill, three states (default order): not chosen → show only → hide → not chosen.
+    const pill = () => doc.querySelector<HTMLButtonElement>('#sec-problems .topic')!;
+    expect(pill().className).toBe('topic');
+    expect(pill().getAttribute('aria-label')).toBe('ComProg: click to show only ComProg problems');
+    pill().click();
+    expect(sent.at(-1)).toEqual({ type: 'setFilter', filter: { status: 'unsolved', topic: null, topicsIn: ['ComProg'], topicsOut: [] } });
+    post({ ...st, problems: { ...st.problems, filter: { status: 'all', topic: null, topicsIn: ['ComProg'], topicsOut: [] } } });
+    expect(pill().classList.contains('active')).toBe(true);
+    expect(pill().querySelector('.codicon-check')).not.toBeNull();
+    expect(pill().getAttribute('aria-label')).toBe('Showing only ComProg problems. Click to hide ComProg problems');
+    expect(doc.querySelectorAll('#sec-problems .problem-row')).toHaveLength(1); // only the ComProg one
+    pill().click();
+    expect(sent.at(-1)).toEqual({ type: 'setFilter', filter: { status: 'all', topic: null, topicsIn: [], topicsOut: ['ComProg'] } });
+    post({ ...st, problems: { ...st.problems, filter: { status: 'all', topic: null, topicsIn: [], topicsOut: ['ComProg'] } } });
+    expect(pill().classList.contains('excluded')).toBe(true);
+    expect(pill().querySelector('.codicon-circle-slash')).not.toBeNull();
+    expect(pill().getAttribute('aria-label')).toBe('Hiding ComProg problems. Click to stop filtering by ComProg');
+    expect(doc.querySelectorAll('#sec-problems .problem-row')).toHaveLength(1); // the ComProg one is hidden
+    pill().click();
+    expect(sent.at(-1)).toEqual({ type: 'setFilter', filter: { status: 'all', topic: null, topicsIn: [], topicsOut: [] } });
+    // Setting "hide first": the first click hides.
+    post({ ...st, problems: { ...st.problems, filter: { status: 'all', topic: null }, topicClickOrder: 'hideFirst' } });
+    expect(pill().getAttribute('aria-label')).toBe('ComProg: click to hide ComProg problems');
+    pill().click();
+    expect(sent.at(-1)).toEqual({ type: 'setFilter', filter: { status: 'all', topic: null, topicsIn: [], topicsOut: ['ComProg'] } });
+    // An older saved filter (one topic) shows as "show only".
+    post({ ...st, problems: { ...st.problems, filter: { status: 'all', topic: 'ComProg' } } });
+    expect(pill().classList.contains('active')).toBe(true);
     expect(doc.querySelector('#sec-problems')!.textContent).not.toMatch(/Random/);
+  });
+
+  it('problem rows show their tags; the Tags dropdown filters by several other tags with Any / All', () => {
+    const { doc, sent, post } = boot();
+    const items = loggedIn.problems.items.map((p, i) => ({ ...p, tags: i === 0 ? ['ComProg', 'Graph', 'DFS'] : ['BFS'] }));
+    const st = { ...loggedIn, problems: { ...loggedIn.problems, items, topics: [{ name: 'ComProg', description: null }], tags: ['BFS', 'DFS', 'Graph'] } };
+    post(st);
+    const firstRow = doc.querySelector('#sec-problems .problem-row')!;
+    expect([...firstRow.querySelectorAll('.problem-tags .tag')].map((t) => t.textContent)).toEqual(['ComProg', 'Graph', 'DFS']);
+    expect(firstRow.querySelector('.problem-main')!.getAttribute('aria-label')).toContain('tags: ComProg, Graph, DFS');
+    // closed: one toggle; open it
+    const toggle = doc.querySelector<HTMLButtonElement>('#sec-problems .tag-toggle')!;
+    expect(toggle.textContent).toContain('Tags');
+    expect(toggle.getAttribute('aria-expanded')).toBe('false');
+    toggle.click();
+    const boxes = [...doc.querySelectorAll<HTMLInputElement>('#sec-problems .tag-option input[type=checkbox]')];
+    expect(boxes.map((b) => b.parentElement!.textContent)).toEqual(['BFS', 'DFS', 'Graph']);
+    boxes[2].click();
+    expect(sent.at(-1)).toEqual({ type: 'setFilter', filter: { status: 'all', topic: null, tags: ['Graph'], tagMode: 'or' } });
+    post({ ...st, problems: { ...st.problems, filter: { status: 'all', topic: null, tags: ['Graph', 'DFS'], tagMode: 'or' } } });
+    expect(doc.querySelectorAll('#sec-problems .problem-row')).toHaveLength(1);
+    expect(doc.querySelector('#sec-problems .tag-toggle')!.textContent).toContain('Graph / DFS');
+    // Any / All
+    const all = [...doc.querySelectorAll<HTMLButtonElement>('#sec-problems .tag-menu .seg')].find((b) => b.textContent === 'All (AND)')!;
+    all.click();
+    expect(sent.at(-1)).toEqual({ type: 'setFilter', filter: { status: 'all', topic: null, tags: ['Graph', 'DFS'], tagMode: 'and' } });
+    // Clear
+    [...doc.querySelectorAll<HTMLButtonElement>('#sec-problems .tag-menu button')].find((b) => b.textContent === 'Clear')!.click();
+    expect(sent.at(-1)).toEqual({ type: 'setFilter', filter: { status: 'all', topic: null, tags: [], tagMode: 'or' } });
+  });
+
+  it('no other tags: no Tags dropdown', () => {
+    const { doc, post } = boot();
+    post(loggedIn);
+    expect(doc.querySelector('#sec-problems .tag-toggle')).toBeNull();
   });
 
   it('unrelated state pushes do not recreate a hovered element (tooltips stay)', () => {

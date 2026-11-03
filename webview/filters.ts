@@ -1,5 +1,6 @@
 import { W } from '../src/shared/strings';
 import type { ProblemFilter, ProblemSort, ProblemView } from '../src/shared/messages';
+import { matchesTags, matchesTopics } from '../src/shared/tags';
 
 /** Text search: name, full name, or id ("1360" / "#1360"). */
 export function matches(p: ProblemView, q: string): boolean {
@@ -8,14 +9,16 @@ export function matches(p: ProblemView, q: string): boolean {
 
 /**
  * Problem-list filters, same rules as the website (main/list.html.haml):
- * All / Unsolved (untried or in progress) / In progress / Solved, a topic
- * tag, and the text search, combined.
+ * All / Unsolved (untried or in progress) / In progress / Solved, the topic
+ * pills (show only / hide), the other tags chosen in the "Tags" dropdown (any / all of them), and
+ * the text search, combined.
  */
 export function filterProblems(items: ProblemView[], f: ProblemFilter, q: string): ProblemView[] {
   return items.filter((p) => {
     if (f.status === 'unsolved' && p.status === 'solved') return false;
     if ((f.status === 'inprogress' || f.status === 'solved') && p.status !== f.status) return false;
-    if (f.topic && !(p.tags ?? []).includes(f.topic)) return false;
+    if (!matchesTopics(p.tags, f)) return false;
+    if (!matchesTags(p.tags, f.tags, f.tagMode)) return false;
     return matches(p, q);
   });
 }
