@@ -1180,7 +1180,7 @@ function renderProblems(s: ViewState): void {
     return;
   }
   b.append(statusFilter(P.filter), el('div', { class: 'row gap filter-row' }, problemFilter, sortSelect(P.filter)));
-  if (P.topics.length) b.append(topicFilter(P.filter, P.topics));
+  if (P.topics.length) b.append(topicFilter(P.filter, P.topics, P.topicClickOrder ?? 'showFirst'));
   if (P.tags.length) b.append(tagFilter(P.filter, P.tags));
   const hits = problemHits(s);
   b.append(problemList.viewport);
@@ -1223,18 +1223,18 @@ function sortSelect(f: ProblemFilter): HTMLElement {
 }
 
 /**
- * Topic pills, three states each (click cycles): not chosen → hide problems
- * with the topic → show only problems with it. Colour + icon show the state.
+ * Topic pills, three states each (clicks cycle; `cedtGrader.panel.topicClickOrder`:
+ * show only first, or hide first). Colour + icon show the state.
  */
-function topicFilter(f: ProblemFilter, topics: { name: string; description: string | null }[]): HTMLElement {
+function topicFilter(f: ProblemFilter, topics: { name: string; description: string | null }[], order: 'showFirst' | 'hideFirst'): HTMLElement {
   return el('div', { class: 'topics', role: 'group', 'aria-label': W.filterProblemsByTopic },
     ...topics.map((t) => {
       const state = topicState(f, t.name);
-      const tip = W.topicTip(t.description, t.name, state);
+      const tip = W.topicTip(t.description, t.name, state, order);
       return el('button', {
         class: `topic${state === 'in' ? ' active' : state === 'out' ? ' excluded' : ''}`, type: 'button',
         title: tip, 'aria-label': tip, 'data-focus': `topic:${t.name}`,
-        onclick: () => send({ type: 'setFilter', filter: { ...f, ...cycleTopic(f, t.name) } }),
+        onclick: () => send({ type: 'setFilter', filter: { ...f, ...cycleTopic(f, t.name, order) } }),
       }, state === 'in' ? icon('check') : state === 'out' ? icon('circle-slash') : null, t.name);
     }),
   );

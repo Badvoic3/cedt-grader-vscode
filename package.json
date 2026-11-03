@@ -332,6 +332,13 @@
           "default": false,
           "markdownDescription": "%config.panel.compact.description%"
         },
+        "cedtGrader.panel.topicClickOrder": {
+          "type": "string",
+          "enum": ["showFirst", "hideFirst"],
+          "enumDescriptions": ["%config.panel.topicClickOrder.showFirst%", "%config.panel.topicClickOrder.hideFirst%"],
+          "default": "showFirst",
+          "markdownDescription": "%config.panel.topicClickOrder.description%"
+        },
         "cedtGrader.baseUrl": {
           "type": "string",
           "default": "https://cedt-grader.nattee.net",

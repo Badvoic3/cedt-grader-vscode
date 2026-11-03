@@ -254,6 +254,8 @@ export interface ViewState {
     topics: { name: string; description: string | null }[];
     /** The "Tags" dropdown: every other tag of the problems (`otherTags`), selected ones included. */
     tags: string[];
+    /** What the first click on a topic pill does (setting `cedtGrader.panel.topicClickOrder`). Optional for older test states. */
+    topicClickOrder?: 'showFirst' | 'hideFirst';
     /** Note when hint/AI penalties could not be read from /main/list. */
     penaltyNote: string | null;
   };

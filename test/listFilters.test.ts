@@ -121,19 +121,26 @@ describe('other tags: the "Tags" dropdown (several at once, Any / All)', () => {
   });
 });
 
-describe('topic pills: not chosen → hide → show only → not chosen', () => {
+describe('topic pills: three states, click order from the setting', () => {
   const items = [V(1, 'solved', ['ComProg']), V(2, 'untried', ['DataAlgo', 'Graph']), V(3, 'untried', ['DigLo']), V(4, 'untried', [])];
   const ids = (f: Parameters<typeof filterProblems>[1]) => filterProblems(items, f, '').map((p) => p.id);
   const off = { status: 'all' as const, topic: null };
 
-  it('a click cycles the state and keeps the other pills', () => {
-    const a = cycleTopic(off, 'ComProg');
-    expect(a).toEqual({ topic: null, topicsIn: [], topicsOut: ['ComProg'] });
-    expect(topicState(a, 'ComProg')).toBe('out');
-    const b = cycleTopic({ ...a, topicsOut: ['ComProg', 'DigLo'] }, 'ComProg');
-    expect(b).toEqual({ topic: null, topicsIn: ['ComProg'], topicsOut: ['DigLo'] });
-    expect(topicState(b, 'ComProg')).toBe('in');
+  it('default (show only first): not chosen → show only → hide → not chosen, other pills kept', () => {
+    const a = cycleTopic({ ...off, topicsOut: ['DigLo'] }, 'ComProg');
+    expect(a).toEqual({ topic: null, topicsIn: ['ComProg'], topicsOut: ['DigLo'] });
+    expect(topicState(a, 'ComProg')).toBe('in');
+    const b = cycleTopic(a, 'ComProg');
+    expect(b).toEqual({ topic: null, topicsIn: [], topicsOut: ['DigLo', 'ComProg'] });
+    expect(topicState(b, 'ComProg')).toBe('out');
     expect(cycleTopic(b, 'ComProg')).toEqual({ topic: null, topicsIn: [], topicsOut: ['DigLo'] });
+  });
+  it('hide first: not chosen → hide → show only → not chosen', () => {
+    const a = cycleTopic(off, 'ComProg', 'hideFirst');
+    expect(a).toEqual({ topic: null, topicsIn: [], topicsOut: ['ComProg'] });
+    const b = cycleTopic(a, 'ComProg', 'hideFirst');
+    expect(b).toEqual({ topic: null, topicsIn: ['ComProg'], topicsOut: [] });
+    expect(cycleTopic(b, 'ComProg', 'hideFirst')).toEqual({ topic: null, topicsIn: [], topicsOut: [] });
   });
   it('hide: problems with that topic are left out (problems without tags stay)', () => {
     expect(ids({ ...off, topicsOut: ['ComProg'] })).toEqual([2, 3, 4]);

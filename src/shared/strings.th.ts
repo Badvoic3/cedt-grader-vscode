@@ -565,14 +565,12 @@ export const TH: Strings = {
     compilationError: 'Compile error',
     points: (n) => `${n} คะแนน`,
     graded: 'ตรวจแล้ว',
-    topicTip: (description, topic, state) =>
-      `${description ? `${description} ` : ''}${
-        state === 'in'
-          ? `แสดงเฉพาะโจทย์หัวข้อ ${topic} อยู่ คลิกเพื่อเลิกกรองหัวข้อ ${topic}`
-          : state === 'out'
-            ? `ซ่อนโจทย์หัวข้อ ${topic} อยู่ คลิกเพื่อแสดงเฉพาะโจทย์หัวข้อ ${topic}`
-            : `${topic}: คลิกเพื่อซ่อนโจทย์หัวข้อ ${topic}`
-      }`,
+    topicTip: (description, topic, state, order) => {
+      const next = (order === 'hideFirst' ? { off: 'out', out: 'in', in: 'off' } : { off: 'in', in: 'out', out: 'off' })[state];
+      const now = state === 'in' ? `แสดงเฉพาะโจทย์หัวข้อ ${topic} อยู่ ` : state === 'out' ? `ซ่อนโจทย์หัวข้อ ${topic} อยู่ ` : `${topic}: `;
+      const click = next === 'in' ? `คลิกเพื่อแสดงเฉพาะโจทย์หัวข้อ ${topic}` : next === 'out' ? `คลิกเพื่อซ่อนโจทย์หัวข้อ ${topic}` : `คลิกเพื่อเลิกกรองหัวข้อ ${topic}`;
+      return `${description ? `${description} ` : ''}${now}${click}`;
+    },
     defaultOrder: 'ลำดับเดิม',
     nameAZ: 'ชื่อ A–Z',
     nameZA: 'ชื่อ Z–A',

@@ -1109,6 +1109,7 @@ export class GraderController implements vscode.Disposable {
         filter: this.problemFilter(),
         topics: this.topics(list),
         tags: otherTags(list?.problems ?? [], this.topics(list), this.problemFilter().tags ?? []),
+        topicClickOrder: this.cfg.topicClickOrder,
         penaltyNote:
           !list || list.listStatus === 'loaded'
             ? null
