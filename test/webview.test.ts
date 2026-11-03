@@ -506,6 +506,7 @@ describe.runIf(existsSync(resolve(__dirname, '../esbuild.mjs')))('sidebar webvie
     post(withAttachment({ folder: { path: 'pkg/', matched: false, submitFile: 'student.h', submitWhy: 'the included file named student.*', submitChosen: false, runFile: 'main.cpp', runWhy: 'the only file with main()', runChosen: false, candidates: ['main.cpp', 'student.h', 'vector.h'], runCandidates: ['main.cpp'] }, folderMode: { on: true, disabledReason: null }, runTests: { disabledReason: 'load the test cases first' } }));
     const run = [...cur.querySelectorAll<HTMLButtonElement>('button')].find((b) => b.textContent?.includes('Run tests'))!;
     expect(run.disabled).toBe(true);
+    expect(run.classList.contains('run-tests')).toBe(true); // spans the panel like Submit
     expect(run.dataset.tip).toContain('load the test cases first');
     post({ ...withAttachment(), runTests: null });
     expect([...cur.querySelectorAll('button')].some((b) => b.textContent?.includes('Run tests'))).toBe(false); // no CPH: no button

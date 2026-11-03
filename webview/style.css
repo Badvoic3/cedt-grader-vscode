@@ -427,6 +427,7 @@ input::placeholder { color: var(--vscode-input-placeholderForeground); }
   grid-template-columns: repeat(auto-fit, minmax(min(100%, var(--btn-w, 10em)), 1fr));
 }
 .test-buttons .btn { min-width: 0; overflow: hidden; }
+.test-buttons .run-tests { grid-column: 1 / -1; }
 .row-actions { display: inline-flex; flex: none; opacity: 0; transition: opacity 0.1s; }
 /* Same width on every row (room for all five icons, the optional download last), so the score pills line up. */
 .problem-row .row-actions { width: calc(5 * 22px); }
