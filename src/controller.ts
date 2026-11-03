@@ -2258,7 +2258,7 @@ export class GraderController implements vscode.Disposable {
   }
 
   /**
-   * "Find file by name" (only when clicked): one workspace.findFiles for source
+   * "Find a matching file" (only when clicked): one workspace.findFiles for source
    * files named like the problem (case-insensitive) with an extension of a
    * permitted language; build output, binaries and excluded folders are skipped.
    */
@@ -2309,8 +2309,9 @@ export class GraderController implements vscode.Disposable {
    * Download the grader's test cases (one at a time, cached in globalStorage)
    * and save them: into CPH's problem file when CPH is installed, otherwise as
    * `<problem>/tests/<n>.in|out` files (asked once per workspace) or not at all.
+   * `asFiles` ("Save test cases as files"): always the files, CPH or not.
    */
-  async loadTestcases(refresh = false): Promise<void> {
+  async loadTestcases(refresh = false, asFiles = false): Promise<void> {
     const problem = this.currentProblem();
     if (!problem || !this.fileUri || this.testcasesBusy) return;
     // Folder mode: test cases belong to the run file (the driver), whichever file of the folder is open.
@@ -2364,7 +2365,7 @@ export class GraderController implements vscode.Disposable {
       const keyNote = key ? S.testcases.keyRemoved : '';
       const refetch = S.testcases.downloadAgain;
 
-      const target = await this.testcaseTarget(S.testcases.whereTo(set.cases.length));
+      const target = asFiles ? 'files' : await this.testcaseTarget(S.testcases.whereTo(set.cases.length));
       if (!target) return;
       if (target === 'files') {
         const folder = this.testsFolder(file, this.folderLink?.fsPath ?? null, problem.name);
@@ -2378,12 +2379,12 @@ export class GraderController implements vscode.Disposable {
         const pick = await vscode.window.showInformationMessage(
           S.testcases.savedFiles(r.written, total, vscode.workspace.asRelativePath(folder), tooLarge, extra) + keyNote,
           open,
-          install,
+          ...(this.cph.installed ? [] : [install]),
           ...(res.fromCache ? [refetch] : []),
         );
         if (pick === open) await vscode.commands.executeCommand('revealInExplorer', vscode.Uri.file(folder));
         if (pick === install) await vscode.commands.executeCommand('extension.open', CPH_EXTENSION_ID);
-        if (pick === refetch) await this.loadTestcases(true);
+        if (pick === refetch) await this.loadTestcases(true, asFiles);
         return;
       }
 
@@ -2400,16 +2401,17 @@ export class GraderController implements vscode.Disposable {
       if (result.alreadyPresent) parts.push(S.testcases.alreadyPresent(result.alreadyPresent));
       if (result.updated) parts.push(S.testcases.updated(result.updated));
       if (result.added) parts.push(S.testcases.added(result.added));
+      const reloaded = await this.reloadCphIfActive(file);
       const reload = S.testcases.reloadCph;
       const pick = await vscode.window.showInformationMessage(
-        S.testcases.cphDone(parts.join('; '), !!result.backupPath) + keyNote,
-        reload,
+        S.testcases.cphDone(parts.join('; '), !!result.backupPath, reloaded) + keyNote,
+        ...(reloaded ? [] : [reload]),
         ...(res.fromCache ? [refetch] : []),
       );
       if (pick === reload) await this.reloadCph(file);
       if (pick === refetch) await this.loadTestcases(true);
     } catch (err) {
-      if (classifyConnectionError(err)) this.reportError(err, () => this.loadTestcases(refresh));
+      if (classifyConnectionError(err)) this.reportError(err, () => this.loadTestcases(refresh, asFiles));
       else void vscode.window.showErrorMessage(S.testcases.failed(this.describe(err)));
     } finally {
       downloaded();
@@ -2519,8 +2521,12 @@ export class GraderController implements vscode.Disposable {
       if (result.alreadyPresent) parts.push(S.testcases.alreadyPresent(result.alreadyPresent));
       if (result.updated) parts.push(S.testcases.updated(result.updated));
       if (result.added) parts.push(S.testcases.added(result.added));
+      const reloaded = await this.reloadCphIfActive(file);
       const reload = S.testcases.reloadCph;
-      const pick = await vscode.window.showInformationMessage(`${loaded} ${S.testcases.cphDone(S.samples.savedCph(parts.join('; ')), !!result.backupPath)}`, reload);
+      const pick = await vscode.window.showInformationMessage(
+        `${loaded} ${S.testcases.cphDone(S.samples.savedCph(parts.join('; ')), !!result.backupPath, reloaded)}`,
+        ...(reloaded ? [] : [reload]),
+      );
       if (pick === reload) await this.reloadCph(file);
     } catch (err) {
       void vscode.window.showErrorMessage(S.samples.failed(this.describe(err)));
@@ -2529,13 +2535,33 @@ export class GraderController implements vscode.Disposable {
 
   /**
    * CPH only re-reads a .prob when the active editor changes (no reload
-   * command exists). Briefly show a read-only placeholder and come back.
+   * command exists). Briefly show a read-only placeholder and come back. Only
+   * the placeholder is ever closed (if it didn't become the active editor,
+   * nothing is closed).
    */
   async reloadCph(file: vscode.Uri): Promise<void> {
-    const doc = await vscode.workspace.openTextDocument(vscode.Uri.from({ scheme: SUBMISSION_SCHEME, path: '/0/reloading-cph' }));
-    await vscode.window.showTextDocument(doc, { preview: true, preserveFocus: false });
-    await vscode.commands.executeCommand('workbench.action.closeActiveEditor');
-    await vscode.window.showTextDocument(file, { preview: false });
+    const placeholder = vscode.Uri.from({ scheme: SUBMISSION_SCHEME, path: '/0/reloading-cph' });
+    const doc = await vscode.workspace.openTextDocument(placeholder);
+    const shown = await vscode.window.showTextDocument(doc, { preview: true, preserveFocus: false });
+    if (vscode.window.activeTextEditor?.document.uri.toString() === placeholder.toString()) await vscode.commands.executeCommand('workbench.action.closeActiveEditor');
+    await vscode.window.showTextDocument(file, { preview: false, viewColumn: shown.viewColumn });
+  }
+
+  /**
+   * After writing a .prob: reload CPH right away when that is safe, i.e. the
+   * file is the active editor (the user stays where they are; only a flicker).
+   * Otherwise nothing moves: CPH reads the file when the user opens it, and the
+   * message offers "Reload in CPH". Returns whether it reloaded.
+   */
+  private async reloadCphIfActive(file: vscode.Uri): Promise<boolean> {
+    if (vscode.window.activeTextEditor?.document.uri.toString() !== file.toString()) return false;
+    try {
+      await this.reloadCph(file);
+      return true;
+    } catch (err) {
+      this.log(`CPH reload failed: ${this.describe(err)}`);
+      return false;
+    }
   }
 
   /** Command-palette flow: searchable QuickPick of the cached problem list. */

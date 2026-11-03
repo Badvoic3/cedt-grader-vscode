@@ -15,6 +15,11 @@
 - Renaming a folder now offers to move the CPH test cases of the files inside it (CPH names them after the full path).
 - Folder links follow folder renames; the submit file follows renames inside the folder. ✕ unlinks the folder.
 
+### Test cases
+- **Save test cases as files:** a save icon next to the problem name (and in its right-click menu, command "Save Test Cases as .in / .out Files") saves the grader's test cases as `.in` / `.out` files even when CPH is installed.
+- After loading test cases or samples into CPH, CPH is reloaded automatically when the file is already open in front; otherwise you stay where you are and **Reload in CPH** is offered as before. The reload now only ever closes its own placeholder tab.
+- Problem list: the score pills line up on every row (the download icon moved last). "Find file by name" is now **Find a matching file**.
+
 ### Sample cases from the statement
 - The statement icon is now a PDF icon (current problem, problem rows, menus). **Load test cases** has a shorter label; the details are in its tooltip.
 - **Load samples** (button on the same row as **Load test cases** on the current problem, for every problem, also those without grader test cases; command "Load Sample Cases from the Statement"): reads the example input/output table in the problem's statement PDF and saves the cases where **Load test cases** would: into the file's CPH tests (own tests kept first, `.bak` backup, duplicates skipped) or, without CPH, as `tests/sample1.in`, `sample1.out`, … (never overwriting). In folder mode they go to the run file (`main.cpp`). The result says how many cases were loaded and which had a note removed, so you can check them.

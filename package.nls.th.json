@@ -22,6 +22,7 @@
   "command.toggleFolderMode.title": "สลับระหว่างเชื่อมไฟล์นี้กับเชื่อมทั้งโฟลเดอร์",
   "command.loadTestcases.title": "โหลด Test Case จาก Grader",
   "command.loadSampleCases.title": "โหลดตัวอย่างจากโจทย์",
+  "command.saveTestcasesAsFiles.title": "บันทึก Test Case เป็นไฟล์ .in / .out",
   "command.clearCache.title": "ล้างข้อมูลแคช…",
   "command.openWalkthrough.title": "เริ่มต้นใช้งาน",
   "command.openTroubleshooting.title": "แก้ปัญหาเบื้องต้น",

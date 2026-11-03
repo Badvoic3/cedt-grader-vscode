@@ -23,6 +23,8 @@ export const TH_REVIEW: readonly string[] = [
   'W.loadSampleCases',
   'W.loadSampleCasesTip',
   'W.readingStatementTip',
+  'W.saveTestcasesAsFiles',
+  'W.findMatchingFile',
 ];
 
 export const TH: Strings = {
@@ -74,7 +76,7 @@ export const TH: Strings = {
       noLinkedFile: (name) => `${name}: ยังไม่มีไฟล์ที่เชื่อมไว้`,
       linkTo: (file) => `$(link) เชื่อมกับ ${file}`,
       createNew: '$(new-file) สร้างไฟล์ใหม่',
-      findByName: '$(search) หาไฟล์จากชื่อ',
+      findByName: '$(search) หาไฟล์ที่ตรงกับโจทย์',
       openStatement: '$(book) เปิดโจทย์',
       cleanedDuplicates: (n) => `ลบการเชื่อมไฟล์ที่ซ้ำ ${n} รายการออกจาก .cedt-grader.json แล้ว`,
       unlinkOthers: (what, problem) => `ยกเลิกการเชื่อม ${what} กับ ${problem} ไหม?`,
@@ -152,8 +154,8 @@ export const TH: Strings = {
       alreadyPresent: (n) => `มีอยู่แล้ว ${n} ข้อ`,
       updated: (n) => `อัปเดต ${n} ข้อ`,
       added: (n) => `เพิ่ม ${n} ข้อ`,
-      cphDone: (parts, backedUp) =>
-        `${parts}${backedUp ? ' (สำรองไฟล์ CPH เดิมไว้เป็น .bak)' : ''} สลับไปที่ไฟล์นั้น (หรือกด Reload in CPH) ก่อนรัน test ใน CPH`,
+      cphDone: (parts, backedUp, reloaded) =>
+        `${parts}${backedUp ? ' (สำรองไฟล์ CPH เดิมไว้เป็น .bak)' : ''}${reloaded ? ' พร้อมรันใน CPH แล้ว' : ' สลับไปที่ไฟล์นั้น (หรือกด Reload in CPH) ก่อนรัน test ใน CPH'}`,
       keyRemoved: ' ตัดบรรทัดสุดท้าย "KEY: …" ออกจากผลลัพธ์ที่ถูกต้องแล้ว เพราะมีแค่ main ของ Grader ที่พิมพ์บรรทัดนี้',
       reloadCph: 'Reload in CPH',
       failed: (why) => `โหลด test case ไม่ได้: ${why}`,
@@ -404,6 +406,7 @@ export const TH: Strings = {
     downloadingTestCases: 'กำลังดาวน์โหลด test case ของ Grader…',
     loadTestCasesCphTip: 'ดาวน์โหลด test case ของ Grader ลง CPH',
     loadTestCasesFilesTip: 'ดาวน์โหลด test case ของ Grader แล้วบันทึกเป็นไฟล์ .in / .out (ยังไม่ได้ติดตั้ง CPH)',
+    saveTestcasesAsFiles: 'บันทึก test case ของ Grader เป็นไฟล์ .in / .out',
     loadSampleCases: 'โหลดตัวอย่าง',
     readingSampleCases: 'กำลังอ่าน…',
     readingStatementTip: 'กำลังอ่านตารางตัวอย่างในโจทย์…',
@@ -458,7 +461,7 @@ export const TH: Strings = {
     linkTo: (fileName) => `เชื่อมกับ ${fileName}`,
     useFor: (name, fileName) => `ใช้ ${name} กับ ${fileName}`,
     goToLinkedFile: 'ไปที่ไฟล์ที่เชื่อมไว้',
-    findFileByName: 'หาไฟล์จากชื่อ',
+    findMatchingFile: 'หาไฟล์ที่ตรงกับโจทย์',
     newFileForThisProblem: 'สร้างไฟล์ใหม่สำหรับโจทย์นี้',
     openFileToLink: (prefix) => `${prefix}เปิดไฟล์ source เพื่อเชื่อมกับโจทย์`,
     nFilesLinked: (n) => `มี ${n} ไฟล์ที่เชื่อมกับโจทย์นี้`,
