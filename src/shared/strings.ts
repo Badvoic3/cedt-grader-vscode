@@ -205,7 +205,8 @@ const EN_S = {
     submit: 'Submit',
     chooseAnother: 'Choose another problem',
     confirmQ: (file: string, name: string, id: number, lang: string | null) => `Submit ${file} to ${name} (#${id})${lang ? ` as ${lang}` : ''}?`,
-    confirmOff: 'You can turn this question off in Settings ("CEDT Grader: Confirm Before Submit").',
+    /** Detail under the one-time question for an automatic match; `how` is HOW_LINKED (e.g. "matched by file name"). */
+    confirmOnce: (how: string) => `This file was ${how}. Submitting links it to this problem, so you won't be asked again.`,
     whichFileQ: (name: string, id: number) => `Which file do you submit to ${name} (#${id})?`,
     submitNamed: (file: string) => `Submit ${file}`,
     submitOpen: (file: string) => `Submit ${file} (open file)`,
