@@ -39,6 +39,8 @@ export const KEYS = {
   lastNewFileLanguage: 'cedtGrader.lastNewFileLanguage',
   /** "Don't show again" on the CPH tip. */
   cphTipDismissed: 'cedtGrader.cphTipDismissed',
+  /** "Don't ask again" on the question about CPH opening its panel on every file switch. */
+  cphAutoShowDismissed: 'cedtGrader.cphAutoShowDismissed',
   /** "Remember password on this computer". */
   rememberPassword: 'cedtGrader.rememberPassword',
   /** `.prob.bak` files this extension created in the workspace (deleted only from "Clear Cached Data"). */
