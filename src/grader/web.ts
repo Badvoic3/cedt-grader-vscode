@@ -2,6 +2,7 @@ import { AuthError, ParseError, SessionExpiredError } from './errors';
 import { HttpSession, type FetchLike, type Logger } from './http';
 import { extractAlerts, extractCsrf, hasLoginForm, parseLoginForm } from './parsers';
 import type { Redactor } from './redact';
+import { G } from '../shared/strings';
 
 /**
  * Cookie-based web session, used only for what the JSON API does not offer:
@@ -43,8 +44,8 @@ export class WebSession {
     });
     if (hasLoginForm(res.body) || /\/main\/login$/.test(res.path)) {
       const alert = extractAlerts(res.body)[0] ?? '';
-      if (/wrong password/i.test(alert)) throw new AuthError('Wrong username or password.', 'wrong-password');
-      if (/too many failed/i.test(alert)) throw new AuthError('Too many failed login attempts. Wait a few minutes.', 'throttled');
+      if (/wrong password/i.test(alert)) throw new AuthError(G.wrongPassword, 'wrong-password');
+      if (/too many failed/i.test(alert)) throw new AuthError(G.loginThrottled, 'throttled');
       throw new AuthError(alert ? `Web login failed: ${alert}` : 'Web login failed.', 'unknown');
     }
     this.loggedIn = true;

@@ -175,9 +175,12 @@ describe('no hard-coded messages outside strings.ts', () => {
       /placeHolder:\s*['"`][A-Za-z]/,
       /\.text\s*=\s*['"`](\$\([^)]*\)\s*)?[A-Za-z]/,
       /reason\s*=\s*['"`][A-Za-z]/,
+      /message:\s*['"`][A-Za-z]/, // progress.report({ message })
+      /['"`][A-Z][a-z]+[^'"`]*…['"`]/, // busy labels such as "Grading…"
     ];
     for (const f of src) {
       readFileSync(f, 'utf8').split('\n').forEach((line, i) => {
+        if (/^\s*(\/\/|\/?\*)/.test(line)) return; // comments quote texts
         if (patterns.some((re) => re.test(line))) offenders.push(`${f.slice(root.length + 1)}:${i + 1}`);
       });
     }

@@ -41,7 +41,7 @@ import { pathKey } from './mapping/paths';
 import { matchNote, type MatchInfo, NO_MATCH_INFO } from './mapping/linkActions';
 import { nameMatchesProblem, renameProposal } from './mapping/renameToProblem';
 import { LIMITS, SUBMISSION_SCHEME, TIMING, troubleshootingUrl, WEB_PATHS } from './shared/constants';
-import { MATCH_SOURCE, S } from './shared/strings';
+import { MATCH_SOURCE, S, W } from './shared/strings';
 import { KEYS } from './shared/stateKeys';
 import { cleanTagFilter, cleanTopicFilter, otherTags } from './shared/tags';
 import { currentLang, resolveLang, setLanguage } from './shared/i18n';
@@ -1310,7 +1310,7 @@ export class GraderController implements vscode.Disposable {
     const name = d.sourceFilename || 'submission';
     const left = vscode.Uri.from({ scheme: SUBMISSION_SCHEME, path: `/${d.id}/${name}` });
     const right = this.folder.targetUri() ?? this.fileUri; // folder mode: the file Submit sends
-    const label = `${d.number !== null ? `Attempt ${d.number}` : `#${d.id}`} ↔ ${right.path.split('/').pop()}`;
+    const label = `${d.number !== null ? W.attempt(d.number) : `#${d.id}`} ↔ ${right.path.split('/').pop()}`;
     await vscode.commands.executeCommand('vscode.diff', left, right, label);
   }
 

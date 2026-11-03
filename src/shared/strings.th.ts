@@ -40,6 +40,9 @@ export const TH_REVIEW: readonly string[] = [
   'W.clearTagsTip',
   'W.problemTags',
   'W.topicTip',
+  // Progress texts that were hard-coded in English (2026-11-04): not reviewed yet.
+  'S.testcases.downloadProgress',
+  'S.submit.graded',
 ];
 
 export const TH: Strings = {
@@ -155,6 +158,7 @@ export const TH: Strings = {
       notAllowed: (name) => `Grader ไม่อนุญาตให้ดาวน์โหลด test case ของ ${name}`,
       tooLarge: (n) => ` (${n} ข้อใหญ่เกินกว่าจะดาวน์โหลดได้)`,
       downloadAgain: 'ดาวน์โหลดใหม่',
+      downloadProgress: (done, total) => `กำลังดาวน์โหลด ${done} / ${total}`,
       whereTo: (n) => `ดาวน์โหลด test case แล้ว ${n} ข้อ จะเก็บไว้ที่ไหน?`,
       whereToDetail: 'บันทึกเป็นไฟล์ .in / .out ไว้ข้างไฟล์ source หรือติดตั้ง CPH เพื่อรัน test ใน VS Code',
       saveAsFiles: 'บันทึกเป็นไฟล์',
@@ -244,6 +248,7 @@ export const TH: Strings = {
       notAccepted: (wanted) => `โจทย์นี้ไม่รับภาษา ${wanted}`,
       gradingTitle: (name, id) => `กำลังตรวจ ${name} (#${id})`,
       compilationError: 'Compile error',
+      graded: 'ตรวจแล้ว',
       waitingStatus: (status) => `กำลังรอตรวจ… (${status})`,
       noSubmissionsYet: 'ยังไม่มีการส่ง',
       anotherFile: 'อีกไฟล์หนึ่ง',

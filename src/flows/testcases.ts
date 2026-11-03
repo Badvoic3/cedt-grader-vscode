@@ -138,7 +138,7 @@ export class TestCases {
             refresh,
             signal: abort.signal,
             onProgress: (done, total) => {
-              progress.report({ message: `downloading ${done} / ${total}`, increment: total ? ((done - last) / total) * 100 : 0 });
+              progress.report({ message: S.testcases.downloadProgress(done, total), increment: total ? ((done - last) / total) * 100 : 0 });
               last = done;
             },
           });

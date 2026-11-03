@@ -683,7 +683,7 @@ function renderCurrent(s: ViewState): void {
   b.append(
     el('button', { class: 'btn big', type: 'button', id: 'submit-btn', disabled: !sub.enabled, title: sub.reason ?? undefined, onclick: () => send({ type: 'submit' }), 'aria-describedby': sub.reason ? 'submit-reason' : undefined },
       sub.busy ? icon('loading', 'codicon-modifier-spin') : icon('cloud-upload'),
-      ` ${sub.busy ? 'Grading…' : sub.label}`,
+      ` ${sub.busy ? W.grading : sub.label}`,
     ),
   );
   if (s.gradingElsewhere) b.append(el('p', { class: 'hint' }, icon('loading', 'codicon-modifier-spin'), ' ', W.gradingOtherFile(s.gradingElsewhere)));

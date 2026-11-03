@@ -275,7 +275,7 @@ export class SubmitFlow {
             intervalMs: h.cfg.pollIntervalSeconds * 1000,
             signal: abort.signal,
             onUpdate: (s) => {
-              progress.report({ message: s.state === 'graded' ? 'graded' : s.status.replace(/_/g, ' ') });
+              progress.report({ message: s.state !== 'graded' ? S.submit.waitingStatus(s.status.replace(/_/g, ' ')) : s.compileError ? S.submit.compilationError : S.submit.graded });
               this.updateResult(key, submissionPatch(s, h.url(WEB_PATHS.submission(s.id))));
             },
           });
