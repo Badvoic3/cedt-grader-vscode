@@ -16,7 +16,8 @@
 - Folder links follow folder renames; the submit file follows renames inside the folder. ✕ unlinks the folder.
 
 ### Sample cases from the statement
-- **Load sample cases from the statement** (button next to **Load test cases** on the current problem, for every problem, also those without grader test cases; command "Load Sample Cases from the Statement"): reads the example input/output table in the problem's statement PDF and saves the cases where **Load test cases** would: into the file's CPH tests (own tests kept first, `.bak` backup, duplicates skipped) or, without CPH, as `tests/sample1.in`, `sample1.out`, … (never overwriting). In folder mode they go to the run file (`main.cpp`). The result says how many cases were loaded and which had a note removed, so you can check them.
+- The statement icon is now a PDF icon (current problem, problem rows, menus). **Load test cases** has a shorter label; the details are in its tooltip.
+- **Load samples** (button on the same row as **Load test cases** on the current problem, for every problem, also those without grader test cases; command "Load Sample Cases from the Statement"): reads the example input/output table in the problem's statement PDF and saves the cases where **Load test cases** would: into the file's CPH tests (own tests kept first, `.bak` backup, duplicates skipped) or, without CPH, as `tests/sample1.in`, `sample1.out`, … (never overwriting). In folder mode they go to the run file (`main.cpp`). The result says how many cases were loaded and which had a note removed, so you can check them.
 - Uses the statement already downloaded for the viewer; if it isn't there yet, it is downloaded once (the same request as opening the statement) and kept. Works on ruled tables with selectable text; the tooltip notes that an unusual layout may be read wrong. Checked against 50 course statements: every stdin/stdout example table was read; statements without one gave nothing.
 
 ### Matching

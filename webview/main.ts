@@ -506,7 +506,7 @@ function renderCurrent(s: ViewState): void {
       el('div', { class: 'field-label' }, W.problem,
         el('span', { class: 'grow' }),
         // All actions visible (as before the "…" menu); right-click offers the same.
-        p ? iconButton('book', W.openStatement, () => send({ type: 'openStatement', problemId: p.id })) : null,
+        p ? iconButton('file-pdf', W.openStatement, () => send({ type: 'openStatement', problemId: p.id })) : null,
         p ? iconButton('copy', W.copyProblemName, () => send({ type: 'copyName', problemId: p.id })) : null,
         p ? iconButton('globe', W.openOnTheGraderWebsite, () => send({ type: 'openProblemInBrowser', problemId: p.id })) : null,
         // The website's "File": a template file or a zip package (only problems that have one).
@@ -574,8 +574,10 @@ function renderCurrent(s: ViewState): void {
         el('p', { class: 'small muted' }, W.submitFileTip),
       );
     }
+    // Test cases on one row: the grader's (when it has them) and the statement's example table (every problem).
+    const tests = el('div', { class: 'row gap test-buttons' });
     if (p.hasTestcase) {
-      b.append(
+      tests.append(
         button(
           s.testcases.busy ? [icon('loading', 'codicon-modifier-spin'), ' ', W.loadingTestCases] : [icon('beaker'), ' ', W.loadTestCases],
           () => send({ type: 'loadTestcases' }),
@@ -590,14 +592,14 @@ function renderCurrent(s: ViewState): void {
         ),
       );
     }
-    // The statement's example table: for every problem (also without grader test cases).
-    b.append(
+    tests.append(
       button(
-        s.samples.busy ? [icon('loading', 'codicon-modifier-spin'), ' ', W.readingSampleCases] : [icon('file-pdf'), ' ', W.loadSampleCases],
+        s.samples.busy ? [icon('loading', 'codicon-modifier-spin'), ' ', W.readingSampleCases] : [icon('table'), ' ', W.loadSampleCases],
         () => send({ type: 'loadSampleCases' }),
-        { disabled: s.samples.busy, title: W.loadSampleCasesTip },
+        { disabled: s.samples.busy, title: s.samples.busy ? W.readingStatementTip : W.loadSampleCasesTip },
       ),
     );
+    b.append(tests);
     // Run tests (CPH installed only): the run file in folder mode, else this file.
     if (s.runTests) {
       b.append(button([icon('play'), ' ', W.runTests], () => send({ type: 'runTests' }), { disabled: !!s.runTests.disabledReason, title: s.runTests.disabledReason ? `${W.runTestsTip} (${s.runTests.disabledReason})` : W.runTestsTip }));
@@ -882,7 +884,7 @@ function headerMenuItems(p: ViewState['problem']): MenuItem[] {
   return [
     ...(p
       ? [
-          { icon: 'book', label: W.openStatement, onclick: () => send({ type: 'openStatement', problemId: p.id }) },
+          { icon: 'file-pdf', label: W.openStatement, onclick: () => send({ type: 'openStatement', problemId: p.id }) },
           { icon: 'copy', label: W.copyProblemName, onclick: () => send({ type: 'copyName', problemId: p.id }) },
           { icon: 'globe', label: W.openOnTheGraderWebsite, onclick: () => send({ type: 'openProblemInBrowser', problemId: p.id }) },
         ]
@@ -928,7 +930,7 @@ function rowMenuItems(p: ProblemView, s: ViewState): MenuItem[] {
     ...(p.hasAttachment
       ? [{ icon: 'cloud-download', label: W.downloadAttachment, onclick: () => send({ type: 'downloadAttachment', problemId: p.id }), disabledReason: s.attachment.busy === p.id ? W.downloading : null }]
       : []),
-    { icon: 'book', label: W.openStatement, onclick: () => send({ type: 'openStatement', problemId: p.id }) },
+    { icon: 'file-pdf', label: W.openStatement, onclick: () => send({ type: 'openStatement', problemId: p.id }) },
     { icon: 'globe', label: W.openOnTheGraderWebsite, onclick: () => send({ type: 'openProblemInBrowser', problemId: p.id }) },
   ];
 }
@@ -976,7 +978,7 @@ function problemRow(p: ProblemView, s: ViewState, where: 'picker' | 'list'): HTM
         p.hasAttachment
           ? iconButton('cloud-download', W.downloadAttachment, () => send({ type: 'downloadAttachment', problemId: p.id }), { disabledReason: s.attachment.busy === p.id ? W.downloading : null })
           : null,
-        iconButton('book', W.openStatement, () => send({ type: 'openStatement', problemId: p.id })),
+        iconButton('file-pdf', W.openStatement, () => send({ type: 'openStatement', problemId: p.id })),
       ),
     ),
     () => rowMenuItems(p, state ?? s),

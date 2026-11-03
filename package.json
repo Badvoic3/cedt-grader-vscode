@@ -130,7 +130,7 @@
         "command": "cedtGrader.openStatement",
         "title": "%command.openStatement.title%",
         "category": "%command.category%",
-        "icon": "$(book)"
+        "icon": "$(file-pdf)"
       },
       {
         "command": "cedtGrader.refreshProblems",
