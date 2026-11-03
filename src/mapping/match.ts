@@ -46,12 +46,14 @@ function remember<T>(memo: Map<string, T>, key: string, value: T): void {
 }
 
 /** Per problem object (the list's objects are reused for every file): normalized name, full name, pattern stem. */
-const PROBLEM_NAMES = new WeakMap<Problem, { name: string; full: string; pattern?: string; patternStem?: string }>();
+type ProblemNames = { srcName: string; srcFull: string; name: string; full: string; pattern?: string; patternStem?: string };
+const PROBLEM_NAMES = new WeakMap<Problem, ProblemNames>();
 
-function namesOf(p: Problem): { name: string; full: string; pattern?: string; patternStem?: string } {
+/** The note also keeps the names it was made from: a problem renamed in place gets a fresh note, never a stale one. */
+function namesOf(p: Problem): ProblemNames {
   let n = PROBLEM_NAMES.get(p);
-  if (!n) {
-    n = { name: normalizeName(p.name), full: normalizeName(p.fullName) };
+  if (!n || n.srcName !== p.name || n.srcFull !== p.fullName) {
+    n = { srcName: p.name, srcFull: p.fullName, name: normalizeName(p.name), full: normalizeName(p.fullName) };
     PROBLEM_NAMES.set(p, n);
   }
   return n;

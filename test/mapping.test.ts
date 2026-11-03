@@ -2,6 +2,7 @@ import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { resolveProblem } from '../src/mapping/match';
 import type { Problem } from '../src/grader';
 import { cphProbPath, matchCphProblem, readCphProblem } from '../src/mapping/cph';
 import { lookup, parseMappingFile, serializeMappingFile } from '../src/mapping/mappingFile';
@@ -62,5 +63,18 @@ describe('CPH .prob files', () => {
     expect(matchCphProblem(local('Local: test'), problems, BASE)).toBeNull();
     expect(matchCphProblem(local('x', 'https://codeforces.com/problemset/problem/1360/A'), problems, BASE)).toBeNull();
     expect(matchCphProblem(local('Local: dup'), [P(1, 'dup'), P(2, 'dup')], BASE)).toBeNull();
+  });
+});
+
+describe('matcher memo', () => {
+  it('a problem renamed in place is matched by its new name', () => {
+    const p = { id: 1, name: 'old_name', fullName: 'old_name', bestScore: null, lastScore: null, lastResult: null, lastSubmissionId: null, lastSubmissionTime: null, submissionCount: 0, hasTestcase: false, hasAttachment: false, permittedLanguageIds: null, tags: [], list: null };
+    const run = (file: string) => resolveProblem({ savedProblemId: null, cph: null, filePath: file, problems: [p], baseUrl: 'https://x', namePattern: '{id}_{name}.{ext}' });
+    expect(run('/w/old_name.cpp')).toMatchObject({ kind: 'match', source: 'filename' });
+    p.name = 'new_name';
+    p.fullName = 'new_name';
+    expect(run('/w/new_name.cpp')).toMatchObject({ kind: 'match', source: 'filename' });
+    expect(run('/w/1_new_name.cpp')).toMatchObject({ kind: 'match', source: 'filename' });
+    expect(run('/w/old_name.cpp').kind).not.toBe('match');
   });
 });
