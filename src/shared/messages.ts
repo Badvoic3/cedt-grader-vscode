@@ -202,6 +202,8 @@ export interface ViewState {
     note: string | null;
   };
   testcases: { busy: boolean };
+  /** "Load sample cases" is reading the statement; available = false when the cached statement is not a PDF. */
+  samples: { busy: boolean; available: boolean };
   /** CPH (optional) installed and enabled. */
   cph: { installed: boolean };
   languages: {
@@ -273,7 +275,9 @@ export type FromWebview =
   | { type: 'newFile'; problemId: number }
   | { type: 'goToFile'; problemId: number }
   | { type: 'findFile'; problemId: number }
-  | { type: 'loadTestcases' }
+  /** asFiles: "Save test cases as files" (.in / .out even when CPH is installed). */
+  | { type: 'loadTestcases'; asFiles?: boolean }
+  | { type: 'loadSampleCases' }
   | { type: 'confirmProblem'; problemId: number }
   | { type: 'setFilter'; filter: ProblemFilter }
   | { type: 'autoDetect' }

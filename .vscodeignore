@@ -1,5 +1,6 @@
 **
 !dist/extension.js
+!dist/pdfjs/**
 !media/icon.svg
 !media/icon.png
 !media/walkthrough/**

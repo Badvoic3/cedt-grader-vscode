@@ -14,10 +14,18 @@ import type { Strings } from './strings';
 
 /**
  * Keys whose Thai wording is less certain (highlighted on the review page).
- * Empty: everything was reviewed at checkpoint B (2026-11-03). Add keys here
+ * Everything else was reviewed at checkpoint B (2026-11-03). Add keys here
  * when a new text is translated without review.
  */
-export const TH_REVIEW: readonly string[] = [];
+export const TH_REVIEW: readonly string[] = [
+  // "Load sample cases" (2026-11-03): not reviewed yet.
+  'S.samples',
+  'W.loadSampleCases',
+  'W.loadSampleCasesTip',
+  'W.readingStatementTip',
+  'W.saveTestcasesAsFiles',
+  'W.findMatchingFile',
+];
 
 export const TH: Strings = {
   HOW_LINKED: {
@@ -68,7 +76,7 @@ export const TH: Strings = {
       noLinkedFile: (name) => `${name}: ยังไม่มีไฟล์ที่เชื่อมไว้`,
       linkTo: (file) => `$(link) เชื่อมกับ ${file}`,
       createNew: '$(new-file) สร้างไฟล์ใหม่',
-      findByName: '$(search) หาไฟล์จากชื่อ',
+      findByName: '$(search) หาไฟล์ที่ตรงกับโจทย์',
       openStatement: '$(book) เปิดโจทย์',
       cleanedDuplicates: (n) => `ลบการเชื่อมไฟล์ที่ซ้ำ ${n} รายการออกจาก .cedt-grader.json แล้ว`,
       unlinkOthers: (what, problem) => `ยกเลิกการเชื่อม ${what} กับ ${problem} ไหม?`,
@@ -146,14 +154,28 @@ export const TH: Strings = {
       alreadyPresent: (n) => `มีอยู่แล้ว ${n} ข้อ`,
       updated: (n) => `อัปเดต ${n} ข้อ`,
       added: (n) => `เพิ่ม ${n} ข้อ`,
-      cphDone: (parts, backedUp) =>
-        `${parts}${backedUp ? ' (สำรองไฟล์ CPH เดิมไว้เป็น .bak)' : ''} สลับไปที่ไฟล์นั้น (หรือกด Reload in CPH) ก่อนรัน test ใน CPH`,
+      cphDone: (parts, backedUp, reloaded) =>
+        `${parts}${backedUp ? ' (สำรองไฟล์ CPH เดิมไว้เป็น .bak)' : ''}${reloaded ? ' พร้อมรันใน CPH แล้ว' : ' สลับไปที่ไฟล์นั้น (หรือกด Reload in CPH) ก่อนรัน test ใน CPH'}`,
       keyRemoved: ' ตัดบรรทัดสุดท้าย "KEY: …" ออกจากผลลัพธ์ที่ถูกต้องแล้ว เพราะมีแค่ main ของ Grader ที่พิมพ์บรรทัดนี้',
       reloadCph: 'Reload in CPH',
       failed: (why) => `โหลด test case ไม่ได้: ${why}`,
       suggestedQ: (name, sub) => `โหลด test case ของ ${name}${sub ? ` (${sub})` : ''} ไหม?`,
       load: 'โหลด test case',
       progressTitle: (name) => `Test case ของ ${name}`,
+    },
+
+    samples: {
+      load: 'โหลดตัวอย่าง',
+      suggestedQ: (name, sub) => `โหลดตัวอย่างจากโจทย์ ${name}${sub ? ` (${sub})` : ''} ไปที่ไฟล์นี้ไหม`,
+      noPdf: 'โจทย์ข้อนี้ไม่มีไฟล์ PDF ให้อ่าน',
+      none: 'ไม่พบตารางตัวอย่างในโจทย์',
+      incomplete: (n) => `อ่านตารางตัวอย่างในโจทย์ไม่ได้ ${n} แถว จึงไม่ได้โหลดตัวอย่างเลย ให้คัดลอกจากโจทย์เอง`,
+      loaded: (n) => `โหลดตัวอย่างจากโจทย์ ${n} ข้อ`,
+      annotated: (n) => ` ตัดหมายเหตุออกจาก ${n} ข้อ ควรตรวจอีกครั้ง`,
+      whereTo: (n) => `อ่านตัวอย่างจากโจทย์ได้ ${n} ข้อ จะเก็บไว้ที่ไหน`,
+      savedFiles: (written, folder, extra) => `บันทึก ${written} ข้อไว้ที่ ${folder}/ (sample1.in, sample1.out, …)${extra ? ` (${extra})` : ''}`,
+      savedCph: (parts) => `บันทึกลง CPH แล้ว: ${parts}`,
+      failed: (why) => `โหลดตัวอย่างไม่ได้: ${why}`,
     },
 
     cache: {
@@ -380,11 +402,16 @@ export const TH: Strings = {
     loading: 'กำลังโหลด…',
     chooseLanguage: 'เลือกภาษา…',
     language: 'ภาษา',
-    loadingTestCases: 'กำลังดาวน์โหลดจาก Grader…',
-    loadTestCases: 'โหลด test case จาก Grader',
+    loadingTestCases: 'กำลังดาวน์โหลด…',
+    loadTestCases: 'โหลด test case',
     downloadingTestCases: 'กำลังดาวน์โหลด test case ของ Grader…',
     loadTestCasesCphTip: 'ดาวน์โหลด test case ของ Grader ลง CPH',
     loadTestCasesFilesTip: 'ดาวน์โหลด test case ของ Grader แล้วบันทึกเป็นไฟล์ .in / .out (ยังไม่ได้ติดตั้ง CPH)',
+    saveTestcasesAsFiles: 'บันทึก test case ของ Grader เป็นไฟล์ .in / .out',
+    loadSampleCases: 'โหลดตัวอย่าง',
+    readingSampleCases: 'กำลังอ่าน…',
+    readingStatementTip: 'กำลังอ่านตารางตัวอย่างในโจทย์…',
+    loadSampleCasesTip: 'โหลด test case จากตารางตัวอย่างในไฟล์โจทย์ (PDF) ใช้ได้กับโจทย์ที่ไม่มี test case ของ Grader ด้วย ถ้าโจทย์จัดหน้าแปลก ๆ อาจอ่านผิดได้ ควรตรวจ test case อีกครั้ง',
     languageNotAccepted: (language) => `โจทย์นี้ไม่รับภาษา ${language} เลือกโจทย์ผิดหรือเปล่า?`,
     change: 'เปลี่ยน',
     acceptedLanguages: (languages) => `ภาษาที่รับ: ${languages}`,
@@ -435,7 +462,7 @@ export const TH: Strings = {
     linkTo: (fileName) => `เชื่อมกับ ${fileName}`,
     useFor: (name, fileName) => `ใช้ ${name} กับ ${fileName}`,
     goToLinkedFile: 'ไปที่ไฟล์ที่เชื่อมไว้',
-    findFileByName: 'หาไฟล์จากชื่อ',
+    findMatchingFile: 'หาไฟล์ที่ตรงกับโจทย์',
     newFileForThisProblem: 'สร้างไฟล์ใหม่สำหรับโจทย์นี้',
     openFileToLink: (prefix) => `${prefix}เปิดไฟล์ source เพื่อเชื่อมกับโจทย์`,
     nFilesLinked: (n) => `มี ${n} ไฟล์ที่เชื่อมกับโจทย์นี้`,

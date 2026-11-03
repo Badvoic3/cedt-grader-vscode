@@ -86,6 +86,29 @@ function button(label: Child, onclick: () => void, opts: { kind?: 'primary' | 's
   return el('button', { class: `btn ${opts.kind ?? 'secondary'}`, type: 'button', disabled: opts.disabled, title: opts.title, onclick }, label);
 }
 
+/**
+ * Buttons of a `.test-buttons` grid get one width: the widest one's natural
+ * width (labels differ per language), via `--btn-w` (needs layout: measured
+ * on the next frame; skipped while hidden).
+ */
+let lastBtnW = '';
+function equalWidths(row: HTMLElement): void {
+  if (lastBtnW) row.style.setProperty('--btn-w', lastBtnW); // the section is rebuilt on re-render: no flicker
+  const raf = window.requestAnimationFrame?.bind(window);
+  if (!raf) return;
+  raf(() => {
+    let w = 0;
+    for (const b of row.children as HTMLCollectionOf<HTMLElement>) {
+      b.style.width = 'max-content';
+      w = Math.max(w, b.getBoundingClientRect().width);
+      b.style.width = '';
+    }
+    if (!w) return;
+    lastBtnW = `${Math.ceil(w)}px`;
+    row.style.setProperty('--btn-w', lastBtnW);
+  });
+}
+
 export interface MenuItem {
   icon: string;
   label: string;
@@ -506,12 +529,16 @@ function renderCurrent(s: ViewState): void {
       el('div', { class: 'field-label' }, W.problem,
         el('span', { class: 'grow' }),
         // All actions visible (as before the "…" menu); right-click offers the same.
-        p ? iconButton('book', W.openStatement, () => send({ type: 'openStatement', problemId: p.id })) : null,
+        p ? iconButton('file-pdf', W.openStatement, () => send({ type: 'openStatement', problemId: p.id })) : null,
         p ? iconButton('copy', W.copyProblemName, () => send({ type: 'copyName', problemId: p.id })) : null,
         p ? iconButton('globe', W.openOnTheGraderWebsite, () => send({ type: 'openProblemInBrowser', problemId: p.id })) : null,
         // The website's "File": a template file or a zip package (only problems that have one).
         p?.hasAttachment
           ? iconButton('cloud-download', W.downloadAttachment, () => send({ type: 'downloadAttachment', problemId: p.id }), { disabledReason: s.attachment.busy === p.id ? W.downloading : null })
+          : null,
+        // The grader's test cases as .in / .out files (also with CPH installed).
+        p?.hasTestcase
+          ? iconButton('save-as', W.saveTestcasesAsFiles, () => send({ type: 'loadTestcases', asFiles: true }), { disabledReason: s.testcases.busy ? W.downloadingTestCases : null })
           : null,
         p && s.folderMode
           ? iconButton(s.folderMode.on ? 'file' : 'folder', s.folderMode.on ? W.linkOnlyFile : W.linkFolder, () => send({ type: 'toggleFolderMode' }), { disabledReason: s.folderMode.disabledReason })
@@ -574,8 +601,12 @@ function renderCurrent(s: ViewState): void {
         el('p', { class: 'small muted' }, W.submitFileTip),
       );
     }
+    // Test-case buttons, the same width: the grader's (when it has them) and the statement's example
+    // table (unless the cached statement is not a PDF); side by side when they fit, stacked otherwise,
+    // a single one full width, none → no row. Run tests below, full width like Submit.
+    const tests = el('div', { class: 'test-buttons' });
     if (p.hasTestcase) {
-      b.append(
+      tests.append(
         button(
           s.testcases.busy ? [icon('loading', 'codicon-modifier-spin'), ' ', W.loadingTestCases] : [icon('beaker'), ' ', W.loadTestCases],
           () => send({ type: 'loadTestcases' }),
@@ -590,9 +621,26 @@ function renderCurrent(s: ViewState): void {
         ),
       );
     }
+    if (s.samples.available || s.samples.busy) {
+      tests.append(
+        button(
+          s.samples.busy ? [icon('loading', 'codicon-modifier-spin'), ' ', W.readingSampleCases] : [icon('table'), ' ', W.loadSampleCases],
+          () => send({ type: 'loadSampleCases' }),
+          { disabled: s.samples.busy, title: s.samples.busy ? W.readingStatementTip : W.loadSampleCasesTip },
+        ),
+      );
+    }
+    if (tests.children.length) {
+      b.append(tests);
+      equalWidths(tests);
+    }
     // Run tests (CPH installed only): the run file in folder mode, else this file.
     if (s.runTests) {
-      b.append(button([icon('play'), ' ', W.runTests], () => send({ type: 'runTests' }), { disabled: !!s.runTests.disabledReason, title: s.runTests.disabledReason ? `${W.runTestsTip} (${s.runTests.disabledReason})` : W.runTestsTip }));
+      b.append(
+        el('button', { class: 'btn secondary wide', type: 'button', disabled: !!s.runTests.disabledReason, title: s.runTests.disabledReason ? `${W.runTestsTip} (${s.runTests.disabledReason})` : W.runTestsTip, onclick: () => send({ type: 'runTests' }) },
+          icon('play'), ` ${W.runTests}`,
+        ),
+      );
     }
   }
 
@@ -874,13 +922,16 @@ function headerMenuItems(p: ViewState['problem']): MenuItem[] {
   return [
     ...(p
       ? [
-          { icon: 'book', label: W.openStatement, onclick: () => send({ type: 'openStatement', problemId: p.id }) },
+          { icon: 'file-pdf', label: W.openStatement, onclick: () => send({ type: 'openStatement', problemId: p.id }) },
           { icon: 'copy', label: W.copyProblemName, onclick: () => send({ type: 'copyName', problemId: p.id }) },
           { icon: 'globe', label: W.openOnTheGraderWebsite, onclick: () => send({ type: 'openProblemInBrowser', problemId: p.id }) },
         ]
       : []),
     ...(p?.hasAttachment
       ? [{ icon: 'cloud-download', label: W.downloadAttachment, onclick: () => send({ type: 'downloadAttachment', problemId: p.id }), disabledReason: state?.attachment.busy === p.id ? W.downloading : null }]
+      : []),
+    ...(p?.hasTestcase
+      ? [{ icon: 'save-as', label: W.saveTestcasesAsFiles, onclick: () => send({ type: 'loadTestcases', asFiles: true }), disabledReason: state?.testcases.busy ? W.downloadingTestCases : null }]
       : []),
     ...(p && state?.folderMode
       ? [{
@@ -915,12 +966,12 @@ function rowMenuItems(p: ProblemView, s: ViewState): MenuItem[] {
     { icon: 'copy', label: W.copyProblemName, onclick: () => send({ type: 'copyName', problemId: p.id }) },
     p.hasFile
       ? { icon: 'go-to-file', label: W.goToLinkedFile, onclick: () => send({ type: 'goToFile', problemId: p.id }) }
-      : { icon: 'search', label: W.findFileByName, onclick: () => send({ type: 'findFile', problemId: p.id }) },
+      : { icon: 'search', label: W.findMatchingFile, onclick: () => send({ type: 'findFile', problemId: p.id }) },
     { icon: 'new-file', label: W.newFileForThisProblem, onclick: () => send({ type: 'newFile', problemId: p.id }) },
+    { icon: 'file-pdf', label: W.openStatement, onclick: () => send({ type: 'openStatement', problemId: p.id }) },
     ...(p.hasAttachment
       ? [{ icon: 'cloud-download', label: W.downloadAttachment, onclick: () => send({ type: 'downloadAttachment', problemId: p.id }), disabledReason: s.attachment.busy === p.id ? W.downloading : null }]
       : []),
-    { icon: 'book', label: W.openStatement, onclick: () => send({ type: 'openStatement', problemId: p.id }) },
     { icon: 'globe', label: W.openOnTheGraderWebsite, onclick: () => send({ type: 'openProblemInBrowser', problemId: p.id }) },
   ];
 }
@@ -963,12 +1014,13 @@ function problemRow(p: ProblemView, s: ViewState, where: 'picker' | 'list'): HTM
         iconButton('copy', W.copyProblemName, () => send({ type: 'copyName', problemId: p.id })),
         p.hasFile
           ? iconButton('go-to-file', W.goToLinkedFile, () => send({ type: 'goToFile', problemId: p.id }))
-          : iconButton('search', W.findFileByName, () => send({ type: 'findFile', problemId: p.id })),
+          : iconButton('search', W.findMatchingFile, () => send({ type: 'findFile', problemId: p.id })),
         iconButton('new-file', W.newFileForThisProblem, () => send({ type: 'newFile', problemId: p.id })),
+        iconButton('file-pdf', W.openStatement, () => send({ type: 'openStatement', problemId: p.id })),
+        // Last, so the other icons stay in the same columns on every row.
         p.hasAttachment
           ? iconButton('cloud-download', W.downloadAttachment, () => send({ type: 'downloadAttachment', problemId: p.id }), { disabledReason: s.attachment.busy === p.id ? W.downloading : null })
           : null,
-        iconButton('book', W.openStatement, () => send({ type: 'openStatement', problemId: p.id })),
       ),
     ),
     () => rowMenuItems(p, state ?? s),
@@ -1192,7 +1244,7 @@ function sectionKeys(s: ViewState): Record<string, string> {
     banner: j([s.connection, s.problems.loaded, s.history.items.length > 0]),
     prompt: j([s.prompt, promptNearSubmit(s)]),
     account: j([s.account, s.baseUrl, showLoginForm]),
-    current: j([promptNearSubmit(s) ? s.prompt : null, s.notLinked, s.linkedNotice, s.linkedFiles, s.file, s.problem, s.languages, s.submit, s.matching, s.testcases, s.cph, s.gradingElsewhere, s.folder, s.folderMode, s.attachment, s.runTests, pickerOpen, pickerOpen ? s.problems : s.problems.loaded]),
+    current: j([promptNearSubmit(s) ? s.prompt : null, s.notLinked, s.linkedNotice, s.linkedFiles, s.file, s.problem, s.languages, s.submit, s.matching, s.testcases, s.samples, s.cph, s.gradingElsewhere, s.folder, s.folderMode, s.attachment, s.runTests, pickerOpen, pickerOpen ? s.problems : s.problems.loaded]),
     result: j([s.result, legendOpen === 'result', s.problem?.score.rawSum]),
     history: j([pid, s.history, legendOpen === 'history', s.problem?.score.rawSum]),
     problems: j([{ ...s.problems, items: s.problems.items.length }, ui.filter, s.attachment]),
@@ -1207,7 +1259,8 @@ function applyLayout(s: ViewState): void {
   if (compact !== compactOn) {
     compactOn = compact;
     document.body.classList.toggle('compact', compact);
-    lastKeys.delete('problems'); // rows change height: lay the list out again
+    problemList.remeasure(); // rows change height: measure and lay the list out again
+    lastKeys.delete('problems');
   }
   const order = visibleSections(s.layout?.sections ?? [], s.account.status === 'logged-in');
   const key = order.join(',');

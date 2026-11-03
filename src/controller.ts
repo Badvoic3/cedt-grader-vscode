@@ -17,6 +17,7 @@ import {
   GraderError,
   type Language,
   LanguageNotAllowedError,
+  languageForPath,
   languageNameForPath,
   NetworkError,
   ProblemUnavailableError,
@@ -36,7 +37,10 @@ import { stripGraderKey, TestcaseStore } from './data/testcaseStore';
 import { cleanupCache, clearCacheFiles, enforceLimit, formatBytes, scanCache, statementIds, totalBytes } from './data/cacheFiles';
 import { type BackupRecord, backupsToDelete, CLEAR_DEFAULTS, CLEAR_ORDER, type ClearCategory, keepIds, planClear, recordBackup } from './data/cacheClear';
 import { cphProbPath as cphProbPathFor, readCphProblem } from './mapping/cph';
-import { importIntoCph } from './mapping/cphImport';
+import { type GraderCase, importIntoCph, STATEMENT_ID_BASE } from './mapping/cphImport';
+import { sampleCasesToImport } from './mapping/sampleImport';
+import { type Pdfjs, pdfjsLoader, readSampleTables } from './data/pdfSamples';
+import type { SampleTable } from './data/sampleTables';
 import { createFileNoOverwrite, pathExists as exists } from './mapping/newFile';
 import { chooseNewFileLanguage } from './mapping/newFileLanguage';
 import { BINARY_EXTS, excludeGlob, filterSourceFiles, rankCandidates, sourceGlob } from './mapping/findByName';
@@ -157,6 +161,15 @@ export class GraderController implements vscode.Disposable {
   /** Problems with at least one mapped file (for "go to file"). */
   private mappedIds = new Set<number>();
   private testcasesBusy = false;
+  private samplesBusy = false;
+  /** The cached statement of the current problem is not a PDF (no "Load samples" button). Unknown = false. */
+  private statementNoPdf = false;
+  /** The problem the statement tab last followed (undefined: not yet). */
+  private followedProblemId: number | null | undefined = undefined;
+  /** Statement PDFs / descriptions on disk (shared by the statement tabs and "Load sample cases"). */
+  private readonly statementStore: StatementStore;
+  /** pdf.js (legacy build, dist/pdfjs) for "Load sample cases": imported on first use only. */
+  private readonly pdfjs: () => Promise<Pdfjs>;
   /** Files already asked about "keep the link?" this session. */
   private readonly reconnectAsked = new Set<string>();
   private readonly testcases: TestcaseStore;
@@ -198,9 +211,14 @@ export class GraderController implements vscode.Disposable {
       this.reportError(e, () => this.reloadKey(key));
     };
     this.data.onSuccess = () => this.connectionOk();
+    this.statementStore = new StatementStore(ctx.globalStorageUri.fsPath, () => this.client, (l) => this.requestLog(l), (p) => {
+      this.cacheWritten(p);
+      void this.refreshStatementKind();
+    });
+    this.pdfjs = pdfjsLoader(vscode.Uri.joinPath(ctx.extensionUri, 'dist', 'pdfjs').fsPath);
     this.statements = new StatementPanels(
       ctx.extensionUri,
-      new StatementStore(ctx.globalStorageUri.fsPath, () => this.client, (l) => this.requestLog(l), (p) => this.cacheWritten(p)),
+      this.statementStore,
       {
         memento: ctx.globalState,
         beside: () => this.cfg.statementBeside,
@@ -816,7 +834,7 @@ export class GraderController implements vscode.Disposable {
 
   /** An error the user should read once: inline in the panel, a toast only when the panel is hidden. */
   private async tellInline(err: unknown, msg: string): Promise<void> {
-    this.log(`Attachment: ${msg}`);
+    this.log(msg);
     if (this.data.isVisible()) void this.askInline(msg, [{ id: 'ok', label: S.common.ok }], { tone: 'warn' });
     else await this.showError(err, msg);
   }
@@ -1050,6 +1068,7 @@ export class GraderController implements vscode.Disposable {
           : null,
       },
       testcases: { busy: this.testcasesBusy },
+      samples: { busy: this.samplesBusy, available: !this.statementNoPdf },
       cph: { installed: this.cph.installed },
       languages: {
         loading: languagesLoading,
@@ -1449,12 +1468,27 @@ export class GraderController implements vscode.Disposable {
     this.linkedFiles = problem ? await this.filesForProblem(problem.id, 'cached') : [];
     if (problem && !this.matchIndex.peek() && this.data.isVisible()) void this.refreshLinkedFiles();
     if (problem) await this.noteOpened(problem.id);
+    this.statementNoPdf = problem ? (await this.statementStore.cachedKind(problem.id)) === 'other' : false;
     this.runTestCount = this.cph.installed && problem ? ((await readCphProblem(this.runUri()?.fsPath ?? '', this.cphSaveLocation()))?.tests.length ?? 0) : null;
     this.applyLanguageChoice();
     this.emit();
+    this.followStatement(uri, problem);
     // One problem only (the top suggestion at most, never several candidates).
     this.data.focusProblem(problem ? problem.id : null);
     if (!entry && !this.reconnectAsked.has(uri.fsPath)) void this.offerReconnect(uri);
+  }
+
+  /**
+   * An open statement tab follows the active source file's problem (when it
+   * changes; a problem chosen from a row's statement icon stays until then);
+   * no problem → that tab closes. Other files (.in, README, …) change nothing.
+   */
+  private followStatement(uri: vscode.Uri, problem: Problem | null): void {
+    if (!this.cfg.statementFollowsFile || !languageForPath(uri.fsPath)) return;
+    const id = problem?.id ?? null;
+    if (id === this.followedProblemId) return;
+    this.followedProblemId = id;
+    this.statements.follow(problem ? { problemId: problem.id, name: problem.name, outdated: this.unavailableIds.has(problem.id) ? S.statementOutdated : null } : null);
   }
 
   // ------------------------------------------------ files for a problem
@@ -1731,6 +1765,7 @@ export class GraderController implements vscode.Disposable {
     if (plan.cacheFiles) {
       freed += (await clearCacheFiles(this.cacheRoot())).bytes;
       this.data.forgetDetails();
+      await this.refreshStatementKind();
     }
     if (plan.staleLinks) await this.mapping.removeStale();
     if (plan.allLinks) skippedDirty = (await this.mapping.emptyMappingFiles()).skippedDirty;
@@ -2247,7 +2282,7 @@ export class GraderController implements vscode.Disposable {
   }
 
   /**
-   * "Find file by name" (only when clicked): one workspace.findFiles for source
+   * "Find a matching file" (only when clicked): one workspace.findFiles for source
    * files named like the problem (case-insensitive) with an extension of a
    * permitted language; build output, binaries and excluded folders are skipped.
    */
@@ -2298,8 +2333,9 @@ export class GraderController implements vscode.Disposable {
    * Download the grader's test cases (one at a time, cached in globalStorage)
    * and save them: into CPH's problem file when CPH is installed, otherwise as
    * `<problem>/tests/<n>.in|out` files (asked once per workspace) or not at all.
+   * `asFiles` ("Save test cases as files"): always the files, CPH or not.
    */
-  async loadTestcases(refresh = false): Promise<void> {
+  async loadTestcases(refresh = false, asFiles = false): Promise<void> {
     const problem = this.currentProblem();
     if (!problem || !this.fileUri || this.testcasesBusy) return;
     // Folder mode: test cases belong to the run file (the driver), whichever file of the folder is open.
@@ -2353,34 +2389,11 @@ export class GraderController implements vscode.Disposable {
       const keyNote = key ? S.testcases.keyRemoved : '';
       const refetch = S.testcases.downloadAgain;
 
-      const target = chooseTestcaseTarget(this.cph.installed, this.ctx.workspaceState.get<'files'>(TESTCASE_TARGET_KEY));
-      if (target !== 'cph') {
-        if (target === 'ask') {
-          const files = S.testcases.saveAsFiles;
-          const install = S.common.installCph;
-          const pick = await vscode.window.showInformationMessage(
-            S.testcases.whereTo(set.cases.length),
-            { detail: S.testcases.whereToDetail },
-            files,
-            install,
-          );
-          if (pick === install) {
-            await vscode.commands.executeCommand('extension.open', CPH_EXTENSION_ID);
-            return;
-          }
-          if (pick !== files) return;
-          await this.ctx.workspaceState.update(TESTCASE_TARGET_KEY, 'files'); // remembered per workspace
-        }
-        // Folder mode: the folder already carries the problem's name → <folder>/tests.
-        const folder = this.folderLink ? join(this.folderLink.fsPath, 'tests') : testsFolderFor(dirname(file.fsPath), problem.name);
-        if (!(await exists(folder))) {
-          const create = S.testcases.createFolder;
-          const ok = await vscode.window.showInformationMessage(
-            S.testcases.createFolderQ(vscode.workspace.asRelativePath(folder), set.cases.length),
-            create,
-          );
-          if (ok !== create) return;
-        }
+      const target = asFiles ? 'files' : await this.testcaseTarget(S.testcases.whereTo(set.cases.length));
+      if (!target) return;
+      if (target === 'files') {
+        const folder = this.testsFolder(file, this.folderLink?.fsPath ?? null, problem.name);
+        if (!(await this.confirmTestsFolder(folder, set.cases.length))) return;
         const r = await saveTestcasesAsFiles(folder, cases);
         const extra = [r.unchanged ? S.testcases.unchanged(r.unchanged) : '', r.keptExisting ? S.testcases.keptExisting(r.keptExisting) : '']
           .filter(Boolean)
@@ -2390,12 +2403,12 @@ export class GraderController implements vscode.Disposable {
         const pick = await vscode.window.showInformationMessage(
           S.testcases.savedFiles(r.written, total, vscode.workspace.asRelativePath(folder), tooLarge, extra) + keyNote,
           open,
-          install,
+          ...(this.cph.installed ? [] : [install]),
           ...(res.fromCache ? [refetch] : []),
         );
         if (pick === open) await vscode.commands.executeCommand('revealInExplorer', vscode.Uri.file(folder));
         if (pick === install) await vscode.commands.executeCommand('extension.open', CPH_EXTENSION_ID);
-        if (pick === refetch) await this.loadTestcases(true);
+        if (pick === refetch) await this.loadTestcases(true, asFiles);
         return;
       }
 
@@ -2412,31 +2425,185 @@ export class GraderController implements vscode.Disposable {
       if (result.alreadyPresent) parts.push(S.testcases.alreadyPresent(result.alreadyPresent));
       if (result.updated) parts.push(S.testcases.updated(result.updated));
       if (result.added) parts.push(S.testcases.added(result.added));
+      const reloaded = await this.reloadCphIfActive(file);
       const reload = S.testcases.reloadCph;
       const pick = await vscode.window.showInformationMessage(
-        S.testcases.cphDone(parts.join('; '), !!result.backupPath) + keyNote,
-        reload,
+        S.testcases.cphDone(parts.join('; '), !!result.backupPath, reloaded) + keyNote,
+        ...(reloaded ? [] : [reload]),
         ...(res.fromCache ? [refetch] : []),
       );
       if (pick === reload) await this.reloadCph(file);
       if (pick === refetch) await this.loadTestcases(true);
     } catch (err) {
-      if (classifyConnectionError(err)) this.reportError(err, () => this.loadTestcases(refresh));
+      if (classifyConnectionError(err)) this.reportError(err, () => this.loadTestcases(refresh, asFiles));
       else void vscode.window.showErrorMessage(S.testcases.failed(this.describe(err)));
     } finally {
       downloaded();
     }
   }
 
+  /** Where test cases go: CPH's .prob when installed, else files (asked once per workspace, remembered); null = cancelled. */
+  private async testcaseTarget(question: string): Promise<'cph' | 'files' | null> {
+    const target = chooseTestcaseTarget(this.cph.installed, this.ctx.workspaceState.get<'files'>(TESTCASE_TARGET_KEY));
+    if (target !== 'ask') return target;
+    const files = S.testcases.saveAsFiles;
+    const install = S.common.installCph;
+    const pick = await vscode.window.showInformationMessage(question, { detail: S.testcases.whereToDetail }, files, install);
+    if (pick === install) await vscode.commands.executeCommand('extension.open', CPH_EXTENSION_ID);
+    if (pick !== files) return null;
+    await this.ctx.workspaceState.update(TESTCASE_TARGET_KEY, 'files'); // remembered per workspace
+    return 'files';
+  }
+
+  /** `tests/` for a file's cases. Folder mode: the folder already carries the problem's name → `<folder>/tests`. */
+  private testsFolder(file: vscode.Uri, folder: string | null, problemName: string): string {
+    return folder ? join(folder, 'tests') : testsFolderFor(dirname(file.fsPath), problemName);
+  }
+
+  /** Creating the tests folder is confirmed first. */
+  private async confirmTestsFolder(folder: string, n: number): Promise<boolean> {
+    if (await exists(folder)) return true;
+    const create = S.testcases.createFolder;
+    return (await vscode.window.showInformationMessage(S.testcases.createFolderQ(vscode.workspace.asRelativePath(folder), n), create)) === create;
+  }
+
+  // ------------------------------------------------------- sample cases
+
+  /** "Load samples" is hidden only when the cache says the statement is not a PDF (no request to find out). */
+  private async refreshStatementKind(): Promise<void> {
+    const id = this.problem?.id;
+    const noPdf = id ? (await this.statementStore.cachedKind(id)) === 'other' : false;
+    if (noPdf === this.statementNoPdf || id !== this.problem?.id) return;
+    this.statementNoPdf = noPdf;
+    this.emit();
+  }
+
+  /**
+   * "Load sample cases": the example input/output table of the problem's
+   * statement PDF, read in the host (src/data/pdfSamples.ts). The PDF comes
+   * from the statement cache; when it isn't cached it is fetched once with the
+   * same request as opening the statement (and cached). Same targets and rules
+   * as "Load test cases": folder mode → the run file; CPH .prob (ids
+   * STATEMENT_ID_BASE + n, backup recorded, duplicates skipped) or
+   * `tests/sample<n>.in|out`, never overwriting.
+   */
+  async loadSampleCases(): Promise<void> {
+    const problem = this.currentProblem();
+    if (!problem || !this.fileUri || this.samplesBusy) return;
+    if (this.folderLink && !(await this.askFolderRole('run', problem))) return;
+    const file = this.runUri();
+    if (!file) return;
+    if (!(await this.confirmSuggestedFor(this.fileUri, problem, S.samples.suggestedQ(problem.name, this.subtitleOf(problem)), S.samples.load))) return;
+    this.samplesBusy = true;
+    this.emit();
+    let tables: SampleTable[];
+    try {
+      let st = await this.statementStore.cached(problem.id);
+      if (!st) {
+        if (!(await this.ensureLoggedIn())) return;
+        st = await this.statementStore.get(problem.id);
+        this.connectionOk();
+      }
+      if (st.kind !== 'pdf') {
+        this.statementNoPdf = true; // the button goes away (and stays away for this problem while cached)
+        void this.tellInline(null, S.samples.noPdf);
+        return;
+      }
+      tables = await readSampleTables(st.bytes, await this.pdfjs());
+    } catch (err) {
+      if (classifyConnectionError(err)) this.reportError(err, () => this.loadSampleCases());
+      else void this.tellInline(err, S.samples.failed(this.describe(err)));
+      return;
+    } finally {
+      this.samplesBusy = false;
+      this.emit();
+    }
+    const found = tables.flatMap((t) => t.cases);
+    if (!found.length) {
+      void this.tellInline(null, S.samples.none);
+      return;
+    }
+    // A sample table with rows that couldn't be read is an incomplete read: load nothing (not into
+    // CPH, not as files) rather than part of the cases. Misread text that still looks like a case
+    // can't be detected; the tooltip asks to check the cases.
+    const skipped = tables.reduce((n, t) => n + (t.skipped ?? 0), 0);
+    if (skipped) {
+      void this.tellInline(null, S.samples.incomplete(skipped));
+      return;
+    }
+    const annotated = found.filter((c) => c.annotated).length;
+    const cases: GraderCase[] = sampleCasesToImport(found);
+    const loaded = S.samples.loaded(cases.length) + (annotated ? S.samples.annotated(annotated) : '');
+    try {
+      const where = await this.testcaseTarget(S.samples.whereTo(cases.length));
+      if (!where) return;
+      if (where === 'files') {
+        const folder = this.testsFolder(file, this.folderLink?.fsPath ?? null, problem.name);
+        if (!(await this.confirmTestsFolder(folder, cases.length))) return;
+        const r = await saveTestcasesAsFiles(folder, cases, 'sample');
+        const extra = [r.unchanged ? S.testcases.unchanged(r.unchanged) : '', r.keptExisting ? S.testcases.keptExisting(r.keptExisting) : '']
+          .filter(Boolean)
+          .join(', ');
+        const open = S.testcases.showFolder;
+        const pick = await vscode.window.showInformationMessage(`${loaded} ${S.samples.savedFiles(r.written, vscode.workspace.asRelativePath(folder), extra)}`, open);
+        if (pick === open) await vscode.commands.executeCommand('revealInExplorer', vscode.Uri.file(folder));
+        return;
+      }
+      const result = await importIntoCph({
+        srcPath: file.fsPath,
+        saveLocation: this.cphSaveLocation(),
+        problemName: cleanName(problem.name),
+        problemUrl: this.url(WEB_PATHS.problem(problem.id)),
+        cases,
+        idBase: STATEMENT_ID_BASE,
+      });
+      await this.recordBackup(result.backupPath);
+      await this.refreshRunTests(); // "Run tests" becomes available
+      const parts: string[] = [];
+      if (result.alreadyPresent) parts.push(S.testcases.alreadyPresent(result.alreadyPresent));
+      if (result.updated) parts.push(S.testcases.updated(result.updated));
+      if (result.added) parts.push(S.testcases.added(result.added));
+      const reloaded = await this.reloadCphIfActive(file);
+      const reload = S.testcases.reloadCph;
+      const pick = await vscode.window.showInformationMessage(
+        `${loaded} ${S.testcases.cphDone(S.samples.savedCph(parts.join('; ')), !!result.backupPath, reloaded)}`,
+        ...(reloaded ? [] : [reload]),
+      );
+      if (pick === reload) await this.reloadCph(file);
+    } catch (err) {
+      void vscode.window.showErrorMessage(S.samples.failed(this.describe(err)));
+    }
+  }
+
   /**
    * CPH only re-reads a .prob when the active editor changes (no reload
-   * command exists). Briefly show a read-only placeholder and come back.
+   * command exists). Briefly show a read-only placeholder and come back. Only
+   * the placeholder is ever closed (if it didn't become the active editor,
+   * nothing is closed).
    */
   async reloadCph(file: vscode.Uri): Promise<void> {
-    const doc = await vscode.workspace.openTextDocument(vscode.Uri.from({ scheme: SUBMISSION_SCHEME, path: '/0/reloading-cph' }));
-    await vscode.window.showTextDocument(doc, { preview: true, preserveFocus: false });
-    await vscode.commands.executeCommand('workbench.action.closeActiveEditor');
-    await vscode.window.showTextDocument(file, { preview: false });
+    const placeholder = vscode.Uri.from({ scheme: SUBMISSION_SCHEME, path: '/0/reloading-cph' });
+    const doc = await vscode.workspace.openTextDocument(placeholder);
+    const shown = await vscode.window.showTextDocument(doc, { preview: true, preserveFocus: false });
+    if (vscode.window.activeTextEditor?.document.uri.toString() === placeholder.toString()) await vscode.commands.executeCommand('workbench.action.closeActiveEditor');
+    await vscode.window.showTextDocument(file, { preview: false, viewColumn: shown.viewColumn });
+  }
+
+  /**
+   * After writing a .prob: reload CPH right away when that is safe, i.e. the
+   * file is the active editor (the user stays where they are; only a flicker).
+   * Otherwise nothing moves: CPH reads the file when the user opens it, and the
+   * message offers "Reload in CPH". Returns whether it reloaded.
+   */
+  private async reloadCphIfActive(file: vscode.Uri): Promise<boolean> {
+    if (vscode.window.activeTextEditor?.document.uri.toString() !== file.toString()) return false;
+    try {
+      await this.reloadCph(file);
+      return true;
+    } catch (err) {
+      this.log(`CPH reload failed: ${this.describe(err)}`);
+      return false;
+    }
   }
 
   /** Command-palette flow: searchable QuickPick of the cached problem list. */

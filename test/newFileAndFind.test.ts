@@ -50,7 +50,7 @@ describe('New file: extension order', () => {
   });
 });
 
-describe('Find file by name', () => {
+describe('Find a matching file', () => {
   /** Fixture tree: .cpp sources, a compiled binary, a .dSYM bundle, build output, .cph data. */
   function tree() {
     const root = mkdtempSync(join(tmpdir(), 'find-'));

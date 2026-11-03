@@ -46,6 +46,7 @@ const base: ViewState = {
   notLinked: false,
   prompt: null,
   testcases: { busy: false },
+  samples: { busy: false, available: true },
   folder: null,
   folderMode: null,
   attachment: { busy: null },
@@ -307,14 +308,17 @@ describe.runIf(existsSync(resolve(__dirname, '../esbuild.mjs')))('sidebar webvie
     expect(cur.querySelector('.combo .source-icon')).toBeNull(); // not inside the dropdown any more
     // All header icons visible again, in the original order.
     expect([...header(doc).querySelectorAll('button')].map((b) => b.getAttribute('aria-label'))).toEqual([
-      'Open statement', 'Copy problem name', 'Open on the grader website', 'Auto-detect the problem for this file again', "Unlink this file (removes your choice; auto-detect won't link it again)",
+      'Open statement', 'Copy problem name', 'Open on the grader website', "Save the grader's test cases as .in / .out files", 'Auto-detect the problem for this file again', "Unlink this file (removes your choice; auto-detect won't link it again)",
     ]);
     expect([...cur.querySelectorAll('button')].some((b) => b.textContent === 'Change')).toBe(false); // removed: same as the dropdown
     expect(cur.querySelector('[aria-label^="More actions"]')).toBeNull(); // no "…" menu
     header(doc).querySelector<HTMLButtonElement>('[aria-label="Copy problem name"]')!.click();
     expect(sent.at(-1)).toEqual({ type: 'copyName', problemId: 1360 });
     // Right-click on the header: the same actions.
-    expect(rightClick(doc, header(doc))).toEqual(['Open statement', 'Copy problem name', 'Open on the grader website', 'Auto-detect the problem for this file again', 'Unlink this file']);
+    expect(rightClick(doc, header(doc))).toEqual(['Open statement', 'Copy problem name', 'Open on the grader website', "Save the grader's test cases as .in / .out files", 'Auto-detect the problem for this file again', 'Unlink this file']);
+    doc.dispatchEvent(new (doc.defaultView as unknown as typeof globalThis).KeyboardEvent('keydown', { key: 'Escape' }));
+    header(doc).querySelector<HTMLButtonElement>(`[aria-label="Save the grader's test cases as .in / .out files"]`)!.click();
+    expect(sent.at(-1)).toEqual({ type: 'loadTestcases', asFiles: true });
     doc.dispatchEvent(new (doc.defaultView as unknown as typeof globalThis).KeyboardEvent('keydown', { key: 'Escape' }));
     expect(doc.querySelector('.context-menu')).toBeNull();
     [...cur.querySelectorAll<HTMLButtonElement>('button')].find((b) => b.textContent?.includes('Load test cases'))!.click();
@@ -324,12 +328,12 @@ describe.runIf(existsSync(resolve(__dirname, '../esbuild.mjs')))('sidebar webvie
     // Row icons as before the "…" menu (same icons, order, tooltips).
     const icons = (r: Element) => [...r.querySelectorAll('.row-actions button')].map((b) => b.getAttribute('aria-label'));
     expect(icons(row(doc, 0))).toEqual(['Copy problem name', 'Go to linked file', 'New file for this problem', 'Open statement']); // has a mapped file
-    expect(icons(row(doc, 1))).toEqual(['Copy problem name', 'Find file by name', 'New file for this problem', 'Open statement']);
+    expect(icons(row(doc, 1))).toEqual(['Copy problem name', 'Find a matching file', 'New file for this problem', 'Open statement']);
     row(doc, 1).querySelector<HTMLButtonElement>('[aria-label="New file for this problem"]')!.click();
     expect(sent.at(-1)).toEqual({ type: 'newFile', problemId: 1271 });
     // Right-click: the same actions plus linking the open file and the website.
     expect(rightClick(doc, row(doc, 1))).toEqual([
-      'Link to 00 11 intro.cpp', 'Copy problem name', 'Find file by name', 'New file for this problem', 'Open statement', 'Open on the grader website',
+      'Link to 00 11 intro.cpp', 'Copy problem name', 'Find a matching file', 'New file for this problem', 'Open statement', 'Open on the grader website',
     ]);
     menuPick(doc, row(doc, 1), 'Open on the grader website');
     expect(sent.at(-1)).toEqual({ type: 'openProblemInBrowser', problemId: 1271 });
@@ -374,12 +378,37 @@ describe.runIf(existsSync(resolve(__dirname, '../esbuild.mjs')))('sidebar webvie
     const { doc, post } = boot();
     post({ ...loggedIn, cph: { installed: false } });
     const btn = [...doc.querySelectorAll<HTMLButtonElement>('#sec-current button')].find((b) => b.textContent?.includes('Load test cases'))!;
-    expect(btn.textContent).toBe(' Load test cases from the grader');
+    expect(btn.textContent).toBe(' Load test cases');
     expect(btn.getAttribute('data-tip')).toContain("CPH isn't installed");
     expect(doc.querySelector('#submit-btn')).not.toBeNull();
     expect(doc.querySelectorAll('#sec-problems .problem-row')).toHaveLength(2);
     // "CPH" only appears where it is actually used (tooltips), not as visible UI text.
     expect(doc.body.textContent).not.toMatch(/CPH/);
+  });
+
+  it('Load samples: on one row with Load test cases, for every problem (also without grader test cases), the note in the tooltip', () => {
+    const { doc, sent, post } = boot();
+    const row = () => [...doc.querySelectorAll('#sec-current .test-buttons button.btn')].map((b) => b.textContent?.trim());
+    post(loggedIn);
+    expect(row()).toEqual(['Load test cases', 'Load samples']);
+    const tip = 'Load the sample cases from the example table in the problem statement (PDF), also for problems without grader test cases. An unusual layout may be read wrong, so check the cases.';
+    const btn = () => doc.querySelectorAll<HTMLButtonElement>('#sec-current .test-buttons button.btn')[row().length - 1];
+    expect(btn().dataset.tip).toBe(tip);
+    expect(btn().hasAttribute('title')).toBe(false);
+    btn().click();
+    expect(sent.at(-1)).toEqual({ type: 'loadSampleCases' });
+    post({ ...loggedIn, problem: { ...loggedIn.problem!, hasTestcase: false } });
+    expect(row()).toEqual(['Load samples']);
+    post({ ...loggedIn, samples: { busy: true, available: true } });
+    expect(btn().disabled).toBe(true);
+    expect(btn().textContent?.trim()).toBe('Reading…');
+    expect(btn().dataset.tip).toBe('Reading the example table in the statement…');
+    // The cached statement is not a PDF: no samples button; the grader's button alone (full width).
+    post({ ...loggedIn, samples: { busy: false, available: false } });
+    expect(row()).toEqual(['Load test cases']);
+    // Neither: no row at all (the rest moves up).
+    post({ ...loggedIn, problem: { ...loggedIn.problem!, hasTestcase: false }, samples: { busy: false, available: false } });
+    expect(doc.querySelector('#sec-current .test-buttons')).toBeNull();
   });
 
   it('accessibility: every icon-only button has a tooltip and the same aria-label; disabled buttons say why', () => {
@@ -432,7 +461,7 @@ describe.runIf(existsSync(resolve(__dirname, '../esbuild.mjs')))('sidebar webvie
     header(doc).querySelector<HTMLButtonElement>('[aria-label="Download attachment"]')!.click();
     expect(sent.at(-1)).toEqual({ type: 'downloadAttachment', problemId: 1360 });
     const icons = [...row(doc, 1).querySelectorAll('.row-actions button')].map((b) => b.getAttribute('aria-label'));
-    expect(icons).toEqual(['Copy problem name', 'Find file by name', 'New file for this problem', 'Download attachment', 'Open statement']);
+    expect(icons).toEqual(['Copy problem name', 'Find a matching file', 'New file for this problem', 'Open statement', 'Download attachment']);
     expect(row(doc, 0).querySelector('[aria-label="Download attachment"]')).toBeNull();
     menuPick(doc, row(doc, 1), 'Download attachment');
     expect(sent.at(-1)).toEqual({ type: 'downloadAttachment', problemId: 1271 });
@@ -483,6 +512,7 @@ describe.runIf(existsSync(resolve(__dirname, '../esbuild.mjs')))('sidebar webvie
     post(withAttachment({ folder: { path: 'pkg/', matched: false, submitFile: 'student.h', submitWhy: 'the included file named student.*', submitChosen: false, runFile: 'main.cpp', runWhy: 'the only file with main()', runChosen: false, candidates: ['main.cpp', 'student.h', 'vector.h'], runCandidates: ['main.cpp'] }, folderMode: { on: true, disabledReason: null }, runTests: { disabledReason: 'load the test cases first' } }));
     const run = [...cur.querySelectorAll<HTMLButtonElement>('button')].find((b) => b.textContent?.includes('Run tests'))!;
     expect(run.disabled).toBe(true);
+    expect(run.classList.contains('wide')).toBe(true); // full width like Submit, outside the test-case row
     expect(run.dataset.tip).toContain('load the test cases first');
     post({ ...withAttachment(), runTests: null });
     expect([...cur.querySelectorAll('button')].some((b) => b.textContent?.includes('Run tests'))).toBe(false); // no CPH: no button

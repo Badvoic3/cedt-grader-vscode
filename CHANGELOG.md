@@ -15,6 +15,20 @@
 - Renaming a folder now offers to move the CPH test cases of the files inside it (CPH names them after the full path).
 - Folder links follow folder renames; the submit file follows renames inside the folder. ✕ unlinks the folder.
 
+### Statement tab follows your file
+- An open statement tab switches to the problem of the source file you switch to (in place, without taking focus; a tab already showing that problem is brought forward instead) and closes when that file has no problem. Test inputs, READMEs and other non-source files change nothing. Setting `cedtGrader.statementFollowsFile` (on by default).
+
+### Test cases
+- **Load test cases** and **Load samples** have the same width: side by side when they fit, stacked when the panel is narrow; when only one is there it fills the row, and with neither the row goes away. **Run tests** is below them, as wide as the panel (like Submit). **Load samples** is hidden once the downloaded statement is known to have no PDF.
+- **Save test cases as files:** a save icon next to the problem name (and in its right-click menu, command "Save Test Cases as .in / .out Files") saves the grader's test cases as `.in` / `.out` files even when CPH is installed.
+- After loading test cases or samples into CPH, CPH is reloaded automatically when the file is already open in front; otherwise you stay where you are and **Reload in CPH** is offered as before. The reload now only ever closes its own placeholder tab.
+- Problem list: rows no longer overlap after resizing or collapsing the panel (row heights are measured again when the width changes). The score pills line up on every row (the download icon moved last). "Find file by name" is now **Find a matching file**.
+
+### Sample cases from the statement
+- The statement icon is now a PDF icon (current problem, problem rows, menus). **Load test cases** has a shorter label; the details are in its tooltip.
+- **Load samples** (button on the same row as **Load test cases** on the current problem, for every problem, also those without grader test cases; command "Load Sample Cases from the Statement"): reads the example input/output table in the problem's statement PDF and saves the cases where **Load test cases** would: into the file's CPH tests (own tests kept first, `.bak` backup, duplicates skipped) or, without CPH, as `tests/sample1.in`, `sample1.out`, … (never overwriting). In folder mode they go to the run file (`main.cpp`). The result says how many cases were loaded and which had a note removed, so you can check them.
+- If some rows of the example table can't be read, nothing is loaded (not into CPH, not as files) and the panel says so. Uses the statement already downloaded for the viewer; if it isn't there yet, it is downloaded once (the same request as opening the statement) and kept. Works on ruled tables with selectable text; the tooltip notes that an unusual layout may be read wrong. Checked against 50 course statements: every stdin/stdout example table was read; statements without one gave nothing.
+
 ### Matching
 - **Matched by folder name:** when a file's own name matches no problem, the name of the folder it is in is tried with the same rules (exact name first, then a confident suggestion), so any file in a folder named like a problem resolves to it. Same matcher both ways (clicking a problem finds those files; a folder counts as one item in "files for this problem").
 - `.h` / `.hpp` headers count as C++ (`.h` as C when a problem takes C only).

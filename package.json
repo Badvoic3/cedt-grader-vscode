@@ -130,7 +130,7 @@
         "command": "cedtGrader.openStatement",
         "title": "%command.openStatement.title%",
         "category": "%command.category%",
-        "icon": "$(book)"
+        "icon": "$(file-pdf)"
       },
       {
         "command": "cedtGrader.refreshProblems",
@@ -197,6 +197,18 @@
         "title": "%command.loadTestcases.title%",
         "category": "%command.category%",
         "icon": "$(beaker)"
+      },
+      {
+        "command": "cedtGrader.saveTestcasesAsFiles",
+        "title": "%command.saveTestcasesAsFiles.title%",
+        "category": "%command.category%",
+        "icon": "$(save-as)"
+      },
+      {
+        "command": "cedtGrader.loadSampleCases",
+        "title": "%command.loadSampleCases.title%",
+        "category": "%command.category%",
+        "icon": "$(file-pdf)"
       },
       {
         "command": "cedtGrader.clearCache",
@@ -362,6 +374,11 @@
           "type": "boolean",
           "default": true,
           "description": "%config.statementBeside.description%"
+        },
+        "cedtGrader.statementFollowsFile": {
+          "type": "boolean",
+          "default": true,
+          "description": "%config.statementFollowsFile.description%"
         },
         "cedtGrader.defaultLanguage": {
           "type": "string",

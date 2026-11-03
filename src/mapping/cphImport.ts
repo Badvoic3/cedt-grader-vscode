@@ -10,10 +10,13 @@ import { cphProbPath, type CphProblem } from './cph';
  *   CPH writes it with plain JSON.stringify (no indentation); so do we.
  *
  * Imported cases are marked through their `id` (the only per-test field CPH
- * keeps when it re-saves): GRADER_ID_BASE + grader testcase id. A re-import
+ * keeps when it re-saves): GRADER_ID_BASE + grader testcase id, or
+ * STATEMENT_ID_BASE + sample number for statement samples. A re-import
  * updates those in place; the user's own tests are never touched.
  */
 export const GRADER_ID_BASE = 7_000_000_000_000_000; // 7e15: a safe integer, far above CPH ms-timestamp ids (~1.8e12)
+/** Cases read from the statement's example table ("Load sample cases"): STATEMENT_ID_BASE + their number (1, 2, …). */
+export const STATEMENT_ID_BASE = 7_500_000_000_000_000; // 7.5e15: above every grader marker, below MAX_SAFE_INTEGER (~9e15)
 
 export interface GraderCase {
   testcaseId: number;
@@ -46,6 +49,8 @@ export async function importIntoCph(opts: {
   problemName: string;
   problemUrl: string;
   cases: GraderCase[];
+  /** Marker range of these cases: GRADER_ID_BASE (grader test cases, default) or STATEMENT_ID_BASE. */
+  idBase?: number;
 }): Promise<ImportResult> {
   const probPath = cphProbPath(opts.srcPath, opts.saveLocation);
   let existing: CphProblem | null = null;
@@ -85,7 +90,7 @@ export async function importIntoCph(opts: {
   for (const c of [...opts.cases].sort((a, b) => a.num - b.num)) {
     const input = normalizeEol(c.input);
     const output = normalizeEol(c.output);
-    const id = GRADER_ID_BASE + c.testcaseId;
+    const id = (opts.idBase ?? GRADER_ID_BASE) + c.testcaseId;
     const mine = tests.findIndex((t) => t.id === id);
     if (mine >= 0) {
       if (tests[mine].input === input && tests[mine].output === output) alreadyPresent++;

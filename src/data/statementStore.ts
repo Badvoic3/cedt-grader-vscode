@@ -1,4 +1,4 @@
-import { readFile, rm } from 'node:fs/promises';
+import { access, readFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { GraderClient } from '../grader/client';
 import { touch, writeAtomic } from './cacheFiles';
@@ -47,6 +47,21 @@ export class StatementStore {
     const p = this.fetch(problemId).finally(() => this.inflight.delete(key));
     this.inflight.set(key, p);
     return p;
+  }
+
+  /** The cached statement, or null (never a request). */
+  async cached(problemId: number): Promise<Statement | null> {
+    const st = await this.readCache(problemId);
+    if (st) this.log(`cache hit  statement:${problemId} (disk)`);
+    return st;
+  }
+
+  /** What is cached for a problem, without reading the PDF: 'pdf', 'other' (description / none) or null (nothing). */
+  async cachedKind(problemId: number): Promise<'pdf' | 'other' | null> {
+    const base = join(this.folder(), String(problemId));
+    const has = (p: string) => access(p).then(() => true, () => false);
+    if (await has(`${base}.pdf`)) return 'pdf';
+    return (await has(`${base}.json`)) ? 'other' : null;
   }
 
   private async fetch(problemId: number): Promise<Statement> {
