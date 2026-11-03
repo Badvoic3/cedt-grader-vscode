@@ -393,7 +393,6 @@ export const TH: Strings = {
     countedScore: 'คะแนนที่ได้',
     penaltiesFromListTip: 'คะแนนที่ถูกหักจาก hint และ AI assist อ่านจากรายการโจทย์ของ Grader',
     fromProblemList: 'จากรายการโจทย์',
-    notAttempted: 'ยังไม่ได้ทำ',
     best: 'สูงสุด',
     latest: 'ล่าสุด',
     attempts: 'ส่งไปแล้ว',
@@ -563,7 +562,6 @@ export const TH: Strings = {
     scorePillTip: (counted, outOf, penalty, attempts) =>
       `คะแนนที่ได้: ${counted}${outOf !== null ? ` / ${outOf}` : ''} (การส่งที่ดีที่สุด${penalty ? `, ${penalty}` : ''}) · ส่งไป ${attempts} ครั้ง`,
     compilationError: 'Compile error',
-    points: (n) => `${n} คะแนน`,
     graded: 'ตรวจแล้ว',
     topicTip: (description, topic, state, order) => {
       const next = (order === 'hideFirst' ? { off: 'out', out: 'in', in: 'off' } : { off: 'in', in: 'out', out: 'off' })[state];

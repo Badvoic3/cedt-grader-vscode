@@ -1,3 +1,5 @@
+import { pathKey } from './paths';
+
 /**
  * Folder mode: the two roles of a package folder (no `vscode` import; unit tested).
  *
@@ -94,4 +96,65 @@ export function submitFor(files: ReadonlyMap<string, string>, run: string): Fold
   const student = closure.filter((c) => /^student\./i.test(base(c)));
   const stubbed = closure.filter((c) => STUB.test(files.get(c) ?? ''));
   return one(mentioned, 'named-in-run') ?? one(student, 'student') ?? one(stubbed, 'stub');
+}
+
+/** C/C++ sources and headers (role detection reads these). */
+export const CODE_FILE = /\.(c|cc|cpp|cxx|h|hh|hpp|hxx)$/i;
+
+/** Why a folder's submit / run file is what it is (tooltip in the card). */
+export type RoleWhy = SubmitWhy | RunWhy | 'chosen' | 'only-file';
+
+/** A folder's state for the role rules: its source files (relative, "/"), the user's choices, the C/C++ texts and what detection found. */
+export interface FolderState {
+  files: string[];
+  submitFile?: string;
+  runFile?: string;
+  texts: ReadonlyMap<string, string>;
+  roles: FolderRoles | null;
+}
+
+/**
+ * The file Submit sends / CPH runs, with why: the user's choice (while it is
+ * still a file of the folder), else detected (a chosen run file decides the
+ * submit file), else the folder's only source file (submit only); null = asked when needed.
+ */
+export function folderRole(role: 'submit' | 'run', f: FolderState): { file: string; why: RoleWhy } | null {
+  const has = (x: string | undefined) => !!x && f.files.some((y) => pathKey(y) === pathKey(x));
+  const chosen = role === 'submit' ? f.submitFile : f.runFile;
+  if (has(chosen)) return { file: chosen!, why: 'chosen' };
+  if (role === 'run') return f.roles?.run ?? null;
+  const detected = (has(f.runFile) ? submitFor(f.texts, f.runFile!) : null) ?? f.roles?.submit ?? null;
+  if (detected) return detected;
+  return f.files.length === 1 ? { file: f.files[0], why: 'only-file' } : null;
+}
+
+/** The choices when the run file must be asked: files with `main()`, else every C/C++ source. */
+export function runChoices(files: string[], roles: FolderRoles | null): string[] {
+  return roles?.runCandidates.length ? roles.runCandidates : files.filter((x) => SOURCE.test(x));
+}
+
+/** C/C++ sources of the folder (the card's Runs dropdown). */
+export function runSources(files: string[]): string[] {
+  return files.filter((x) => SOURCE.test(x));
+}
+
+/** The file that stands for a folder (row click, notice, newer-file check): chosen submit file, else detected submit, else run, else the first source file. */
+export function standInFile(files: string[], chosenSubmit: string | undefined, roles: FolderRoles | null): string | null {
+  if (!files.length) return null;
+  if (chosenSubmit && files.includes(chosenSubmit)) return chosenSubmit;
+  return roles?.submit?.file ?? roles?.run?.file ?? files[0];
+}
+
+/** `standInFile` needs the detected roles only without a usable chosen submit file. */
+export function needsRolesForStandIn(files: string[], chosenSubmit: string | undefined): boolean {
+  return files.length > 0 && !(chosenSubmit && files.includes(chosenSubmit));
+}
+
+/**
+ * Submit with another source file of the folder open (e.g. main.cpp): ask
+ * "submit the submit file or the open file?" only while the folder has no
+ * chosen submit file and the open file is one of its source files.
+ */
+export function asksSubmitOrOpen(o: { openRel: string; targetRel: string; files: string[]; chosenSubmit: string | undefined }): boolean {
+  return pathKey(o.openRel) !== pathKey(o.targetRel) && o.files.includes(o.openRel) && !o.chosenSubmit;
 }

@@ -35,10 +35,14 @@ export function troubleshootingUrl(lang: keyof typeof TROUBLESHOOTING): string {
   return `${REPO_URL}/blob/main/${t.file}#${encodeURIComponent(t.anchor)}`;
 }
 
+/** URI scheme of the read-only documents serving a past submission's source (diff view; also the CPH reload placeholder). */
+export const SUBMISSION_SCHEME = 'cedt-grader-submission';
+
 /** Website paths (opened in the browser; never fetched). */
 export const WEB_PATHS = {
   problem: (id: number) => `/submissions/direct_edit_problem/${id}`,
   submission: (id: number) => `/submissions/${id}`,
+  statement: (id: number) => `/problems/${id}/download/statement`,
 } as const;
 
 // ------------------------------------------------------------------ timing (ms)

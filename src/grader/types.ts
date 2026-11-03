@@ -80,9 +80,13 @@ export interface TopicTag {
 export type ProblemStatus = 'solved' | 'inprogress' | 'untried';
 
 /** solved = submitted and best >= 100; inprogress = submitted and best < 100; untried = no submission. */
+/** Submitted at least once (the website's rule): an untried problem has no score, even when the API reports `best_score: 0`. */
+export function wasSubmitted(p: Pick<Problem, 'submissionCount'> & { lastSubmissionId?: number | null }): boolean {
+  return p.submissionCount > 0 || (p.lastSubmissionId ?? null) !== null;
+}
+
 export function problemStatus(p: Pick<Problem, 'submissionCount' | 'bestScore' | 'lastSubmissionId'>): ProblemStatus {
-  const submitted = p.submissionCount > 0 || p.lastSubmissionId !== null;
-  if (!submitted) return 'untried';
+  if (!wasSubmitted(p)) return 'untried';
   return (p.bestScore ?? 0) >= SERVER_SCORE_CAP ? 'solved' : 'inprogress';
 }
 

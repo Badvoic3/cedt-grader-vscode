@@ -373,7 +373,6 @@ const EN_W = {
   countedScore: "Counted score",
   penaltiesFromListTip: "Hint and AI-assist penalties, read from the grader's problem list",
   fromProblemList: "from problem list",
-  notAttempted: "Not attempted",
   best: "Best",
   latest: "Latest",
   attempts: "Attempts",
@@ -545,7 +544,6 @@ const EN_W = {
   scorePillTip: (counted: string, outOf: string | null, penalty: string | null, attempts: number) =>
     `Counted score: ${counted}${outOf !== null ? ` / ${outOf}` : ''} (your best submission${penalty ? `, ${penalty}` : ''}) · ${plural(attempts, 'attempt')}`,
   compilationError: 'Compilation error',
-  points: (n: string) => `${n} points`,
   graded: 'Graded',
   /** Topic pill tooltip (also its aria-label): the state, then what the next click does (order from the setting). */
   topicTip: (description: string | null, topic: string, state: 'off' | 'out' | 'in', order: 'showFirst' | 'hideFirst') => {

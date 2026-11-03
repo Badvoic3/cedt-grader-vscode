@@ -10,7 +10,7 @@ import { strToU8, zipSync, type Zippable } from 'fflate';
 import { describe, expect, it } from 'vitest';
 import { DataService } from '../src/data/dataService';
 import { GraderClient, GraderError, parseContentDisposition } from '../src/grader';
-import { attachmentKind, AttachmentError, entryPath, fileToOpen, freeFolderName, planZip, submitCandidates, writeExtracted, writeNewFile } from '../src/mapping/attachment';
+import { attachmentKind, AttachmentError, entryPath, extractedFileToOpen, fileToOpen, freeFolderName, ownFolderStem, planZip, submitCandidates, writeExtracted, writeNewFile } from '../src/mapping/attachment';
 import { ATTACHMENT } from '../src/shared/constants';
 import { FakeGrader } from './fakeServer';
 
@@ -202,5 +202,25 @@ describe('writing: a new folder, never overwriting', () => {
     writeFileSync(join(dir, 'a.dig'), 'mine');
     await expect(writeNewFile(join(dir, 'a.dig'), strToU8('theirs'))).rejects.toThrow();
     expect(readFileSync(join(dir, 'a.dig'), 'utf8')).toBe('mine');
+  });
+});
+
+describe('after extracting', () => {
+  const f = (rel: string, text: string) => ({ rel, data: strToU8(text) });
+
+  it('opens the detected submit file, else the run file, else the int main file', () => {
+    const pkg = [f('main.cpp', '#include "student.h"\nint main() {}\n'), f('student.h', '// your code here'), f('readme.txt', '')];
+    expect(extractedFileToOpen(pkg, ['cpp', 'h'])).toBe('student.h');
+    expect(extractedFileToOpen([f('main.cpp', 'int main() {}'), f('util.cpp', '')], ['cpp'])).toBe('main.cpp');
+    expect(extractedFileToOpen([f('a.py', ''), f('b.py', '')], ['py'])).toBe('a.py');
+    expect(extractedFileToOpen([f('notes.txt', '')], ['cpp'])).toBeNull();
+  });
+
+  it('own folder name: the top folder, else the zip name; reserved characters replaced', () => {
+    expect(ownFolderStem('pkg', 'x.zip')).toBe('pkg');
+    expect(ownFolderStem(null, 'Lab 1.ZIP')).toBe('Lab 1');
+    expect(ownFolderStem(null, 'a:b?.zip')).toBe('a_b_');
+    expect(ownFolderStem(null, null)).toBe('attachment');
+    expect(ownFolderStem(null, '.zip')).toBe('attachment');
   });
 });

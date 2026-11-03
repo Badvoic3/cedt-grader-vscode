@@ -1,6 +1,6 @@
 import { G } from '../shared/strings';
 import { SERVER_SCORE_CAP } from '../shared/constants';
-import type { ListScoreInfo, Problem } from './types';
+import { type ListScoreInfo, type Problem, wasSubmitted } from './types';
 
 /**
  * The score the server counts, as rendered by cafe-grader
@@ -44,23 +44,25 @@ export function penaltyLabel(info: Pick<ListScoreInfo, 'cost' | 'hintCount' | 'a
   return G.penalty(fmt(info.cost), what);
 }
 
-export function summarize(p: Pick<Problem, 'bestScore' | 'lastScore' | 'submissionCount' | 'list'>): ScoreSummary {
+export function summarize(p: Pick<Problem, 'bestScore' | 'lastScore' | 'submissionCount' | 'list'> & { lastSubmissionId?: number | null }): ScoreSummary {
   const list = p.list;
-  const best = p.bestScore ?? list?.rawMax ?? null;
+  // Never submitted: no score at all ("–", grey), not the 0 the API and the list page report.
+  const submitted = wasSubmitted(p);
+  const best = submitted ? (p.bestScore ?? list?.rawMax ?? null) : null;
   const rawSum = list?.rawSum ?? false;
   const cost = list?.cost ?? 0;
   const counted = countedScore(best, cost, rawSum);
   return {
     counted,
     best,
-    latest: p.lastScore,
+    latest: submitted ? p.lastScore : null,
     attempts: p.submissionCount,
     penalty: rawSum ? 0 : cost,
     penaltyLabel: rawSum || !list ? null : penaltyLabel(list),
     rawSum,
     outOf: outOfFor(rawSum),
     source: list ? 'problem-list' : 'api',
-    latestBelowCounted: p.lastScore !== null && counted !== null && p.lastScore < counted,
+    latestBelowCounted: submitted && p.lastScore !== null && counted !== null && p.lastScore < counted,
   };
 }
 

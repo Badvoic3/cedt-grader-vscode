@@ -1,5 +1,5 @@
 import type { SampleCase } from '../data/sampleTables';
-import type { GraderCase } from './cphImport';
+import type { GraderCase } from './testCases';
 
 /** Statement cases numbered 1, 2, … (their CPH id is STATEMENT_ID_BASE + number); each text ends with one newline, `\n` line endings. */
 export function sampleCasesToImport(cases: SampleCase[]): GraderCase[] {

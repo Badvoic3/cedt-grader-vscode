@@ -4,6 +4,7 @@ import { unzipSync } from 'fflate';
 import { ATTACHMENT } from '../shared/constants';
 import { S } from '../shared/strings';
 import { BINARY_EXTS } from './findByName';
+import { CODE_FILE, detectFolderRoles } from './folderRoles';
 import { pathKey } from './paths';
 import { comparePaths } from './problemFiles';
 import { pathExists } from './newFile';
@@ -129,6 +130,20 @@ export function submitCandidates(rels: string[], sourceExts: string[]): string[]
 export function fileToOpen(files: { rel: string; data: Uint8Array }[], candidates: string[]): string | null {
   const withMain = candidates.find((c) => /\bint\s+main\s*\(/.test(new TextDecoder().decode(files.find((f) => f.rel === c)?.data ?? new Uint8Array())));
   return withMain ?? candidates[0] ?? null;
+}
+
+/**
+ * The file to open after extracting a package: the detected submit file
+ * (folderRoles.ts), else the run file, else `fileToOpen`.
+ */
+export function extractedFileToOpen(files: { rel: string; data: Uint8Array }[], sourceExts: string[]): string | null {
+  const roles = detectFolderRoles(new Map(files.filter((f) => CODE_FILE.test(f.rel)).map((f) => [f.rel, new TextDecoder().decode(f.data)])));
+  return roles.submit?.file ?? roles.run?.file ?? fileToOpen(files, submitCandidates(files.map((f) => f.rel), sourceExts));
+}
+
+/** Folder name for "Extract to <name>/ only": the zip's one top folder, else the zip's name without `.zip`; reserved characters → `_`. */
+export function ownFolderStem(topFolder: string | null, filename: string | null): string {
+  return (topFolder ?? (filename ?? 'attachment').replace(/\.zip$/i, '')).replace(/[\\/:*?"<>|\u0000-\u001f]/g, '_') || 'attachment';
 }
 
 /** "<name>", "<name>_2", "<name>_3", … : the first folder name that doesn't exist. */

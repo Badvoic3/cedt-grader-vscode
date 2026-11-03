@@ -2,7 +2,8 @@ import { mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, relative } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { chooseTestcaseTarget, cphAutoShowScope, CPH_EXTENSION_ID, CphPresence, saveTestcasesAsFiles, testsFolderFor } from '../src/cphIntegration';
+import { chooseTestcaseTarget, cphAutoShowScope, CPH_EXTENSION_ID, CphPresence } from '../src/cphIntegration';
+import { saveTestcasesAsFiles, testsFolderFor } from '../src/mapping/testCases';
 import { resolveProblem } from '../src/mapping/match';
 import { readCphProblem } from '../src/mapping/cph';
 import { manifest } from './helpers';
@@ -120,9 +121,9 @@ describe('everything else works without CPH', () => {
       }
     };
     for (const d of ['src/grader', 'src/data', 'src/ui', 'webview']) walk(join(root, d));
-    // src/data/testcaseStore.ts only imports the GraderCase *type* from cphImport.
-    expect(offenders).toEqual(['src/data/testcaseStore.ts']);
-    expect(readFileSync(join(root, 'src/data/testcaseStore.ts'), 'utf8')).toMatch(/import type \{ GraderCase \} from '..\/mapping\/cphImport'/);
+    // The neutral test-case shape lives in src/mapping/testCases.ts (no CPH code).
+    expect(offenders).toEqual([]);
+    expect(readFileSync(join(root, 'src/mapping/testCases.ts'), 'utf8')).not.toMatch(/mapping\/cph|cphImport|cphIntegration|from '\.\/cph/);
   });
 
   it('CPH is not a dependency or part of an extension pack', () => {

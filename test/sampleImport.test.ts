@@ -7,12 +7,12 @@ import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFil
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { saveTestcasesAsFiles } from '../src/cphIntegration';
+import { GRADER_ID_BASE, saveTestcasesAsFiles, STATEMENT_ID_BASE } from '../src/mapping/testCases';
 import { pdfjsLoader, PDFJS_FILES, readSampleTables } from '../src/data/pdfSamples';
 import { StatementStore } from '../src/data/statementStore';
 import { GraderClient } from '../src/grader';
 import { cphProbPath, type CphProblem } from '../src/mapping/cph';
-import { GRADER_ID_BASE, importIntoCph, STATEMENT_ID_BASE } from '../src/mapping/cphImport';
+import { importIntoCph } from '../src/mapping/cphImport';
 import { sampleCasesToImport } from '../src/mapping/sampleImport';
 import { FakeGrader } from './fakeServer';
 import { buildPdf, sampleStatementPdf } from './samplePdf';

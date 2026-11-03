@@ -1,6 +1,7 @@
 import { copyFile, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { cphProbPath, type CphProblem } from './cph';
+import { caseKey, GRADER_ID_BASE, type GraderCase, normalizeEol } from './testCases';
 
 /**
  * Writes grader test cases into CPH's `.prob` file in CPH's own format
@@ -10,21 +11,10 @@ import { cphProbPath, type CphProblem } from './cph';
  *   CPH writes it with plain JSON.stringify (no indentation); so do we.
  *
  * Imported cases are marked through their `id` (the only per-test field CPH
- * keeps when it re-saves): GRADER_ID_BASE + grader testcase id, or
- * STATEMENT_ID_BASE + sample number for statement samples. A re-import
- * updates those in place; the user's own tests are never touched.
+ * keeps when it re-saves): `idBase` + case id (`CASE_MARKERS` in testCases.ts).
+ * A re-import updates those in place; the user's own tests are never touched.
+ * Callers go through `writeCases` (writeCases.ts), the one pipeline for both targets.
  */
-export const GRADER_ID_BASE = 7_000_000_000_000_000; // 7e15: a safe integer, far above CPH ms-timestamp ids (~1.8e12)
-/** Cases read from the statement's example table ("Load sample cases"): STATEMENT_ID_BASE + their number (1, 2, …). */
-export const STATEMENT_ID_BASE = 7_500_000_000_000_000; // 7.5e15: above every grader marker, below MAX_SAFE_INTEGER (~9e15)
-
-export interface GraderCase {
-  testcaseId: number;
-  num: number;
-  input: string;
-  output: string;
-}
-
 export interface ImportResult {
   probPath: string;
   created: boolean;
@@ -36,12 +26,6 @@ export interface ImportResult {
   /** Total tests in the file afterwards. */
   total: number;
 }
-
-/** `\r\n` / `\r` → `\n`; trailing newlines are kept exactly as in the file. */
-export function normalizeEol(s: string): string {
-  return s.replace(/\r\n?/g, '\n');
-}
-
 
 export async function importIntoCph(opts: {
   srcPath: string;
@@ -82,7 +66,6 @@ export async function importIntoCph(opts: {
     local: true,
   };
 
-  const key = (t: { input: string; output: string }) => `${normalizeEol(t.input)}\u0000${normalizeEol(t.output)}`;
   let added = 0;
   let updated = 0;
   let alreadyPresent = 0;
@@ -100,7 +83,7 @@ export async function importIntoCph(opts: {
       }
       continue;
     }
-    if (tests.some((t) => key(t) === key({ input, output }))) {
+    if (tests.some((t) => caseKey(t) === caseKey({ input, output }))) {
       alreadyPresent++;
       continue;
     }

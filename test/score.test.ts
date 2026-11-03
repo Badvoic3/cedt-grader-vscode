@@ -27,6 +27,12 @@ describe('countedScore', () => {
     expect(s).toMatchObject({ counted: 137.5, rawSum: true, penalty: 0, penaltyLabel: null, source: 'problem-list' });
   });
 
+  it('never submitted: no score, even when the API says best_score 0', () => {
+    expect(summarize({ bestScore: 0, lastScore: 0, submissionCount: 0, list: { rawMax: 0, adjusted: null, cost: 0, hintCount: 0, aiCount: 0, rawSum: false } })).toMatchObject({ counted: null, best: null, latest: null, attempts: 0 });
+    expect(summarize({ bestScore: 0, lastScore: 0, submissionCount: 0, lastSubmissionId: 5, list: null }).counted).toBe(0); // a submission exists
+    expect(summarize({ bestScore: 0, lastScore: 0, submissionCount: 2, list: null }).counted).toBe(0); // tried, scored 0: stays red
+  });
+
   it('never submitted → null', () => {
     expect(summarize({ bestScore: null, lastScore: null, submissionCount: 0, list: null }).counted).toBeNull();
   });

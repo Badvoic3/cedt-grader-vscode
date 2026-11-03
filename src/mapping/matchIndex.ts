@@ -17,6 +17,11 @@ export interface SourceFile {
   folders: string[];
 }
 
+/** Folder names of a workspace-relative directory (`asRelativePath` of the file's folder): no `.`, no drive / outside path. */
+export function foldersOf(relDir: string): string[] {
+  return relDir.split('/').filter((x) => x && x !== '.' && !x.includes(':'));
+}
+
 export interface FileMatch {
   problemId: number;
   /** Exact normalized file name, exact name of the folder it is in, or a confident suggestion. */

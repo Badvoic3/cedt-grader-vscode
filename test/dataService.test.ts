@@ -1,5 +1,5 @@
 /**
- * Request discipline (claude-code-prompt.md, "History and request usage"):
+ * Request discipline (docs/claude-code-prompt.md, "History and request usage"):
  * request counts are measured at the HTTP level on the fake grader.
  */
 import { describe, expect, it } from 'vitest';

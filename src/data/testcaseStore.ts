@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { GraderClient } from '../grader/client';
-import type { GraderCase } from '../mapping/cphImport';
+import type { GraderCase } from '../mapping/testCases';
 import { touch, writeAtomic } from './cacheFiles';
 
 /**

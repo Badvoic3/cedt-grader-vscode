@@ -601,6 +601,18 @@ describe.runIf(existsSync(resolve(__dirname, '../esbuild.mjs')))('sidebar webvie
     expect(doc.querySelectorAll('#sec-problems .score-pill')[1].getAttribute('data-tip')).toBe('Not attempted yet');
   });
 
+  it('never submitted: grey "–" pill and "–" counted score on the card', () => {
+    const { doc, post } = boot();
+    post({ ...loggedIn, problem: { ...loggedIn.problem!, score: score(null, { attempts: 0, latest: null, latestBelowCounted: false, penaltyLabel: null }), status: 'untried' } });
+    const pill = doc.querySelectorAll('#sec-problems .score-pill')[1];
+    expect(pill.textContent).toBe('–');
+    expect(pill.classList.contains('score-none')).toBe(true);
+    const big = doc.querySelector('#sec-current .score')!;
+    expect(big.textContent).toBe('–');
+    expect(big.classList.contains('score-none')).toBe(true);
+    expect(big.getAttribute('data-tip')).toBe('Not attempted yet');
+  });
+
   it('verdict groups drawn as a box with the website tooltip; plain text for non-strips; legend', () => {
     const { doc, post } = boot();
     const verdicts = [

@@ -11,7 +11,8 @@ import { describe, expect, it } from 'vitest';
 import { stripGraderKey } from '../src/data/testcaseStore';
 import { normalizeProblem } from '../src/grader/types';
 import { cphProbPath } from '../src/mapping/cph';
-import { GRADER_ID_BASE, importIntoCph, type GraderCase } from '../src/mapping/cphImport';
+import { importIntoCph } from '../src/mapping/cphImport';
+import { GRADER_ID_BASE, type GraderCase } from '../src/mapping/testCases';
 import { parseMappingFile, serializeMappingFile } from '../src/mapping/mappingFile';
 import { type LocatedEntry, nearestFolderLink } from '../src/mapping/mappingOps';
 

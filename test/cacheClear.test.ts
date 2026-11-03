@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { backupsToDelete, CLEAR_DEFAULTS, CLEAR_ORDER, type ClearCategory, keepIds, planClear, recordBackup } from '../src/data/cacheClear';
@@ -67,9 +67,11 @@ describe('Clear Cached Data: what each checkbox removes', () => {
   });
 
   it('every stored key name comes from stateKeys.ts', () => {
-    const root = join(__dirname, '..');
-    for (const f of ['src/controller.ts', 'src/mapping/store.ts', 'src/ui/statementPanel.ts']) {
-      expect(readFileSync(join(root, f), 'utf8')).not.toMatch(/'cedtGrader\.(mappings?|unlinked|autoMatches|dismissed\w*|recentlyOpened|languageByFile|statementView|problems)\b/);
+    const src = join(__dirname, '..', 'src');
+    const files = readdirSync(src, { recursive: true, encoding: 'utf8' }).filter((f) => f.endsWith('.ts') && !f.endsWith('stateKeys.ts'));
+    expect(files.length).toBeGreaterThan(40);
+    for (const f of files) {
+      expect(readFileSync(join(src, f), 'utf8'), f).not.toMatch(/'cedtGrader\.(mappings?|unlinked|autoMatches|dismissed\w*|recentlyOpened|languageByFile|statementView|problems|backups|lastMappingCleanup|testcaseTarget|problemFilter|cphTipDismissed|cphAutoShowDismissed|rememberPassword|lastNewFileLanguage)\b/);
     }
   });
 });

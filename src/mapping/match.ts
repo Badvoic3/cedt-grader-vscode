@@ -205,6 +205,17 @@ export function placeholder(id: number, name = ''): Problem {
   };
 }
 
+/**
+ * A problem's full name without a repeated "name:" prefix (card title,
+ * questions); null when it adds nothing to the name.
+ */
+export function problemSubtitle(name: string, fullName: string): string | null {
+  const full = fullName.trim();
+  if (!full || full === name) return null;
+  if (full.startsWith(`${name}:`)) return full.slice(name.length + 1).trim() || null;
+  return full;
+}
+
 /** A safe folder name for a problem (folder mode, extracted attachments): the file-name pattern without `.{ext}`. */
 export function folderNameFor(problemName: string, pattern: string = DEFAULT_NAME_PATTERN, problemId = 0): string {
   return stemFor(isDefaultPattern(pattern) ? DEFAULT_NAME_PATTERN : pattern, { id: problemId, cleanName: cleanName(problemName) }).normalize('NFC');

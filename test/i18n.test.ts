@@ -185,6 +185,36 @@ describe('no hard-coded messages outside strings.ts', () => {
   });
 });
 
+describe('no unused texts', () => {
+  it('every text in EN is used outside the string tables', () => {
+    const files = (dir: string): string[] =>
+      readdirSync(dir).flatMap((f) => {
+        const p = join(dir, f);
+        return statSync(p).isDirectory() ? files(p) : p.endsWith('.ts') ? [p] : [];
+      });
+    const code = [...files(join(root, 'src')), ...files(join(root, 'webview'))]
+      .filter((f) => !/strings(\.\w+)?\.ts$/.test(f))
+      .map((f) => readFileSync(f, 'utf8'))
+      .join('\n');
+    // Lookup tables (indexed by a match source / link kind) count as used when the table is.
+    const tables = ['HOW_LINKED', 'PICK_HOW', 'W_SOURCE', 'MATCH_SOURCE'];
+    const unused: string[] = [];
+    const walk = (node: unknown, path: string[]) => {
+      for (const [k, v] of Object.entries(node as Record<string, unknown>)) {
+        if (v && typeof v === 'object') walk(v, [...path, k]);
+        else {
+          const parent = path[path.length - 1];
+          if (tables.includes(path[0])) {
+            if (!new RegExp(`\\b${path[0]}\\b`).test(code)) unused.push([...path, k].join('.'));
+          } else if (!new RegExp(`\\b${parent}(\\.${k}\\b|\\[)`).test(code)) unused.push([...path, k].join('.'));
+        }
+      }
+    };
+    walk(EN, []);
+    expect(unused).toEqual([]);
+  });
+});
+
 describe('READMEs', () => {
   const read = (f: string) => readFileSync(join(root, f), 'utf8');
   it('each README links to the other language at the top', () => {

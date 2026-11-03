@@ -1,9 +1,3 @@
-import { mkdir, readFile, stat, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
-import type { GraderCase } from './mapping/cphImport';
-import { normalizeEol } from './mapping/cphImport';
-import { fileNameFor } from './mapping/match';
-
 /**
  * Optional integration with Competitive Programming Helper (CPH).
  * The extension works fully without it; CPH is never a dependency or part of
@@ -85,55 +79,3 @@ export function chooseTestcaseTarget(cphInstalled: boolean, remembered: 'files' 
   if (cphInstalled) return 'cph';
   return remembered === 'files' ? 'files' : 'ask';
 }
-
-/** `<source dir>/<clean problem name>/tests` */
-export function testsFolderFor(sourceDir: string, problemName: string): string {
-  const folder = fileNameFor(problemName, 'x').replace(/\.x$/, '');
-  return join(sourceDir, folder, 'tests');
-}
-
-export interface SaveFilesResult {
-  folder: string;
-  written: number;
-  /** Already there with the same content. */
-  unchanged: number;
-  /** Already there with different content: never overwritten. */
-  keptExisting: number;
-}
-
-/**
- * Write `<prefix><num>.in` / `<prefix><num>.out` per case. Line endings `\n`,
- * trailing newlines kept. Existing files are never overwritten. Statement
- * samples use the prefix `sample` so they never collide with grader cases.
- */
-export async function saveTestcasesAsFiles(folder: string, cases: GraderCase[], prefix = ''): Promise<SaveFilesResult> {
-  await mkdir(folder, { recursive: true });
-  let written = 0;
-  let unchanged = 0;
-  let keptExisting = 0;
-  for (const c of [...cases].sort((a, b) => a.num - b.num)) {
-    let caseWritten = false;
-    let caseKept = false;
-    for (const [ext, text] of [['in', c.input], ['out', c.output]] as const) {
-      const path = join(folder, `${prefix}${c.num}.${ext}`);
-      const content = normalizeEol(text);
-      let existing: string | null = null;
-      try {
-        if ((await stat(path)).isFile()) existing = await readFile(path, 'utf8');
-      } catch {
-        existing = null;
-      }
-      if (existing === null) {
-        await writeFile(path, content, { flag: 'wx' });
-        caseWritten = true;
-      } else if (existing !== content) {
-        caseKept = true;
-      }
-    }
-    if (caseWritten) written++;
-    else if (caseKept) keptExisting++;
-    else unchanged++;
-  }
-  return { folder, written, unchanged, keptExisting };
-}
-

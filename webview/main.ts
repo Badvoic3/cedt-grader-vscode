@@ -476,7 +476,7 @@ function scoreCard(sc: ScoreView): HTMLElement {
     ),
     (() => {
       const t = scoreText(sc.counted, sc.rawSum);
-      return el('div', { class: `score ${scoreClass(sc.counted, sc.rawSum, outOf(sc))}`, title: t.tip ?? undefined }, sc.counted === null ? W.notAttempted : t.text);
+      return el('div', { class: `score ${scoreClass(sc.counted, sc.rawSum, outOf(sc))}`, title: (sc.counted === null ? W.notAttemptedYet : t.tip) ?? undefined }, sc.counted === null ? fmt(null) : t.text);
     })(),
     el('div', { class: 'score-facts small' },
       el('span', {}, W.best, ' ', el('strong', {}, fmt(sc.best))),
