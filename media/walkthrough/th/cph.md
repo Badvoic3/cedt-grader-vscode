@@ -1,9 +1,9 @@
-# ไม่บังคับ: Competitive Programming Helper
+# ตัวเลือกเสริม: Competitive Programming Helper
 
-[Competitive Programming Helper](https://marketplace.visualstudio.com/items?itemName=DivyanshuAgrawal.competitive-programming-helper) (CPH) ใช้รัน test case ในเครื่องของคุณเอง
+[Competitive Programming Helper](https://marketplace.visualstudio.com/items?itemName=DivyanshuAgrawal.competitive-programming-helper) (CPH) ช่วยรัน test case บนเครื่องของคุณเอง
 
-- ถ้าติดตั้ง CPH ไว้ ปุ่ม **โหลด test case** จะบันทึก test case ของ Grader ลง CPH ("บันทึกลง CPH แล้ว") test ที่คุณเขียนเองใน CPH ยังอยู่ลำดับแรก
-- ถ้าไม่มี CPH ปุ่ม **โหลด test case** จะบันทึกเป็นไฟล์ `.in` / `.out` ไว้ข้างไฟล์ source แทน
-- ไฟล์ที่มีข้อมูล CPH จะถูกจับคู่กับโจทย์ใน Grader อัตโนมัติ
+- เมื่อติดตั้ง CPH แล้ว ปุ่ม **โหลด test case** จะบันทึก test case จาก Grader เข้าสู่ CPH ("บันทึกลง CPH แล้ว") โดยเคสที่คุณสร้างไว้เองใน CPH จะยังอยู่ด้านบนสุดตามเดิม
+- หากไม่ได้ติดตั้ง CPH ปุ่ม **โหลด test case** จะสามารถบันทึกเป็นไฟล์ `.in` / `.out` ไว้ข้างไฟล์ source ของคุณแทน
+- ไฟล์ที่มีข้อมูล CPH อยู่แล้วจะถูกจับคู่กับโจทย์บน Grader โดยอัตโนมัติ
 
-ขั้นตอนนี้ไม่บังคับ ส่วนอื่นทั้งหมดใช้ได้โดยไม่ต้องมี CPH
+ขั้นตอนนี้เป็นตัวเลือกเสริม ฟีเจอร์อื่นๆ ทั้งหมดทำงานได้โดยไม่ต้องติดตั้ง CPH
