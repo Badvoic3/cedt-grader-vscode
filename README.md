@@ -20,10 +20,13 @@ This is an unofficial homework tool. It is not made by the grader's maintainers.
 
 You need **VS Code 1.90 or newer**.
 
-### From the Marketplace
+### In VS Code (Marketplace)
 
-1. Open the Extensions view: the four-squares icon in the left bar, or <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>X</kbd> (<kbd>Cmd</kbd>+<kbd>Shift</kbd>+<kbd>X</kbd> on macOS).
-2. Search for **CEDT Grader Submit** and click **Install**. The extension ID is `Badvoic3.cedt-grader-submit`.
+1. Click the **Extensions** icon in the left bar (four squares, or <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>X</kbd> / <kbd>Cmd</kbd>+<kbd>Shift</kbd>+<kbd>X</kbd> on macOS).
+2. Search for **CEDT Grader Submit** (`Badvoic3.cedt-grader-submit`).
+3. Click **Install**.
+
+<img src="media/readme/install.png" width="340" alt="Installing in VS Code: 1. click the Extensions icon in the left bar, 2. search for CEDT Grader Submit, 3. click Install; the CEDT Grader icon appears in the left bar">
 
 Updates install automatically.
 

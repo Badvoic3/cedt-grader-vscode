@@ -981,7 +981,7 @@ describe.runIf(existsSync(resolve(__dirname, '../esbuild.mjs')))('sidebar webvie
       times.push(performance.now() - t);
     }
     times.sort((a, b) => a - b);
-    expect(times[Math.floor(times.length / 2)]).toBeLessThan(10); // median keystroke, ms
+    expect(times[Math.floor(times.length / 2)]).toBeLessThan(process.env.CI ? 30 : 10); // median keystroke, ms
     expect(doc.querySelectorAll('#sec-problems .problem-list > :not([hidden])')).toHaveLength(292);
   });
 

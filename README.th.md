@@ -20,10 +20,13 @@
 
 ต้องใช้ **VS Code 1.90 ขึ้นไป**
 
-### ติดตั้งจาก Marketplace
+### ติดตั้งจากในแอป VS Code (Marketplace)
 
-1. เปิดแถบ Extensions: คลิกไอคอนสี่เหลี่ยมสี่ช่องบนแถบด้านซ้าย หรือกด <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>X</kbd> (<kbd>Cmd</kbd>+<kbd>Shift</kbd>+<kbd>X</kbd> บน macOS)
-2. ค้นหา **CEDT Grader Submit** แล้วคลิก **Install** (รหัสส่วนขยายคือ `Badvoic3.cedt-grader-submit`)
+1. คลิกไอคอน **Extensions** บนแถบด้านซ้าย (รูปสี่เหลี่ยมสี่ช่อง หรือกด <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>X</kbd> / <kbd>Cmd</kbd>+<kbd>Shift</kbd>+<kbd>X</kbd> บน macOS)
+2. พิมพ์ค้นหา **CEDT Grader Submit** (`Badvoic3.cedt-grader-submit`)
+3. คลิกปุ่ม **Install**
+
+<img src="media/readme/install.th.png" width="340" alt="การติดตั้งใน VS Code: 1. คลิกไอคอน Extensions บนแถบด้านซ้าย, 2. ค้นหา CEDT Grader Submit, 3. คลิกปุ่ม Install แล้วไอคอน CEDT Grader จะแสดงบนแถบด้านซ้าย">
 
 ส่วนขยายจะอัปเดตเวอร์ชันใหม่ให้โดยอัตโนมัติ
 

@@ -142,15 +142,106 @@ function sample() {
 // ---------------------------------------------------------------- shots
 
 interface Shot {
-  state: ViewState;
+  state?: ViewState;
   /** JavaScript run in the page after the state is rendered (clicks on local UI such as the legend). */
   after?: string;
+  /** Full-width HTML replacing the webview panel (Activity Bar + Extensions sidebar for `install`). */
+  html?: string;
 }
 
-function shots(): Record<string, Shot> {
+function installHtml(lang: Lang): string {
+  const nlsFile = lang === 'th' ? 'package.nls.th.json' : 'package.nls.json';
+  const nls = JSON.parse(readFileSync(join(ROOT, nlsFile), 'utf8')) as Record<string, string>;
+  const desc = nls['extension.description'] ?? '';
+  const iconPng = pathToFileURL(join(ROOT, 'media', 'icon.png')).href;
+  const iconSvg = readFileSync(join(ROOT, 'media', 'icon.svg'), 'utf8').trim();
+  const hint = lang === 'th' ? 'ไอคอน CEDT Grader จะแสดงตรงนี้หลังติดตั้ง' : 'CEDT Grader appears here after install';
+  return `<style>
+    .inst-wrap { display: flex; width: ${WIDTH}px; background: #181818; color: #cccccc; font-family: -apple-system, BlinkMacSystemFont, sans-serif; border-top: 1px solid #2b2b2b; border-bottom: 1px solid #2b2b2b; }
+    .inst-act { width: 48px; flex-shrink: 0; background: #181818; border-right: 1px solid #2b2b2b; display: flex; flex-direction: column; align-items: center; padding: 2px 0 4px; box-sizing: border-box; }
+    .inst-act-item { position: relative; width: 48px; height: 34px; display: flex; align-items: center; justify-content: center; color: #868686; }
+    .inst-act-item .codicon { font-size: 22px; }
+    .inst-act-item.active { color: #ffffff; height: 36px; }
+    .inst-act-item.active::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 2px; background: #0078d4; }
+    .inst-act-item.grader { color: #cccccc; height: 38px; margin-top: 2px; }
+    .inst-act-item.grader svg { width: 22px; height: 22px; }
+    .inst-act-item.grader::after { content: ''; position: absolute; inset: 4px 9px; border: 1px dashed #3794ff; border-radius: 5px; opacity: 0.75; }
+    .inst-side { flex: 1; min-width: 0; display: flex; flex-direction: column; background: #181818; }
+    .inst-hdr { height: 35px; padding: 0 10px 0 16px; display: flex; align-items: center; justify-content: space-between; font-size: 11px; letter-spacing: 0.04em; color: #cccccc; }
+    .inst-hdr-icons { display: flex; gap: 6px; color: #c5c5c5; }
+    .inst-hdr-icons .codicon { font-size: 16px; }
+    .inst-search-wrap { padding: 0 10px 8px 10px; border-bottom: 1px solid #2b2b2b; }
+    .inst-search { height: 26px; background: #313131; border: 1px solid #0078d4; border-radius: 2px; padding: 0 6px 0 8px; display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+    .inst-search-text { font-size: 13px; color: #ffffff; white-space: nowrap; overflow: hidden; }
+    .inst-search-right { display: flex; align-items: center; gap: 4px; color: #9d9d9d; flex-shrink: 0; }
+    .inst-search-right .codicon { font-size: 14px; }
+    .inst-row { display: flex; gap: 10px; padding: 10px 10px 10px 12px; background: #2a2d2e; border-bottom: 1px solid #2b2b2b; align-items: flex-start; }
+    .inst-icon { width: 42px; height: 42px; border-radius: 6px; flex-shrink: 0; margin-top: 2px; }
+    .inst-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+    .inst-title-row { display: flex; align-items: center; justify-content: space-between; gap: 4px; }
+    .inst-title { font-size: 13px; font-weight: 700; color: #ffffff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .inst-desc { font-size: 12px; color: #9d9d9d; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 16px; }
+    .inst-foot { display: flex; align-items: center; justify-content: space-between; margin-top: 3px; }
+    .inst-pub { font-size: 11px; font-weight: 600; color: #9d9d9d; }
+    .inst-cta { display: flex; align-items: center; gap: 5px; }
+    .inst-btn { background: #0078d4; color: #ffffff; font-size: 11px; font-weight: 600; line-height: 16px; padding: 1px 8px; border-radius: 2px; }
+    .inst-step { display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; border-radius: 999px; background: #0078d4; color: #ffffff; font-size: 10px; font-weight: 700; line-height: 1; box-shadow: 0 0 0 1.5px #181818; flex-shrink: 0; }
+    .inst-act-item .inst-step { position: absolute; top: 2px; right: 5px; }
+    .inst-callout { margin-top: auto; height: 40px; padding: 0 10px 2px 8px; display: flex; align-items: center; gap: 6px; font-size: 11.5px; color: #9d9d9d; }
+    .inst-arrow { color: #3794ff; font-size: 13px; font-weight: 700; line-height: 1; }
+  </style>
+  <div class="inst-wrap">
+    <div class="inst-act">
+      <div class="inst-act-item"><span class="codicon codicon-files"></span></div>
+      <div class="inst-act-item"><span class="codicon codicon-search"></span></div>
+      <div class="inst-act-item"><span class="codicon codicon-source-control"></span></div>
+      <div class="inst-act-item"><span class="codicon codicon-debug-alt"></span></div>
+      <div class="inst-act-item active"><span class="codicon codicon-extensions"></span><span class="inst-step">1</span></div>
+      <div class="inst-act-item grader">${iconSvg}</div>
+    </div>
+    <div class="inst-side">
+      <div class="inst-hdr">
+        <span>EXTENSIONS</span>
+        <span class="inst-hdr-icons">
+          <span class="codicon codicon-refresh"></span>
+          <span class="codicon codicon-clear-all"></span>
+          <span class="codicon codicon-ellipsis"></span>
+        </span>
+      </div>
+      <div class="inst-search-wrap">
+        <div class="inst-search">
+          <span class="inst-search-text">CEDT Grader Submit</span>
+          <span class="inst-search-right">
+            <span class="inst-step">2</span>
+            <span class="codicon codicon-clear-all"></span>
+            <span class="codicon codicon-filter"></span>
+          </span>
+        </div>
+      </div>
+      <div class="inst-row">
+        <img class="inst-icon" src="${iconPng}" alt="">
+        <div class="inst-main">
+          <div class="inst-title-row"><span class="inst-title">CEDT Grader Submit</span></div>
+          <div class="inst-desc">${desc}</div>
+          <div class="inst-foot">
+            <span class="inst-pub">Badvoic3</span>
+            <span class="inst-cta"><span class="inst-step">3</span><span class="inst-btn">Install</span></span>
+          </div>
+        </div>
+      </div>
+      <div class="inst-callout">
+        <span class="inst-arrow">←</span>
+        <span>${hint}</span>
+      </div>
+    </div>
+  </div>`;
+}
+
+function shots(lang: Lang): Record<string, Shot> {
   const { state, folderState, detail } = sample();
   const only = (ids: ViewState['layout']['sections'], s: ViewState = state): ViewState => ({ ...s, layout: { ...s.layout, sections: ids } });
   return {
+    install: { html: installHtml(lang) },
     panel: { state },
     current: { state: only(['current']) },
     notice: {
@@ -341,11 +432,15 @@ async function take(page: Cdp, htmlUrl: string, shot: Shot): Promise<Buffer> {
   const loaded = page.once('Page.loadEventFired');
   await page.send('Page.navigate', { url: htmlUrl });
   await loaded;
-  await page.eval(`window.postMessage(${JSON.stringify({ type: 'state', state: shot.state })}, '*'); new Promise((r) => setTimeout(r, 50))`);
+  if (shot.html) {
+    await page.eval(`document.body.style.cssText = 'width:${WIDTH}px;margin:0'; document.getElementById('app').innerHTML = ${JSON.stringify(shot.html)}; Promise.all([...document.images].map((i) => i.complete ? null : new Promise((r) => { i.onload = i.onerror = r; })))`);
+  } else {
+    await page.eval(`window.postMessage(${JSON.stringify({ type: 'state', state: shot.state })}, '*'); new Promise((r) => setTimeout(r, 50))`);
+  }
   if (shot.after) await page.eval(`${shot.after}; new Promise((r) => setTimeout(r, 50))`);
   await page.eval(`document.fonts.ready.then(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))))`);
   const bottom: number = await page.eval(`document.body.getBoundingClientRect().bottom`);
-  const height = Math.ceil(bottom) + 6;
+  const height = Math.ceil(bottom) + (shot.html ? 0 : 6);
   const r = await page.send('Page.captureScreenshot', { format: 'png', captureBeyondViewport: true, clip: { x: 0, y: 0, width: WIDTH, height, scale: 1 } });
   return Buffer.from(r.data, 'base64');
 }
@@ -373,7 +468,7 @@ async function main(): Promise<void> {
   const out = resolve(opt('--out') ?? join(ROOT, 'media', 'readme'));
   if (!existsSync(join(DIST, 'webview.js'))) throw new Error('media/dist/webview.js is missing: run `npm run build` first');
   setLanguage(lang);
-  const all = shots();
+  const all = shots(lang);
   const names = args.length ? args : Object.keys(all);
   for (const n of names) if (!all[n]) throw new Error(`unknown picture "${n}" (known: ${Object.keys(all).join(', ')})`);
 
@@ -395,7 +490,7 @@ async function main(): Promise<void> {
     }
   } finally {
     await stop();
-    rmSync(work, { recursive: true, force: true });
+    rmSync(work, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
   }
 }
 
