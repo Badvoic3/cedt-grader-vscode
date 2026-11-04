@@ -17,18 +17,7 @@ import type { Strings } from './strings';
  * Everything else was reviewed at checkpoint B (2026-11-03). Add keys here
  * when a new text is translated without review.
  */
-export const TH_REVIEW: readonly string[] = [
-  // Part 1 (S, HOW_LINKED, PICK_HOW) translated 2026-11-04; open doubts only.
-  // Glossary says never "ผูก"; here it means CPH's test cases belong to main.cpp, not a file-to-problem link.
-  'S.folder.runFileDetail',
-  // The Submit button is now "Submit ไปยัง Grader" (Submit stays English on buttons; "ส่ง" in sentences); walkthrough and README follow it.
-  'S.submitLabel',
-  // Part 2 (W, W_SOURCE, G, MATCH_SOURCE) translated 2026-11-04; open doubts only.
-  // Button says "โหลดตัวอย่าง" (fits beside "โหลด test case"); the glossary and S.samples.load say "ตัวอย่างจากโจทย์".
-  'W.loadSampleCases',
-  // "statement" = plain โจทย์, so this reads "this problem has no problem file"; may need its own wording.
-  'G.statementMissing',
-];
+export const TH_REVIEW: readonly string[] = [];
 
 export const TH: Strings = {
   HOW_LINKED: {
@@ -72,7 +61,7 @@ export const TH: Strings = {
     },
 
     files: {
-      noLongerExists: (what, _many) => `ไม่พบ ${what} แล้ว`,
+      noLongerExists: (what, many) => `ไม่พบ ${what}${many ? '' : ' '}แล้ว`,
       nLinkedFiles: (n) => `${n} ไฟล์ที่เชื่อมไว้`,
       removeStale: 'ลบการเชื่อมเดิมออก',
       filesFor: (name) => `ไฟล์สำหรับ ${name}`,
@@ -85,7 +74,7 @@ export const TH: Strings = {
       unlinkOthers: (what, problem) => `ยกเลิกการเชื่อม ${what} กับ ${problem} ไหม?`,
       nOtherFiles: (n) => `อีก ${n} ไฟล์`,
       unlink: 'ยกเลิกการเชื่อม',
-      linksOnly: 'ลบเฉพาะการเชื่อมกับโจทย์เท่านั้น ตัวไฟล์ไม่ถูกลบ',
+      linksOnly: 'ลบเฉพาะการเชื่อมกับโจทย์ ตัวไฟล์ไม่ถูกลบ',
       copied: (name) => `$(check) คัดลอก "${name}" แล้ว`,
       openFolderFirst: 'เปิดโฟลเดอร์ก่อน',
       languagesNotLoaded: 'ยังโหลดรายการภาษาไม่เสร็จ ลองอีกครั้งในอีกสักครู่',
@@ -292,7 +281,7 @@ export const TH: Strings = {
       oneFile: 'Grader รับครั้งละ 1 ไฟล์ จึงจะส่งเฉพาะไฟล์นี้เท่านั้น เปลี่ยนได้ในส่วน "โจทย์ปัจจุบัน"',
       onlyThisSent: (file) => `ส่งเฉพาะไฟล์ ${file} เท่านั้น (Grader รับไฟล์เดียว)`,
       whichRunFile: (name) => `โปรแกรมไหนใช้รันทดสอบสำหรับโจทย์ ${name}?`,
-      runFileDetail: 'test case จะผูกกับไฟล์โปรแกรมที่มี main() (ไฟล์ทดสอบที่โจทย์ให้มา ซึ่ง include ไฟล์ของคุณ)',
+      runFileDetail: 'test case จะเป็นของไฟล์โปรแกรมที่มี main() (ไฟล์ทดสอบที่โจทย์ให้มา ซึ่ง include ไฟล์ของคุณ)',
       why: {
         'named-in-run': (run) => `ระบุไว้ในคอมเมนต์ของ ${run}`,
         student: (_run) => 'ไฟล์ที่ถูก include ชื่อ student.*',
@@ -471,7 +460,7 @@ export const TH: Strings = {
     compileError: 'compile error',
     loadingDetails: 'กำลังโหลดรายละเอียด…',
     chooseProblemForHistory: 'เลือกโจทย์เพื่อดูประวัติการส่ง',
-    mayBeOutOfDate: 'ข้อมูลอาจไม่อัปเดต (เชื่อมต่อ Grader ไม่ได้)',
+    mayBeOutOfDate: 'ข้อมูลอาจไม่อัปเดต (ติดต่อ Grader ไม่ได้)',
     noSubmissions: 'ยังไม่มีประวัติการส่งสำหรับโจทย์นี้',
     nSubmissions: (n) => `ส่งแล้ว ${n} ครั้ง`,
     refreshing: 'กำลังรีเฟรช…',
@@ -501,7 +490,7 @@ export const TH: Strings = {
     dontMatchThisFile: 'ไม่ต้องจับคู่ไฟล์นี้',
     dontMatchFileTip: (path) => `หยุดจับคู่ ${path} กับโจทย์นี้ (ตัวไฟล์ไม่ถูกแก้ไข)`,
     unlinkTheOtherFiles: 'ยกเลิกการเชื่อมไฟล์อื่น',
-    unlinkOthersTip: 'ลบเฉพาะการเชื่อมกับโจทย์เท่านั้น ตัวไฟล์ไม่ถูกลบ',
+    unlinkOthersTip: 'ลบเฉพาะการเชื่อมกับโจทย์ ตัวไฟล์ไม่ถูกลบ',
     suggestedFromFileName: 'แนะนำจากชื่อไฟล์',
     useThisTip: (name, problemId) => `เชื่อมไฟล์นี้กับ ${name} (#${problemId})`,
     useThis: 'ใช้โจทย์นี้',
@@ -522,7 +511,7 @@ export const TH: Strings = {
     tagsChosen: (names) => `แท็ก: ${names}`,
     tagsFilterTip: 'กรองด้วยแท็กอื่นๆ ของโจทย์ (เลือกได้หลายแท็ก)',
     tagMatch: 'เงื่อนไข',
-    tagMatchAny: 'อย่างน้อยหนึ่งแท็ก (OR)',
+    tagMatchAny: 'แท็กใดก็ได้ (OR)',
     tagMatchAll: 'ครบทุกแท็ก (AND)',
     tagMatchAnyTip: 'แสดงโจทย์ที่มีแท็กที่เลือกอย่างน้อยหนึ่งแท็ก',
     tagMatchAllTip: 'แสดงโจทย์ที่มีแท็กครบทุกแท็กที่เลือก',
@@ -566,8 +555,8 @@ export const TH: Strings = {
     nameAZ: 'ชื่อ A–Z',
     nameZA: 'ชื่อ Z–A',
     latestSubmission: 'ส่งล่าสุด',
-    bestScoreLowToHigh: 'คะแนนสูงสุด (น้อยไปมาก)',
-    bestScoreHighToLow: 'คะแนนสูงสุด (มากไปน้อย)',
+    bestScoreLowToHigh: 'คะแนน (น้อย → มาก)',
+    bestScoreHighToLow: 'คะแนน (มาก → น้อย)',
     recentlyOpened: 'เปิดดูล่าสุด',
     downloadAttachment: 'ดาวน์โหลดไฟล์แนบ',
     downloading: 'กำลังดาวน์โหลด…',
@@ -634,7 +623,7 @@ export const TH: Strings = {
     statusLastTip: (name, id, score, counted) => `${name} (#${id}): คะแนนล่าสุด ${score}${counted} คลิกเพื่อเปิดแผง`,
     statusOpenTip: (name, id) => `${name} (#${id}): เปิดแผง CEDT Grader`,
     statementHidden: 'Grader ไม่เปิดให้ดูโจทย์ข้อนี้ใน VS Code โปรดใช้ "เปิดในเบราว์เซอร์" แทน',
-    statementMissing: 'โจทย์ข้อนี้ไม่มีไฟล์โจทย์',
+    statementMissing: 'โจทย์ข้อนี้ไม่มีเนื้อหาหรือไฟล์ PDF ให้แสดง',
     loginThrottledTitle: 'พยายามเข้าสู่ระบบมากเกินไป',
     loginThrottledMsg: 'Grader บล็อกการเข้าสู่ระบบชั่วคราวเป็นเวลาไม่กี่นาที โปรดรอสักครู่แล้วกด "ลองใหม่"',
     sessionExpiredTitle: 'การเข้าสู่ระบบหมดอายุ',
@@ -643,14 +632,14 @@ export const TH: Strings = {
     rateLimitedMsg: 'Grader ได้รับคำขอมากเกินไป โปรดรอสัก 1 นาทีแล้วกด "ลองใหม่"',
     offlineTitle: 'ไม่มีการเชื่อมต่ออินเทอร์เน็ต',
     offlineMsg: 'ตรวจสอบการเชื่อมต่ออินเทอร์เน็ต แล้วกด "ลองใหม่"',
-    timeoutTitle: 'Grader ไม่ตอบสนอง',
+    timeoutTitle: 'Grader ไม่ตอบกลับ',
     timeoutMsg: 'Grader ใช้เวลาตอบนานเกินไป เซิร์ฟเวอร์อาจกำลังทำงานหนัก ลองกด "ลองใหม่" ในอีกสักครู่',
     serverErrorTitle: 'Grader มีปัญหา',
     serverErrorMsg: 'เกิดข้อผิดพลาดฝั่งเซิร์ฟเวอร์ของ Grader ลองอีกครั้งในอีกไม่กี่นาที',
     unreachableTitle: 'ติดต่อ Grader ไม่ได้',
     unreachableMsg: 'เชื่อมต่อกับ Grader ไม่สำเร็จ ตรวจสอบอินเทอร์เน็ตของคุณ แล้วกด "ลองใหม่"',
     submitSentResultLater: (id) => `ส่งงาน #${id} แล้ว ระบบจะโหลดผลตรวจเมื่อกลับมาเชื่อมต่อได้อีกครั้ง`,
-    submitMaybeReceived: 'Grader ไม่ตอบกลับในเวลาที่กำหนด จึงไม่แน่ใจว่าได้รับโค้ดของคุณหรือยัง โปรดเช็กใน "ประวัติการส่ง" ก่อนส่งซ้ำ',
+    submitMaybeReceived: 'Grader ไม่ตอบกลับในเวลาที่กำหนด จึงไม่แน่ใจว่าได้รับโค้ดของคุณหรือยัง โปรดดูใน "ประวัติการส่ง" ก่อนส่งซ้ำ',
     submitNothingServerError: 'เกิดข้อผิดพลาดฝั่งเซิร์ฟเวอร์ของ Grader ยังไม่ได้ส่งงาน (เช็กใน "ประวัติการส่ง" เพื่อความแน่ใจได้)',
     submitNothingLoginExpired: 'ยังไม่ได้ส่งงานเนื่องจากการเข้าสู่ระบบหมดอายุ โปรดเข้าสู่ระบบใหม่แล้วส่งอีกครั้ง',
     submitNothingRateLimited: 'ยังไม่ได้ส่งงานเนื่องจาก Grader ได้รับคำขอมากเกินไป ลองอีกครั้งในอีก 1 นาที',
