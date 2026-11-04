@@ -599,7 +599,7 @@ describe.runIf(existsSync(resolve(__dirname, '../esbuild.mjs')))('sidebar webvie
     expect(doc.body.textContent).toContain('เข้าสู่ระบบ');
     expect(doc.body.textContent).toContain('จำรหัสผ่านไว้ในเครื่องนี้');
     out.post(loggedIn);
-    expect(doc.querySelector('#sec-current')!.textContent).toContain('คะแนนที่ได้');
+    expect(doc.querySelector('#sec-current')!.textContent).toContain('คะแนนที่นับ');
     // Grader content stays as it is.
     expect(doc.querySelector('#sec-current')!.textContent).toContain('00_Intro_11');
     // The same bundle in English.

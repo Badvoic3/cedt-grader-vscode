@@ -116,8 +116,8 @@ describe('Thai table (strings.th.ts)', () => {
   it('switching to Thai changes what callers read', () => {
     setLanguage('th');
     expect(S.common.cancel).toBe('ยกเลิก');
-    expect(G.statusBar.submit).toBe('ส่ง');
-    expect(W.ago.minAgo(3)).toBe('3 นาทีก่อน');
+    expect(G.statusBar.submit).toBe('Submit ไปยัง Grader');
+    expect(W.ago.minAgo(3)).toBe('3 นาทีที่แล้ว');
     setLanguage('en');
     expect(S.common.cancel).toBe('Cancel');
   });
