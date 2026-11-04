@@ -2,7 +2,7 @@
   "name": "cedt-grader-submit",
   "displayName": "CEDT Grader Submit",
   "description": "%extension.description%",
-  "version": "0.7.0",
+  "version": "1.0.0",
   "publisher": "Badvoic3",
   "license": "MIT",
   "icon": "media/icon.png",
@@ -65,7 +65,10 @@
     "grader",
     "cedt",
     "competitive programming",
-    "submit"
+    "submit",
+    "test cases",
+    "CPH",
+    "Thai"
   ],
   "activationEvents": [
     "onLanguage:c",

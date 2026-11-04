@@ -1,6 +1,6 @@
 # Changelog
 
-## 1.0.0 — unreleased
+## 1.0.0 — 2026-11-04
 
 The first release on the VS Code Marketplace (search "CEDT Grader Submit", ID `Badvoic3.cedt-grader-submit`). Needs VS Code 1.90 or newer.
 
