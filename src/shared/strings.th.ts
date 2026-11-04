@@ -21,7 +21,7 @@ export const TH_REVIEW: readonly string[] = [
   // Part 1 (S, HOW_LINKED, PICK_HOW) translated 2026-11-04; open doubts only.
   // Glossary says never "ผูก"; here it means CPH's test cases belong to main.cpp, not a file-to-problem link.
   'S.folder.runFileDetail',
-  // The Submit button is now "Submit ไปยัง Grader"; the Thai walkthrough and README still call it "ส่ง".
+  // The Submit button is now "Submit ไปยัง Grader" (Submit stays English on buttons; "ส่ง" in sentences); walkthrough and README follow it.
   'S.submitLabel',
   // Part 2 (W, W_SOURCE, G, MATCH_SOURCE) translated 2026-11-04; open doubts only.
   // Button says "โหลดตัวอย่าง" (fits beside "โหลด test case"); the glossary and S.samples.load say "ตัวอย่างจากโจทย์".
