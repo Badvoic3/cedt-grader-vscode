@@ -831,6 +831,151 @@ describe.runIf(existsSync(resolve(__dirname, '../esbuild.mjs')))('sidebar webvie
     expect(acc.textContent).toContain('1234567890');
   });
 
+  describe('server line', () => {
+    const server = (status: string, draft: string | null, message: string | null = null) => ({ ...base, account: { ...base.account, server: { draft, status, message } } }) as typeof base;
+    const open = (doc: Document) => doc.querySelector<HTMLButtonElement>('#sec-account .server-line .icon-btn')!.click();
+    const input = (doc: Document) => doc.querySelector<HTMLInputElement>('#login-server')!;
+    const submit = (doc: Document) => doc.querySelector<HTMLButtonElement>('#sec-account button[type=submit]')!;
+
+    it('sits above the username, and the pencil has its label', () => {
+      const { doc, post } = boot();
+      post({ ...base, baseUrl: 'https://grader.example/sub' });
+      const line = doc.querySelector<HTMLElement>('#sec-account .server-line')!;
+      expect(line.textContent).toContain('grader.example/sub');
+      expect(line.compareDocumentPosition(doc.querySelector('#login-user')!) & 4).toBeTruthy();
+      const pencil = line.querySelector<HTMLButtonElement>('.icon-btn')!;
+      expect(pencil.getAttribute('aria-label')).toBe('Change server');
+      expect(pencil.dataset.tip).toBe('Change server');
+      expect(doc.querySelector<HTMLElement>('#sec-account .server-field')!.hidden).toBe(true);
+    });
+
+    it('a plain http address shows its scheme', () => {
+      const { doc, post } = boot();
+      post({ ...base, baseUrl: 'http://plain.example' });
+      expect(doc.querySelector('#sec-account .server-line')!.textContent).toContain('http://plain.example');
+    });
+
+    it('a closed line sends no server with the login', () => {
+      const { doc, sent, post, dom } = boot();
+      post(base);
+      doc.querySelector<HTMLFormElement>('#sec-account .login-form')!.dispatchEvent(new dom.window.Event('submit', { cancelable: true }));
+      expect(sent.at(-1)).not.toHaveProperty('server');
+    });
+
+    it('the pencil opens the field on the current address, and login carries it', () => {
+      const { doc, sent, post, dom } = boot();
+      post({ ...base, baseUrl: 'https://grader.example' });
+      open(doc);
+      expect(input(doc).value).toBe('https://grader.example');
+      expect(doc.activeElement).toBe(input(doc));
+      input(doc).value = 'other.example';
+      doc.querySelector<HTMLFormElement>('#sec-account .login-form')!.dispatchEvent(new dom.window.Event('submit', { cancelable: true }));
+      expect(sent.at(-1)).toMatchObject({ type: 'login', server: 'other.example' });
+    });
+
+    it('Enter checks the address and does not log in', () => {
+      const { doc, sent, post, dom } = boot();
+      const win = dom.window;
+      post(base);
+      open(doc);
+      input(doc).value = 'other.example';
+      const enter = new win.KeyboardEvent('keydown', { key: 'Enter', cancelable: true, bubbles: true });
+      input(doc).dispatchEvent(enter);
+      expect(enter.defaultPrevented).toBe(true);
+      expect(sent.at(-1)).toEqual({ type: 'checkServer', url: 'other.example' });
+    });
+
+    it('leaving the field checks it', () => {
+      const { doc, sent, post, dom } = boot();
+      const win = dom.window;
+      post(base);
+      open(doc);
+      input(doc).value = 'other.example';
+      input(doc).dispatchEvent(new win.Event('change'));
+      expect(sent.at(-1)).toEqual({ type: 'checkServer', url: 'other.example' });
+    });
+
+    it('a refused address disables Log in, with the reason; editing it enables Log in again', () => {
+      const { doc, post, dom } = boot();
+      const win = dom.window;
+      post(base);
+      open(doc);
+      input(doc).value = 'bad.example';
+      post(server('bad', 'bad.example', 'Not a grader.'));
+      expect(doc.querySelector('#sec-account .server-status [role=alert]')!.textContent).toContain('Not a grader.');
+      expect(submit(doc).disabled).toBe(true);
+      expect(submit(doc).dataset.tip).toBe('Not a grader.');
+      input(doc).value = 'bad.example2';
+      input(doc).dispatchEvent(new win.Event('input'));
+      expect(submit(doc).disabled).toBe(false);
+      expect(doc.querySelector('#sec-account .server-status')!.textContent).toBe('');
+    });
+
+    it('unreachable keeps Log in enabled, so the user can try again', () => {
+      const { doc, post } = boot();
+      post(base);
+      open(doc);
+      input(doc).value = 'far.example';
+      post(server('unreachable', 'far.example', "Couldn't reach it."));
+      expect(doc.querySelector('#sec-account .server-status')!.textContent).toContain("Couldn't reach it.");
+      expect(submit(doc).disabled).toBe(false);
+    });
+
+    it('an answer about older text is not shown', () => {
+      const { doc, post } = boot();
+      post(base);
+      open(doc);
+      input(doc).value = 'new.example';
+      post(server('ok', 'old.example'));
+      expect(doc.querySelector('#sec-account .server-status')!.textContent).toBe('');
+    });
+
+    it('a refused address from Settings opens the field to show it', () => {
+      const { doc, post } = boot();
+      post(server('bad', 'https://edited.example', 'Not a grader.'));
+      expect(input(doc).value).toBe('https://edited.example');
+      expect(doc.querySelector<HTMLElement>('#sec-account .server-field')!.hidden).toBe(false);
+      expect(doc.querySelector<HTMLElement>('#sec-account .server-line')!.hidden).toBe(true);
+    });
+
+    it('Use the default server empties the field and checks it', () => {
+      const { doc, sent, post } = boot();
+      post(base);
+      open(doc);
+      input(doc).value = 'other.example';
+      [...doc.querySelectorAll<HTMLButtonElement>('#sec-account .server-field .link')].find((b) => b.textContent === 'Use the default server')!.click();
+      expect(input(doc).value).toBe('');
+      expect(sent.at(-1)).toEqual({ type: 'checkServer', url: '' });
+    });
+
+    it('an answer arriving while typing keeps the focus and the text', () => {
+      const { doc, post } = boot();
+      post(base);
+      open(doc);
+      input(doc).value = 'other.example';
+      const pass = doc.querySelector<HTMLInputElement>('#login-pass')!;
+      pass.focus();
+      pass.value = 'typing';
+      post(server('checking', 'other.example'));
+      post(server('ok', 'other.example'));
+      expect(doc.activeElement).toBe(pass);
+      expect(pass.value).toBe('typing');
+      expect(doc.querySelector('#sec-account .server-status')!.textContent).toContain('This server works');
+      input(doc).focus();
+      post(server('bad', 'other.example', 'Not a grader.'));
+      expect(doc.activeElement).toBe(input(doc));
+    });
+
+    it('a login closes the field again', () => {
+      const { doc, post } = boot();
+      post(base);
+      open(doc);
+      post(loggedIn);
+      post(base);
+      expect(doc.querySelector<HTMLElement>('#sec-account .server-field')!.hidden).toBe(true);
+    });
+  });
+
   it('account: Website and Log out sit on their own row', () => {
     const { doc, sent, post } = boot();
     post(loggedIn);

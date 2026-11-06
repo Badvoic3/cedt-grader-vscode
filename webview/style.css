@@ -563,6 +563,12 @@ body.vscode-high-contrast .segmented .seg.active, body.vscode-high-contrast .top
 
 .account-name { display: flex; flex-direction: column; min-width: 0; }
 .account-actions { margin-top: 6px; }
+.server-line { margin-bottom: 2px; }
+.server-line[hidden], .server-field[hidden] { display: none; }
+.server-field { display: flex; flex-direction: column; gap: 4px; margin-bottom: 4px; }
+.server-field .link { align-self: flex-start; }
+.server-status:empty { display: none; }
+.server-ok { color: var(--ok); }
 .notice.tip { border-color: var(--vscode-inputValidation-infoBorder, var(--border)); }
 .notice.linked { padding: 4px 8px; gap: 4px; }
 .linked-list { display: flex; flex-direction: column; }

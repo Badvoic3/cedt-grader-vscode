@@ -17,7 +17,7 @@ import type { Strings } from './strings';
  * Everything else was reviewed at checkpoint B (2026-11-03). Add keys here
  * when a new text is translated without review.
  */
-export const TH_REVIEW: readonly string[] = ['S.common.dismiss', 'S.crash.notice', 'S.crash.report', 'S.crash.review', 'S.crash.reviewTitle', 'S.files.saveHere', 'S.folder.cancelRestores', 'S.folder.cancelStopsMatch', 'S.folder.cancelUnlinksFile', 'S.folder.replaceFilesQ', 'W.websiteTip', 'S.account.serverInvalid', 'S.account.serverIncompatible', 'S.account.serverUnreachable', 'S.account.insecureTitle', 'S.account.insecureDetail', 'S.account.insecureSend', 'W.crashNote', 'W.crashReport', 'W.crashReportLabel', 'W.crashTitle', 'W.defaultOrderReversed', 'W.sortedBy'];
+export const TH_REVIEW: readonly string[] = ['S.common.dismiss', 'S.crash.notice', 'S.crash.report', 'S.crash.review', 'S.crash.reviewTitle', 'S.files.saveHere', 'S.folder.cancelRestores', 'S.folder.cancelStopsMatch', 'S.folder.cancelUnlinksFile', 'S.folder.replaceFilesQ', 'W.websiteTip', 'W.server', 'W.serverLine', 'W.changeServer', 'W.checkingServer', 'W.serverWorks', 'W.useDefaultServer', 'S.account.serverInvalid', 'S.account.serverIncompatible', 'S.account.serverUnreachable', 'S.account.insecureTitle', 'S.account.insecureDetail', 'S.account.insecureSend', 'W.crashNote', 'W.crashReport', 'W.crashReportLabel', 'W.crashTitle', 'W.defaultOrderReversed', 'W.sortedBy'];
 
 export const TH: Strings = {
   HOW_LINKED: {
@@ -376,6 +376,12 @@ export const TH: Strings = {
     showingSavedData: 'กำลังแสดงข้อมูลที่โหลดไว้ก่อนหน้า ซึ่งอาจไม่อัปเดต',
     userOnHost: (user, host) => `${user} บน ${host}`,
     logOut: 'ออกจากระบบ',
+    server: 'เซิร์ฟเวอร์',
+    serverLine: 'เซิร์ฟเวอร์:',
+    changeServer: 'เปลี่ยนเซิร์ฟเวอร์',
+    checkingServer: 'กำลังตรวจสอบเซิร์ฟเวอร์นี้…',
+    serverWorks: 'เซิร์ฟเวอร์นี้ใช้งานได้',
+    useDefaultServer: 'ใช้เซิร์ฟเวอร์เริ่มต้น',
     websiteTip: (host: string | number) => `เปิด ${host} ในเบราว์เซอร์`,
     logOutTip: 'ออกจากระบบและลบรหัสผ่านที่จำไว้',
     loggingIn: (host) => `กำลังเข้าสู่ระบบที่ ${host}…`,

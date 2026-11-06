@@ -14,7 +14,7 @@ import { verdictLegend } from '../src/grader/verdicts';
 import { groupLabel } from '../src/grader/verdictWords';
 import { menuLabelMax, middleEllipsis } from './text';
 import { FlowList } from './flowList';
-import { PANEL, SERVER_SCORE_CAP } from '../src/shared/constants';
+import { DEFAULT_BASE_URL, PANEL, SERVER_SCORE_CAP } from '../src/shared/constants';
 import { filterProblems, matches, sorts, sortProblems } from './filters';
 import { cycleTopic, topicState } from '../src/shared/tags';
 import { installTooltips } from './tooltip';
@@ -307,6 +307,65 @@ const loginUser = el('input', { type: 'text', id: 'login-user', name: 'username'
 const loginPass = el('input', { type: 'password', id: 'login-pass', name: 'password', autocomplete: 'current-password', placeholder: W.password });
 const loginRemember = el('input', { type: 'checkbox', id: 'login-remember', checked: true });
 let rememberInitialised = false;
+
+// The server line. Every part stays in place across renders: a check's answer can arrive while the user is typing.
+let serverOpen = false;
+const checkServer = () => send({ type: 'checkServer', url: loginServer.value });
+const loginServer = el('input', {
+  type: 'text',
+  id: 'login-server',
+  name: 'server',
+  autocomplete: 'off',
+  spellcheck: 'false',
+  placeholder: new URL(DEFAULT_BASE_URL).host,
+  onchange: checkServer,
+  oninput: () => showServerStatus(),
+  onkeydown: (e: Event) => {
+    if ((e as KeyboardEvent).key !== 'Enter') return;
+    e.preventDefault(); // Enter here checks the address; it doesn't log in
+    checkServer();
+  },
+});
+const serverHost = el('span', { class: 'small ellipsis grow' });
+const serverLine = el('div', { class: 'row server-line' },
+  el('span', { class: 'muted small' }, W.serverLine),
+  serverHost,
+  iconButton('edit', W.changeServer, () => {
+    serverOpen = true;
+    loginServer.value = state?.baseUrl ?? '';
+    showServerStatus();
+    loginServer.focus();
+  }),
+);
+const serverStatus = el('div', { class: 'server-status' });
+const serverField = el('div', { class: 'server-field' },
+  el('label', { for: 'login-server' }, W.server),
+  loginServer,
+  serverStatus,
+  el('button', { class: 'link', type: 'button', onclick: () => { loginServer.value = ''; checkServer(); showServerStatus(); } }, W.useDefaultServer),
+);
+const loginSubmit = el('button', { class: 'btn primary', type: 'submit' }, icon('sign-in'), ' ', W.logIn);
+
+/** What the host said about the address now in the field: an answer about older text isn't shown. */
+function showServerStatus(): void {
+  const v = state?.account.server;
+  if (v && !serverOpen && (v.status === 'bad' || v.status === 'unreachable') && v.draft !== null) {
+    serverOpen = true; // an address from Settings was refused: show which one
+    loginServer.value = v.draft;
+  }
+  serverLine.hidden = serverOpen;
+  serverField.hidden = !serverOpen;
+  const current = serverOpen && v?.draft === loginServer.value ? v : null;
+  serverStatus.replaceChildren();
+  if (current?.status === 'checking') serverStatus.append(el('div', { class: 'hint' }, icon('loading', 'codicon-modifier-spin'), ' ', W.checkingServer));
+  else if (current?.status === 'ok') serverStatus.append(el('div', { class: 'hint server-ok' }, icon('check'), ' ', W.serverWorks));
+  else if (current?.message) serverStatus.append(el('div', { class: 'error', role: 'alert' }, icon('error'), ' ', current.message));
+  const refused = current?.status === 'bad' ? current.message : null;
+  loginSubmit.disabled = !!refused;
+  if (refused) loginSubmit.dataset.tip = refused;
+  else delete loginSubmit.dataset.tip;
+}
+
 const loginForm = el(
   'form',
   {
@@ -315,15 +374,17 @@ const loginForm = el(
       e.preventDefault();
       const password = loginPass.value;
       loginPass.value = ''; // never kept in the webview
-      send({ type: 'login', username: loginUser.value, password, remember: loginRemember.checked });
+      send({ type: 'login', username: loginUser.value, password, remember: loginRemember.checked, ...(serverOpen ? { server: loginServer.value } : {}) });
     },
   },
+  serverLine,
+  serverField,
   el('label', { for: 'login-user' }, W.username),
   loginUser,
   el('label', { for: 'login-pass' }, W.password),
   loginPass,
   el('label', { class: 'check', for: 'login-remember' }, loginRemember, ' ', W.rememberPassword),
-  el('button', { class: 'btn primary', type: 'submit' }, icon('sign-in'), ' ', W.logIn),
+  loginSubmit,
 );
 let showLoginForm = false;
 
@@ -421,8 +482,16 @@ let state: ViewState | null = null;
 
 function renderAccount(s: ViewState): void {
   const b = sAccount.body;
-  b.replaceChildren();
   const a = s.account;
+  // The form stays where it is: moving it would take the focus from whatever the user is typing in.
+  const formShown = a.status === 'logged-out' && !(a.hasSavedPassword && a.username && !showLoginForm);
+  if (formShown && b.contains(loginForm)) {
+    for (const n of [...b.children]) {
+      if (n !== loginForm) n.remove();
+    }
+  } else {
+    b.replaceChildren();
+  }
   let host = s.baseUrl;
   try {
     host = new URL(s.baseUrl).host;
@@ -463,7 +532,10 @@ function renderAccount(s: ViewState): void {
       loginRemember.checked = a.rememberPassword;
       rememberInitialised = true;
     }
-    b.append(loginForm);
+    serverHost.textContent = s.baseUrl.replace(/^https:\/\//, ''); // a plain http:// address keeps its scheme
+    serverHost.dataset.tip = s.baseUrl;
+    showServerStatus();
+    if (!b.contains(loginForm)) b.append(loginForm);
   }
   if (a.error) b.append(el('div', { class: 'error', role: 'alert' }, icon('error'), ' ', a.error), el('div', { class: 'row' }, troubleshootingLink()));
 }
@@ -1479,7 +1551,10 @@ window.addEventListener('message', (ev: MessageEvent<ToWebview>) => {
   const m = ev.data;
   if (!m || typeof m !== 'object') return;
   if (m.type === 'state') {
-    if (state && state.account.status !== 'logged-in' && m.state.account.status === 'logged-in') showLoginForm = false;
+    if (state && state.account.status !== 'logged-in' && m.state.account.status === 'logged-in') {
+      showLoginForm = false;
+      serverOpen = false;
+    }
     const prevPid = state?.problem?.id ?? null;
     state = m.state;
     render();
