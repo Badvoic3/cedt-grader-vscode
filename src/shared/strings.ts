@@ -301,6 +301,13 @@ const EN_S = {
     noTestsShort: 'load the test cases first',
   },
 
+  crash: {
+    notice: 'CEDT Grader hit a problem. Nothing has been sent.',
+    review: 'Review Report',
+    reviewTitle: 'This text opens in a new GitHub issue. Nothing is posted until you submit it there.',
+    report: 'Report on GitHub',
+  },
+
   cphAutoShow: {
     question: 'CPH opens its own panel every time you switch to a source file, which can hide this panel. Turn that off?',
     detail: 'This changes CPH\'s setting "Auto Show Judge". You can still open CPH yourself, and turn the setting back on in VS Code\'s settings.',
@@ -428,6 +435,10 @@ const EN_W = {
   cphTip: "Want to run test cases inside VS Code? Install the Competitive Programming Helper (CPH) extension.",
   install: "Install",
   cphInstallTip: "Open CPH's page in the Extensions view",
+  crashTitle: "CEDT Grader hit a problem",
+  crashNote: "Nothing has been sent. GitHub opens with this text, and you decide whether to post it.",
+  crashReport: "Report on GitHub",
+  crashReportLabel: "Report text",
   notNow: "Not now",
   notNowTip: "Hide until VS Code restarts",
   dontShowAgainTip: "Don't show this tip again",

@@ -315,6 +315,9 @@ It reads only ruled tables with selectable text. Copy the cases from the stateme
 **Where is my password stored?**
 Only if **Remember password on this computer** is on: in your operating system's keychain through VS Code's SecretStorage. Never in settings, files or logs. **Log out** (or Clear Cached Data → Saved login) deletes it.
 
+**"CEDT Grader hit a problem".**
+The extension found a bug in itself. **Report on GitHub** opens a new issue with the text shown, with tokens and file paths removed; nothing is posted until you submit it there. **Not now** closes the card, and nothing is sent.
+
 **Something else.**
 *Output → CEDT Grader* shows errors. Turn on `cedtGrader.debugRequests` and run **CEDT Grader: Show Request Log** to see every request (no passwords or tokens).
 

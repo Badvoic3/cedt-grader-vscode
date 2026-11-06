@@ -94,6 +94,7 @@ function sample() {
     runTests: null,
     folderMode: { on: false, disabledReason: null },
     attachment: { busy: null },
+    crash: null,
     cphTip: false,
     notLinked: false,
     prompt: null,

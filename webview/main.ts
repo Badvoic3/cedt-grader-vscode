@@ -39,6 +39,14 @@ const ui: UiState = { collapsed: {}, filter: '', ...(vscode.getState() ?? {}) };
 const saveUi = () => vscode.setState({ collapsed: ui.collapsed, filter: ui.filter, listScroll: ui.listScroll });
 const send = (m: FromWebview) => vscode.postMessage(m);
 
+// A bug in this script: the host offers a report (the panel itself may be broken, so it doesn't rely on it).
+const stackOf = (err: unknown) => String((err as { stack?: unknown } | null)?.stack ?? '');
+window.addEventListener('error', (e) => send({ type: 'webviewError', message: e.message, stack: stackOf(e.error) }));
+window.addEventListener('unhandledrejection', (e) => {
+  const err = e.reason as { message?: unknown } | null;
+  send({ type: 'webviewError', message: String(err?.message ?? err), stack: stackOf(err) });
+});
+
 // ------------------------------------------------------------------ helpers
 
 type Child = Node | string | null | undefined | false | Child[];
@@ -340,7 +348,8 @@ const sHistory = section('history', W.sectionHistory, [
 const sProblems = section('problems', W.sectionProblems, [iconButton('refresh', W.refreshProblems, () => send({ type: 'refreshProblems' }))]);
 const banner = el('div', { class: 'banner', role: 'alert', hidden: true });
 const promptBar = el('div', { class: 'prompt', role: 'status', hidden: true });
-app.append(banner, promptBar, sAccount.details, sCurrent.details, sResult.details, sHistory.details, sProblems.details);
+const crashBar = el('div', { class: 'crash', role: 'status', hidden: true });
+app.append(banner, crashBar, promptBar, sAccount.details, sCurrent.details, sResult.details, sHistory.details, sProblems.details);
 
 /** A question about submitting goes right above the Submit button (when Current problem is shown). */
 function promptNearSubmit(s: ViewState): boolean {
@@ -363,6 +372,23 @@ function renderPrompt(s: ViewState): void {
   promptBar.hidden = !q;
   promptBar.replaceChildren();
   if (q) fillPrompt(promptBar, q);
+}
+
+/** A bug was caught: the exact report, and the choice to open it on GitHub. Its own card, so it never cancels an open question. */
+function renderCrash(s: ViewState): void {
+  const c = s.crash;
+  crashBar.hidden = !c;
+  crashBar.replaceChildren();
+  if (!c) return;
+  appendChildren(crashBar, [
+    el('div', { class: 'row' }, icon('warning'), el('strong', { class: 'grow' }, W.crashTitle)),
+    el('p', { class: 'small' }, W.crashNote),
+    el('pre', { class: 'crash-report', tabindex: '0', 'aria-label': W.crashReportLabel }, c.report),
+    el('div', { class: 'row gap' },
+      button(W.crashReport, () => send({ type: 'crashAction', id: c.id, action: 'open' }), { kind: 'primary' }),
+      button(W.notNow, () => send({ type: 'crashAction', id: c.id, action: 'dismiss' })),
+    ),
+  ]);
 }
 
 /** The question shown above Submit that was last scrolled into view (only new ones are). */
@@ -1351,6 +1377,7 @@ function sectionKeys(s: ViewState): Record<string, string> {
   const pid = s.problem?.id ?? null;
   return {
     banner: j([s.connection, s.problems.loaded, s.history.items.length > 0]),
+    crash: j(s.crash),
     prompt: j([s.prompt, promptNearSubmit(s)]),
     account: j([s.account, s.baseUrl, showLoginForm]),
     current: j([promptNearSubmit(s) ? s.prompt : null, s.notLinked, s.linkedNotice, s.linkedFiles, s.file, s.problem, s.languages, s.submit, s.matching, s.testcases, s.samples, s.cph, s.gradingElsewhere, s.folder, s.folderMode, s.attachment, s.runTests, pickerOpen, pickerOpen ? s.problems : s.problems.loaded]),
@@ -1381,7 +1408,7 @@ function applyLayout(s: ViewState): void {
     sec.details.classList.toggle('first-visible', id === order[0]);
   }
   // Move only when the order changed (existing elements are moved, nothing is rebuilt).
-  app.append(banner, promptBar, ...order.map((id) => all[id].details), ...(Object.keys(all) as SectionId[]).filter((id) => !order.includes(id)).map((id) => all[id].details));
+  app.append(banner, crashBar, promptBar, ...order.map((id) => all[id].details), ...(Object.keys(all) as SectionId[]).filter((id) => !order.includes(id)).map((id) => all[id].details));
 }
 
 function render(): void {
@@ -1395,6 +1422,7 @@ function render(): void {
   const keys = sectionKeys(state);
   const renderers: Record<string, (s: ViewState) => void> = {
     banner: renderBanner,
+    crash: renderCrash,
     prompt: renderPrompt,
     account: renderAccount,
     current: renderCurrent,

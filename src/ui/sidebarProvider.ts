@@ -62,6 +62,14 @@ export class SidebarProvider implements vscode.WebviewViewProvider, vscode.Dispo
   }
 
   private async handle(m: FromWebview): Promise<void> {
+    try {
+      await this.dispatch(m);
+    } catch (err) {
+      this.controller.crash.report(err, `panel message ${m.type}`);
+    }
+  }
+
+  private async dispatch(m: FromWebview): Promise<void> {
     const c = this.controller;
     await c.started;
     switch (m.type) {
@@ -185,6 +193,12 @@ export class SidebarProvider implements vscode.WebviewViewProvider, vscode.Dispo
         return;
       case 'openTroubleshooting':
         await c.openTroubleshooting();
+        return;
+      case 'crashAction':
+        if (Number.isInteger(m.id) && (m.action === 'open' || m.action === 'dismiss')) await c.crash.answer(m.id, m.action);
+        return;
+      case 'webviewError':
+        c.crash.panelError(m.message, m.stack);
         return;
       case 'openSettings':
         await vscode.commands.executeCommand('workbench.action.openSettings', 'cedtGrader');

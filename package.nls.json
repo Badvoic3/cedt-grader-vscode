@@ -6,6 +6,7 @@
   "command.login.title": "Log In",
   "command.category": "CEDT Grader",
   "command.logout.title": "Log Out",
+  "command.testCrashReport.title": "Test Crash Report (development build)",
   "command.submit.title": "Submit Current File",
   "command.chooseProblem.title": "Choose Problem for This File",
   "command.showLastResult.title": "Show Last Result",

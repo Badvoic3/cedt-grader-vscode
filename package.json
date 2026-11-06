@@ -141,6 +141,11 @@
         "icon": "$(refresh)"
       },
       {
+        "command": "cedtGrader.testCrashReport",
+        "title": "%command.testCrashReport.title%",
+        "category": "%command.category%"
+      },
+      {
         "command": "cedtGrader.focus",
         "title": "%command.focus.title%",
         "category": "%command.category%",
@@ -267,6 +272,10 @@
       "commandPalette": [
         {
           "command": "cedtGrader.focus"
+        },
+        {
+          "command": "cedtGrader.testCrashReport",
+          "when": "cedtGrader.devMode"
         }
       ]
     },

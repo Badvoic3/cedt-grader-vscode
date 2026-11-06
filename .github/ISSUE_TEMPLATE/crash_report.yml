@@ -1,0 +1,20 @@
+name: Crash report
+description: Opened from the extension after an unexpected error.
+title: "Crash report"
+body:
+  - type: markdown
+    attributes:
+      value: The extension filled in the report below and removed tokens and file paths. Check it before you submit.
+  - type: textarea
+    id: report
+    attributes:
+      label: Report
+      description: Filled in by the extension.
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: What were you doing?
+      description: Optional. The steps that led to the error, if you remember them.

@@ -5,6 +5,7 @@
   "view.contextualTitle": "CEDT Grader",
   "command.login.title": "เข้าสู่ระบบ",
   "command.category": "CEDT Grader",
+  "command.testCrashReport.title": "ทดสอบรายงานข้อผิดพลาด (เวอร์ชันพัฒนา)",
   "command.logout.title": "ออกจากระบบ",
   "command.submit.title": "ส่งไฟล์ปัจจุบัน (Submit)",
   "command.chooseProblem.title": "เลือกโจทย์สำหรับไฟล์นี้",

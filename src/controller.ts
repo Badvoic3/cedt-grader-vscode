@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { readConfig, type GraderConfig } from './config';
+import type { CrashReporter } from './crashReporter';
 import { DataService } from './data/dataService';
 import { StatementStore } from './data/statementStore';
 import { StatementPanels } from './ui/statementPanel';
@@ -130,9 +131,15 @@ export class GraderController implements vscode.Disposable {
   /** Password / token writes and deletes (every key written is listed, so Log Out removes them all). */
   private readonly secrets: SecretLedger;
 
-  constructor(private readonly ctx: vscode.ExtensionContext) {
+  constructor(
+    private readonly ctx: vscode.ExtensionContext,
+    readonly crash: CrashReporter,
+  ) {
     this.secrets = new SecretLedger(ctx.secrets, ctx.globalState);
-    this.output = vscode.window.createOutputChannel('CEDT Grader');
+    this.output = crash.output;
+    crash.onChange = () => this.emit();
+    crash.panelReady = () => this.isStarted && this.panelVisible;
+    crash.privateInfo = () => ({ username: this.cfg.username, baseUrl: this.cfg.baseUrl, fullName: this.client.user?.fullName });
     this.mapping = new MappingStore(ctx);
     this.client = this.makeClient();
     this.data = new DataService({
@@ -351,6 +358,7 @@ export class GraderController implements vscode.Disposable {
       return this.state();
     } catch (err) {
       this.log(`Internal error while building the panel: ${err instanceof Error ? (err.stack ?? err.message) : err}`);
+      this.crash.report(err, 'panel state', { notify: true });
       return null;
     }
   }
@@ -502,6 +510,7 @@ export class GraderController implements vscode.Disposable {
   /** Errors outside a request (e.g. activation) go to the extension's output channel, not the console. */
   logError(context: string, err: unknown): void {
     this.log(`${context}: ${err instanceof Error ? err.message : String(err)}`);
+    this.crash.caught(err, context);
   }
 
   private log(msg: string): void {
@@ -675,6 +684,7 @@ export class GraderController implements vscode.Disposable {
       // Explicitly unlinked, or no confident match (candidates are only offered in the picker).
       notLinked: !problem && !!file && (this.notLinked || (!!this.data.problemList()?.problems.length && !this.matchInfo.ambiguous)),
       prompt: this.prompts.current,
+      crash: this.crash.view,
       ...this.links.noticeView(problem, file),
       folder: this.folder.view(),
       runTests: this.cph.installed && problem && file ? { disabledReason: this.tests.runTestCount ? null : S.runTests.noTestsShort } : null,
@@ -1399,7 +1409,10 @@ export class GraderController implements vscode.Disposable {
   describe(err: unknown): string {
     if (err instanceof NetworkError) return S.errors.checkConnection(err.message);
     if (err instanceof GraderError) return err.message;
-    if (err instanceof Error) return S.errors.unexpected(err.message);
+    if (err instanceof Error) {
+      this.crash.caught(err, 'handled error');
+      return S.errors.unexpected(err.message);
+    }
     return String(err);
   }
 

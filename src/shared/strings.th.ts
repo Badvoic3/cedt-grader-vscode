@@ -17,7 +17,7 @@ import type { Strings } from './strings';
  * Everything else was reviewed at checkpoint B (2026-11-03). Add keys here
  * when a new text is translated without review.
  */
-export const TH_REVIEW: readonly string[] = ['S.common.dismiss', 'S.files.saveHere', 'S.folder.cancelRestores', 'S.folder.cancelStopsMatch', 'S.folder.cancelUnlinksFile', 'S.folder.replaceFilesQ', 'W.sortedBy'];
+export const TH_REVIEW: readonly string[] = ['S.common.dismiss', 'S.crash.notice', 'S.crash.report', 'S.crash.review', 'S.crash.reviewTitle', 'S.files.saveHere', 'S.folder.cancelRestores', 'S.folder.cancelStopsMatch', 'S.folder.cancelUnlinksFile', 'S.folder.replaceFilesQ', 'W.crashNote', 'W.crashReport', 'W.crashReportLabel', 'W.crashTitle', 'W.sortedBy'];
 
 export const TH: Strings = {
   HOW_LINKED: {
@@ -301,6 +301,13 @@ export const TH: Strings = {
       noTestsShort: 'โหลด test case ก่อน',
     },
 
+    crash: {
+      notice: 'CEDT Grader เกิดปัญหา ยังไม่มีการส่งข้อมูลใด ๆ',
+      review: 'ตรวจรายงาน',
+      reviewTitle: 'ข้อความนี้จะเปิดเป็น issue ใหม่บน GitHub และจะไม่ถูกโพสต์จนกว่าคุณจะกดส่งที่นั่น',
+      report: 'รายงานบน GitHub',
+    },
+
     cphAutoShow: {
       question: 'CPH จะเปิดแผงของตัวเองทุกครั้งที่คุณสลับไปที่ไฟล์ source ซึ่งอาจบังแผงนี้ ต้องการปิดไว้ไหม?',
       detail: 'การเปลี่ยนนี้จะปิดการตั้งค่า "Auto Show Judge" ของ CPH คุณยังเปิดแผง CPH เองได้ และเปิดกลับได้ในการตั้งค่าของ VS Code',
@@ -426,6 +433,10 @@ export const TH: Strings = {
     cphTip: 'อยากรัน test case ใน VS Code ไหม? ติดตั้งส่วนขยาย Competitive Programming Helper (CPH) ได้เลย',
     install: 'ติดตั้ง',
     cphInstallTip: 'เปิดหน้า CPH ในแถบ Extensions',
+    crashTitle: 'CEDT Grader เกิดปัญหา',
+    crashNote: 'ยังไม่มีการส่งข้อมูลใด ๆ GitHub จะเปิดพร้อมข้อความนี้ และคุณเลือกเองว่าจะโพสต์หรือไม่',
+    crashReport: 'รายงานบน GitHub',
+    crashReportLabel: 'ข้อความรายงาน',
     notNow: 'ไว้ทีหลัง',
     notNowTip: 'ซ่อนไว้จนกว่าจะเปิด VS Code ใหม่',
     dontShowAgainTip: 'ไม่ต้องแสดงคำแนะนำนี้อีก',

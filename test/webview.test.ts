@@ -42,6 +42,7 @@ const base: ViewState = {
   matching: { suggestions: [], ambiguous: null, note: null },
   linkedFiles: [],
   linkedNotice: null,
+  crash: null,
   cphTip: false,
   notLinked: false,
   prompt: null,
@@ -1310,5 +1311,48 @@ describe.runIf(existsSync(resolve(__dirname, '../esbuild.mjs')))('sidebar webvie
     post({ ...loggedIn, result: { ...loggedIn.result!, points: 0, verdicts: [], compileError: true, compilerMessage: 'a.cpp:1: error: <script>' } });
     expect(doc.querySelector('.compiler pre')!.textContent).toBe('a.cpp:1: error: <script>');
     expect(doc.querySelector('script')).toBeNull();
+  });
+  describe('crash report card', () => {
+    const report = 'Extension: 1.0.1\nWhere: command submit\nTypeError: <img src=x onerror=alert(1)>';
+
+    it('shows the exact report as text, and takes no focus', () => {
+      const { post, doc } = boot();
+      post({ ...loggedIn, crash: { id: 4, report } });
+      const box = doc.querySelector('.crash') as HTMLElement;
+      expect(box.hidden).toBe(false);
+      expect(box.querySelector('pre')?.textContent).toBe(report);
+      expect(box.querySelector('img')).toBeNull();
+      expect(box.contains(doc.activeElement)).toBe(false);
+    });
+
+    it('sends the choice for this card', () => {
+      const { post, doc, sent } = boot();
+      post({ ...loggedIn, crash: { id: 4, report } });
+      const buttons = [...doc.querySelectorAll<HTMLButtonElement>('.crash button')];
+      expect(buttons.map((b) => b.textContent)).toEqual(['Report on GitHub', 'Not now']);
+      buttons[0].click();
+      buttons[1].click();
+      expect(sent).toContainEqual({ type: 'crashAction', id: 4, action: 'open' });
+      expect(sent).toContainEqual({ type: 'crashAction', id: 4, action: 'dismiss' });
+    });
+
+    it('sits apart from an inline question, and goes away', () => {
+      const { post, doc } = boot();
+      const prompt = { id: 1, text: 'Submit?', detail: null, tone: 'info' as const, buttons: [{ id: 'y', label: 'Yes' }], near: null };
+      post({ ...loggedIn, prompt, crash: { id: 4, report } });
+      expect((doc.querySelector('.prompt') as HTMLElement).hidden).toBe(false);
+      expect((doc.querySelector('.crash') as HTMLElement).hidden).toBe(false);
+      expect(doc.querySelector('.prompt .crash-report')).toBeNull();
+      post({ ...loggedIn, prompt, crash: null });
+      expect((doc.querySelector('.crash') as HTMLElement).hidden).toBe(true);
+      expect((doc.querySelector('.prompt') as HTMLElement).hidden).toBe(false);
+    });
+
+    it('reports a script error to the host', () => {
+      const { dom, sent } = boot();
+      const err = new TypeError('boom');
+      dom.window.dispatchEvent(new dom.window.ErrorEvent('error', { message: 'Uncaught TypeError: boom', error: err }));
+      expect(sent).toContainEqual({ type: 'webviewError', message: 'Uncaught TypeError: boom', stack: err.stack ?? '' });
+    });
   });
 });

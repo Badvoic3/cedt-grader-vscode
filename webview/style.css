@@ -619,6 +619,34 @@ body.vscode-high-contrast .segmented .seg.active, body.vscode-high-contrast .top
 
 /* Result header: "Attempt 3 · #id ↗" with the legend on the right */
 .result-head { gap: 6px; }
+.crash {
+  margin: 6px 8px;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  border: 1px solid var(--vscode-inputValidation-warningBorder, var(--border));
+  background: var(--vscode-inputValidation-warningBackground, transparent);
+  border-radius: var(--radius);
+}
+.crash[hidden] { display: none; }
+.crash p { margin: 0; }
+.crash .row.gap { flex-wrap: wrap; }
+.crash-report {
+  margin: 0;
+  padding: 6px;
+  max-height: 140px;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-family: var(--vscode-editor-font-family, monospace);
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--vscode-foreground);
+  background: var(--vscode-sideBar-background, transparent);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
 .prompt { margin: 6px 8px; }
 .prompt[hidden] { display: none; }
 /* Answer buttons can be long (folder names): wrap inside the box instead of overflowing it. */

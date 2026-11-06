@@ -35,6 +35,16 @@ export function troubleshootingUrl(lang: keyof typeof TROUBLESHOOTING): string {
   return `${REPO_URL}/blob/main/${t.file}#${encodeURIComponent(t.anchor)}`;
 }
 
+/** Crash reports (prefilled GitHub issue). Electron's `shell.openExternal` takes at most 2,081 characters on Windows. */
+export const CRASH = {
+  issueTemplate: 'crash_report.yml',
+  maxPromptsPerSession: 3,
+  maxUrlLength: 2000,
+  maxFrames: 8,
+  maxMessageChars: 500,
+  maxPanelErrorChars: 4000,
+} as const;
+
 /** URI scheme of the read-only documents serving a past submission's source (diff view; also the CPH reload placeholder). */
 export const SUBMISSION_SCHEME = 'cedt-grader-submission';
 

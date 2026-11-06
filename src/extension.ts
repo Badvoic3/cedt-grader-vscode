@@ -5,6 +5,7 @@ import { SidebarProvider } from './ui/sidebarProvider';
 import { StatementPanels } from './ui/statementPanel';
 import { GraderStatusBar } from './ui/statusBar';
 import { readConfig } from './config';
+import { CrashReporter } from './crashReporter';
 import { resolveLang, setLanguage } from './shared/i18n';
 import { WALKTHROUGH_CONTEXT, WALKTHROUGH_ID, walkthroughContext } from './shared/walkthrough';
 
@@ -16,9 +17,20 @@ import { WALKTHROUGH_CONTEXT, WALKTHROUGH_ID, walkthroughContext } from './share
  * action (see the device-lock note in CLAUDE.md).
  */
 export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
+  const crash = new CrashReporter(ctx);
+  ctx.subscriptions.push(crash);
+  try {
+    start(ctx, crash);
+  } catch (err) {
+    crash.report(err, 'activation', { notify: true });
+    throw err;
+  }
+}
+
+function start(ctx: vscode.ExtensionContext, crash: CrashReporter): void {
   // Display language first: every text read after this is in it (changes apply live, see GraderController).
   setLanguage(resolveLang(readConfig().displayLanguage, vscode.env.language));
-  const controller = new GraderController(ctx);
+  const controller = new GraderController(ctx, crash);
   const sidebar = new SidebarProvider(ctx.extensionUri, controller);
   const statusBar = new GraderStatusBar();
   const walkthroughState: Record<string, boolean> = {};
@@ -27,7 +39,12 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
   const command = <A extends unknown[]>(id: string, run: (...args: A) => unknown) =>
     vscode.commands.registerCommand(id, async (...args: A) => {
       await controller.started;
-      return run(...args);
+      try {
+        return await run(...args);
+      } catch (err) {
+        crash.report(err, `command ${id.replace('cedtGrader.', '')}`);
+        throw err;
+      }
     });
 
   const reveal = async (target?: 'login' | 'problem-search' | 'submit') => {
@@ -102,6 +119,16 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
       vscode.commands.executeCommand('workbench.action.openSettings', 'cedtGrader'),
     ),
   );
+
+  // Development builds only: the path a real bug takes (checklist: "Crash report").
+  if (ctx.extensionMode === vscode.ExtensionMode.Development) {
+    void vscode.commands.executeCommand('setContext', 'cedtGrader.devMode', true);
+    ctx.subscriptions.push(
+      vscode.commands.registerCommand('cedtGrader.testCrashReport', () => {
+        void Promise.reject(new TypeError(`Test crash report & more #1 from ${ctx.globalStorageUri.fsPath}/main.cpp`));
+      }),
+    );
+  }
 
   void controller.init();
 }

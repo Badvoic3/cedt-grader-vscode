@@ -193,6 +193,8 @@ export interface ViewState {
   folderMode: { on: boolean; disabledReason: string | null } | null;
   /** Attachment download in progress (problem id). */
   attachment: { busy: number | null };
+  /** A bug was caught: the exact text a GitHub issue would be prefilled with. Nothing is sent until the user asks. */
+  crash: { id: number; report: string } | null;
   /** Show the dismissible "install CPH" tip. */
   cphTip: boolean;
   /** The file was explicitly unlinked: "Not linked to a problem" (auto-detection off). */
@@ -305,6 +307,8 @@ export type FromWebview =
   | { type: 'setFolderRole'; role: 'submit' | 'run'; file: string }
   | { type: 'runTests' }
   | { type: 'cphTip'; action: 'install' | 'later' | 'never' }
+  | { type: 'crashAction'; id: number; action: 'open' | 'dismiss' }
+  | { type: 'webviewError'; message: string; stack: string }
   | { type: 'showCompilerMessage' }
   | { type: 'openSettings' }
   | { type: 'openTroubleshooting' };
