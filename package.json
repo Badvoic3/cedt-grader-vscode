@@ -29,6 +29,7 @@
     "watch": "node esbuild.mjs --watch",
     "typecheck": "tsc --noEmit -p .",
     "test": "vitest run",
+    "check": "npm run build && npm test",
     "test:watch": "vitest",
     "probe": "tsx scripts/probe.ts",
     "package": "vsce package --no-dependencies",
