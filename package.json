@@ -20,7 +20,7 @@
     "theme": "dark"
   },
   "engines": {
-    "vscode": "^1.82.0"
+    "vscode": "^1.106.0"
   },
   "type": "commonjs",
   "scripts": {
@@ -46,7 +46,7 @@
     "@types/jsdom": "^30.0.0",
     "@types/markdown-it": "^14.2.0",
     "@types/node": "^22.20.5",
-    "@types/vscode": "~1.82.0",
+    "@types/vscode": "~1.106.0",
     "@vscode/codicons": "^0.0.46-24",
     "@vscode/vsce": "^4.1.0",
     "esbuild": "^0.28.2",
@@ -80,6 +80,13 @@
   ],
   "contributes": {
     "viewsContainers": {
+      "secondarySidebar": [
+        {
+          "id": "cedtGrader",
+          "title": "%viewContainer.title%",
+          "icon": "media/icon.svg"
+        }
+      ],
       "activitybar": [
         {
           "id": "cedtGrader",
