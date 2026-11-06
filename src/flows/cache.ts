@@ -44,7 +44,11 @@ export class CacheCare {
     if (Date.now() - last < TIMING.dailyCleanupMs) return;
     await h.ctx.globalState.update(KEYS.lastCleanup, Date.now());
     const n = await h.mapping.expireStale();
-    if (n) h.log(`Removed ${n} mapping(s) whose file has been missing for 30 days.`);
+    if (n) {
+      h.log(`Removed ${n} mapping(s) whose file has been missing for 30 days.`);
+      await h.links.refreshMappedIds(); // runs after the panel's first state
+      h.emit();
+    }
     const r = await cleanupCache(this.root, { now: Date.now(), maxBytes: this.maxBytes, unusedDays: CACHE.unusedDays, tempDays: CACHE.tempDays });
     if (r.removed) h.log(`Cache cleanup: removed ${r.removed} file(s), ${formatBytes(r.bytes)}.`);
     await this.pruneStatementViews();

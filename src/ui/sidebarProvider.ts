@@ -30,7 +30,10 @@ export class SidebarProvider implements vscode.WebviewViewProvider, vscode.Dispo
       view.webview.onDidReceiveMessage((m: unknown) => {
         if (isFromWebview(m)) void this.handle(m);
       }),
-      this.controller.onState((state) => this.post({ type: 'state', state })),
+      // The panel stays on "Loading" until the saved session is read: no flash of the login form.
+      this.controller.onState((state) => {
+        if (this.controller.isStarted) this.post({ type: 'state', state });
+      }),
     ];
     this.controller.focusTarget = (t) => setTimeout(() => this.focus(t), TIMING.focusDelayMs);
     this.controller.onLanguageChanged = () => this.reload();
@@ -60,6 +63,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider, vscode.Dispo
 
   private async handle(m: FromWebview): Promise<void> {
     const c = this.controller;
+    await c.started;
     switch (m.type) {
       case 'ready':
         this.post({ type: 'state', state: c.state() });

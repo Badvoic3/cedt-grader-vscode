@@ -23,6 +23,13 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
   const statusBar = new GraderStatusBar();
   const walkthroughState: Record<string, boolean> = {};
 
+  // Activation doesn't wait for `controller.init()`, so the panel can load meanwhile; commands do.
+  const command = <A extends unknown[]>(id: string, run: (...args: A) => unknown) =>
+    vscode.commands.registerCommand(id, async (...args: A) => {
+      await controller.started;
+      return run(...args);
+    });
+
   const reveal = async (target?: 'login' | 'problem-search' | 'submit') => {
     await vscode.commands.executeCommand(`${SidebarProvider.viewId}.focus`);
     if (target) setTimeout(() => sidebar.focus(target), TIMING.focusDelayMs);
@@ -49,7 +56,7 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
     ),
 
     vscode.commands.registerCommand('cedtGrader.focus', () => reveal()),
-    vscode.commands.registerCommand('cedtGrader.login', async () => {
+    command('cedtGrader.login', async () => {
       const s = controller.state();
       if (s.account.username && s.account.hasSavedPassword) {
         await reveal();
@@ -58,47 +65,45 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
         await reveal('login');
       }
     }),
-    vscode.commands.registerCommand('cedtGrader.logout', () => controller.logout()),
-    vscode.commands.registerCommand('cedtGrader.submit', async (uri?: vscode.Uri) => {
+    command('cedtGrader.logout', () => controller.logout()),
+    command('cedtGrader.submit', async (uri?: vscode.Uri) => {
       if (uri instanceof vscode.Uri && uri.scheme === 'file') await controller.setActiveFile(uri);
       await reveal();
       await controller.submit();
     }),
-    vscode.commands.registerCommand('cedtGrader.chooseProblem', () => controller.chooseProblemQuickPick()),
-    vscode.commands.registerCommand('cedtGrader.showLastResult', () => controller.showLastResult()),
-    vscode.commands.registerCommand('cedtGrader.openStatement', () => controller.openStatement()),
-    vscode.commands.registerCommand('cedtGrader.refreshProblems', () => controller.refreshProblems(true)),
-    vscode.commands.registerCommand('cedtGrader.refreshHistory', () => controller.refreshHistory()),
-    vscode.commands.registerCommand('cedtGrader.clearMapping', () => controller.unmapCurrentFile()),
-    vscode.commands.registerCommand('cedtGrader.renameFileToProblem', () => controller.renameFileToProblem()),
-    vscode.commands.registerCommand('cedtGrader.downloadAttachment', () => controller.downloadAttachment()),
-    vscode.commands.registerCommand('cedtGrader.toggleFolderMode', () => controller.toggleFolderMode()),
-    vscode.commands.registerCommand('cedtGrader.runTests', () => controller.runTests()),
-    vscode.commands.registerCommand('cedtGrader.loadTestcases', () => controller.loadTestcases(false)),
-    vscode.commands.registerCommand('cedtGrader.saveTestcasesAsFiles', () => controller.loadTestcases(false, true)),
-    vscode.commands.registerCommand('cedtGrader.loadSampleCases', () => controller.loadSampleCases()),
-    vscode.commands.registerCommand('cedtGrader.showRequestLog', () => controller.showRequestLog()),
-    vscode.commands.registerCommand('cedtGrader.clearCache', () => controller.clearCachedData()),
-    vscode.commands.registerCommand('cedtGrader.openTroubleshooting', () => controller.openTroubleshooting()),
+    command('cedtGrader.chooseProblem', () => controller.chooseProblemQuickPick()),
+    command('cedtGrader.showLastResult', () => controller.showLastResult()),
+    command('cedtGrader.openStatement', () => controller.openStatement()),
+    command('cedtGrader.refreshProblems', () => controller.refreshProblems(true)),
+    command('cedtGrader.refreshHistory', () => controller.refreshHistory()),
+    command('cedtGrader.clearMapping', () => controller.unmapCurrentFile()),
+    command('cedtGrader.renameFileToProblem', () => controller.renameFileToProblem()),
+    command('cedtGrader.downloadAttachment', () => controller.downloadAttachment()),
+    command('cedtGrader.toggleFolderMode', () => controller.toggleFolderMode()),
+    command('cedtGrader.runTests', () => controller.runTests()),
+    command('cedtGrader.loadTestcases', () => controller.loadTestcases(false)),
+    command('cedtGrader.saveTestcasesAsFiles', () => controller.loadTestcases(false, true)),
+    command('cedtGrader.loadSampleCases', () => controller.loadSampleCases()),
+    command('cedtGrader.showRequestLog', () => controller.showRequestLog()),
+    command('cedtGrader.clearCache', () => controller.clearCachedData()),
+    command('cedtGrader.openTroubleshooting', () => controller.openTroubleshooting()),
     // Read-only documents with the source of past submissions (for "Compare with current file").
     // Statement tabs reopen after a restart, from the disk cache (no request).
     vscode.window.registerWebviewPanelSerializer(StatementPanels.viewType, {
       deserializeWebviewPanel: async (panel, state) => controller.statements.revive(panel, state as { problemId?: number; name?: string }),
     }),
     vscode.workspace.registerTextDocumentContentProvider(SUBMISSION_SCHEME, {
-      provideTextDocumentContent: (uri) => controller.submissionSource(uri),
+      provideTextDocumentContent: async (uri) => {
+        await controller.started;
+        return controller.submissionSource(uri);
+      },
     }),
     vscode.commands.registerCommand('cedtGrader.openSettings', () =>
       vscode.commands.executeCommand('workbench.action.openSettings', 'cedtGrader'),
     ),
   );
 
-  try {
-    await controller.init();
-  } catch (err) {
-    // Activation must not fail because of bad saved data; the panel still works.
-    controller.logError('Init failed', err);
-  }
+  void controller.init();
 }
 
 export function deactivate(): void {

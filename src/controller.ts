@@ -82,6 +82,12 @@ export class GraderController implements vscode.Disposable {
   private accountStatus: ViewState['account']['status'] = 'logged-out';
   private accountError: string | null = null;
   private hasSavedPassword = false;
+  private panelVisible = false;
+  /** `init` has read the saved session. */
+  isStarted = false;
+  private markStarted!: () => void;
+  /** Resolves when `init` has read the saved session, also after a failure. */
+  readonly started = new Promise<void>((done) => (this.markStarted = done));
 
   private fileUri: vscode.Uri | null = null;
   private problem: CurrentProblem | null = null;
@@ -293,20 +299,37 @@ export class GraderController implements vscode.Disposable {
   }
 
   /** Restores a stored API token (no network). Never logs in on its own. */
+  /**
+   * Read the saved login, links and active file. Runs after activation, while the panel's webview
+   * loads: commands and panel messages wait for `started`, so they never see a half-read session.
+   */
   async init(): Promise<void> {
-    // Problem list saved by versions before v2 (no tags): no longer read, remove it.
-    await this.ctx.workspaceState.update(`${KEYS.problemsPrefix}:${this.cfg.baseUrl}:${this.cfg.username}`, undefined);
-    await this.cache.dailyCleanup();
-    await this.links.cleanupDuplicates();
-    this.warnBadPattern();
-    this.hasSavedPassword = !!(await this.getPassword());
-    if (await this.client.restore()) {
-      this.accountStatus = 'logged-in';
-      void this.data.loadProblems(); // deferred until the panel is visible
+    try {
+      await this.links.cleanupDuplicates();
+      this.warnBadPattern();
+      this.hasSavedPassword = !!(await this.getPassword());
+      if (await this.client.restore()) {
+        this.accountStatus = 'logged-in';
+        void this.data.loadProblems(); // deferred until the panel is visible
+      }
+      const ed = vscode.window.activeTextEditor;
+      if (ed && ed.document.uri.scheme === 'file') await this.setActiveFile(ed.document.uri);
+    } catch (err) {
+      // Bad saved data must not stop the extension; the panel still works.
+      this.logError('Init failed', err);
     }
-    const ed = vscode.window.activeTextEditor;
-    if (ed && ed.document.uri.scheme === 'file') await this.setActiveFile(ed.document.uri);
-    else this.emit();
+    this.isStarted = true;
+    this.markStarted();
+    if (this.panelVisible) this.setPanelVisible(true);
+    this.emit();
+    // Housekeeping, after the panel has what it needs.
+    try {
+      // Problem list saved by versions before v2 (no tags): no longer read, remove it.
+      await this.ctx.workspaceState.update(`${KEYS.problemsPrefix}:${this.cfg.baseUrl}:${this.cfg.username}`, undefined);
+      await this.cache.dailyCleanup();
+    } catch (err) {
+      this.logError('Cleanup failed', err);
+    }
   }
 
   dispose(): void {
@@ -334,6 +357,8 @@ export class GraderController implements vscode.Disposable {
 
   /** The sidebar was shown or hidden. */
   setPanelVisible(v: boolean): void {
+    this.panelVisible = v;
+    if (!this.isStarted) return; // `init` applies it: loading needs the saved login first
     this.data.setVisible(v);
     if (v) {
       void this.ensureLanguages();
