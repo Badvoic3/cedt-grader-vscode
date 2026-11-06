@@ -139,9 +139,9 @@ export class GraderController implements vscode.Disposable {
     this.output = crash.output;
     crash.onChange = () => this.emit();
     crash.panelReady = () => this.isStarted && this.panelVisible;
-    crash.privateInfo = () => ({ username: this.cfg.username, baseUrl: this.cfg.baseUrl, fullName: this.client.user?.fullName });
     this.mapping = new MappingStore(ctx);
     this.client = this.makeClient();
+    crash.privateInfo = () => ({ username: this.cfg.username, baseUrl: this.cfg.baseUrl, fullName: this.client.user?.fullName });
     this.data = new DataService({
       client: () => this.client,
       canFetch: () => this.client.isLoggedIn || this.hasSavedPassword,
@@ -784,19 +784,15 @@ export class GraderController implements vscode.Disposable {
   }
 
   /** The filter is kept per workspace; a window with no folder open has no lasting workspace. */
-  private filterState(): vscode.Memento {
-    return vscode.workspace.workspaceFolders?.length ? this.ctx.workspaceState : this.ctx.globalState;
-  }
-
   private problemFilter(): ProblemFilter {
-    return this.filterState().get<ProblemFilter>(KEYS.problemFilter, { status: 'all', topic: null });
+    return this.mapping.local.get<ProblemFilter>(KEYS.problemFilter, { status: 'all', topic: null });
   }
 
   /** Persist the problem-list filter per workspace. */
   async setProblemFilter(f: ProblemFilter): Promise<void> {
     const valid: ProblemFilter['status'][] = ['all', 'unsolved', 'inprogress', 'solved'];
     const sorts = ['default', 'name-asc', 'name-desc', 'latest', 'score-asc', 'score-desc', 'recent'];
-    await this.filterState().update(KEYS.problemFilter, {
+    await this.mapping.local.update(KEYS.problemFilter, {
       status: valid.includes(f.status) ? f.status : 'all',
       ...cleanTopicFilter(f),
       sort: f.sort && sorts.includes(f.sort) ? f.sort : 'default',
@@ -1086,9 +1082,14 @@ export class GraderController implements vscode.Disposable {
     // Matched by the name of its folder, or at the top of a workspace folder holding a package: the
     // folder is a package like a linked folder (submit and run files detected), but nothing is saved
     // until the user chooses something.
-    if (!this.folder.link && problem && (problem.source === 'folder' || (await this.folder.atRootPackage(uri, problem.source)))) {
-      await this.folder.load({ fsPath: dirname(uri.fsPath), entry: { problemId: problem.id, name: problem.name, baseUrl: this.cfg.baseUrl, folder: true } }, true);
+    if (!this.folder.link && problem) {
+      const isPackage = problem.source === 'folder' || (await this.folder.atRootPackage(uri, problem.source));
+      // Another file became active during the check: loading this one's package would make Submit send it for that file.
       if (seq !== this.refreshSeq) return;
+      if (isPackage) {
+        await this.folder.load({ fsPath: dirname(uri.fsPath), entry: { problemId: problem.id, name: problem.name, baseUrl: this.cfg.baseUrl, folder: true } }, true);
+        if (seq !== this.refreshSeq) return;
+      }
     }
     // The chosen language belongs to the file Submit sends (folder mode: the folder's submit file).
     const target = this.folder.targetUri()?.fsPath;

@@ -152,6 +152,12 @@ describe('CrashReporter', () => {
     expect(process.listenerCount('uncaughtException')).toBeGreaterThanOrEqual(0);
   });
 
+  it('hides the server name when its address has a port', () => {
+    c.privateInfo = () => ({ baseUrl: 'https://grader.example.net:8443' });
+    c.report(bug('getaddrinfo ENOTFOUND grader.example.net'), 'command submit');
+    expect(c.view?.report).toContain('ENOTFOUND <private>');
+  });
+
   it('never throws from the reporter', () => {
     c.privateInfo = () => {
       throw new Error('no config');

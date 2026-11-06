@@ -5,7 +5,7 @@
 import { strToU8, zipSync, type Zippable } from 'fflate';
 import { describe, expect, it } from 'vitest';
 import { planZip } from '../src/mapping/attachment';
-import { asksSubmitOrOpen, detectFolderRoles, folderRole, hasMain, includeClosure, needsRolesForStandIn, runChoices, runSources, standInFile, submitFor } from '../src/mapping/folderRoles';
+import { asksSubmitOrOpen, canBeRootPackage, detectFolderRoles, folderRole, hasMain, includeClosure, isRootPackage, needsRolesForStandIn, runChoices, runSources, standInFile, submitFor } from '../src/mapping/folderRoles';
 
 const M = (o: Record<string, string>) => new Map(Object.entries(o));
 const DRIVER = (inc: string[], extra = '') => `${inc.map((i) => `#include "${i}"`).join('\n')}\n#include <iostream>\n${extra}\nint main() {\n  return 0;\n}\n`;
@@ -146,5 +146,21 @@ describe('folder state: the file Submit sends / CPH runs', () => {
     expect(asksSubmitOrOpen({ ...o, chosenSubmit: 'student.h' })).toBe(false);
     expect(asksSubmitOrOpen({ ...o, openRel: 'student.h' })).toBe(false);
     expect(asksSubmitOrOpen({ ...o, openRel: 'notes.txt' })).toBe(false);
+  });
+});
+
+describe('package at the workspace root', () => {
+  const role = { file: 'x', why: 'main' } as never;
+  const roles = { run: role, submit: role };
+
+  it('needs a file-name or CPH match, so a suggestion costs no folder walk', () => {
+    expect(['filename', 'cph'].every(canBeRootPackage)).toBe(true);
+    expect(['suggested', 'saved', 'folder'].some(canBeRootPackage)).toBe(false);
+  });
+
+  it('needs both roles', () => {
+    expect(isRootPackage('filename', roles)).toBe(true);
+    expect(isRootPackage('suggested', roles)).toBe(false);
+    expect(isRootPackage('cph', { run: role, submit: null })).toBe(false);
   });
 });

@@ -84,13 +84,19 @@ function underFolder(folder: string, rest: string): RegExp {
 }
 const longestFirst = (paths: readonly string[]) => [...paths].filter((p) => p.length > 1).sort((a, b) => b.length - a.length);
 
-/** The rest of a path. Spaces count: losing a few words of a message is better than leaving a file name behind. */
-const PATH_REST = `[^'"\`()<>,;\\n]*`;
-const QUOTED_PATH = /(['"`])(?:\/|~\/|[A-Za-z]:[\\/]|\\\\)[^'"`\n]*\1/g;
+/** The rest of a path. Spaces and commas count: losing a few words of a message is better than leaving a file name behind. */
+const PATH_REST = `[^'"\`()<>\\n]*`;
+/** Anything quoted with a separator in it is treated as a path, relative ones too. */
+const QUOTED_PATH = /(['"`])[^'"`\n]*[\\/][^'"`\n]*\1/g;
 const FILE_URL = /\bfile:\/\/[^\s'"`()<>]*/gi;
 const ANY_URL = /\b[a-z][a-z0-9+.-]*:\/\/[^\s'"`()<>]+/gi;
 const WINDOWS_PATH = new RegExp(`(?<![\\w<>~])(?:[A-Za-z]:[\\\\/]|\\\\\\\\[^\\s\\\\/]+[\\\\/])${PATH_REST}`, 'g');
 const POSIX_PATH = new RegExp(`(?<![\\w.<>~/:\\\\-])\\/[^\\s'"\`()<>,;:/]+(?:\\/${PATH_REST})?`, 'g');
+
+/** `quiz1/somsak/main.cpp`. A date or `1/2` has no letter, so it stays. */
+const RELATIVE_PATH = /(?<![\p{L}\p{N}_.<>~/\\:-])[\p{L}\p{N}_.-]+(?:[\\/][\p{L}\p{N}_.-]+)+/gu;
+/** A file name on its own can hold a student's name. */
+const SOURCE_FILE = /(?<![\p{L}\p{N}_.-])[\p{L}\p{N}_.-]+\.(?:c|cc|cpp|cxx|h|hh|hpp|hxx|py|java|rs|go|pas|hs|rb|php|pdf|zip)(?![\p{L}\p{N}_])/giu;
 
 function fileUrlPath(url: string): string {
   const path = url.replace(/^file:\/\/(localhost)?/i, '').replace(/^\/([A-Za-z](?::|%3A))/i, '$1');
@@ -114,7 +120,7 @@ export function sanitize(text: string, ctx: SanitizeContext = {}): string {
   let out = redactPatterns(text)
     .replace(/\beyJ[\w-]+\.[\w-]+\.[\w-]+/g, '***')
     .replace(/\b(Bearer\s+)\S+/gi, '$1***')
-    .replace(/\b(token|secret|api[_-]?key)(["']?\s*[:=]\s*["']?)[^\s"'&,;]+/gi, '$1$2***')
+    .replace(/\b(token|secret|api[_-]?key|password|passwd|pwd)(["']?\s*[:=]\s*["']?)[^\s"'&,;]+/gi, '$1$2***')
     .replace(/[\p{L}\p{N}._%+-]+@[\p{L}\p{N}-]+(?:\.[\p{L}\p{N}-]+)+/gu, '<private>')
     .replace(FILE_URL, (url) => reducePath(fileUrlPath(url), ctx));
   if (ctx.extensionPath) out = out.replace(underFolder(ctx.extensionPath, ''), '<extension>');
@@ -124,7 +130,9 @@ export function sanitize(text: string, ctx: SanitizeContext = {}): string {
     .replace(ANY_URL, '<url>')
     .replace(QUOTED_PATH, '$1<path>$1')
     .replace(WINDOWS_PATH, '<path>')
-    .replace(POSIX_PATH, '<path>');
+    .replace(POSIX_PATH, '<path>')
+    .replace(RELATIVE_PATH, (m) => (/\p{L}/u.test(m) ? '<path>' : m))
+    .replace(SOURCE_FILE, '<file>');
   for (const term of ctx.terms ?? []) {
     const t = term?.trim();
     if (t && t.length >= 3) out = out.replace(new RegExp(`(?<![\\p{L}\\p{N}])${escapeRe(t)}(?![\\p{L}\\p{N}])`, 'giu'), '<private>');

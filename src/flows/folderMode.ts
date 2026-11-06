@@ -11,7 +11,7 @@ import {
   detectFolderRoles,
   type FolderRoles,
   folderRole,
-  isRootPackage,
+  canBeRootPackage, isRootPackage,
   needsRolesForStandIn,
   type RoleWhy,
   runChoices,
@@ -163,6 +163,7 @@ export class FolderMode {
 
   /** Is this file, matched by `source`, at the top of a workspace folder that holds a whole package? */
   async atRootPackage(uri: vscode.Uri, source: string): Promise<boolean> {
+    if (!canBeRootPackage(source)) return false; // before the folder walk: this runs on every file switch
     const ws = vscode.workspace.getWorkspaceFolder(uri);
     if (!ws || pathKey(ws.uri.fsPath) !== pathKey(dirname(uri.fsPath))) return false;
     const files = await this.sources(ws.uri.fsPath);

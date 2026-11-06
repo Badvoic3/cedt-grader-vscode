@@ -87,6 +87,14 @@ describe('commands', () => {
     expect(direct).toEqual(['focus', 'openSettings', 'openWalkthrough', 'testCrashReport']);
   });
 
+  it('checks that the file is still active before loading a root package', () => {
+    const controller = readFileSync('src/controller.ts', 'utf8');
+    const check = controller.indexOf('await this.folder.atRootPackage(');
+    const load = controller.indexOf('await this.folder.load(', check);
+    expect(check).toBeGreaterThan(-1);
+    expect(controller.slice(check, load)).toContain('seq !== this.refreshSeq');
+  });
+
   it('activation does not wait for init', () => {
     expect(source).not.toMatch(/await controller\.init\(\)/);
   });

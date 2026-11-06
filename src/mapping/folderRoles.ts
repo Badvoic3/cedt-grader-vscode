@@ -37,7 +37,12 @@ export interface FolderRoles {
  * isn't: nothing about a guess should change which file Submit sends.
  */
 export function isRootPackage(source: string, roles: Pick<FolderRoles, 'run' | 'submit'>): boolean {
-  return (source === 'filename' || source === 'cph') && !!roles.run && !!roles.submit;
+  return canBeRootPackage(source) && !!roles.run && !!roles.submit;
+}
+
+/** Only a file-name or CPH match, never a suggestion. */
+export function canBeRootPackage(source: string): boolean {
+  return source === 'filename' || source === 'cph';
 }
 
 const SOURCE = /\.(c|cc|cpp|cxx)$/i;

@@ -18,6 +18,14 @@ describe('sanitize', () => {
     ['home path with spaces, unquoted', 'open /Users/ann/Documents/a b/secret.cpp', 'secret.cpp'],
     ['unknown path with spaces', 'open /srv/my files/secret.cpp', 'secret.cpp'],
     ['Windows path with spaces', 'read C:\\Users\\a b\\secret.cpp', 'secret.cpp'],
+    ['path with a comma', 'bad /Users/ann/homework, term 1/alice/main.cpp here', 'alice'],
+    ['quoted relative path', "open 'quiz1/somsak/main.cpp'", 'somsak'],
+    ['quoted relative path with spaces', "open 'my quiz/somsak/main.cpp'", 'my quiz'],
+    ['relative path', 'open quiz1/somsak/main.cpp now', 'somsak'],
+    ['Thai relative path', 'เปิด งาน/สมศักดิ์/main.cpp ไม่ได้', 'สมศักดิ์'],
+    ['Windows relative path', 'open quiz1\\somsak\\main.cpp', 'somsak'],
+    ['file name alone', 'cannot read somsak_hw1.cpp today', 'somsak'],
+    ['JSON password', '{"password":"hunter22"}', 'hunter22'],
     ['Linux home', 'read /home/ann/secret.cpp failed', 'secret.cpp'],
     ['Windows path', 'read C:\\Users\\ann\\secret.cpp failed', 'secret.cpp'],
     ['Windows forward slashes', 'read C:/Users/ann/secret.cpp failed', 'secret.cpp'],
@@ -46,7 +54,8 @@ describe('sanitize', () => {
   it('keeps what is needed to read the error', () => {
     expect(sanitize("Cannot read properties of undefined (reading 'id')", ctx)).toBe("Cannot read properties of undefined (reading 'id')");
     expect(sanitize(`at f (${EXT}/dist/extension.js:1:42)`, ctx)).toBe('at f (<extension>/dist/extension.js:1:42)');
-    expect(sanitize('1/2 of a/b', ctx)).toBe('1/2 of a/b');
+    expect(sanitize('1/2 on 2026/11/07', ctx)).toBe('1/2 on 2026/11/07');
+    expect(sanitize('v1.0 and extension.js', ctx)).toBe('v1.0 and extension.js');
     expect(sanitize(`at f (file://${EXT}/dist/pdfjs/pdf.min.mjs:1:2)`, ctx)).toBe('at f (<extension>/dist/pdfjs/pdf.min.mjs:1:2)');
   });
 

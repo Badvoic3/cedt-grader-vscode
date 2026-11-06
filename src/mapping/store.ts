@@ -54,7 +54,7 @@ export class MappingStore {
   // ------------------------------------------------- remembered auto-matches
 
   /** Per-workspace memory; a window with no folder open has no lasting workspace, so it uses the global one. */
-  private get local(): vscode.Memento {
+  get local(): vscode.Memento {
     return vscode.workspace.workspaceFolders?.length ? this.ctx.workspaceState : this.ctx.globalState;
   }
 

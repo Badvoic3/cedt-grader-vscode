@@ -18,9 +18,9 @@ export interface PrivateInfo {
   baseUrl?: string;
 }
 
-function hostOf(url: string | undefined): string | undefined {
+function hostnameOf(url: string | undefined): string | undefined {
   try {
-    return url ? new URL(url).host : undefined;
+    return url ? new URL(url).hostname : undefined;
   } catch {
     return undefined;
   }
@@ -115,7 +115,7 @@ export class CrashReporter implements vscode.Disposable {
       extensionPath: this.ctx.extensionPath,
       workspaceFolders: vscode.workspace.workspaceFolders?.map((f) => f.uri.fsPath) ?? [],
       home: os.homedir(),
-      terms: [info.username, info.fullName, hostOf(info.baseUrl), osUser(), os.hostname()],
+      terms: [info.username, info.fullName, hostnameOf(info.baseUrl), osUser(), os.hostname()],
     };
   }
 
