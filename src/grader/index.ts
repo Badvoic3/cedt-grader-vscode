@@ -3,6 +3,8 @@
 export * from './types';
 export * from './errors';
 export * from './client';
+export * from './provider';
+export { createGrader } from './createGrader';
 export * from './contest';
 export * from './languages';
 export * from './score';

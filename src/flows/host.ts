@@ -3,7 +3,7 @@ import type { CphPresence } from '../cphIntegration';
 import type { GraderConfig } from '../config';
 import type { DataService } from '../data/dataService';
 import type { StatementStore } from '../data/statementStore';
-import type { GraderClient, Language, Problem } from '../grader';
+import type { GraderProvider, Language, Problem } from '../grader';
 import type { MatchSource } from '../mapping/match';
 import type { MappingStore } from '../mapping/store';
 import type { Attachments } from './attachments';
@@ -24,7 +24,7 @@ export type CurrentProblem = Problem & { source: MatchSource };
 export interface Host {
   readonly ctx: vscode.ExtensionContext;
   readonly cfg: GraderConfig;
-  readonly client: GraderClient;
+  readonly client: GraderProvider;
   readonly data: DataService;
   readonly mapping: MappingStore;
   readonly cph: CphPresence;

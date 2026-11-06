@@ -1,8 +1,7 @@
-import { type GraderClient, isFinalStatus } from '../grader/client';
+import { type GraderProvider, isFinalStatus, type ProblemList } from '../grader/provider';
 import { classifyConnectionError } from '../grader/connection';
 import { normalizeProblem } from '../grader/types';
 import type { Language, Problem, SubmissionBrief, SubmissionDetail } from '../grader/types';
-import type { ProblemList } from '../grader/client';
 import { type Freshness, RequestCache } from './cache';
 import { TIMING } from '../shared/constants';
 
@@ -40,7 +39,7 @@ export interface LoadState {
 const IDLE: LoadState = { loading: false, stale: false, error: null };
 
 export interface DataServiceOptions {
-  client: () => GraderClient;
+  client: () => GraderProvider;
   /** True when a request may be made (logged in, or a stored password allows a silent re-login). */
   canFetch: () => boolean;
   now?: () => number;
@@ -71,7 +70,7 @@ export class DataService {
   private timer: unknown = null;
   private pendingProblems = false;
   private readonly states = new Map<string, LoadState>();
-  private readonly downloads = new Map<number, ReturnType<GraderClient['getAttachment']>>();
+  private readonly downloads = new Map<number, ReturnType<GraderProvider['getAttachment']>>();
   private readonly setTimer: NonNullable<DataServiceOptions['setTimer']>;
   private readonly clearTimer: NonNullable<DataServiceOptions['clearTimer']>;
   private readonly log: (line: string) => void;
@@ -263,7 +262,7 @@ export class DataService {
    * it. Not cached; a second click while it is downloading shares the request.
    * Errors are thrown to the caller (which shows them once).
    */
-  downloadAttachment(problemId: number): ReturnType<GraderClient['getAttachment']> {
+  downloadAttachment(problemId: number): ReturnType<GraderProvider['getAttachment']> {
     const key = `attachment:${problemId}`;
     const inFlight = this.downloads.get(problemId);
     if (inFlight) {

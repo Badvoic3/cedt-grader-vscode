@@ -10,7 +10,8 @@ import {
   classifyConnectionError,
   type ConnectionProblem,
   type Credentials,
-  GraderClient,
+  createGrader,
+  type GraderProvider,
   GraderError,
   type Language,
   languageForPath,
@@ -71,7 +72,7 @@ type Listener = (s: ViewState) => void;
  */
 export class GraderController implements vscode.Disposable {
   private cfg: GraderConfig = readConfig();
-  private client: GraderClient;
+  private client: GraderProvider;
   readonly data: DataService;
   private readonly mapping: MappingStore;
   private readonly listeners = new Set<Listener>();
@@ -378,8 +379,8 @@ export class GraderController implements vscode.Disposable {
 
   // ------------------------------------------------------------ plumbing
 
-  private makeClient(): GraderClient {
-    return new GraderClient({
+  private makeClient(): GraderProvider {
+    return createGrader({
       baseUrl: this.cfg.baseUrl,
       getStoredCredentials: async (): Promise<Credentials | undefined> => {
         const password = await this.getPassword();

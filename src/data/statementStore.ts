@@ -1,6 +1,6 @@
 import { access, readFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
-import type { GraderClient } from '../grader/client';
+import type { GraderProvider } from '../grader/provider';
 import { touch, writeAtomic } from './cacheFiles';
 
 /**
@@ -22,7 +22,7 @@ export class StatementStore {
 
   constructor(
     private readonly dir: string,
-    private readonly client: () => GraderClient,
+    private readonly client: () => GraderProvider,
     private readonly log: (line: string) => void = () => {},
     /** A file was written (the controller enforces the cache size limit). */
     private readonly onWrite: (path: string) => void = () => {},

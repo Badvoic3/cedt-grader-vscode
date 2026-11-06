@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { DEFAULT_BASE_URL } from './grader/client';
+import { DEFAULT_BASE_URL } from './shared/constants';
 import { CACHE } from './shared/constants';
 import type { LangSetting } from './shared/i18n';
 import { checkPattern, type PatternCheck } from './mapping/namePattern';
