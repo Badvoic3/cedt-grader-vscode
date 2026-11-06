@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { readFile as fsReadFile, stat as fsStat } from 'node:fs/promises';
-import { basename, join, relative, sep } from 'node:path';
+import { basename, dirname, join, relative, sep } from 'node:path';
 import type { Problem } from '../grader';
 import { submitCandidates } from '../mapping/attachment';
 import { listFolderFiles } from '../mapping/folderFiles';
@@ -11,6 +11,7 @@ import {
   detectFolderRoles,
   type FolderRoles,
   folderRole,
+  isRootPackage,
   needsRolesForStandIn,
   type RoleWhy,
   runChoices,
@@ -95,6 +96,14 @@ export class FolderMode {
     if (!link) return;
     await h.mapping.set(vscode.Uri.file(link.fsPath), { ...link.entry, problemId, name, baseUrl: h.cfg.baseUrl });
     await h.links.refreshMappedIds();
+  }
+
+  /** Is this file, matched by `source`, at the top of a workspace folder that holds a whole package? */
+  async atRootPackage(uri: vscode.Uri, source: string): Promise<boolean> {
+    const ws = vscode.workspace.getWorkspaceFolder(uri);
+    if (!ws || pathKey(ws.uri.fsPath) !== pathKey(dirname(uri.fsPath))) return false;
+    const files = await this.sources(ws.uri.fsPath);
+    return isRootPackage(source, detectFolderRoles(await this.textsOf(ws.uri.fsPath, files)));
   }
 
   /** A folder's name in messages: relative, or its own name for a workspace folder and anything outside. */

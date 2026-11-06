@@ -6,7 +6,7 @@ import { readCphProblem } from '../mapping/cph';
 import { BINARY_EXTS, excludeGlob, filterSourceFiles, rankCandidates, sourceGlob } from '../mapping/findByName';
 import { autoDetectOutcome, pickScope, unlinkScope } from '../mapping/linkActions';
 import { cleanName, fileNameFor, resolveProblem } from '../mapping/match';
-import { buildMatchIndex, foldersOf, type IndexedFile, matchFile, OnceCache, type SourceFile } from '../mapping/matchIndex';
+import { buildMatchIndex, folderNames, type IndexedFile, matchFile, OnceCache, type SourceFile } from '../mapping/matchIndex';
 import { dismissKey, type LocatedEntry, reconnectCandidates } from '../mapping/mappingOps';
 import { createFileNoOverwrite, pathExists as exists } from '../mapping/newFile';
 import { chooseNewFileLanguage } from '../mapping/newFileLanguage';
@@ -136,7 +136,18 @@ export class Links {
 
   /** A workspace file as the matcher sees it (path + workspace-relative parent folders for the folder/tag bonus). */
   sourceFile(fsPath: string): SourceFile {
-    return { fsPath, folders: foldersOf(vscode.workspace.asRelativePath(vscode.Uri.joinPath(vscode.Uri.file(fsPath), '..'), false)) };
+    const file = vscode.Uri.file(fsPath);
+    const dir = vscode.Uri.joinPath(file, '..');
+    const ws = vscode.workspace.getWorkspaceFolder(file);
+    return { fsPath, folders: folderNames(dir.fsPath, vscode.workspace.asRelativePath(dir, false), ws ? { path: ws.uri.fsPath, name: ws.name } : null) };
+  }
+
+  /** Where a new file or attachment goes: the active file's folder, the first workspace folder, else the user picks one. */
+  async targetFolder(): Promise<vscode.Uri | undefined> {
+    const h = this.host;
+    const known = (h.fileUri ? vscode.Uri.joinPath(h.fileUri, '..') : undefined) ?? vscode.workspace.workspaceFolders?.[0]?.uri;
+    if (known) return known;
+    return (await vscode.window.showOpenDialog({ canSelectFolders: true, canSelectFiles: false, canSelectMany: false, openLabel: S.files.saveHere }))?.[0];
   }
 
   /**
@@ -525,11 +536,8 @@ export class Links {
     const h = this.host;
     const p = h.problemById(problemId);
     if (!p) return;
-    const folder = (h.fileUri ? vscode.Uri.joinPath(h.fileUri, '..') : undefined) ?? vscode.workspace.workspaceFolders?.[0]?.uri;
-    if (!folder) {
-      void vscode.window.showInformationMessage(S.files.openFolderFirst);
-      return;
-    }
+    const folder = await this.targetFolder();
+    if (!folder) return;
     await h.data.languages().catch(() => undefined);
     const permitted = h.allowedLanguages(p);
     if (!permitted.length) {

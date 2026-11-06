@@ -74,7 +74,7 @@ const EN_S = {
     unlink: 'Unlink',
     linksOnly: 'Only the links are removed; the files themselves are not deleted.',
     copied: (name: string) => `$(check) Copied "${name}"`,
-    openFolderFirst: 'Open a folder first.',
+    saveHere: 'Save here',
     languagesNotLoaded: 'Languages could not be loaded yet. Try again in a moment.',
     newFileLanguage: (name: string) => `Language for the new ${name} file`,
     alreadyExists: (path: string) => `${path} already exists.`,

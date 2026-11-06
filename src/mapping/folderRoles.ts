@@ -31,6 +31,15 @@ export interface FolderRoles {
   runCandidates: string[];
 }
 
+/**
+ * A file at the top of a workspace folder that holds a whole package (both
+ * roles found) gets folder mode when it was matched for sure. A suggestion
+ * isn't: nothing about a guess should change which file Submit sends.
+ */
+export function isRootPackage(source: string, roles: Pick<FolderRoles, 'run' | 'submit'>): boolean {
+  return (source === 'filename' || source === 'cph') && !!roles.run && !!roles.submit;
+}
+
 const SOURCE = /\.(c|cc|cpp|cxx)$/i;
 /** `main(` at the start of a line, optionally after a return type. */
 const HAS_MAIN = /^[ \t]*(?:(?:int|signed|void|auto)[ \t]+)?main[ \t]*\(/m;

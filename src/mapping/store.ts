@@ -53,8 +53,13 @@ export class MappingStore {
 
   // ------------------------------------------------- remembered auto-matches
 
+  /** Per-workspace memory; a window with no folder open has no lasting workspace, so it uses the global one. */
+  private get local(): vscode.Memento {
+    return vscode.workspace.workspaceFolders?.length ? this.ctx.workspaceState : this.ctx.globalState;
+  }
+
   autoMatches(): AutoMatch[] {
-    return this.ctx.workspaceState.get<AutoMatch[]>(AUTO_KEY, []);
+    return this.local.get<AutoMatch[]>(AUTO_KEY, []);
   }
 
   /** Remember that an open file matched a problem automatically (never over a manual link or "not linked"). */
@@ -62,23 +67,23 @@ export class MappingStore {
     const k = pathKey(uri.fsPath);
     const list = this.autoMatches().filter((a) => pathKey(a.fsPath) !== k);
     list.push({ fsPath: normalizeAbsPath(uri.fsPath), problemId, how, at: Date.now() });
-    await this.ctx.workspaceState.update(AUTO_KEY, list.slice(-LIMITS.autoMatchesMax));
+    await this.local.update(AUTO_KEY, list.slice(-LIMITS.autoMatchesMax));
   }
 
   async dropAuto(uri: vscode.Uri): Promise<void> {
     const k = pathKey(uri.fsPath);
     const list = this.autoMatches();
     const next = list.filter((a) => pathKey(a.fsPath) !== k);
-    if (next.length !== list.length) await this.ctx.workspaceState.update(AUTO_KEY, next);
+    if (next.length !== list.length) await this.local.update(AUTO_KEY, next);
   }
 
   /** Rename: an auto-match follows the file only if it still matches by name. */
   async renameAuto(oldUri: vscode.Uri, newUri: vscode.Uri, stillMatches: (fsPath: string, problemId: number) => boolean): Promise<void> {
-    await this.ctx.workspaceState.update(AUTO_KEY, autoAfterRename(this.autoMatches(), oldUri.fsPath, newUri.fsPath, stillMatches));
+    await this.local.update(AUTO_KEY, autoAfterRename(this.autoMatches(), oldUri.fsPath, newUri.fsPath, stillMatches));
   }
 
   async deleteAuto(uri: vscode.Uri): Promise<void> {
-    await this.ctx.workspaceState.update(AUTO_KEY, autoAfterDelete(this.autoMatches(), uri.fsPath));
+    await this.local.update(AUTO_KEY, autoAfterDelete(this.autoMatches(), uri.fsPath));
   }
 
   /** Absolute paths of files explicitly marked "not linked". */

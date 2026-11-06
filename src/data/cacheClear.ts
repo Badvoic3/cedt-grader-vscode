@@ -48,6 +48,7 @@ export function planClear(
   if (selected.has('lists')) {
     for (const k of present.workspace) if (k.startsWith(KEYS.problemsPrefix)) ws.add(k);
     for (const k of [KEYS.autoMatches, KEYS.dismissedNotices, KEYS.dismissedReconnects, KEYS.recentlyOpened]) ws.add(k);
+    gl.add(KEYS.autoMatches); // windows with no folder open
     ws.add(KEYS.unlinked);
     gl.add(KEYS.unlinked); // files outside any folder
   }

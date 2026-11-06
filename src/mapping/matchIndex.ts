@@ -1,5 +1,6 @@
 import type { Problem } from '../grader/types';
 import { resolveProblem } from './match';
+import { pathKey } from './paths';
 
 /**
  * ONE matcher for both directions (no `vscode` import, unit tested):
@@ -20,6 +21,16 @@ export interface SourceFile {
 /** Folder names of a workspace-relative directory (`asRelativePath` of the file's folder): no `.`, no drive / outside path. */
 export function foldersOf(relDir: string): string[] {
   return relDir.split('/').filter((x) => x && x !== '.' && !x.includes(':'));
+}
+
+/**
+ * The folder names the matcher sees for a file's folder: the workspace folder's
+ * name and the folders below it. Outside a workspace only the immediate parent
+ * counts, so OS path segments such as `Users` or `Downloads` never match.
+ */
+export function folderNames(dir: string, relDir: string, root: { path: string; name: string } | null): string[] {
+  if (!root) return dir.split(/[\\/]/).filter(Boolean).slice(-1);
+  return pathKey(dir) === pathKey(root.path) ? [root.name] : [root.name, ...foldersOf(relDir)];
 }
 
 export interface FileMatch {

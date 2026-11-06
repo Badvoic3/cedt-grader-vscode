@@ -13,7 +13,7 @@ import { FolderMode } from '../src/flows/folderMode';
 import { Links } from '../src/flows/links';
 import { MappingStore } from '../src/mapping/store';
 
-const env = vi.hoisted(() => ({ folders: [] as { uri: { fsPath: string }; name: string; index: number }[] }));
+const env = vi.hoisted(() => ({ folders: [] as { uri: { fsPath: string }; name: string; index: number }[], dialog: undefined as unknown }));
 
 vi.mock('vscode', async () => {
   const fs = await import('node:fs/promises');
@@ -40,7 +40,7 @@ vi.mock('vscode', async () => {
         writeFile: (u: { fsPath: string }, data: Uint8Array) => fs.writeFile(u.fsPath, data),
       },
     },
-    window: { showInformationMessage: async () => undefined, setStatusBarMessage: () => undefined },
+    window: { showInformationMessage: async () => undefined, setStatusBarMessage: () => undefined, showOpenDialog: async () => env.dialog },
     commands: { executeCommand: async () => undefined },
   };
 });
@@ -301,5 +301,73 @@ describe('cause E: the folder is the workspace root, or outside the workspace', 
     expect(await follow(s, pkg)).toEqual(allOn(1, pkg));
     expect(existsSync(join(pkg, '.cedt-grader.json'))).toBe(false);
     expect(s.folder.view()?.path).toBe('xyz_folder/');
+  });
+});
+
+describe('a package opened as the workspace folder', () => {
+  const pkgFiles = () => {
+    env.folders = [{ uri: { fsPath: pkg }, name: 'xyz_folder', index: 0 }];
+    writeFileSync(join(pkg, 'main.cpp'), '#include "student.h"\nint main() { return 0; }\n');
+    writeFileSync(join(pkg, 'student.h'), '// add your code here\n');
+  };
+
+  it('folder mode is automatic for a sure match with both roles found', async () => {
+    pkgFiles();
+    const s = session();
+    expect(await s.folder.atRootPackage(uri(join(pkg, 'main.cpp')), 'filename')).toBe(true);
+    expect(await s.folder.atRootPackage(uri(join(pkg, 'main.cpp')), 'cph')).toBe(true);
+  });
+
+  it('a suggestion, or a file further down, changes nothing', async () => {
+    pkgFiles();
+    mkdirSync(join(pkg, 'sub'));
+    const s = session();
+    expect(await s.folder.atRootPackage(uri(join(pkg, 'main.cpp')), 'suggested')).toBe(false);
+    expect(await s.folder.atRootPackage(uri(join(pkg, 'sub', 'x.cpp')), 'filename')).toBe(false);
+  });
+
+  it('without a driver there is no package', async () => {
+    env.folders = [{ uri: { fsPath: pkg }, name: 'xyz_folder', index: 0 }];
+    expect(await session().folder.atRootPackage(uri(join(pkg, 'foo.cpp')), 'filename')).toBe(false);
+  });
+});
+
+describe('folder names the matcher sees', () => {
+  it('at the workspace folder: its name; below it: the path from there', () => {
+    const s = session();
+    expect(s.links.sourceFile(join(root, 'top.cpp')).folders).toEqual(['ws']);
+    expect(s.links.sourceFile(join(pkg, 'foo.cpp')).folders).toEqual(['ws', 'xyz_folder']);
+  });
+
+  it('outside the workspace: only the parent folder, no OS path segments', () => {
+    env.folders = [];
+    expect(session().links.sourceFile('/Users/me/Downloads/pkg/a.cpp').folders).toEqual(['pkg']);
+  });
+});
+
+describe('a window with no folder open', () => {
+  it('remembers auto-matches globally', async () => {
+    env.folders = [];
+    const s = session();
+    await s.mapping.recordAuto(uri('/tmp/a.cpp'), 1, 'filename');
+    expect(s.mapping.autoMatches().map((a) => a.problemId)).toEqual([1]);
+    env.folders = [{ uri: { fsPath: root }, name: 'ws', index: 0 }];
+    expect(s.mapping.autoMatches()).toEqual([]); // a workspace keeps its own list
+  });
+
+  it('asks where a new file goes; cancelled = nowhere', async () => {
+    env.folders = [];
+    const s = session();
+    env.dialog = [uri('/picked')];
+    expect((await s.links.targetFolder())?.fsPath).toBe('/picked');
+    env.dialog = undefined;
+    expect(await s.links.targetFolder()).toBeUndefined();
+  });
+
+  it('the active file wins over everything, then the workspace folder', async () => {
+    const s = session();
+    expect((await s.links.targetFolder())?.fsPath).toBe(root);
+    s.fileUri = uri(join(pkg, 'foo.cpp'));
+    expect((await s.links.targetFolder())?.fsPath).toBe(pkg);
   });
 });

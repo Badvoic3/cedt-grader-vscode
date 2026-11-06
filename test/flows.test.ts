@@ -8,7 +8,7 @@ import { InlinePrompts } from '../src/flows/prompts';
 import { countedSubmissionId, newestAfter, newResult, ResultStore, submissionPatch } from '../src/flows/results';
 import { autoDetectOutcome, matchNote, NO_MATCH_INFO, unlinkScope } from '../src/mapping/linkActions';
 import { type MatchResult, problemSubtitle } from '../src/mapping/match';
-import { foldersOf } from '../src/mapping/matchIndex';
+import { folderNames, foldersOf } from '../src/mapping/matchIndex';
 import { S } from '../src/shared/strings';
 
 const P = (id: number, name = `p${id}`): Problem => ({
@@ -131,5 +131,9 @@ describe('link actions', () => {
     expect(foldersOf('week1/pkg')).toEqual(['week1', 'pkg']);
     expect(foldersOf('.')).toEqual([]);
     expect(foldersOf('C:/outside')).toEqual(['outside']);
+    expect(folderNames('/w/week1/pkg', 'week1/pkg', { path: '/w', name: 'w' })).toEqual(['w', 'week1', 'pkg']);
+    expect(folderNames('/w', '/w', { path: '/w', name: 'renamed' })).toEqual(['renamed']);
+    expect(folderNames('/Users/me/Downloads', '/Users/me/Downloads', null)).toEqual(['Downloads']);
+    expect(folderNames('C:\\Users\\me\\pkg', 'C:\\Users\\me\\pkg', null)).toEqual(['pkg']);
   });
 });

@@ -17,7 +17,7 @@ import type { Strings } from './strings';
  * Everything else was reviewed at checkpoint B (2026-11-03). Add keys here
  * when a new text is translated without review.
  */
-export const TH_REVIEW: readonly string[] = ['S.folder.replaceFilesQ'];
+export const TH_REVIEW: readonly string[] = ['S.files.saveHere', 'S.folder.replaceFilesQ'];
 
 export const TH: Strings = {
   HOW_LINKED: {
@@ -76,7 +76,7 @@ export const TH: Strings = {
       unlink: 'ยกเลิกการเชื่อม',
       linksOnly: 'ลบเฉพาะการเชื่อมกับโจทย์ ตัวไฟล์ไม่ถูกลบ',
       copied: (name) => `$(check) คัดลอก "${name}" แล้ว`,
-      openFolderFirst: 'เปิดโฟลเดอร์ก่อน',
+      saveHere: 'บันทึกที่นี่',
       languagesNotLoaded: 'ยังโหลดรายการภาษาไม่เสร็จ ลองอีกครั้งในอีกสักครู่',
       newFileLanguage: (name) => `ภาษาสำหรับไฟล์ใหม่ของ ${name}`,
       alreadyExists: (path) => `มีไฟล์ ${path} อยู่แล้ว`,

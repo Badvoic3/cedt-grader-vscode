@@ -26,11 +26,8 @@ export class Attachments {
       void vscode.window.showInformationMessage(S.submit.chooseFirst);
       return;
     }
-    const dir = (h.fileUri ? vscode.Uri.joinPath(h.fileUri, '..') : undefined) ?? vscode.workspace.workspaceFolders?.[0]?.uri;
-    if (!dir) {
-      void vscode.window.showInformationMessage(S.files.openFolderFirst);
-      return;
-    }
+    const dir = await h.links.targetFolder();
+    if (!dir) return;
     if (!(await h.ensureLoggedIn())) return;
     let a: Awaited<ReturnType<DataService['downloadAttachment']>>;
     try {

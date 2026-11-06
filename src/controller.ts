@@ -748,15 +748,20 @@ export class GraderController implements vscode.Disposable {
     };
   }
 
+  /** The filter is kept per workspace; a window with no folder open has no lasting workspace. */
+  private filterState(): vscode.Memento {
+    return vscode.workspace.workspaceFolders?.length ? this.ctx.workspaceState : this.ctx.globalState;
+  }
+
   private problemFilter(): ProblemFilter {
-    return this.ctx.workspaceState.get<ProblemFilter>(KEYS.problemFilter, { status: 'all', topic: null });
+    return this.filterState().get<ProblemFilter>(KEYS.problemFilter, { status: 'all', topic: null });
   }
 
   /** Persist the problem-list filter per workspace. */
   async setProblemFilter(f: ProblemFilter): Promise<void> {
     const valid: ProblemFilter['status'][] = ['all', 'unsolved', 'inprogress', 'solved'];
     const sorts = ['default', 'name-asc', 'name-desc', 'latest', 'score-asc', 'score-desc', 'recent'];
-    await this.ctx.workspaceState.update(KEYS.problemFilter, {
+    await this.filterState().update(KEYS.problemFilter, {
       status: valid.includes(f.status) ? f.status : 'all',
       ...cleanTopicFilter(f),
       sort: f.sort && sorts.includes(f.sort) ? f.sort : 'default',
@@ -1043,9 +1048,10 @@ export class GraderController implements vscode.Disposable {
       this.matchInfo.suggestions = [...m.suggestions];
     }
     if (m.kind === 'match' && m.source === 'suggested') this.matchInfo.suggestions = [...m.suggestions];
-    // Matched by the name of its folder: the folder is a package like a linked folder (submit and
-    // run files detected), but nothing is saved until the user chooses something.
-    if (!this.folder.link && problem?.source === 'folder') {
+    // Matched by the name of its folder, or at the top of a workspace folder holding a package: the
+    // folder is a package like a linked folder (submit and run files detected), but nothing is saved
+    // until the user chooses something.
+    if (!this.folder.link && problem && (problem.source === 'folder' || (await this.folder.atRootPackage(uri, problem.source)))) {
       await this.folder.load({ fsPath: dirname(uri.fsPath), entry: { problemId: problem.id, name: problem.name, baseUrl: this.cfg.baseUrl, folder: true } }, true);
       if (seq !== this.refreshSeq) return;
     }
