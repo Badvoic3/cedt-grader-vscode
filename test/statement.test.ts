@@ -73,9 +73,9 @@ describe('StatementStore (globalStorage cache)', () => {
     expect(fetches()).toBe(1);
   });
 
-  it('pdf message carries the saved view (page / zoom / scroll) for reopened tabs', () => {
+  it('pdf message carries the saved view (page / zoom / scroll) for reopened tabs', async () => {
     const view = { page: 3, scale: '1.5', scrollTop: 120, scrollLeft: 0 };
-    expect(render(B, { kind: 'pdf', bytes: new Uint8Array([1]) }, view)).toMatchObject({ type: 'pdf', problemId: 1, view });
+    await expect(render(B, { kind: 'pdf', bytes: new Uint8Array([1]) }, view)).resolves.toMatchObject({ type: 'pdf', problemId: 1, view });
   });
 
   it('concurrent opens share one request', async () => {
@@ -86,8 +86,8 @@ describe('StatementStore (globalStorage cache)', () => {
 });
 
 describe('statement rendering', () => {
-  it('markdown is rendered with raw HTML escaped', () => {
-    const m = render(B, { kind: 'description', markdown: true, text: '**bold** <script>alert(1)</script> <img src=x onerror=alert(1)>' });
+  it('markdown is rendered with raw HTML escaped', async () => {
+    const m = await render(B, { kind: 'description', markdown: true, text: '**bold** <script>alert(1)</script> <img src=x onerror=alert(1)>' });
     expect(m.type).toBe('html');
     const html = (m as { html: string }).html;
     expect(html).toContain('<strong>bold</strong>');
@@ -95,8 +95,8 @@ describe('statement rendering', () => {
     expect(html).toContain('&lt;script&gt;');
   });
 
-  it('non-markdown (website HTML) is shown as escaped text', () => {
-    const m = render(B, { kind: 'description', markdown: false, text: '<p>Line 1</p><p>Line <b>2</b> &amp; more</p><script>x()</script>' });
+  it('non-markdown (website HTML) is shown as escaped text', async () => {
+    const m = await render(B, { kind: 'description', markdown: false, text: '<p>Line 1</p><p>Line <b>2</b> &amp; more</p><script>x()</script>' });
     const html = (m as { html: string }).html;
     expect(html).toMatch(/^<pre class="text">/);
     expect(html).not.toMatch(/<p>|<b>|<script/);
@@ -104,8 +104,8 @@ describe('statement rendering', () => {
     expect(html).toContain('&amp; more');
   });
 
-  it('hidden / missing statements give a message', () => {
-    expect(render(B, { kind: 'none', reason: 'hidden' })).toMatchObject({ type: 'message', text: expect.stringContaining('Open in Browser') });
-    expect(render(B, { kind: 'none', reason: 'missing' })).toMatchObject({ type: 'message', text: 'This problem has no statement.' });
+  it('hidden / missing statements give a message', async () => {
+    await expect(render(B, { kind: 'none', reason: 'hidden' })).resolves.toMatchObject({ type: 'message', text: expect.stringContaining('Open in Browser') });
+    await expect(render(B, { kind: 'none', reason: 'missing' })).resolves.toMatchObject({ type: 'message', text: 'This problem has no statement.' });
   });
 });

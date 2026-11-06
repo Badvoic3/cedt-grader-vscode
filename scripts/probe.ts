@@ -20,14 +20,13 @@ import {
   GraderClient,
   GraderError,
   isContestPage,
-  parseListScores,
   Redactor,
-  sanitizeHtml,
-  sanitizeJson,
   summarize,
   type SubmissionResult,
-  WebSession,
 } from '../src/grader';
+import { parseListScores } from '../src/grader/parsers';
+import { sanitizeHtml, sanitizeJson } from '../src/grader/sanitize';
+import { WebSession } from '../src/grader/web';
 import { attachmentKind, planZip } from '../src/mapping/attachment';
 
 interface Args {

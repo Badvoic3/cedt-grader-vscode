@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { parseTopicTags, problemStatus } from '../src/grader';
+import { problemStatus } from '../src/grader';
+import { parseTopicTags } from '../src/grader/parsers';
 import type { ProblemView } from '../src/shared/messages';
 import { filterProblems, sortProblems } from '../webview/filters';
 import { cleanTagFilter, cleanTopicFilter, cycleTopic, matchesTags, otherTags, topicState } from '../src/shared/tags';

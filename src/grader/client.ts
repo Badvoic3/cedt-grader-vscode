@@ -4,7 +4,6 @@ import { type Attachment, parseContentDisposition } from './attachment';
 import { isContestPage } from './contest';
 import { AuthError, GraderError, NetworkError, PollTimeoutError, SessionExpiredError } from './errors';
 import type { FetchLike, Logger } from './http';
-import { parseListScores, parseTopicTags } from './parsers';
 import { Redactor } from './redact';
 import type {
   GraderUser,
@@ -18,7 +17,7 @@ import type {
   TopicTag,
 } from './types';
 import { parseGraderComment } from './verdicts';
-import { WebSession } from './web';
+import type { WebSession } from './web';
 
 export { DEFAULT_BASE_URL } from '../shared/constants';
 import { ATTACHMENT, DEFAULT_BASE_URL, STATEMENT, TIMING } from '../shared/constants';
@@ -101,7 +100,9 @@ export class GraderClient {
   readonly baseUrl: string;
   readonly redactor = new Redactor();
   private readonly api: ApiClient;
-  private readonly web: WebSession;
+  /** Built on first use (login or the list page): it and its parsers are heavy and most starts never need them. */
+  private webSession: WebSession | null = null;
+  private readonly log: Logger;
   private readonly now: () => Date;
   private readonly sleep: NonNullable<GraderClientOptions['sleep']>;
   private tokenExpiresAt = 0;
@@ -115,10 +116,18 @@ export class GraderClient {
   constructor(private readonly opts: GraderClientOptions = {}) {
     this.baseUrl = (opts.baseUrl ?? DEFAULT_BASE_URL).replace(/\/+$/, '');
     const log = opts.log ?? (() => {});
+    this.log = log;
     this.now = opts.now ?? (() => new Date());
     this.sleep = opts.sleep ?? defaultSleep;
     this.api = new ApiClient(this.baseUrl, opts.fetch ?? ((i, init) => fetch(i, init)), log, this.redactor, this.sleep);
-    this.web = new WebSession(this.baseUrl, opts.fetch, log, this.redactor);
+  }
+
+  private async web(): Promise<WebSession> {
+    if (!this.webSession) {
+      const { WebSession } = await import('./web');
+      this.webSession ??= new WebSession(this.baseUrl, this.opts.fetch, this.log, this.redactor);
+    }
+    return this.webSession;
   }
 
   url(path: string): string {
@@ -173,7 +182,7 @@ export class GraderClient {
     await this.opts.tokenStore?.save({ token: res.token, expiresAt: new Date(this.tokenExpiresAt).toISOString() });
     // Web session for /main/list (penalties). Its failure does not fail the login.
     try {
-      this.setListHtml(await this.web.login(creds.username, creds.password));
+      this.setListHtml(await (await this.web()).login(creds.username, creds.password));
     } catch (err) {
       this.opts.log?.(`Web login skipped: ${err instanceof Error ? err.message : err}`);
     }
@@ -183,7 +192,7 @@ export class GraderClient {
   async logout(): Promise<void> {
     this.api.setToken(null);
     this.tokenExpiresAt = 0;
-    this.web.clear();
+    this.webSession?.clear();
     this.user = null;
     this.listHtml = null;
     this.languagesCache = null;
@@ -242,6 +251,7 @@ export class GraderClient {
     let topics: TopicTag[] | null = null;
     try {
       const html = await this.fetchListPage();
+      const { parseListScores, parseTopicTags } = await import('./parsers');
       scores = parseListScores(html);
       topics = parseTopicTags(html);
     } catch (err) {
@@ -263,18 +273,19 @@ export class GraderClient {
       this.opts.log?.('cache hit  /main/list (login landing page)');
       return this.listHtml;
     }
-    if (!this.web.isLoggedIn) {
+    const web = await this.web();
+    if (!web.isLoggedIn) {
       const creds = await this.opts.getStoredCredentials?.();
       if (!creds) throw new SessionExpiredError(G.noWebSession, false);
-      return this.setListHtml(await this.web.login(creds.username, creds.password));
+      return this.setListHtml(await web.login(creds.username, creds.password));
     }
     try {
-      return this.setListHtml(await this.web.problemListPage());
+      return this.setListHtml(await web.problemListPage());
     } catch (err) {
       if (!(err instanceof SessionExpiredError)) throw err;
       const creds = await this.opts.getStoredCredentials?.();
       if (!creds) throw err;
-      return this.setListHtml(await this.web.login(creds.username, creds.password));
+      return this.setListHtml(await web.login(creds.username, creds.password));
     }
   }
 

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { cleanText, extractAlerts, extractCsrf, hasLoginForm, parseListScores, parseLoginForm, sanitizeHtml, sanitizeJson } from '../src/grader';
+import { cleanText, extractAlerts, extractCsrf, hasLoginForm, parseListScores, parseLoginForm } from '../src/grader/parsers';
+import { sanitizeHtml, sanitizeJson } from '../src/grader/sanitize';
 import { fixture, realFixture } from './helpers';
 
 describe('cleanText', () => {

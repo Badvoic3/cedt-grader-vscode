@@ -2,8 +2,6 @@ import { G, S } from '../shared/strings';
 import { currentLang } from '../shared/i18n';
 import { KEYS } from '../shared/stateKeys';
 import { randomBytes } from 'node:crypto';
-import * as cheerio from 'cheerio/slim';
-import MarkdownIt from 'markdown-it';
 import * as vscode from 'vscode';
 import type { Statement, StatementStore } from '../data/statementStore';
 
@@ -39,9 +37,6 @@ export type FromStatement =
   | { type: 'viewState'; state: StatementViewState; problemId?: number };
 
 const VIEW_KEY = KEYS.statementView;
-
-/** Raw HTML is disabled: markdown-it escapes it, so the output is safe to insert. */
-const md = new MarkdownIt({ html: false, linkify: true, breaks: false });
 
 /**
  * Read-only "Statement: <problem>" editor tabs (one per problem), rendering
@@ -166,7 +161,8 @@ export class StatementPanels implements vscode.Disposable {
       try {
         const view = this.opts.memento.get<Record<string, StatementViewState>>(VIEW_KEY, {})[id] ?? null;
         const st = await this.store.get(id, { refresh });
-        if (t.problemId === id) post(render(base(), st, view)); // switched again meanwhile: the newer load posts
+        const message = await render(base(), st, view);
+        if (t.problemId === id) post(message); // switched again meanwhile: the newer load posts
       } catch (err) {
         if (t.problemId === id) post({ ...base(), type: 'message', text: this.opts.onError(err), error: true });
       }
@@ -232,13 +228,11 @@ export class StatementPanels implements vscode.Disposable {
 }
 
 /** Turn a cached statement into a webview message. Descriptions are rendered safely in the host. */
-export function render(base: Base, st: Statement, view: StatementViewState | null = null): ToStatement {
+export async function render(base: Base, st: Statement, view: StatementViewState | null = null): Promise<ToStatement> {
   if (st.kind === 'pdf') return { ...base, type: 'pdf', data: st.bytes, view };
   if (st.kind === 'description') {
-    if (st.markdown) return { ...base, type: 'html', html: md.render(st.text) };
-    // Non-markdown descriptions are HTML written for the website: show their text only.
-    const $ = cheerio.load(st.text.replace(/<br\s*\/?>/gi, '\n').replace(/<\/(p|div|li|h\d|tr)>/gi, '$&\n'));
-    return { ...base, type: 'html', html: `<pre class="text">${md.utils.escapeHtml($.root().text().trim())}</pre>` };
+    const { descriptionHtml } = await import('./descriptionHtml');
+    return { ...base, type: 'html', html: descriptionHtml(st.text, st.markdown) };
   }
   return {
     ...base,

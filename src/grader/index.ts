@@ -1,16 +1,15 @@
+// `parsers`, `web`, `http` and `sanitize` stay out of this file: they pull in cheerio and tough-cookie, which
+// `GraderClient` loads on first use. Import them by path (test/lazyImports.test.ts checks the start path).
 export * from './types';
 export * from './errors';
 export * from './client';
 export * from './contest';
 export * from './languages';
-export * from './parsers';
 export * from './score';
 export * from './verdicts';
 export * from './connection';
 export { ApiClient } from './api';
 export type { ApiProblem, ApiSubmission, ApiSubmissionBrief, ApiLanguage, ApiLoginResponse } from './api';
-export { WebSession } from './web';
-export { HttpSession, type FetchLike, type Logger, type HttpResult } from './http';
+export type { FetchLike, Logger, HttpResult } from './http';
 export { Redactor, redactPatterns } from './redact';
-export { sanitizeHtml, sanitizeJson } from './sanitize';
 export * from './attachment';
