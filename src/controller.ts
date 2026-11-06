@@ -653,7 +653,7 @@ export class GraderController implements vscode.Disposable {
       ...this.links.noticeView(problem, file),
       folder: this.folder.view(),
       runTests: this.cph.installed && problem && file ? { disabledReason: this.tests.runTestCount ? null : S.runTests.noTestsShort } : null,
-      folderMode: problem && file ? { on: !!folderLink && !this.folder.matched, disabledReason: folderLink ? null : this.folder.modeTarget().reason } : null,
+      folderMode: file ? { on: !!folderLink && !this.folder.matched, disabledReason: folderLink ? null : this.folder.modeTarget().reason } : null,
       attachment: { busy: problem && this.data.isDownloading(problem.id) ? problem.id : null },
       cphTip:
         !this.cph.installed && !this.cphTipHidden && !this.ctx.globalState.get<boolean>(KEYS.cphTipDismissed, false) && !!problem?.hasTestcase,

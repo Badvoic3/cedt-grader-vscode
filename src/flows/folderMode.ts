@@ -25,6 +25,7 @@ import { ATTACHMENT, TIMING } from '../shared/constants';
 import type { ViewState } from '../shared/messages';
 import { S } from '../shared/strings';
 import type { Host } from './host';
+import type { InlinePrompt } from './prompts';
 
 export type FolderLink = { fsPath: string; entry: MappingEntry };
 
@@ -89,13 +90,30 @@ export class FolderMode {
     return true;
   }
 
-  /** A problem picked in folder mode: the folder link moves to it (its submit / run files stay). */
+  /** A problem picked in folder mode: the folder link moves to it (its submit / run files stay), and every file follows. */
   async setProblem(problemId: number, name: string): Promise<void> {
     const h = this.host;
     const link = this.link;
     if (!link) return;
-    await h.mapping.set(vscode.Uri.file(link.fsPath), { ...link.entry, problemId, name, baseUrl: h.cfg.baseUrl });
+    const folder = vscode.Uri.file(link.fsPath);
+    if (!(await this.mayReplaceFileLinks(folder, problemId, name))) return;
+    await h.mapping.linkFolder(folder, { ...link.entry, problemId, name, baseUrl: h.cfg.baseUrl }, h.cfg.baseUrl, true);
     await h.links.refreshMappedIds();
+  }
+
+  /** Links of files inside to other problems would keep those files out of the folder: true when there are none or the user says replace them. */
+  private async mayReplaceFileLinks(folder: vscode.Uri, problemId: number, name: string): Promise<boolean> {
+    const h = this.host;
+    const others = (await h.mapping.fileLinksIn(folder, h.cfg.baseUrl)).filter((e) => e.entry.problemId !== problemId);
+    if (!others.length) return true;
+    return (await h.askInline(S.folder.replaceFilesQ(this.label(folder.fsPath), others.length, name), this.replaceButtons())) === 'replace';
+  }
+
+  private replaceButtons(): InlinePrompt['buttons'] {
+    return [
+      { id: 'replace', label: S.folder.replace, primary: true },
+      { id: 'cancel', label: S.common.cancel },
+    ];
   }
 
   /** Is this file, matched by `source`, at the top of a workspace folder that holds a whole package? */
@@ -213,16 +231,11 @@ export class FolderMode {
     const { dir } = this.modeTarget();
     if (!file || !dir) return;
     const label = this.label(dir.fsPath);
-    const replace = [
-      { id: 'replace', label: S.folder.replace, primary: true },
-      { id: 'cancel', label: S.common.cancel },
-    ];
     const existing = await h.mapping.get(dir, h.cfg.baseUrl);
     if (existing?.folder && existing.problemId !== problem.id) {
-      if ((await h.askInline(S.folder.replaceQ(label, existing.name || `#${existing.problemId}`, problem.name), replace)) !== 'replace') return;
+      if ((await h.askInline(S.folder.replaceQ(label, existing.name || `#${existing.problemId}`, problem.name), this.replaceButtons())) !== 'replace') return;
     }
-    const others = (await h.mapping.fileLinksIn(dir, h.cfg.baseUrl)).filter((e) => e.entry.problemId !== problem.id);
-    if (others.length && (await h.askInline(S.folder.replaceFilesQ(label, others.length, problem.name), replace)) !== 'replace') return;
+    if (!(await this.mayReplaceFileLinks(dir, problem.id, problem.name))) return;
     const files = await this.sources(dir.fsPath);
     const detected = detectFolderRoles(await this.textsOf(dir.fsPath, files)).submit;
     const own = relative(dir.fsPath, file.fsPath).split(sep).join('/');

@@ -541,7 +541,8 @@ function renderCurrent(s: ViewState): void {
         p?.hasTestcase
           ? iconButton('save-as', W.saveTestcasesAsFiles, () => send({ type: 'loadTestcases', asFiles: true }), { disabledReason: s.testcases.busy ? W.downloadingTestCases : null })
           : null,
-        p && s.folderMode
+        // Also with no problem yet: the picker opens and the folder is linked to the choice.
+        s.folderMode
           ? iconButton(s.folderMode.on ? 'file' : 'folder', s.folderMode.on ? W.linkOnlyFile : W.linkFolder, () => send({ type: 'toggleFolderMode' }), { disabledReason: s.folderMode.disabledReason })
           : null,
         iconButton('sparkle', W.autoDetectTip, () => send({ type: 'autoDetect' })),
@@ -934,7 +935,7 @@ function headerMenuItems(p: ViewState['problem']): MenuItem[] {
     ...(p?.hasTestcase
       ? [{ icon: 'save-as', label: W.saveTestcasesAsFiles, onclick: () => send({ type: 'loadTestcases', asFiles: true }), disabledReason: state?.testcases.busy ? W.downloadingTestCases : null }]
       : []),
-    ...(p && state?.folderMode
+    ...(state?.folderMode
       ? [{
           icon: state.folderMode.on ? 'file' : 'folder',
           label: state.folderMode.on ? W.linkOnlyFile : W.linkFolder,

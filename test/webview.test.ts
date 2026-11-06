@@ -452,6 +452,16 @@ describe.runIf(existsSync(resolve(__dirname, '../esbuild.mjs')))('sidebar webvie
     expect(problems).toEqual([]);
   });
 
+  it('Link the whole folder is offered before a problem is chosen', () => {
+    const { doc, sent, post } = boot();
+    post({ ...loggedIn, problem: null, notLinked: true, folderMode: { on: false, disabledReason: null } });
+    header(doc).querySelector<HTMLButtonElement>('[aria-label="Link the whole folder"]')!.click();
+    expect(sent).toContainEqual({ type: 'toggleFolderMode' });
+    expect(rightClick(doc, header(doc))).toContain('Link the whole folder');
+    post({ ...loggedIn, problem: null, notLinked: true, folderMode: null }); // no source file open
+    expect(header(doc).querySelector('[aria-label="Link the whole folder"]')).toBeNull();
+  });
+
   it('attachment: a download icon (header, row, right-click) only for problems that have one', () => {
     const { doc, sent, post } = boot();
     post({ ...loggedIn, folderMode: { on: false, disabledReason: null } });

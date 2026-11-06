@@ -64,6 +64,7 @@ function session() {
   const problems = [
     { id: 1, name: 'alpha' },
     { id: 2, name: 'beta' },
+    { id: 3, name: 'gamma' },
   ];
   const s = {
     mapping,
@@ -152,6 +153,41 @@ describe('cause A: picking a problem in folder mode', () => {
     expect(await follow(s, pkg)).toEqual(allOn(2, pkg));
     expect(await s.mapping.get(uri(pkg), BASE)).toMatchObject({ problemId: 2, name: 'beta', folder: true, submitFile: 'student.h', runFile: 'foo.cpp' });
     expect(await s.mapping.get(uri(join(pkg, 'foo.cpp')), BASE)).toBeUndefined();
+  });
+
+  describe('with a file inside linked to another problem', () => {
+    const start = async (s: ReturnType<typeof session>) => {
+      await s.mapping.set(uri(pkg), { problemId: 3, name: 'gamma', baseUrl: BASE, folder: true, submitFile: 'student.h' });
+      await s.mapping.set(uri(join(pkg, 'bar.cpp')), { problemId: 2, name: 'beta', baseUrl: BASE });
+      await s.setActiveFile(uri(join(pkg, 'foo.cpp')));
+    };
+
+    it('asks, then every file follows and the folder keeps its files', async () => {
+      const s = session();
+      await start(s);
+      s.answer = 'replace';
+      await s.links.mapCurrentFile(1);
+      expect(s.asked).toHaveLength(1);
+      expect(await follow(s, pkg)).toEqual(allOn(1, pkg));
+      expect(await s.mapping.get(uri(pkg), BASE)).toMatchObject({ problemId: 1, folder: true, submitFile: 'student.h' });
+    });
+
+    it('declining changes nothing', async () => {
+      const s = session();
+      await start(s);
+      s.answer = 'cancel';
+      await s.links.mapCurrentFile(1);
+      expect((await s.mapping.get(uri(pkg), BASE))?.problemId).toBe(3);
+      expect((await s.mapping.get(uri(join(pkg, 'bar.cpp')), BASE))?.problemId).toBe(2);
+    });
+
+    it('picking the problem that file already has needs no question', async () => {
+      const s = session();
+      await start(s);
+      await s.links.mapCurrentFile(2);
+      expect(s.asked).toEqual([]);
+      expect(await follow(s, pkg)).toEqual(allOn(2, pkg));
+    });
   });
 
   it('a folder only matched by its name is not changed: the pick is for the file', async () => {
