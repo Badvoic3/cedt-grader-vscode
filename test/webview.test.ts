@@ -831,6 +831,17 @@ describe.runIf(existsSync(resolve(__dirname, '../esbuild.mjs')))('sidebar webvie
     expect(acc.textContent).toContain('1234567890');
   });
 
+  it('account: Website and Log out sit on their own row', () => {
+    const { doc, sent, post } = boot();
+    post(loggedIn);
+    const row = doc.querySelector('#sec-account .account-actions')!;
+    const [website, logOut] = [...row.querySelectorAll<HTMLButtonElement>('button')];
+    expect(website.textContent).toContain('Website');
+    expect(logOut.textContent).toContain('Log out');
+    website.click();
+    expect(sent.at(-1)).toEqual({ type: 'openGraderWebsite' });
+  });
+
   it('CPH tip: Install / Not now / Don\'t show again', () => {
     const { doc, sent, post } = boot();
     post({ ...loggedIn, cph: { installed: false }, cphTip: true });

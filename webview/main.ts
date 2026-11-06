@@ -437,6 +437,9 @@ function renderAccount(s: ViewState): void {
           el('strong', { class: 'ellipsis' }, a.fullName || a.username),
           el('span', { class: 'muted small ellipsis' }, a.fullName ? `${a.username} · ${host}` : host),
         ),
+      ),
+      el('div', { class: 'row gap account-actions' },
+        button([icon('globe'), ' ', W.website], () => send({ type: 'openGraderWebsite' }), { title: W.websiteTip(host) }),
         button([icon('sign-out'), ' ', W.logOut], () => send({ type: 'logout' }), { title: W.logOutTip }),
       ),
     );

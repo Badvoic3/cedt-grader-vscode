@@ -279,6 +279,7 @@ export type FromWebview =
   | { type: 'refreshProblems' }
   | { type: 'openStatement'; problemId: number }
   | { type: 'openProblemInBrowser'; problemId: number }
+  | { type: 'openGraderWebsite' }
   | { type: 'openSubmission'; submissionId: number }
   | { type: 'toggleSubmission'; submissionId: number }
   | { type: 'openSubmissionSource'; submissionId: number }

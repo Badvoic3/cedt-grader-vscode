@@ -104,6 +104,9 @@ export class SidebarProvider implements vscode.WebviewViewProvider, vscode.Dispo
       case 'openStatement':
         if (Number.isInteger(m.problemId)) await c.openStatement(m.problemId);
         return;
+      case 'openGraderWebsite':
+        await c.openGraderWebsite();
+        return;
       case 'openProblemInBrowser':
         if (Number.isInteger(m.problemId)) await c.openProblemInBrowser(m.problemId);
         return;

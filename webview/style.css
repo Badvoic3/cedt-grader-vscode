@@ -562,6 +562,7 @@ body.vscode-high-contrast .segmented .seg.active, body.vscode-high-contrast .top
 /* ---------------------------------------------------------- phase 3/4 bits */
 
 .account-name { display: flex; flex-direction: column; min-width: 0; }
+.account-actions { margin-top: 6px; }
 .notice.tip { border-color: var(--vscode-inputValidation-infoBorder, var(--border)); }
 .notice.linked { padding: 4px 8px; gap: 4px; }
 .linked-list { display: flex; flex-direction: column; }

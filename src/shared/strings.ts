@@ -372,6 +372,7 @@ const EN_W = {
   showingSavedData: "Showing what was loaded before; it may be out of date.",
   userOnHost: (user: string | number, host: string | number) => `${user} on ${host}`,
   logOut: "Log out",
+  websiteTip: (host: string | number) => `Open ${host} in the browser`,
   logOutTip: "Log out and forget the saved password",
   loggingIn: (host: string | number) => `Logging in to ${host}…`,
   savedLogin: "Saved login:",

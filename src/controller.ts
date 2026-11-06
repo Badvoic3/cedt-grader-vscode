@@ -1395,6 +1395,10 @@ export class GraderController implements vscode.Disposable {
     return this.problems.find((p) => p.id === id) ?? (this.problem?.id === id ? this.problem : undefined);
   }
 
+  async openGraderWebsite(): Promise<void> {
+    await vscode.env.openExternal(vscode.Uri.parse(this.cfg.baseUrl));
+  }
+
   async openProblemInBrowser(problemId?: number): Promise<void> {
     const id = problemId ?? this.problem?.id;
     if (!id) return;
