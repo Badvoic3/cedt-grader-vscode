@@ -20,10 +20,10 @@ vi.mock('vscode', async () => {
   const fs = await import('node:fs/promises');
   const path = await import('node:path');
   const file = (p: string) => ({ scheme: 'file', fsPath: p, path: p, toString: () => `file://${p}` });
-  const inside = (p: string, dir: string) => p === dir || p.startsWith(`${dir}/`);
+  const inside = (p: string, dir: string) => p === dir || p.startsWith(`${dir}${path.sep}`);
   const folderOf = (p: string) => env.folders.find((f) => inside(p, f.uri.fsPath));
   return {
-    Uri: { file, joinPath: (u: { fsPath: string }, ...parts: string[]) => file(path.posix.join(u.fsPath, ...parts)) },
+    Uri: { file, joinPath: (u: { fsPath: string }, ...parts: string[]) => file(path.join(u.fsPath, ...parts)) },
     workspace: {
       get workspaceFolders() {
         return env.folders;
@@ -36,7 +36,7 @@ vi.mock('vscode', async () => {
       asRelativePath: (u: string | { fsPath: string }) => {
         const p = typeof u === 'string' ? u : u.fsPath;
         const f = folderOf(p);
-        return !f || f.uri.fsPath === p ? p : path.posix.relative(f.uri.fsPath, p);
+        return !f || f.uri.fsPath === p ? p : path.relative(f.uri.fsPath, p).split(path.sep).join('/');
       },
       fs: {
         readFile: (u: { fsPath: string }) => fs.readFile(u.fsPath),
@@ -682,7 +682,8 @@ describe('a linked file outside the workspace', () => {
     expect(await pathState(join(away, 'nope'))).toEqual({ kind: 'missing' });
     expect((await pathState(away)).kind).toBe('folder');
     expect((await pathState(join(away, 'sol.cpp'))).kind).toBe('file');
-    expect((await pathState(`${away}/${'x'.repeat(5000)}`)).kind).toBe('unreadable'); // ENAMETOOLONG
+    // Windows reports a path this long as not found.
+    if (process.platform !== 'win32') expect((await pathState(`${away}/${'x'.repeat(5000)}`)).kind).toBe('unreadable'); // ENAMETOOLONG
   });
 
   describe('then opened inside a workspace', () => {

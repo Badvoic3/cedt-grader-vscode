@@ -76,7 +76,7 @@ describe('Find a matching file', () => {
 
   it('keeps only source files (no binaries, build output, .cph, node_modules, *.dSYM); the matcher picks the problem', () => {
     const { root, all } = tree();
-    const rel = (xs: string[]) => xs.map((p) => p.slice(root.length + 1)).sort();
+    const rel = (xs: string[]) => xs.map((p) => p.slice(root.length + 1).replace(/\\/g, '/')).sort();
     const src = filterSourceFiles(all, ['cpp', 'cc', 'cxx', 'py']);
     expect(rel(src)).toEqual(['hw/00_Intro_11.cpp', 'other/00_INTRO_11.CPP', 'other/00_Intro_11.py', 'other/00_Intro_11_v2.cpp']);
     // Binary extensions never, even if a language claims them.

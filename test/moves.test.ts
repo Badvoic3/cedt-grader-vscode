@@ -100,7 +100,7 @@ describe('CPH .prob follows a rename', () => {
     const { oldSrc, newSrc, from, to } = setup();
     const r = await moveCphProblem(oldSrc, newSrc);
     expect(r.status).toBe('moved');
-    expect(to).toMatch(/sub\/\.cph\/\.b\.cpp_[0-9a-f]{32}\.prob$/);
+    expect(to).toMatch(/sub[\\/]\.cph[\\/]\.b\.cpp_[0-9a-f]{32}\.prob$/);
     const p = JSON.parse(readFileSync(to, 'utf8'));
     expect(p).toMatchObject({ srcPath: newSrc, url: newSrc, tests: [{ id: 1, input: '1', output: '2' }] });
     expect(existsSync(from)).toBe(false);

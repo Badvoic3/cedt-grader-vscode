@@ -37,9 +37,9 @@ describe('CPH .prob files', () => {
   it('computes the same path as CPH (md5 of the full source path)', () => {
     // From the user's workspace: .cph/.test.cpp_d91f7014ebc867db60a02993b068a793.prob
     expect(cphProbPath('/Users/badvoic3/Documents/project/test.cpp')).toBe(
-      '/Users/badvoic3/Documents/project/.cph/.test.cpp_d91f7014ebc867db60a02993b068a793.prob',
+      join('/Users/badvoic3/Documents/project', '.cph', '.test.cpp_d91f7014ebc867db60a02993b068a793.prob'),
     );
-    expect(cphProbPath('/x/y/a.cpp', '/save')).toMatch(/^\/save\/\.a\.cpp_[0-9a-f]{32}\.prob$/);
+    expect(cphProbPath('/x/y/a.cpp', '/save')).toMatch(/^[\\/]save[\\/]\.a\.cpp_[0-9a-f]{32}\.prob$/);
   });
 
   it('reads a .prob file and returns null when missing', async () => {
