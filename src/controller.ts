@@ -53,7 +53,7 @@ import { Attachments } from './flows/attachments';
 import { CacheCare } from './flows/cache';
 import { FolderMode } from './flows/folderMode';
 import type { CurrentProblem, Host } from './flows/host';
-import { revealPanelOnce } from './flows/firstReveal';
+import { revealPanelOnStart } from './flows/panelReveal';
 import { Links } from './flows/links';
 import { type AskOptions, type InlinePrompt, InlinePrompts } from './flows/prompts';
 import { countedSubmissionId } from './flows/results';
@@ -346,7 +346,7 @@ export class GraderController implements vscode.Disposable {
     this.markStarted();
     if (this.panelVisible) this.setPanelVisible(true);
     this.emit();
-    revealPanelOnce(this.ctx.globalState, this.panelVisible, (c) => vscode.commands.executeCommand(c)).then(undefined, (err) => this.logError('Reveal failed', err));
+    revealPanelOnStart(this.cfg.panelOpenOnStartup, this.panelVisible, (c, o) => vscode.commands.executeCommand(c, o)).then(undefined, (err) => this.logError('Reveal failed', err));
     // Housekeeping, after the panel has what it needs.
     try {
       // Problem list saved by versions before v2 (no tags): no longer read, remove it.

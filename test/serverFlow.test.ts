@@ -64,6 +64,13 @@ describe('gate', () => {
     expect(deps.saveVerified).not.toHaveBeenCalled();
   });
 
+  it('a bare word is called no address, not an unreachable server', async () => {
+    const { f, deps } = flow();
+    await f.inspect('example');
+    expect(deps.check).not.toHaveBeenCalled();
+    expect(f.view()).toMatchObject({ status: 'bad', message: "That isn't a web address." });
+  });
+
   it('text that is no address is blocked with no request', async () => {
     const { f, deps } = flow();
     expect(await f.gate('ftp://x', DEFAULT_BASE_URL)).toEqual({ ok: false });

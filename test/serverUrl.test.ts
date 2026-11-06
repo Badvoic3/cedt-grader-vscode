@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_BASE_URL } from '../src/shared/constants';
-import { isInsecure, isLoopback, normalizeServerUrl } from '../src/shared/serverUrl';
+import { isInsecure, isLoopback, normalizeServerUrl, normalizeTypedServer } from '../src/shared/serverUrl';
 
 describe('normalizeServerUrl', () => {
   it.each([
@@ -28,5 +28,23 @@ describe('plain http', () => {
     expect(isInsecure('http://grader.example')).toBe(true);
     expect(isInsecure('http://127.0.0.1.example.com')).toBe(true);
     expect(isInsecure('https://grader.example')).toBe(false);
+  });
+});
+
+describe('normalizeTypedServer', () => {
+  it('a bare word with no scheme is a slip', () => {
+    for (const raw of ['example', 'example:3000', 'grader/path']) expect(normalizeTypedServer(raw)).toBeNull();
+  });
+
+  it('a dotted name, this computer, an IP or a typed scheme is an address', () => {
+    expect(normalizeTypedServer('grader.example.ac.th')).toBe('https://grader.example.ac.th');
+    expect(normalizeTypedServer('localhost:3000')).toBe('https://localhost:3000');
+    expect(normalizeTypedServer('10.0.0.5')).toBe('https://10.0.0.5');
+    expect(normalizeTypedServer('[::1]:3000')).toBe('https://[::1]:3000');
+    expect(normalizeTypedServer('http://grader')).toBe('http://grader');
+  });
+
+  it('empty still means the default server', () => {
+    expect(normalizeTypedServer('')).toBe(DEFAULT_BASE_URL);
   });
 });

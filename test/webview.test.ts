@@ -976,15 +976,14 @@ describe.runIf(existsSync(resolve(__dirname, '../esbuild.mjs')))('sidebar webvie
     });
   });
 
-  it('account: Website and Log out sit on their own row', () => {
+  it('account: the website is an icon by the address; Log out has its own row', () => {
     const { doc, sent, post } = boot();
     post(loggedIn);
-    const row = doc.querySelector('#sec-account .account-actions')!;
-    const [website, logOut] = [...row.querySelectorAll<HTMLButtonElement>('button')];
-    expect(website.textContent).toContain('Website');
-    expect(logOut.textContent).toContain('Log out');
-    website.click();
+    const icon = doc.querySelector<HTMLButtonElement>('#sec-account .account-host .icon-btn')!;
+    expect(icon.getAttribute('aria-label')).toBe(icon.dataset.tip);
+    icon.click();
     expect(sent.at(-1)).toEqual({ type: 'openGraderWebsite' });
+    expect([...doc.querySelectorAll('#sec-account .account-actions button')].map((b) => b.textContent!.trim())).toEqual(['Log out']);
   });
 
   it('CPH tip: Install / Not now / Don\'t show again', () => {

@@ -44,8 +44,6 @@ export const KEYS = {
   cphAutoShowDismissed: 'cedtGrader.cphAutoShowDismissed',
   /** "Remember password on this computer". */
   rememberPassword: 'cedtGrader.rememberPassword',
-  /** The panel has been shown once in this profile (it may start on a closed side bar). */
-  panelRevealed: 'cedtGrader.panelRevealed',
   /** Grader addresses a login has accepted: these aren't checked again. */
   verifiedServers: 'cedtGrader.verifiedServers',
   /** `.prob.bak` files this extension created in the workspace (deleted only from "Clear Cached Data"). */

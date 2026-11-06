@@ -52,6 +52,7 @@
   "config.revealResultAfterSubmit.description": "When grading finishes, open the **Result** section in the panel and scroll it into view. Keyboard focus stays in your editor.",
   "config.debugRequests.description": "Log every grader request (method, path, status) and cache hit/miss to the **Grader Submit: Requests** output channel, to check request counts. Never logs passwords or tokens.",
   "config.statementBeside.description": "Open problem statements in an editor tab beside your code.",
+  "config.panelOpenOnStartup.description": "Open the panel when a window starts. Your cursor stays where it is.",
   "config.statementFollowsFile.description": "An open statement tab switches to the problem of the file you switch to, and closes when that source file has no problem.",
   "config.defaultLanguage.description": "Language for \"New file for this problem\" when the active file's language isn't allowed and no language was used before (e.g. C++, Python, Java). Archive and other non-source languages are never chosen automatically.",
   "config.fileNamePattern.description": "File name for **New file for this problem** and **Rename file to match the problem**. `{name}` = the problem name, `{id}` = the problem id, `{ext}` = the language's extension; must end with `.{ext}`. Files named this way are also matched to their problem automatically. Example: `{id}_{name}.{ext}` → `1360_00_Intro_11.cpp`.",

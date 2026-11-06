@@ -1,7 +1,7 @@
 import type { ServerCheck } from '../grader';
 import { DEFAULT_BASE_URL, LIMITS } from '../shared/constants';
 import type { ServerView } from '../shared/messages';
-import { isInsecure, normalizeServerUrl } from '../shared/serverUrl';
+import { isInsecure, normalizeTypedServer } from '../shared/serverUrl';
 import { S } from '../shared/strings';
 
 export interface ServerDeps {
@@ -49,7 +49,7 @@ export class ServerFlow {
 
   /** Check what was typed and show the result. */
   async inspect(raw: string): Promise<void> {
-    const url = normalizeServerUrl(raw);
+    const url = normalizeTypedServer(raw);
     this.latest = raw;
     if (!url) return this.show({ draft: raw, status: 'bad', message: S.account.serverInvalid });
     if (!needsCheck(url, this.deps.verified())) return this.show({ draft: raw, status: 'idle', message: null });
@@ -60,7 +60,7 @@ export class ServerFlow {
 
   /** May a password go to this address? `raw` undefined means the current one. */
   async gate(raw: string | undefined, current: string): Promise<ServerGate> {
-    const url = raw === undefined ? current : normalizeServerUrl(raw);
+    const url = raw === undefined ? current : normalizeTypedServer(raw);
     const draft = raw ?? current;
     this.latest = draft;
     if (!url) {

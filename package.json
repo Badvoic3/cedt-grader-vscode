@@ -72,6 +72,7 @@
     "Thai"
   ],
   "activationEvents": [
+    "onStartupFinished",
     "onLanguage:c",
     "onLanguage:cpp",
     "onLanguage:python",
@@ -343,6 +344,11 @@
           "type": "boolean",
           "default": false,
           "markdownDescription": "%config.panel.compact.description%"
+        },
+        "cedtGrader.panel.openOnStartup": {
+          "type": "boolean",
+          "default": true,
+          "description": "%config.panelOpenOnStartup.description%"
         },
         "cedtGrader.panel.topicClickOrder": {
           "type": "string",

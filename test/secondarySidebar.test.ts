@@ -1,7 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it, vi } from 'vitest';
-import { revealPanelOnce } from '../src/flows/firstReveal';
-import { KEYS } from '../src/shared/stateKeys';
+import { revealPanelOnStart } from '../src/flows/panelReveal';
 
 const pkg = JSON.parse(readFileSync('package.json', 'utf8'));
 
@@ -26,31 +25,30 @@ describe('where the panel lives', () => {
   });
 });
 
-describe('revealPanelOnce', () => {
-  const flags = (seen = false) => {
-    const m = new Map<string, unknown>(seen ? [[KEYS.panelRevealed, true]] : []);
-    return { m, get: <T>(k: string, d: T) => (m.has(k) ? (m.get(k) as T) : d), update: async (k: string, v: unknown) => void m.set(k, v) };
-  };
+describe('revealPanelOnStart', () => {
+  const run = () => vi.fn(async (_: string, __: { preserveFocus: boolean }) => undefined);
 
-  it('shows the panel once, then gives the cursor back to the editor', async () => {
-    const f = flags();
-    const run = vi.fn(async (_: string) => undefined);
-    await revealPanelOnce(f, false, run);
-    await revealPanelOnce(f, false, run);
-    expect(run.mock.calls.map((c) => c[0])).toEqual(['cedtGrader.panel.focus', 'workbench.action.focusActiveEditorGroup']);
+  it('shows the panel on every start and leaves the cursor where it is', async () => {
+    const r = run();
+    await revealPanelOnStart(true, false, r);
+    await revealPanelOnStart(true, false, r);
+    expect(r.mock.calls).toEqual([['cedtGrader.panel.focus', { preserveFocus: true }], ['cedtGrader.panel.focus', { preserveFocus: true }]]);
   });
 
-  it('a panel already on screen is left alone, and the flag is still set', async () => {
-    const f = flags();
-    const run = vi.fn(async (_: string) => undefined);
-    await revealPanelOnce(f, true, run);
-    expect(run).not.toHaveBeenCalled();
-    expect(f.m.get(KEYS.panelRevealed)).toBe(true);
+  it('a panel already on screen is left alone', async () => {
+    const r = run();
+    await revealPanelOnStart(true, true, r);
+    expect(r).not.toHaveBeenCalled();
   });
 
-  it('a failed reveal tries again next time', async () => {
-    const f = flags();
-    await expect(revealPanelOnce(f, false, async () => { throw new Error('no view'); })).rejects.toThrow('no view');
-    expect(f.m.has(KEYS.panelRevealed)).toBe(false);
+  it('the setting turns it off', async () => {
+    const r = run();
+    await revealPanelOnStart(false, false, r);
+    expect(r).not.toHaveBeenCalled();
+  });
+
+  it('activates after startup, so a window with no source file shows the panel too', () => {
+    expect(pkg.activationEvents).toContain('onStartupFinished');
+    expect(JSON.stringify(pkg.contributes.configuration)).toContain('cedtGrader.panel.openOnStartup');
   });
 });

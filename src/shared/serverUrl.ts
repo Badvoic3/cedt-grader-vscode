@@ -17,6 +17,17 @@ export function normalizeServerUrl(raw: string): string | null {
   }
 }
 
+/**
+ * The login form: as above, but a bare word with no scheme ("example") is a
+ * slip, not a host. A name on a local network needs its scheme: `http://grader`.
+ */
+export function normalizeTypedServer(raw: string): string | null {
+  const url = normalizeServerUrl(raw);
+  if (!url || raw.includes('://')) return url;
+  const host = new URL(url).hostname;
+  return host.includes('.') || host.startsWith('[') || isLoopback(url) ? url : null;
+}
+
 /** This computer: `http://` to it never crosses a network. */
 export function isLoopback(url: string): boolean {
   const host = new URL(url).hostname;

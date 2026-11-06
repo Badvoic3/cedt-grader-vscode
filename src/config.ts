@@ -30,6 +30,8 @@ export interface GraderConfig {
   panelSections: SectionId[];
   /** Compact panel (`cedtGrader.panel.compact`). */
   panelCompact: boolean;
+  /** Show the panel when a window starts (`cedtGrader.panel.openOnStartup`). */
+  panelOpenOnStartup: boolean;
   /** Topic pill clicks: show only first (default) or hide first (`cedtGrader.panel.topicClickOrder`). */
   topicClickOrder: 'showFirst' | 'hideFirst';
   /** `en` (default), `th`, or `auto` (follow VS Code's display language). */
@@ -62,6 +64,7 @@ export function readConfig(): GraderConfig {
     revealResultAfterSubmit: c.get<boolean>('revealResultAfterSubmit', true) !== false,
     panelSections: normalizeSections(c.get<unknown>('panel.sections')),
     panelCompact: c.get<boolean>('panel.compact', false) === true,
+    panelOpenOnStartup: c.get<boolean>('panel.openOnStartup', true) !== false,
     topicClickOrder: c.get<string>('panel.topicClickOrder', 'showFirst') === 'hideFirst' ? 'hideFirst' : 'showFirst',
     fileNamePattern: checkPattern(c.get<string>('fileNamePattern', '{name}.{ext}')),
     cacheMaxMB: Math.max(CACHE.maxMbMinimum, Number(c.get('cacheMaxMB', CACHE.maxMbDefault)) || CACHE.maxMbDefault),
