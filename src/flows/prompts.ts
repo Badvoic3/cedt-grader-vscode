@@ -5,7 +5,8 @@
  * hidden), so the rules are unit tested.
  *
  * One question at a time: a new one, a file switch (`cancel`) or a dismissal
- * resolves the open one with `undefined`.
+ * resolves the open one with `undefined`. A question with `stays` doesn't
+ * depend on the active file, so a file switch leaves it open.
  */
 export interface InlinePrompt {
   id: number;
@@ -21,10 +22,13 @@ export interface AskOptions {
   detail?: string;
   tone?: 'info' | 'warn';
   near?: 'submit';
+  /** Stays open when the active file changes (the question names what it is about). */
+  stays?: boolean;
 }
 
 export class InlinePrompts {
   private open: InlinePrompt | null = null;
+  private stays = false;
   private resolveOpen: ((v: string | undefined) => void) | null = null;
   private seq = 0;
 
@@ -43,6 +47,7 @@ export class InlinePrompts {
   /** Resolves with the chosen button id, or undefined when replaced, dismissed or cancelled. */
   ask(text: string, buttons: InlinePrompt['buttons'], opts: AskOptions = {}): Promise<string | undefined> {
     this.resolveOpen?.(undefined);
+    this.stays = !!opts.stays;
     const id = ++this.seq;
     this.open = { id, text, detail: opts.detail ?? null, tone: opts.tone ?? 'info', buttons, near: opts.near ?? null };
     this.onChange();
@@ -64,8 +69,8 @@ export class InlinePrompts {
     if (this.open?.id === id) this.resolveOpen?.(button ?? undefined);
   }
 
-  /** The active file changed: the open question goes away unanswered. */
+  /** The active file changed: the open question goes away unanswered, unless it stays. */
   cancel(): void {
-    this.resolveOpen?.(undefined);
+    if (!this.stays) this.resolveOpen?.(undefined);
   }
 }

@@ -79,11 +79,16 @@ function session() {
     /** Problem the picker returns; undefined = cancelled. */
     pick: undefined as number | undefined,
     asked: [] as string[],
+    /** Options of the last question, and its answer callback while `hold` is on. */
+    askOpts: undefined as { stays?: boolean } | undefined,
+    hold: false,
+    release: null as ((id: string | undefined) => void) | null,
     currentProblem: () => s.problem,
     allSourceExts: () => ['cpp', 'c', 'h', 'py'],
-    askInline: async (text: string) => {
+    askInline: async (text: string, _buttons: unknown, opts?: { stays?: boolean }) => {
       s.asked.push(text);
-      return s.answer;
+      s.askOpts = opts;
+      return s.hold ? new Promise<string | undefined>((resolve) => (s.release = resolve)) : s.answer;
     },
     chooseProblemQuickPick: async (apply: (id: number) => Promise<void>) => {
       if (s.pick !== undefined) await apply(s.pick);
@@ -364,6 +369,67 @@ describe('Auto-detect on a folder matched by its name', () => {
     await s.links.autoDetect();
     expect(await s.mapping.get(uri(pkg), BASE)).toBeUndefined();
     expect(await s.mapping.get(uri(join(pkg, 'beta.cpp')), BASE)).toBeUndefined();
+  });
+});
+
+describe('moving to another file while a folder question is open', () => {
+  const start = async (s: ReturnType<typeof session>) => {
+    await s.mapping.set(uri(join(pkg, 'foo.cpp')), { problemId: 1, name: 'alpha', baseUrl: BASE });
+    await s.mapping.set(uri(join(pkg, 'bar.cpp')), { problemId: 2, name: 'beta', baseUrl: BASE });
+    await s.setActiveFile(uri(join(pkg, 'foo.cpp')));
+    s.hold = true;
+  };
+  const whileOpen = async (s: ReturnType<typeof session>, action: Promise<void>, next: string) => {
+    while (!s.release) await new Promise((r) => setTimeout(r, 1));
+    expect(s.askOpts?.stays).toBe(true);
+    await s.setActiveFile(uri(next));
+    s.release('replace');
+    await action;
+  };
+
+  it('Link the whole folder still applies, and the file you moved to stays active', async () => {
+    const s = session();
+    await start(s);
+    await whileOpen(s, s.folder.toggle(), join(pkg, 'bar.cpp'));
+    expect(s.fileUri?.fsPath).toBe(join(pkg, 'bar.cpp'));
+    expect(s.problem?.id).toBe(1);
+    expect(s.folder.link?.fsPath).toBe(pkg);
+    s.hold = false;
+    expect(await follow(s, pkg)).toEqual(allOn(1, pkg));
+  });
+
+  it('it also works from a file outside the folder', async () => {
+    const s = session();
+    const away = join(root, 'away.cpp');
+    writeFileSync(away, '');
+    await start(s);
+    await whileOpen(s, s.folder.toggle(), away);
+    expect(s.fileUri?.fsPath).toBe(away);
+    expect(s.folder.link).toBeNull();
+    s.hold = false;
+    expect(await follow(s, pkg)).toEqual(allOn(1, pkg));
+  });
+
+  it('a pick in folder mode and Auto-detect ask the same way', async () => {
+    const a = session();
+    await a.mapping.set(uri(pkg), { problemId: 3, name: 'gamma', baseUrl: BASE, folder: true });
+    await a.mapping.set(uri(join(pkg, 'bar.cpp')), { problemId: 2, name: 'beta', baseUrl: BASE });
+    await a.setActiveFile(uri(join(pkg, 'foo.cpp')));
+    a.hold = true;
+    await whileOpen(a, a.links.mapCurrentFile(1), join(pkg, 'student.h'));
+    a.hold = false;
+    expect(await follow(a, pkg)).toEqual(allOn(1, pkg));
+
+    const named = join(root, 'alpha');
+    mkdirSync(named);
+    for (const f of FILES) writeFileSync(join(named, f), '');
+    const b = session();
+    await b.mapping.set(uri(join(named, 'bar.cpp')), { problemId: 2, name: 'beta', baseUrl: BASE });
+    await b.setActiveFile(uri(join(named, 'foo.cpp')));
+    b.hold = true;
+    await whileOpen(b, b.links.autoDetect(), join(named, 'student.h'));
+    b.hold = false;
+    expect(await follow(b, named)).toEqual(allOn(1, named));
   });
 });
 

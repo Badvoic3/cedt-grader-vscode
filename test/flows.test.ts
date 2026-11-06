@@ -24,6 +24,21 @@ describe('inline questions', () => {
   };
   const ok = [{ id: 'ok', label: 'OK' }];
 
+  it('a question with stays survives a file switch; a new question or an answer still ends it', async () => {
+    const { p } = setup();
+    const first = p.ask('Link the folder?', ok, { stays: true });
+    p.cancel();
+    expect(p.current?.text).toBe('Link the folder?');
+    const second = p.ask('Other?', ok);
+    await expect(first).resolves.toBeUndefined();
+    p.cancel();
+    await expect(second).resolves.toBeUndefined();
+    expect(p.current).toBeNull();
+    const third = p.ask('Link the folder?', ok, { stays: true });
+    p.answer(p.current!.id, 'ok');
+    await expect(third).resolves.toBe('ok');
+  });
+
   it('resolves with the button; answers for an older question are ignored', async () => {
     const { p, calls } = setup();
     const a = p.ask('first?', ok);

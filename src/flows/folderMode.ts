@@ -98,13 +98,12 @@ export class FolderMode {
   async saveMatch(): Promise<void> {
     const h = this.host;
     const link = this.link;
-    const file = h.fileUri;
-    if (!link || !this.matched || !file) return;
+    if (!link || !this.matched) return;
     const folder = vscode.Uri.file(link.fsPath);
     if (!(await this.mayReplaceFileLinks(folder, link.entry.problemId, link.entry.name))) return;
     await h.mapping.linkFolder(folder, { ...link.entry }, h.cfg.baseUrl, true);
     await h.links.refreshMappedIds();
-    await h.setActiveFile(file);
+    if (h.fileUri) await h.setActiveFile(h.fileUri); // the user may have moved on while the question was open
   }
 
   /** A problem picked in folder mode: the folder link moves to it (its submit / run files stay), and every file follows. */
@@ -123,7 +122,7 @@ export class FolderMode {
     const h = this.host;
     const others = (await h.mapping.fileLinksIn(folder, h.cfg.baseUrl)).filter((e) => e.entry.problemId !== problemId);
     if (!others.length) return true;
-    return (await h.askInline(S.folder.replaceFilesQ(this.label(folder.fsPath), others.length, name), this.replaceButtons())) === 'replace';
+    return (await h.askInline(S.folder.replaceFilesQ(this.label(folder.fsPath), others.length, name), this.replaceButtons(), { stays: true })) === 'replace';
   }
 
   private replaceButtons(): InlinePrompt['buttons'] {
@@ -250,7 +249,7 @@ export class FolderMode {
     const label = this.label(dir.fsPath);
     const existing = await h.mapping.get(dir, h.cfg.baseUrl);
     if (existing?.folder && existing.problemId !== problem.id) {
-      if ((await h.askInline(S.folder.replaceQ(label, existing.name || `#${existing.problemId}`, problem.name), this.replaceButtons())) !== 'replace') return;
+      if ((await h.askInline(S.folder.replaceQ(label, existing.name || `#${existing.problemId}`, problem.name), this.replaceButtons(), { stays: true })) !== 'replace') return;
     }
     if (!(await this.mayReplaceFileLinks(dir, problem.id, problem.name))) return;
     const files = await this.sources(dir.fsPath);
@@ -258,9 +257,10 @@ export class FolderMode {
     const own = relative(dir.fsPath, file.fsPath).split(sep).join('/');
     const entry = { problemId: problem.id, name: problem.name, baseUrl: h.cfg.baseUrl, ...(detected || files.length === 1 ? {} : { submitFile: own }) };
     await h.mapping.linkFolder(dir, entry, h.cfg.baseUrl, true);
-    h.links.clearTempLink();
+    const active = h.fileUri ?? file; // the user may have moved on while a question was open
+    if (active.fsPath === file.fsPath) h.links.clearTempLink();
     await h.links.refreshMappedIds();
-    await h.setActiveFile(file);
+    await h.setActiveFile(active);
     void vscode.window.setStatusBarMessage(S.folder.nowFolder(label), TIMING.statusMessageMs);
   }
 
