@@ -921,6 +921,32 @@ describe.runIf(existsSync(resolve(__dirname, '../esbuild.mjs')))('sidebar webvie
     expect(rows.filter((r) => r.hidden)).toEqual([]);
   });
 
+  it('Choose problem: lists every problem, not only the first 50 (regression: problems seemed to be missing)', () => {
+    const { dom, doc, post } = boot();
+    const many = Array.from({ length: 292 }, (_, i) => ({ ...loggedIn.problems.items[1], id: 5000 + i, name: `p_${String(i).padStart(3, '0')}`, fullName: `Problem ${i}` }));
+    post({ ...loggedIn, problem: null, problems: { ...loggedIn.problems, items: many } });
+    doc.querySelector<HTMLButtonElement>('#sec-current .combo')!.click();
+    const names = () => [...doc.querySelectorAll('.picker-list .problem-row')].length;
+    expect(names()).toBe(292);
+    const search = doc.querySelector<HTMLInputElement>('.picker-search')!;
+    search.value = 'p_29';
+    search.dispatchEvent(new dom.window.Event('input'));
+    expect(names()).toBe(2); // p_290, p_291
+    search.value = '';
+    search.dispatchEvent(new dom.window.Event('input'));
+    expect(names()).toBe(292);
+  });
+
+  it('problem count follows a refresh that changes what a filter shows, with the same number of problems', () => {
+    const { doc, post } = boot();
+    const many = Array.from({ length: 4 }, (_, i) => ({ ...loggedIn.problems.items[1], id: 5000 + i, name: `p_${i}`, status: 'untried' as const }));
+    const filter = { ...loggedIn.problems.filter, status: 'unsolved' as const };
+    post({ ...loggedIn, problem: null, problems: { ...loggedIn.problems, filter, items: many } });
+    expect(doc.querySelector('#sec-problems .list-count')!.textContent).toBe('4 problems');
+    post({ ...loggedIn, problem: null, problems: { ...loggedIn.problems, filter, items: many.map((p, i) => (i ? p : { ...p, status: 'solved' as const })) } });
+    expect(doc.querySelector('#sec-problems .list-count')!.textContent).toBe('3 of 4 problems');
+  });
+
   it('panel CSS: selected row outline inside the row; score facts and verdicts never cut or scroll sideways', () => {
     const css = readFileSync(resolve(__dirname, '../webview/style.css'), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
     const rule = (sel: string) => [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].find((m) => m[1].trim() === sel)?.[2] ?? '';

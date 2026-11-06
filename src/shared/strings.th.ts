@@ -374,7 +374,6 @@ export const TH: Strings = {
     matchesForThisFile: 'โจทย์ที่ตรงกับไฟล์นี้',
     suggestedForThisFile: 'โจทย์ที่แนะนำสำหรับไฟล์นี้',
     allProblems: 'โจทย์ทั้งหมด',
-    moreResults: (n) => `อีก ${n} รายการ พิมพ์ชื่อเพิ่มเพื่อให้ผลการค้นหาแคบลง`,
     countedScore: 'คะแนนที่นับ',
     penaltiesFromListTip: 'คะแนนที่ถูกหักจากคำใบ้และ AI อ่านจากหน้ารายการโจทย์บน Grader',
     fromProblemList: 'จากรายการโจทย์',

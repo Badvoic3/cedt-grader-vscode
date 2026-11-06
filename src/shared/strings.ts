@@ -376,7 +376,6 @@ const EN_W = {
   matchesForThisFile: "Matches for this file",
   suggestedForThisFile: "Suggested for this file",
   allProblems: "All problems",
-  moreResults: (n: string | number) => `${n} more. Type more of the name to narrow it down.`,
   countedScore: "Counted score",
   penaltiesFromListTip: "Hint and AI-assist penalties, read from the grader's problem list",
   fromProblemList: "from problem list",

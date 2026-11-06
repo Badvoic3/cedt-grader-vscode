@@ -462,8 +462,7 @@ function renderPickerList(s: ViewState): void {
       for (const p of top) pickerList.append(problemRow(p, s, 'picker'));
       pickerList.append(el('div', { class: 'picker-group muted small' }, W.allProblems));
     }
-    for (const p of hits.slice(0, 50)) pickerList.append(problemRow(p, s, 'picker'));
-    if (hits.length > 50) pickerList.append(el('div', { class: 'muted pad' }, W.moreResults(hits.length - 50)));
+    for (const p of hits) pickerList.append(problemRow(p, s, 'picker'));
   }
 }
 
@@ -1323,7 +1322,7 @@ function sectionKeys(s: ViewState): Record<string, string> {
     current: j([promptNearSubmit(s) ? s.prompt : null, s.notLinked, s.linkedNotice, s.linkedFiles, s.file, s.problem, s.languages, s.submit, s.matching, s.testcases, s.samples, s.cph, s.gradingElsewhere, s.folder, s.folderMode, s.attachment, s.runTests, pickerOpen, pickerOpen ? s.problems : s.problems.loaded]),
     result: j([s.result, legendOpen === 'result', s.problem?.score.rawSum]),
     history: j([pid, s.history, legendOpen === 'history', s.problem?.score.rawSum]),
-    problems: j([{ ...s.problems, items: s.problems.items.length }, ui.filter, s.attachment]),
+    problems: j([{ ...s.problems, items: s.problems.items.length }, problemHits(s).length, ui.filter, s.attachment]),
   };
 }
 
