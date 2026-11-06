@@ -101,6 +101,8 @@ export class GraderController implements vscode.Disposable {
   private refreshSeq = 0;
   /** A login is writing the username / address itself: the settings event must not reset the session too. */
   private changingAccount = false;
+  /** Raised by each typed login and account change: a login still waiting on its check gives up. */
+  private loginAttempt = 0;
   private readonly server: ServerFlow;
   /** Matching details for the active file (picker suggestions, ambiguous candidates). */
   private matchInfo: MatchInfo = NO_MATCH_INFO;
@@ -395,15 +397,18 @@ export class GraderController implements vscode.Disposable {
   // ------------------------------------------------------------ plumbing
 
   private makeClient(): GraderProvider {
+    // Fixed here: a client still finishing after a switch must not read the next account's secrets.
+    const { baseUrl, username } = this.cfg;
+    const key = (kind: SecretKind) => secretKey(kind, baseUrl, username);
     return createGrader({
-      baseUrl: this.cfg.baseUrl,
+      baseUrl,
       getStoredCredentials: async (): Promise<Credentials | undefined> => {
-        const password = await this.getPassword();
-        return this.cfg.username && password ? { username: this.cfg.username, password } : undefined;
+        const password = username ? await this.ctx.secrets.get(key('password')) : undefined;
+        return username && password ? { username, password } : undefined;
       },
       tokenStore: {
         load: async () => {
-          const raw = await this.ctx.secrets.get(this.secretKey('token'));
+          const raw = await this.ctx.secrets.get(key('token'));
           try {
             return raw ? (JSON.parse(raw) as StoredToken) : undefined;
           } catch {
@@ -412,8 +417,8 @@ export class GraderController implements vscode.Disposable {
         },
         save: async (t) => {
           // The token is persisted only when the user chose to remember the password.
-          if (t && this.rememberPassword) await this.secrets.store(this.secretKey('token'), JSON.stringify(t));
-          else await this.secrets.delete(this.secretKey('token'));
+          if (t && this.rememberPassword) await this.secrets.store(key('token'), JSON.stringify(t));
+          else await this.secrets.delete(key('token'));
         },
       },
       log: (line) => this.requestLog(line),
@@ -465,6 +470,7 @@ export class GraderController implements vscode.Disposable {
       void this.secrets.forgetAccount(prev.baseUrl, prev.username);
       this.client = this.makeClient();
       this.resetSessionState();
+      this.server.reset();
       void this.getPassword().then((p) => {
         this.hasSavedPassword = !!p;
         if (this.fileUri) void this.setActiveFile(this.fileUri);
@@ -475,6 +481,12 @@ export class GraderController implements vscode.Disposable {
 
   private resetSessionState(): void {
     this.accountStatus = 'logged-out';
+    // Nothing started for the previous account carries over: a Retry or poll would reach the new server.
+    this.loginAttempt++;
+    this.connection = null;
+    this.retryAction = null;
+    this.submitFlow.stop();
+    this.submitFlow.pendingPoll = null;
     this.submitFlow.results.clear();
     this.expandedSubmission = null;
     this.data.clear();
@@ -935,11 +947,16 @@ export class GraderController implements vscode.Disposable {
       return false;
     }
     // Before anything is stored or sent: a blocked address leaves the account as it was.
+    const attempt = ++this.loginAttempt;
     const gate = await this.server.gate(server, this.cfg.baseUrl);
-    if (!gate.ok) return false;
+    if (!gate.ok || attempt !== this.loginAttempt) return false; // blocked, or something newer took over
     this.server.reset();
     await this.ctx.globalState.update(KEYS.rememberPassword, remember);
-    if (username !== this.cfg.username || gate.url !== this.cfg.baseUrl) await this.switchAccount(username, gate.url);
+    if ((username !== this.cfg.username || gate.url !== this.cfg.baseUrl) && !(await this.switchAccount(username, gate.url))) {
+      this.accountError = S.account.settingsNotSaved;
+      this.emit();
+      return false;
+    }
     if (remember) await this.secrets.store(this.secretKey('password'), password);
     else await this.secrets.delete(this.secretKey('password'));
     this.hasSavedPassword = remember;
@@ -947,21 +964,29 @@ export class GraderController implements vscode.Disposable {
   }
 
   /** Another user or grader: the previous one's saved password and token don't stay behind. */
-  private async switchAccount(username: string, baseUrl: string): Promise<void> {
+  private async switchAccount(username: string, baseUrl: string): Promise<boolean> {
     const prev = this.cfg;
-    await this.secrets.forgetAccount(prev.baseUrl, prev.username);
+    const settings = vscode.workspace.getConfiguration('cedtGrader');
+    const target = vscode.ConfigurationTarget.Global;
     this.changingAccount = true;
     try {
-      const settings = vscode.workspace.getConfiguration('cedtGrader');
-      if (username !== prev.username) await settings.update('username', username, vscode.ConfigurationTarget.Global);
-      if (baseUrl !== prev.baseUrl) await settings.update('baseUrl', baseUrl === DEFAULT_BASE_URL ? undefined : baseUrl, vscode.ConfigurationTarget.Global);
+      if (username !== prev.username) await settings.update('username', username, target);
+      if (baseUrl !== prev.baseUrl) await settings.update('baseUrl', baseUrl === DEFAULT_BASE_URL ? undefined : baseUrl, target);
+    } catch (err) {
+      // Secrets are forgotten only after this worked, so the old account is still whole.
+      this.log(`Couldn't save the account settings: ${this.describe(err)}`);
+      if (username !== prev.username) await settings.update('username', prev.username || undefined, target).then(undefined, () => undefined);
+      this.cfg = readConfig();
+      return false;
     } finally {
       this.changingAccount = false;
     }
+    await this.secrets.forgetAccount(prev.baseUrl, prev.username);
     this.cfg = readConfig();
     await this.client.logout();
     this.client = this.makeClient();
     this.resetSessionState();
+    return true;
   }
 
   /** Show whether an address typed at login answers like a grader. Sends no credentials. */
@@ -983,11 +1008,13 @@ export class GraderController implements vscode.Disposable {
   }
 
   private async doLogin(creds: Credentials): Promise<boolean> {
+    const client = this.client;
     this.accountStatus = 'logging-in';
     this.accountError = null;
     this.emit();
     try {
-      await this.client.login(creds);
+      await client.login(creds);
+      if (client !== this.client) return false; // the account changed meanwhile
       this.accountStatus = 'logged-in';
       this.connection = null;
       this.retryAction = null;
@@ -997,6 +1024,7 @@ export class GraderController implements vscode.Disposable {
       await this.ensureLanguages();
       return true;
     } catch (err) {
+      if (client !== this.client) return false; // a Retry would send these credentials to the new server
       const conn = classifyConnectionError(err);
       if (conn && conn.kind !== 'session') {
         this.accountStatus = 'logged-out';
@@ -1026,9 +1054,6 @@ export class GraderController implements vscode.Disposable {
     await this.secrets.forgetAll(this.cfg.username ? [this.secretKey('password'), this.secretKey('token')] : []);
     this.hasSavedPassword = false;
     this.accountError = null;
-    this.connection = null;
-    this.retryAction = null;
-    this.submitFlow.pendingPoll = null;
     this.resetSessionState();
     this.emit();
   }

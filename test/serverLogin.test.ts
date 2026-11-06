@@ -9,7 +9,7 @@ const v = vi.hoisted(() => {
   const settings = new Map<string, unknown>();
   const listeners: ((e: { affectsConfiguration: (s: string) => boolean }) => void)[] = [];
   const event = () => ({ dispose() {} });
-  return { settings, listeners, event, showWarningMessage: vi.fn(async (..._: unknown[]): Promise<string | undefined> => undefined), openExternal: vi.fn(async () => true) };
+  return { settings, listeners, event, failUpdate: null as string | null, showWarningMessage: vi.fn(async (..._: unknown[]): Promise<string | undefined> => undefined), openExternal: vi.fn(async () => true) };
 });
 
 vi.mock('vscode', () => {
@@ -19,6 +19,7 @@ vi.mock('vscode', () => {
     inspect: (k: string) => ({ globalValue: v.settings.get(k) }),
     update: async (k: string, value: unknown, target: number) => {
       if (target !== 1) throw new Error('settings must be written to user scope');
+      if (k === v.failUpdate) throw new Error('settings file is read-only');
       if (value === undefined) v.settings.delete(k);
       else v.settings.set(k, value);
       for (const l of v.listeners) l({ affectsConfiguration: () => true });
@@ -100,6 +101,7 @@ const web = (text: string) => new Response(text, { status: 200, headers: { 'cont
 beforeEach(() => {
   v.settings.clear();
   v.listeners.length = 0;
+  v.failUpdate = null;
   v.showWarningMessage.mockReset();
   sent = [];
 });
@@ -203,5 +205,128 @@ describe('logging in to another server', () => {
     secrets.set(`cedtGrader.password:${OTHER}:student`, server.password);
     expect(await c.login()).toBe(true);
     expect(sent[0].path).toBe('/api/v1/auth/login');
+  });
+});
+
+/** The user edits a setting by hand. */
+function editSetting(key: string, value: string): void {
+  v.settings.set(key, value);
+  for (const l of v.listeners) l({ affectsConfiguration: () => true });
+}
+const offline = () => new TypeError('fetch failed', { cause: { code: 'ECONNREFUSED' } });
+
+describe('changing account while something is still going on', () => {
+  it('Retry after a failed login sends nothing to an address changed since', async () => {
+    const server = new FakeGrader();
+    vi.stubGlobal('fetch', async (input: string, init: RequestInit = {}) => {
+      const u = new URL(input);
+      sent.push({ host: u.host, path: u.pathname, method: init.method ?? 'GET', body: String(init.body ?? '') });
+      if (u.host !== 'other.example') throw offline();
+      return server.fetch(input, init);
+    });
+    const { c } = start();
+    expect(await c.loginWith('student', 'hunter2', false)).toBe(false);
+    expect(c.state().connection).not.toBeNull();
+
+    editSetting('baseUrl', OTHER);
+    expect(c.state().connection).toBeNull();
+    await c.retry();
+
+    expect(JSON.stringify(sent.filter((r) => r.host === 'other.example'))).not.toContain('hunter2');
+  });
+
+  it('a login finishing after the address changed leaves no banner to retry', async () => {
+    let fail!: (e: Error) => void;
+    vi.stubGlobal('fetch', (input: string, init: RequestInit = {}) => {
+      const u = new URL(input);
+      sent.push({ host: u.host, path: u.pathname, method: init.method ?? 'GET', body: String(init.body ?? '') });
+      return new Promise((_, reject) => (fail = reject));
+    });
+    const { c } = start();
+    const login = c.loginWith('student', 'hunter2', false);
+    await vi.waitFor(() => expect(sent).toHaveLength(1));
+
+    editSetting('baseUrl', OTHER);
+    fail(offline());
+
+    expect(await login).toBe(false);
+    expect(c.state().connection).toBeNull();
+  });
+
+  it('an abandoned check does not undo a newer login', async () => {
+    const server = new FakeGrader();
+    let finish!: () => void;
+    const held = new Promise<void>((r) => (finish = r));
+    vi.stubGlobal('fetch', async (input: string, init: RequestInit = {}) => {
+      const u = new URL(input);
+      sent.push({ host: u.host, path: u.pathname, method: init.method ?? 'GET', body: String(init.body ?? '') });
+      if (u.host === 'other.example') await held;
+      return server.fetch(input, init);
+    });
+    const { c, secrets } = start();
+
+    const abandoned = c.loginWith('student', server.password, true, OTHER);
+    await vi.waitFor(() => expect(sent).toHaveLength(1));
+    expect(await c.loginWith('student', server.password, true)).toBe(true);
+    finish();
+
+    expect(await abandoned).toBe(false);
+    expect(sent.filter((r) => r.host === 'other.example').map((r) => r.path)).toEqual(['/api/v1/languages']);
+    expect(v.settings.get('baseUrl')).toBeUndefined();
+    expect(secrets.get(`cedtGrader.password:${DEFAULT_BASE_URL}:student`)).toBe(server.password);
+    expect(c.state().account.status).toBe('logged-in');
+  });
+
+  it('a client still running reads only its own account', async () => {
+    v.settings.set('username', 'student');
+    serve(() => new FakeGrader());
+    const { c, secrets } = start();
+    secrets.set(`cedtGrader.password:${DEFAULT_BASE_URL}:student`, 'first');
+    secrets.set(`cedtGrader.password:${OTHER}:student`, 'second');
+    const old = (c as unknown as { client: { opts: { getStoredCredentials(): Promise<{ password: string } | undefined> } } }).client;
+
+    editSetting('baseUrl', OTHER);
+
+    const creds = await old.opts.getStoredCredentials();
+    expect(creds?.password).not.toBe('second');
+  });
+
+  it('a submission of the old server is not polled on the new one', async () => {
+    serve(() => new FakeGrader());
+    const { c } = start();
+    const flow = (c as unknown as { submitFlow: { pendingPoll: unknown } }).submitFlow;
+    flow.pendingPoll = { key: 'k', problem: { id: 1 }, submissionId: 7, countedBefore: null };
+
+    editSetting('baseUrl', OTHER);
+
+    expect(flow.pendingPoll).toBeNull();
+  });
+
+  it('correcting the setting clears a refused address from the form', async () => {
+    serve(() => web('<html>not a grader</html>'));
+    const { c } = start();
+    await c.loginWith('student', 'hunter2', false, OTHER);
+    expect(c.state().account.server.draft).toBe(OTHER);
+
+    editSetting('baseUrl', 'https://right.example');
+
+    expect(c.state().account.server).toMatchObject({ draft: null, status: 'idle' });
+  });
+
+  it('settings that cannot be written change nothing and send nothing', async () => {
+    v.settings.set('username', 'old');
+    const server = new FakeGrader();
+    serve(() => server);
+    v.failUpdate = 'baseUrl';
+    const { c, secrets } = start();
+    secrets.set(`cedtGrader.password:${DEFAULT_BASE_URL}:old`, 'kept');
+
+    expect(await c.loginWith('new', server.password, true, OTHER)).toBe(false);
+
+    expect(secrets.get(`cedtGrader.password:${DEFAULT_BASE_URL}:old`)).toBe('kept');
+    expect(v.settings.get('username')).toBe('old');
+    expect(v.settings.get('baseUrl')).toBeUndefined();
+    expect(sent.some((r) => r.path === '/api/v1/auth/login')).toBe(false);
+    expect(c.state().account.error).toBeTruthy();
   });
 });

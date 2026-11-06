@@ -17,7 +17,7 @@ import type { Strings } from './strings';
  * Everything else was reviewed at checkpoint B (2026-11-03). Add keys here
  * when a new text is translated without review.
  */
-export const TH_REVIEW: readonly string[] = ['S.common.dismiss', 'S.crash.notice', 'S.crash.report', 'S.crash.review', 'S.crash.reviewTitle', 'S.files.saveHere', 'S.folder.cancelRestores', 'S.folder.cancelStopsMatch', 'S.folder.cancelUnlinksFile', 'S.folder.replaceFilesQ', 'W.websiteTip', 'S.requestLogOff', 'W.crashTitle', 'G.statusGradingTip', 'G.statusChooseTip', 'G.statusOpenTip', 'G.logInFirst', 'W.server', 'W.serverLine', 'W.changeServer', 'W.checkingServer', 'W.serverWorks', 'W.useDefaultServer', 'S.account.serverInvalid', 'S.account.serverIncompatible', 'S.account.serverUnreachable', 'S.account.insecureTitle', 'S.account.insecureDetail', 'S.account.insecureSend', 'W.crashNote', 'W.crashReport', 'W.crashReportLabel', 'W.crashTitle', 'W.defaultOrderReversed', 'W.sortedBy'];
+export const TH_REVIEW: readonly string[] = ['S.common.dismiss', 'S.crash.notice', 'S.crash.report', 'S.crash.review', 'S.crash.reviewTitle', 'S.files.saveHere', 'S.folder.cancelRestores', 'S.folder.cancelStopsMatch', 'S.folder.cancelUnlinksFile', 'S.folder.replaceFilesQ', 'W.websiteTip', 'S.requestLogOff', 'W.crashTitle', 'G.statusGradingTip', 'G.statusChooseTip', 'G.statusOpenTip', 'G.logInFirst', 'W.server', 'W.serverLine', 'W.changeServer', 'W.checkingServer', 'W.serverWorks', 'W.useDefaultServer', 'S.account.serverInvalid', 'S.account.settingsNotSaved', 'S.account.serverIncompatible', 'S.account.serverUnreachable', 'S.account.insecureTitle', 'S.account.insecureDetail', 'S.account.insecureSend', 'W.crashNote', 'W.crashReport', 'W.crashReportLabel', 'W.crashTitle', 'W.defaultOrderReversed', 'W.sortedBy'];
 
 export const TH: Strings = {
   HOW_LINKED: {
@@ -237,6 +237,7 @@ export const TH: Strings = {
     account: {
       enterBoth: 'กรอกชื่อผู้ใช้และรหัสผ่านให้ครบ',
       serverInvalid: 'นี่ไม่ใช่ที่อยู่เว็บ',
+      settingsNotSaved: 'บันทึกที่อยู่ลงในการตั้งค่าไม่ได้ จึงยังไม่มีอะไรเปลี่ยน และยังไม่ได้ส่งรหัสผ่านไป',
       serverIncompatible: 'ที่อยู่นี้ไม่ใช่เกรดเดอร์ที่รองรับ จึงยังเข้าสู่ระบบไม่ได้ และยังไม่ได้ส่งรหัสผ่านไป',
       serverUnreachable: (host: string | number) => `ติดต่อ ${host} ไม่ได้ จึงยังเข้าสู่ระบบไม่ได้ และยังไม่ได้ส่งรหัสผ่านไป ตรวจสอบที่อยู่แล้วลองอีกครั้ง`,
       insecureTitle: (host: string | number) => `ส่งรหัสผ่านไปที่ ${host} โดยไม่เข้ารหัสหรือไม่`,

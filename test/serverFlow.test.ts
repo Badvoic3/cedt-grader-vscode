@@ -146,6 +146,28 @@ describe('inspect', () => {
     expect(f.view()).toMatchObject({ draft: GOOD, status: 'ok' });
   });
 
+  it('a refused address is checked again when asked: a login page in the way goes away', async () => {
+    const check = vi.fn<ServerDeps['check']>().mockResolvedValueOnce(answer('incompatible')).mockResolvedValue(answer('compatible'));
+    const { f } = flow({ check });
+    await f.inspect(GOOD);
+    expect(f.view().status).toBe('bad');
+    await f.inspect(GOOD);
+    expect(check).toHaveBeenCalledTimes(2);
+    expect(f.view().status).toBe('ok');
+  });
+
+  it('a login whose address was abandoned does not pass or change what is shown', async () => {
+    let finish!: (r: ServerCheck) => void;
+    const check = vi.fn((u: string) => (u === 'https://slow.example' ? new Promise<ServerCheck>((r) => (finish = r)) : Promise.resolve(answer('compatible'))));
+    const { f, deps } = flow({ check });
+    const slow = f.gate('https://slow.example', DEFAULT_BASE_URL);
+    await f.inspect(GOOD);
+    finish(answer('compatible'));
+    expect(await slow).toEqual({ ok: false });
+    expect(f.view()).toMatchObject({ draft: GOOD, status: 'ok' });
+    expect(deps.saveVerified).not.toHaveBeenCalled();
+  });
+
   it('the default server and an empty field need no request', async () => {
     const { f, deps } = flow();
     await f.inspect('');

@@ -70,6 +70,7 @@ export class ServerFlow {
     if (!needsCheck(url, this.deps.verified())) return { ok: true, url };
     this.show({ draft, status: 'checking', message: null });
     const result = await this.run(url);
+    if (this.latest !== draft) return { ok: false }; // another address was asked about meanwhile
     this.showResult(draft, url, result);
     if (result.status !== 'compatible') return { ok: false };
     if (isInsecure(url) && !(await this.deps.confirmInsecure(url))) return { ok: false };
@@ -83,8 +84,8 @@ export class ServerFlow {
     let running = this.inFlight.get(url);
     if (!running) {
       running = this.deps.check(url).then((r) => {
-        // "Try again" has to try again; the other two answers don't change within a session.
-        if (r.status !== 'unreachable') this.results.set(url, r);
+        // Only a good answer is kept: a captive portal or a server being restarted can give a wrong one for a while.
+        if (r.status === 'compatible') this.results.set(url, r);
         return r;
       }).finally(() => this.inFlight.delete(url));
       this.inFlight.set(url, running);
