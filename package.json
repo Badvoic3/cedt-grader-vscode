@@ -114,8 +114,7 @@
       {
         "command": "cedtGrader.submit",
         "title": "%command.submit.title%",
-        "category": "%command.category%",
-        "icon": "$(cloud-upload)"
+        "category": "%command.category%"
       },
       {
         "command": "cedtGrader.chooseProblem",
@@ -233,13 +232,6 @@
       }
     ],
     "menus": {
-      "editor/title": [
-        {
-          "command": "cedtGrader.submit",
-          "group": "navigation@90",
-          "when": "resourceScheme == file && resourceExtname =~ /^\\.(c|cc|cpp|cxx|py|java)$/"
-        }
-      ],
       "view/title": [
         {
           "command": "cedtGrader.showLastResult",

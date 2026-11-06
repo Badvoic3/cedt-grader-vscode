@@ -180,7 +180,6 @@ Click the PDF icon (**Open statement**) to open the statement in a tab beside yo
 ## More ways to submit
 
 - The status bar item (☁ **Submit to Grader**, with the score after grading) opens the panel.
-- The ☁ button in the editor title bar (C, C++, Python and Java files) submits the current file.
 - Every action is a command in the Command Palette (`CEDT Grader: …`), so you can give it a keyboard shortcut: Log In, Log Out, Submit Current File, Choose Problem for This File, Clear Problem for This File, Rename File to Match the Problem, Load Test Cases from the Grader, Save Test Cases as .in / .out Files, Load Sample Cases from the Statement, Run Tests, Download Problem Attachment, Switch Between Linking This File and the Whole Folder, Show Last Result, Open Problem Statement, Reload Problem List, Reload Submission History, Show Panel, Open Settings, Show Request Log, Clear Cached Data…, Get Started, Troubleshooting.
 
 ## Works with CPH
@@ -193,7 +192,6 @@ Click the PDF icon (**Open statement**) to open the statement in a tab beside yo
 - **Matching:** a file whose CPH problem refers to a grader problem (by URL or name) is linked to it ("Matched from CPH data").
 - **Renames:** after you rename a file or folder in VS Code, the extension offers to move its CPH tests too (CPH itself doesn't follow renames).
 - **CPH's panel covering this one:** CPH opens its own panel each time you switch to a source file (its setting "Auto Show Judge"). The panel asks once whether to turn that off: **Turn it off**, **Keep it** or **Don't ask again**. You can still open CPH yourself.
-- Both extensions add a button to the editor title bar: CPH's runs your tests; ours (☁) submits to the grader.
 
 The extension never changes CPH itself and doesn't require it. Without CPH, test cases are saved as files.
 

@@ -180,7 +180,6 @@
 ## วิธีอื่นๆ ในการส่งงาน
 
 - คลิกที่แถบสถานะด้านล่างของหน้าต่าง (☁ **Submit ไปยัง Grader** ซึ่งจะแสดงคะแนนให้เห็นหลังตรวจเสร็จด้วย) เพื่อเปิดแผง CEDT Grader
-- กดปุ่ม ☁ บนแถบมุมขวาบนของเอดิเตอร์ (เมื่อเปิดไฟล์ C, C++, Python และ Java) เพื่อส่งไฟล์ที่กำลังเปิดอยู่ได้ทันที
 - ทุกคำสั่งเรียกใช้ผ่าน Command Palette (`CEDT Grader: …`) และนำไปตั้งคีย์ลัด (Keyboard Shortcuts) ได้ตามถนัด ได้แก่: Log In, Log Out, Submit Current File, Choose Problem for This File, Clear Problem for This File, Rename File to Match the Problem, Load Test Cases from the Grader, Save Test Cases as .in / .out Files, Load Sample Cases from the Statement, Run Tests, Download Problem Attachment, Switch Between Linking This File and the Whole Folder, Show Last Result, Open Problem Statement, Reload Problem List, Reload Submission History, Show Panel, Open Settings, Show Request Log, Clear Cached Data…, Get Started, Troubleshooting
 
 ## การทำงานร่วมกับ CPH
@@ -193,7 +192,6 @@
 - **การจับคู่โจทย์:** ไฟล์ที่มีข้อมูล CPH อ้างอิงถึงโจทย์บน Grader (จาก URL หรือชื่อโจทย์) ระบบจะเชื่อมเข้ากับโจทย์ข้อนั้นให้อัตโนมัติ ("ตรงกับข้อมูล CPH")
 - **การเปลี่ยนชื่อไฟล์:** เมื่อคุณเปลี่ยนชื่อไฟล์หรือโฟลเดอร์ใน VS Code ส่วนขยายจะถามว่าต้องการย้าย test case ใน CPH ตามไปด้วยไหม (เพราะตามปกติ CPH จะไม่ย้ายไฟล์ตามเมื่อเปลี่ยนชื่อ)
 - **เมื่อแผง CPH เปิดทับแผงนี้:** ตามค่าเริ่มต้น CPH จะเปิดแผงของตัวเองขึ้นมาทุกครั้งที่คุณสลับไปที่ไฟล์โค้ด (จากตั้งค่า "Auto Show Judge" ของ CPH) แผงของเราจะถามคุณ 1 ครั้งว่าต้องการปิดพฤติกรรมนั้นไหม โดยเลือกได้ระหว่าง **ปิดไว้**, **คงไว้ตามเดิม** หรือ **ไม่ต้องถามอีก** ซึ่งคุณยังกดเปิดแผง CPH เองได้ตามปกติ
-- ทั้งสองส่วนขยายจะมีปุ่มอยู่ตรงมุมขวาบนของเอดิเตอร์ โดยปุ่มของ CPH ใช้รันทดสอบบนเครื่อง ส่วนปุ่มของเรา (☁) ใช้ส่งโค้ดไปยัง Grader
 
 ส่วนขยายนี้ไม่ได้ดัดแปลงการทำงานภายในของ CPH และไม่ได้บังคับว่าต้องติดตั้ง หากไม่ได้ลง CPH ระบบจะบันทึก test case เป็นไฟล์ `.in` / `.out` แทน
 
