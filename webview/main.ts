@@ -116,6 +116,8 @@ export interface MenuItem {
   tip?: string;
   onclick: () => void;
   disabledReason?: string | null;
+  /** Set on every item of a pick-one menu: the current choice is `true`. */
+  checked?: boolean;
 }
 
 /**
@@ -127,6 +129,8 @@ export interface MenuItem {
  */
 let ctxMenu: HTMLElement | null = null;
 let ctxReturnFocus: HTMLElement | null = null;
+/** The button that opened the menu: clicking it again closes the menu. */
+let ctxToggle: HTMLElement | null = null;
 
 function closeContextMenu(refocus = false): void {
   if (!ctxMenu) return;
@@ -134,6 +138,7 @@ function closeContextMenu(refocus = false): void {
   ctxMenu = null;
   if (refocus) ctxReturnFocus?.focus();
   ctxReturnFocus = null;
+  ctxToggle = null;
 }
 
 function openContextMenu(x: number, y: number, items: MenuItem[], from: HTMLElement | null): void {
@@ -144,7 +149,8 @@ function openContextMenu(x: number, y: number, items: MenuItem[], from: HTMLElem
       const shown = middleEllipsis(it.label, max);
       const tip = [shown !== it.label ? it.label : '', it.tip ?? '', it.disabledReason ? `(${it.disabledReason})` : ''].filter(Boolean).join(' — ');
       const b = el('button', {
-        class: 'menu-item', type: 'button', role: 'menuitem', disabled: !!it.disabledReason,
+        class: 'menu-item', type: 'button', role: it.checked === undefined ? 'menuitem' : 'menuitemradio',
+        'aria-checked': it.checked === undefined ? undefined : String(it.checked), disabled: !!it.disabledReason,
         title: tip || undefined,
         onclick: () => {
           closeContextMenu();
@@ -162,7 +168,7 @@ function openContextMenu(x: number, y: number, items: MenuItem[], from: HTMLElem
   menu.style.top = `${y + h > window.innerHeight - 4 ? Math.max(4, y - h) : y}px`;
   ctxMenu = menu;
   ctxReturnFocus = from;
-  menu.querySelector<HTMLButtonElement>('.menu-item:not([disabled])')?.focus();
+  (menu.querySelector<HTMLButtonElement>('.menu-item[aria-checked="true"]:not([disabled])') ?? menu.querySelector<HTMLButtonElement>('.menu-item:not([disabled])'))?.focus();
 }
 
 /** Attach the right-click menu to an element; `items` is evaluated when it opens. */
@@ -180,7 +186,8 @@ function withContextMenu<T extends HTMLElement>(target: T, items: () => MenuItem
 }
 
 document.addEventListener('mousedown', (e) => {
-  if (ctxMenu && !(e.target as Element).closest?.('.context-menu')) closeContextMenu();
+  const on = e.target as Element;
+  if (ctxMenu && !on.closest?.('.context-menu') && !ctxToggle?.contains(on)) closeContextMenu();
 });
 document.addEventListener('keydown', (e) => {
   if (!ctxMenu) return;
@@ -318,6 +325,7 @@ const pickerBox = el('div', { class: 'picker' }, pickerSearch, pickerList);
 let pickerOpen = false;
 
 const problemFilter = el('input', { type: 'search', placeholder: W.filterPlaceholder, 'aria-label': W.filterProblems, spellcheck: 'false', value: ui.filter });
+const problemSearch = el('div', { class: 'search-box' }, icon('search'), problemFilter);
 
 const sAccount = section('account', W.sectionAccount);
 const sCurrent = section('current', W.sectionCurrent);
@@ -1189,9 +1197,14 @@ function renderProblems(s: ViewState): void {
     if (P.error) b.append(el('div', { class: 'error' }, icon('error'), ' ', P.error));
     return;
   }
-  b.append(statusFilter(P.filter), el('div', { class: 'row gap filter-row' }, problemFilter, sortSelect(P.filter)));
-  if (P.topics.length) b.append(topicFilter(P.filter, P.topics, P.topicClickOrder ?? 'showFirst'));
-  if (P.tags.length) b.append(tagFilter(P.filter, P.tags));
+  b.append(statusFilter(P.filter), el('div', { class: 'filter-row' }, problemSearch, sortButton(P.filter)));
+  if (P.topics.length || P.tags.length) {
+    b.append(el('div', { class: 'filter-chips' },
+      P.topics.length ? topicFilter(P.filter, P.topics, P.topicClickOrder ?? 'showFirst') : null,
+      P.tags.length ? tagToggle(P.filter) : null,
+    ));
+  }
+  if (P.tags.length && tagMenuOpen) b.append(tagMenu(P.filter, P.tags));
   const hits = problemHits(s);
   b.append(problemList.viewport);
   problemList.setItems(hits, knownKeys(s));
@@ -1224,12 +1237,28 @@ function statusFilter(f: ProblemFilter): HTMLElement {
   );
 }
 
-function sortSelect(f: ProblemFilter): HTMLElement {
-  const sel = el('select', { class: 'sort', 'aria-label': W.sortProblems, title: W.sortProblems, onchange: (e: Event) => {
-    send({ type: 'setFilter', filter: { ...f, sort: (e.target as HTMLSelectElement).value as ProblemFilter['sort'] } });
-  } });
-  for (const x of sorts()) sel.append(el('option', { value: x.key, selected: (f.sort ?? 'default') === x.key }, x.label));
-  return sel;
+/** Sort order: an icon button with a pick-one menu; a dot shows a non-default order. */
+function sortButton(f: ProblemFilter): HTMLElement {
+  const current = f.sort ?? 'default';
+  const choices = sorts();
+  const open = () => {
+    if (ctxToggle === btn) { closeContextMenu(true); return; }
+    const r = btn.getBoundingClientRect();
+    openContextMenu(r.left, r.bottom + 2, choices.map((x) => ({
+      icon: x.key === current ? 'check' : 'blank', label: x.label, checked: x.key === current,
+      onclick: () => {
+        btn.focus(); // the render puts focus back on the rebuilt button (`data-focus`)
+        send({ type: 'setFilter', filter: { ...f, sort: x.key } });
+      },
+    })), btn);
+    ctxToggle = btn;
+  };
+  const btn = iconButton('sort-precedence', W.sortedBy(choices.find((x) => x.key === current)?.label ?? ''), open);
+  btn.classList.add('sort-btn');
+  btn.classList.toggle('changed', current !== 'default');
+  btn.setAttribute('aria-haspopup', 'menu');
+  btn.dataset.focus = 'sort';
+  return btn;
 }
 
 /**
@@ -1253,53 +1282,58 @@ function topicFilter(f: ProblemFilter, topics: { name: string; description: stri
 /** The "Tags" dropdown is open (local UI state; it stays open while ticking several tags). */
 let tagMenuOpen = false;
 
-/**
- * "Tags" dropdown: the problems' other tags (not the topic pills), several at
- * once, matched with Any (OR) or All (AND). Combines with status, topic and search.
- */
-function tagFilter(f: ProblemFilter, tags: string[]): HTMLElement {
+/** Change the chosen tags or how they match, keeping the rest of the filter. */
+function setTags(f: ProblemFilter, next: Partial<ProblemFilter>): void {
+  send({ type: 'setFilter', filter: { ...f, tags: f.tags ?? [], tagMode: f.tagMode ?? 'or', ...next } });
+}
+
+/** The "Tags" button, last on the row of topic pills; `tagMenu` opens below that row. */
+function tagToggle(f: ProblemFilter): HTMLElement {
   const chosen = f.tags ?? [];
-  const mode = f.tagMode ?? 'or';
-  const set = (next: Partial<ProblemFilter>) => send({ type: 'setFilter', filter: { ...f, tags: chosen, tagMode: mode, ...next } });
-  const label = chosen.length ? W.tagsChosen(chosen.join(mode === 'and' ? ' + ' : ' / ')) : W.tagsFilter;
-  const toggle = el('button', {
+  const label = chosen.length ? W.tagsChosen(chosen.join((f.tagMode ?? 'or') === 'and' ? ' + ' : ' / ')) : W.tagsFilter;
+  return el('button', {
     class: `tag-toggle${chosen.length ? ' active' : ''}`, type: 'button', 'aria-expanded': String(tagMenuOpen), title: W.tagsFilterTip,
     'data-focus': 'tag-toggle',
     onclick: () => { tagMenuOpen = !tagMenuOpen; forceRender(); },
   }, icon('tag'), el('span', { class: 'ellipsis' }, label), icon(tagMenuOpen ? 'chevron-up' : 'chevron-down'));
-  const box = el('div', { class: 'tag-filter' }, toggle);
-  if (!tagMenuOpen) return box;
+}
+
+/**
+ * The open "Tags" dropdown: the problems' other tags (not the topic pills), several
+ * at once, matched with Any (OR) or All (AND). Combines with status, topic and search.
+ */
+function tagMenu(f: ProblemFilter, tags: string[]): HTMLElement {
+  const chosen = f.tags ?? [];
+  const mode = f.tagMode ?? 'or';
   const modes: { key: 'or' | 'and'; label: string; tip: string }[] = [
     { key: 'or', label: W.tagMatchAny, tip: W.tagMatchAnyTip },
     { key: 'and', label: W.tagMatchAll, tip: W.tagMatchAllTip },
   ];
-  const menu = el('div', { class: 'tag-menu', role: 'group', 'aria-label': W.tagsFilter,
+  return el('div', { class: 'tag-menu', role: 'group', 'aria-label': W.tagsFilter,
     onkeydown: (e: Event) => { if ((e as KeyboardEvent).key === 'Escape') { tagMenuOpen = false; forceRender(); document.querySelector<HTMLElement>('[data-focus="tag-toggle"]')?.focus(); } },
   },
-    el('div', { class: 'row gap tag-menu-head' },
+    el('div', { class: 'tag-menu-head' },
       el('span', { class: 'small muted' }, W.tagMatch),
-      el('div', { class: 'segmented grow', role: 'radiogroup', 'aria-label': W.tagMatch },
+      el('div', { class: 'segmented', role: 'radiogroup', 'aria-label': W.tagMatch },
         ...modes.map((m) => el('button', {
           class: `seg${mode === m.key ? ' active' : ''}`, type: 'button', role: 'radio', 'aria-checked': String(mode === m.key), title: m.tip,
           'data-focus': `tag-mode-${m.key}`,
-          onclick: () => set({ tagMode: m.key }),
+          onclick: () => setTags(f, { tagMode: m.key }),
         }, m.label)),
       ),
-      el('button', { class: 'link small', type: 'button', title: W.clearTagsTip, disabled: !chosen.length, 'data-focus': 'tag-clear', onclick: () => set({ tags: [] }) }, W.clearTags),
+      el('button', { class: 'link small', type: 'button', title: W.clearTagsTip, disabled: !chosen.length, 'data-focus': 'tag-clear', onclick: () => setTags(f, { tags: [] }) }, W.clearTags),
     ),
     el('div', { class: 'tag-list' },
       ...tags.map((t) => {
         const on = chosen.some((c) => c.toLowerCase() === t.toLowerCase());
         return el('label', { class: 'tag-option' },
           el('input', { type: 'checkbox', checked: on, 'data-focus': `tag:${t}`,
-            onchange: () => set({ tags: on ? chosen.filter((c) => c.toLowerCase() !== t.toLowerCase()) : [...chosen, t] }) }),
+            onchange: () => setTags(f, { tags: on ? chosen.filter((c) => c.toLowerCase() !== t.toLowerCase()) : [...chosen, t] }) }),
           el('span', { class: 'ellipsis' }, t),
         );
       }),
     ),
   );
-  box.append(menu);
-  return box;
 }
 
 // ---------------------------------------------------------------- wiring

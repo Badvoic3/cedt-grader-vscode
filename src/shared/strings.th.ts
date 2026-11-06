@@ -17,7 +17,7 @@ import type { Strings } from './strings';
  * Everything else was reviewed at checkpoint B (2026-11-03). Add keys here
  * when a new text is translated without review.
  */
-export const TH_REVIEW: readonly string[] = ['S.common.dismiss', 'S.files.saveHere', 'S.folder.cancelRestores', 'S.folder.cancelStopsMatch', 'S.folder.cancelUnlinksFile', 'S.folder.replaceFilesQ'];
+export const TH_REVIEW: readonly string[] = ['S.common.dismiss', 'S.files.saveHere', 'S.folder.cancelRestores', 'S.folder.cancelStopsMatch', 'S.folder.cancelUnlinksFile', 'S.folder.replaceFilesQ', 'W.sortedBy'];
 
 export const TH: Strings = {
   HOW_LINKED: {
@@ -507,7 +507,7 @@ export const TH: Strings = {
     solved: 'ผ่านแล้ว',
     solvedTip: 'คะแนนสูงสุด 100 ขึ้นไป',
     filterProblemsByStatus: 'กรองโจทย์ตามสถานะ',
-    sortProblems: 'เรียงลำดับโจทย์',
+    sortedBy: (order) => `เรียงลำดับโจทย์: ${order}`,
     filterProblemsByTopic: 'กรองโจทย์ตามหัวข้อ',
     tagsFilter: 'แท็ก',
     tagsChosen: (names) => `แท็ก: ${names}`,

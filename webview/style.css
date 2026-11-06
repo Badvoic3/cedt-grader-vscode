@@ -2,7 +2,8 @@
 
 :root {
   --gap: 6px;
-  --radius: 2px;
+  --radius: var(--vscode-cornerRadius-small, 2px);
+  --radius-track: calc(var(--radius) + 2px);
   --ok: var(--vscode-testing-iconPassed, #388a34);
   --bad: var(--vscode-testing-iconFailed, #e51400);
   --warn: var(--vscode-editorWarning-foreground, #bf8803);
@@ -10,7 +11,10 @@
   --muted: var(--vscode-descriptionForeground);
   --border: var(--vscode-widget-border, var(--vscode-contrastBorder, transparent));
   --hc-border: var(--vscode-contrastBorder, transparent);
+  --rim: color-mix(in srgb, var(--vscode-foreground) 14%, transparent);
+  --sunken: color-mix(in srgb, var(--vscode-foreground) 6%, transparent);
 }
+body.vscode-high-contrast { --rim: var(--vscode-contrastBorder, currentColor); --sunken: transparent; }
 
 * { box-sizing: border-box; }
 
@@ -464,7 +468,8 @@ input::placeholder { color: var(--vscode-input-placeholderForeground); }
 .problem-row .pill { min-width: calc(3ch + 12px); font-variant-numeric: tabular-nums; }
 .problem-row:hover .row-actions, .problem-row:focus-within .row-actions { opacity: 1; pointer-events: auto; }
 @media (hover: none) { .row-actions, .problem-row .row-actions { opacity: 1; pointer-events: auto; } }
-@media (prefers-reduced-motion: reduce) { .row-actions { transition: none; } }
+@media (prefers-reduced-motion: reduce) { .row-actions, .section > summary .chev { transition: none; } }
+body.vscode-reduce-motion .row-actions, body.vscode-reduce-motion .section > summary .chev { transition: none; }
 .picker-group { padding: 4px 4px 2px; text-transform: uppercase; font-size: 10px; letter-spacing: 0.04em; }
 
 
@@ -489,17 +494,18 @@ input::placeholder { color: var(--vscode-input-placeholderForeground); }
 
 /* ------------------------------------------------------------ list filters */
 
-.segmented { display: flex; border: 1px solid var(--vscode-input-border, var(--border)); border-radius: var(--radius); overflow: hidden; }
+.segmented { display: flex; gap: 2px; min-height: 26px; padding: 2px; border: 1px solid var(--rim); border-radius: var(--radius-track); background: var(--sunken); }
 .segmented .seg {
-  flex: 1 1 0; min-width: 0; padding: 2px 4px; border: none; border-left: 1px solid var(--vscode-input-border, var(--border));
+  flex: 1 1 auto; min-width: 0; padding: 1px 4px; border: none; border-radius: var(--radius);
   color: inherit; background: transparent; font: inherit; font-size: 0.9em; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-.segmented .seg:first-child { border-left: none; }
 .segmented .seg:hover { background: var(--vscode-list-hoverBackground); }
 .segmented .seg.active { color: var(--vscode-button-foreground); background: var(--vscode-button-background); }
-.topics { display: flex; flex-wrap: wrap; gap: 4px; }
+/* Topic pills and the Tags button share one wrapping row. */
+.filter-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; min-width: 0; }
+.topics { display: contents; }
 .topic {
-  padding: 0 8px; border-radius: 10px; border: 1px solid var(--vscode-input-border, var(--border));
+  min-height: 22px; padding: 0 7px; border-radius: var(--radius); border: 1px solid var(--rim);
   color: inherit; background: transparent; font: inherit; font-size: 0.85em; cursor: pointer;
 }
 .topic:hover { background: var(--vscode-list-hoverBackground); }
@@ -510,18 +516,23 @@ input::placeholder { color: var(--vscode-input-placeholderForeground); }
   background: var(--vscode-inputValidation-errorBackground, transparent); text-decoration: line-through;
 }
 .topic .codicon { font-size: 12px; vertical-align: -2px; margin-right: 2px; }
+/* High Contrast themes can give the button background no colour: mark the choice with a line. */
+body.vscode-high-contrast .segmented .seg.active, body.vscode-high-contrast .topic.active, body.vscode-high-contrast .tag-toggle.active {
+  outline: 1px solid var(--vscode-contrastActiveBorder, var(--rim)); outline-offset: -1px;
+}
 .segmented .seg:focus-visible, .topic:focus-visible { outline: 1px solid var(--vscode-focusBorder); outline-offset: -1px; }
 /* "Tags" dropdown (other tags, several at once, Any / All). */
-.tag-filter { display: flex; flex-direction: column; gap: 4px; }
 .tag-toggle {
-  display: flex; align-items: center; gap: 4px; max-width: 100%; align-self: flex-start; padding: 1px 8px; border-radius: 10px;
-  border: 1px solid var(--vscode-input-border, var(--border)); color: inherit; background: transparent; font: inherit; font-size: 0.85em; cursor: pointer;
+  display: flex; align-items: center; gap: 4px; min-width: 0; max-width: 100%; min-height: 22px; padding: 0 7px; border-radius: var(--radius);
+  border: 1px solid var(--rim); color: inherit; background: transparent; font: inherit; font-size: 0.85em; cursor: pointer;
 }
 .tag-toggle:hover { background: var(--vscode-list-hoverBackground); }
 .tag-toggle.active { color: var(--vscode-button-foreground); background: var(--vscode-button-background); border-color: transparent; }
 .tag-toggle:focus-visible { outline: 1px solid var(--vscode-focusBorder); outline-offset: -1px; }
 .tag-menu { display: flex; flex-direction: column; gap: 4px; padding: 6px; border: 1px solid var(--vscode-widget-border, var(--border)); border-radius: var(--radius); }
-.tag-menu-head { align-items: center; }
+/* "Match" and Clear on one line, the Any / All track below them (its labels are long in Thai). */
+.tag-menu-head { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 4px; }
+.tag-menu-head .segmented { grid-column: 1 / -1; grid-row: 2; }
 .tag-list { display: flex; flex-wrap: wrap; gap: 2px 10px; max-height: 9.5em; overflow-y: auto; }
 .tag-option { display: inline-flex; align-items: center; gap: 4px; min-width: 0; max-width: 100%; cursor: pointer; font-size: 0.9em; }
 /* Tags on each problem row (they wrap; the row grows with them). */
@@ -556,9 +567,16 @@ input::placeholder { color: var(--vscode-input-placeholderForeground); }
 .linked-list { display: flex; flex-direction: column; }
 .history-row.current { opacity: 0.8; cursor: default; }
 .history-line { gap: 2px; }
-.filter-row { flex-wrap: nowrap; }
-.filter-row input[type='search'] { flex: 1 1 auto; }
-select.sort { width: auto; flex: 0 1 auto; max-width: 48%; }
+/* Search and the sort button, always on one row. */
+.filter-row { display: flex; align-items: center; gap: var(--gap); min-width: 0; }
+.search-box { position: relative; flex: 1 1 0; min-width: 0; }
+.search-box > .codicon { position: absolute; left: 6px; top: 50%; transform: translateY(-50%); font-size: 14px; color: var(--muted); pointer-events: none; }
+.search-box input[type='search'] { height: 26px; padding-left: 24px; }
+.icon-btn.sort-btn { position: relative; flex: 0 0 26px; width: 26px; height: 26px; border: 1px solid var(--rim); border-radius: var(--radius); }
+.icon-btn.sort-btn.changed::after {
+  content: ''; position: absolute; top: 2px; right: 2px; width: 6px; height: 6px; border-radius: 50%;
+  background: var(--vscode-focusBorder, currentColor);
+}
 
 /* Problem header actions wrap instead of being clipped on narrow sidebars. */
 .field-label { flex-wrap: wrap; row-gap: 2px; }

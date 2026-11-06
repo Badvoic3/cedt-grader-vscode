@@ -845,7 +845,7 @@ describe.runIf(existsSync(resolve(__dirname, '../esbuild.mjs')))('sidebar webvie
   });
 
   it('open on website (problem and each submission), auto-detect, sort menu', () => {
-    const { dom, doc, sent, post } = boot();
+    const { doc, sent, post } = boot();
     post(loggedIn);
     header(doc).querySelector<HTMLButtonElement>('[aria-label="Open on the grader website"]')!.click();
     expect(sent.at(-1)).toEqual({ type: 'openProblemInBrowser', problemId: 1360 });
@@ -853,10 +853,65 @@ describe.runIf(existsSync(resolve(__dirname, '../esbuild.mjs')))('sidebar webvie
     expect(sent.at(-1)).toEqual({ type: 'openSubmission', submissionId: 2460977 });
     menuPick(doc, header(doc), 'Auto-detect the problem for this file again');
     expect(sent.at(-1)).toEqual({ type: 'autoDetect' });
-    const sel = doc.querySelector<HTMLSelectElement>('#sec-problems select.sort')!;
-    sel.value = 'score-desc';
-    sel.dispatchEvent(new dom.window.Event('change'));
+    doc.querySelector<HTMLButtonElement>('#sec-problems .sort-btn')!.click();
+    [...doc.querySelectorAll<HTMLButtonElement>('.context-menu .menu-item')].find((x) => x.getAttribute('aria-label') === 'Best score (high to low)')!.click();
     expect(sent.at(-1)).toEqual({ type: 'setFilter', filter: { status: 'all', topic: null, sort: 'score-desc' } });
+  });
+
+  it('sort button: says the order, marks a non-default one, and its menu is a pick-one list', () => {
+    const { doc, post } = boot();
+    post(loggedIn);
+    const btn = () => doc.querySelector<HTMLButtonElement>('#sec-problems .sort-btn')!;
+    const items = () => [...doc.querySelectorAll<HTMLButtonElement>('.context-menu .menu-item')];
+    expect(btn().getAttribute('aria-label')).toBe('Sort problems: Default order');
+    expect(btn().classList.contains('changed')).toBe(false);
+    expect(btn().getAttribute('aria-haspopup')).toBe('menu');
+
+    const sorted = { ...loggedIn, problems: { ...loggedIn.problems, filter: { status: 'all' as const, topic: null, sort: 'latest' as const } } };
+    post(sorted);
+    expect(btn().getAttribute('aria-label')).toBe('Sort problems: Latest submission');
+    expect(btn().classList.contains('changed')).toBe(true);
+
+    btn().click();
+    expect(items().map((x) => x.getAttribute('role'))).toEqual(items().map(() => 'menuitemradio'));
+    const checked = items().filter((x) => x.getAttribute('aria-checked') === 'true');
+    expect(checked.map((x) => x.getAttribute('aria-label'))).toEqual(['Latest submission']);
+    expect(checked[0].querySelector('.codicon-check')).not.toBeNull();
+    expect(doc.activeElement).toBe(checked[0]);
+
+    // A second click closes the menu instead of opening it again.
+    btn().dispatchEvent(new (doc.defaultView as unknown as typeof globalThis).MouseEvent('mousedown', { bubbles: true }));
+    expect(items()).toHaveLength(7);
+    btn().click();
+    expect(items()).toHaveLength(0);
+    expect(doc.activeElement).toBe(btn());
+  });
+
+  it('search and sort share one row; Tags sits with the topic pills and opens below them', () => {
+    const { doc, post } = boot();
+    const st = { ...loggedIn, problems: { ...loggedIn.problems, topics: [{ name: 'ComProg', description: null }], tags: ['BFS'] } };
+    post(st);
+    const row = doc.querySelector('#sec-problems .filter-row')!;
+    expect(row.querySelector('input[type=search]')).not.toBeNull();
+    expect(row.querySelector('.sort-btn')).not.toBeNull();
+    const chips = doc.querySelector('#sec-problems .filter-chips')!;
+    expect(chips.querySelector('.topics .topic')).not.toBeNull();
+    expect(chips.querySelector('.topics .tag-toggle')).toBeNull(); // the topics group holds topics only
+    expect(chips.querySelector('.tag-toggle')).not.toBeNull();
+    chips.querySelector<HTMLButtonElement>('.tag-toggle')!.click();
+    const menu = doc.querySelector('#sec-problems .tag-menu')!;
+    expect(doc.querySelector('#sec-problems .filter-chips')!.contains(menu)).toBe(false);
+    expect(doc.querySelector('#sec-problems .filter-chips')!.nextElementSibling).toBe(menu);
+    doc.querySelector<HTMLButtonElement>('#sec-problems .tag-toggle')!.click();
+
+    // Tags without topics: the row holds the button alone.
+    post({ ...st, problems: { ...st.problems, topics: [] } });
+    const only = doc.querySelector('#sec-problems .filter-chips')!;
+    expect(only.querySelector('.tag-toggle')).not.toBeNull();
+    expect(only.querySelector('.topics')).toBeNull();
+    // Neither: no empty row.
+    post({ ...st, problems: { ...st.problems, topics: [], tags: [] } });
+    expect(doc.querySelector('#sec-problems .filter-chips')).toBeNull();
   });
 
   it('same-name notice: rows never move when the active file changes; "Don\'t match this file" for a name match', () => {

@@ -509,7 +509,7 @@ const EN_W = {
   solved: "Solved",
   solvedTip: "Best score 100 or more",
   filterProblemsByStatus: "Filter problems by status",
-  sortProblems: "Sort problems",
+  sortedBy: (order: string) => `Sort problems: ${order}`,
   filterProblemsByTopic: "Filter problems by topic",
   /** "Tags" dropdown (the problems' other tags, several at once). */
   tagsFilter: 'Tags',
