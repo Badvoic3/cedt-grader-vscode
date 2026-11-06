@@ -11,9 +11,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Host } from '../src/flows/host';
 import { FolderMode } from '../src/flows/folderMode';
 import { Links } from '../src/flows/links';
+import { pathState } from '../src/mapping/mappingOps';
 import { MappingStore } from '../src/mapping/store';
 
-const env = vi.hoisted(() => ({ folders: [] as { uri: { fsPath: string }; name: string; index: number }[], dialog: undefined as unknown }));
+const env = vi.hoisted(() => ({ folders: [] as { uri: { fsPath: string }; name: string; index: number }[], dialog: undefined as unknown, opened: [] as string[] }));
 
 vi.mock('vscode', async () => {
   const fs = await import('node:fs/promises');
@@ -28,6 +29,8 @@ vi.mock('vscode', async () => {
         return env.folders;
       },
       textDocuments: [],
+      findFiles: async () => [],
+      getConfiguration: () => ({ get: () => ({}) }),
       getWorkspaceFolder: (u: { fsPath: string }) => folderOf(u.fsPath),
       // As in VS Code: a workspace folder itself and anything outside come back as the full path.
       asRelativePath: (u: string | { fsPath: string }) => {
@@ -41,7 +44,11 @@ vi.mock('vscode', async () => {
       },
     },
     window: { showInformationMessage: async () => undefined, setStatusBarMessage: () => undefined, showOpenDialog: async () => env.dialog },
-    commands: { executeCommand: async () => undefined },
+    commands: {
+      executeCommand: async (id: string, target: { fsPath: string }) => {
+        if (id === 'vscode.open') env.opened.push(target.fsPath);
+      },
+    },
   };
 });
 
@@ -72,6 +79,9 @@ function session() {
     cfg: { baseUrl: BASE, fileNamePattern: { pattern: '{name}.{ext}' } },
     data: { problemList: () => ({ problems }) },
     cphSaveLocation: () => '',
+    requestLog: () => undefined,
+    emit: () => undefined,
+    problemById: (id: number) => problems.find((p) => p.id === id),
     fileUri: null as { fsPath: string } | null,
     problem: null as { id: number; name: string } | null,
     /** Answer to the inline questions; undefined = dismissed. */
@@ -140,6 +150,7 @@ beforeEach(() => {
   mkdirSync(pkg, { recursive: true });
   for (const f of FILES) writeFileSync(join(pkg, f), `// ${f}\n`);
   env.folders = [{ uri: { fsPath: root }, name: 'ws', index: 0 }];
+  env.opened = [];
 });
 afterEach(() => rmSync(dir, { recursive: true, force: true }));
 
@@ -616,5 +627,101 @@ describe('a window with no folder open', () => {
     expect((await s.links.targetFolder())?.fsPath).toBe(root);
     s.fileUri = uri(join(pkg, 'foo.cpp'));
     expect((await s.links.targetFolder())?.fsPath).toBe(pkg);
+  });
+});
+
+describe('a linked file outside the workspace', () => {
+  let away: string;
+  const link = { problemId: 1, name: 'alpha', baseUrl: BASE };
+
+  beforeEach(() => {
+    away = join(dir, 'elsewhere');
+    mkdirSync(away);
+    writeFileSync(join(away, 'sol.cpp'), 'int main() {}\n');
+  });
+
+  it('a row click opens it and asks nothing', async () => {
+    const s = session();
+    await s.mapping.set(uri(join(away, 'sol.cpp')), link);
+    await s.links.problemRowClick(1);
+    expect(env.opened).toEqual([join(away, 'sol.cpp')]);
+    expect(s.asked).toEqual([]);
+  });
+
+  it('a linked folder out there opens its file', async () => {
+    const s = session();
+    await s.mapping.set(uri(away), { ...link, folder: true });
+    await s.links.problemRowClick(1);
+    expect(env.opened).toEqual([join(away, 'sol.cpp')]);
+    expect(s.asked).toEqual([]);
+  });
+
+  it('gone from the disk: offers to remove the link', async () => {
+    const s = session();
+    await s.mapping.set(uri(join(away, 'gone.cpp')), link);
+    s.answer = 'remove';
+    await s.links.problemRowClick(1);
+    expect(env.opened).toEqual([]);
+    expect(s.asked).toHaveLength(1);
+    expect(await s.mapping.get(uri(join(away, 'gone.cpp')), BASE)).toBeUndefined();
+  });
+
+  it('a linked folder that exists is never called gone, even with no source file', async () => {
+    const s = session();
+    const empty = join(dir, 'empty');
+    mkdirSync(empty);
+    await s.mapping.set(uri(empty), { ...link, folder: true });
+    await s.links.goToFile(1);
+    expect(s.asked).toEqual([]);
+    expect(await s.mapping.get(uri(empty), BASE)).toMatchObject({ problemId: 1 });
+  });
+
+  it('a path that cannot be read is not missing', async () => {
+    const blocked = join(away, 'sol.cpp', 'x'); // ENOTDIR: nothing can be there
+    expect(await pathState(blocked)).toEqual({ kind: 'missing' });
+    expect(await pathState(join(away, 'nope'))).toEqual({ kind: 'missing' });
+    expect((await pathState(away)).kind).toBe('folder');
+    expect((await pathState(join(away, 'sol.cpp'))).kind).toBe('file');
+    expect((await pathState(`${away}/${'x'.repeat(5000)}`)).kind).toBe('unreadable'); // ENAMETOOLONG
+  });
+
+  describe('then opened inside a workspace', () => {
+    const inside = () => join(away, 'sol.cpp');
+    const open = () => (env.folders = [{ uri: { fsPath: away }, name: 'elsewhere', index: 0 }]);
+
+    it('keeps its link', async () => {
+      const s = session();
+      await s.mapping.set(uri(inside()), link);
+      open();
+      expect(await s.mapping.get(uri(inside()), BASE)).toMatchObject({ problemId: 1 });
+      await s.setActiveFile(uri(inside()));
+      expect(s.problem?.id).toBe(1);
+    });
+
+    it('unlinking removes it for good', async () => {
+      const s = session();
+      await s.mapping.set(uri(inside()), link);
+      open();
+      await s.mapping.set(uri(inside()), undefined);
+      expect(await s.mapping.get(uri(inside()), BASE)).toBeUndefined();
+      expect(await s.mapping.filesFor(1, BASE)).toEqual([]);
+    });
+
+    it('a new link replaces it', async () => {
+      const s = session();
+      await s.mapping.set(uri(inside()), link);
+      open();
+      await s.mapping.set(uri(inside()), { problemId: 2, name: 'beta', baseUrl: BASE });
+      expect((await s.mapping.allEntries()).map((e) => e.entry.problemId)).toEqual([2]);
+    });
+
+    it('"not linked" set out there can be cleared', async () => {
+      const s = session();
+      await s.mapping.setUnlinked(uri(inside()), true);
+      open();
+      expect(s.mapping.isUnlinked(uri(inside()))).toBe(true);
+      await s.mapping.set(uri(inside()), link);
+      expect(s.mapping.isUnlinkedHere(uri(inside()))).toBe(false);
+    });
   });
 });

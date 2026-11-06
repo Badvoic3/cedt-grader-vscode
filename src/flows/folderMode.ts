@@ -309,7 +309,7 @@ export class FolderMode {
   async openItem(fsPath: string): Promise<void> {
     const file = (await this.itemFile(fsPath)) ?? fsPath;
     if ((await fsStat(file).catch(() => null))?.isDirectory()) await vscode.commands.executeCommand('revealInExplorer', vscode.Uri.file(file));
-    else await vscode.window.showTextDocument(vscode.Uri.file(file));
+    else await vscode.commands.executeCommand('vscode.open', vscode.Uri.file(file));
   }
 
   /** The user picks the submit / run file in the card ('' = automatic again). */

@@ -100,7 +100,7 @@ export class MappingStore {
 
   isUnlinked(uri: vscode.Uri): boolean {
     const { memento, key } = this.keyFor(uri);
-    return !!memento.get<Record<string, string>>(UNLINKED_KEY, {})[key];
+    return !!memento.get<Record<string, string>>(UNLINKED_KEY, {})[key] || !!this.ctx.globalState.get<Record<string, string>>(UNLINKED_KEY, {})[pathKey(uri.fsPath)];
   }
 
   /** "Not linked" for this file or for a folder it is in ("Don't match this folder"). */
@@ -161,6 +161,7 @@ export class MappingStore {
     if (on) all[key] = normalizeAbsPath(uri.fsPath);
     else delete all[key];
     await memento.update(UNLINKED_KEY, all);
+    if (!on) await this.dropGlobal(UNLINKED_KEY, uri);
   }
 
   async get(uri: vscode.Uri, baseUrl: string): Promise<MappingEntry | undefined> {
@@ -169,8 +170,23 @@ export class MappingStore {
     const fromState = all[key] ?? all[oldKey] ?? this.legacy(memento)[uri.fsPath];
     if (fromState?.staleSince) return undefined;
     if (fromState && (!fromState.baseUrl || fromState.baseUrl === baseUrl)) return fromState;
-    if (folder && rel) return lookup(await this.readFile(folder), rel, baseUrl);
-    return undefined;
+    const inFile = folder && rel ? lookup(await this.readFile(folder), rel, baseUrl) : undefined;
+    return inFile ?? this.savedOutside(uri, baseUrl);
+  }
+
+  /** A link saved while the file was outside every workspace folder: the file can be inside one now. */
+  private savedOutside(uri: vscode.Uri, baseUrl: string): StateEntry | undefined {
+    const e = this.ctx.globalState.get<Record<string, StateEntry>>(STATE_KEY, {})[pathKey(uri.fsPath)];
+    return e && !e.staleSince && (!e.baseUrl || e.baseUrl === baseUrl) ? e : undefined;
+  }
+
+  /** Forget a global record of a path (kept there while it was outside every workspace folder). */
+  private async dropGlobal(stateKey: string, uri: vscode.Uri): Promise<void> {
+    const all = { ...this.ctx.globalState.get<Record<string, unknown>>(stateKey, {}) };
+    const k = pathKey(uri.fsPath);
+    if (!(k in all)) return;
+    delete all[k];
+    await this.ctx.globalState.update(stateKey, all);
   }
 
   async set(uri: vscode.Uri, entry: MappingEntry | undefined): Promise<void> {
@@ -180,6 +196,7 @@ export class MappingStore {
     if (entry) all[key] = { ...entry, fsPath: normalizeAbsPath(uri.fsPath) };
     else delete all[key];
     await memento.update(STATE_KEY, all);
+    if (memento !== this.ctx.globalState) await this.dropGlobal(STATE_KEY, uri);
     if (entry && this.isUnlinked(uri)) await this.setUnlinked(uri, false); // choosing a problem clears "not linked"
     const legacy = this.legacy(memento);
     if (legacy[uri.fsPath]) {

@@ -7,8 +7,8 @@ import { BINARY_EXTS, excludeGlob, filterSourceFiles, rankCandidates, sourceGlob
 import { autoDetectOutcome, pickScope, unlinkScope } from '../mapping/linkActions';
 import { cleanName, fileNameFor, resolveProblem } from '../mapping/match';
 import { buildMatchIndex, folderNames, type IndexedFile, matchFile, OnceCache, type SourceFile } from '../mapping/matchIndex';
-import { dismissKey, type LocatedEntry, reconnectCandidates } from '../mapping/mappingOps';
-import { createFileNoOverwrite, pathExists as exists } from '../mapping/newFile';
+import { dismissKey, type LocatedEntry, pathState, reconnectCandidates } from '../mapping/mappingOps';
+import { createFileNoOverwrite } from '../mapping/newFile';
 import { chooseNewFileLanguage } from '../mapping/newFileLanguage';
 import { isAtOrInside, pathKey } from '../mapping/paths';
 import { comparePaths, linkedNotice, mergeProblemFiles, noticeDismissed, noticeSignature, type ProblemFile } from '../mapping/problemFiles';
@@ -22,6 +22,8 @@ import { PICK_HOW, S } from '../shared/strings';
 import type { CurrentProblem, Host } from './host';
 
 type FoundFile = { uri: vscode.Uri; t: number; how: ProblemFile['how'] };
+
+const stillThere = async (fsPath: string) => (await pathState(fsPath)).kind !== 'missing';
 
 /**
  * Links and the matching UI: files for a problem (one matcher, both
@@ -189,20 +191,23 @@ export class Links {
     const gone: vscode.Uri[] = [];
     // Opening a file never links it, so suggestions are fine here.
     for (const f of await this.filesForProblem(problemId, 'run', true)) {
-      const st = await fsStat(f.fsPath).catch(() => null);
+      const at = await pathState(f.fsPath);
+      if (at.kind === 'missing') {
+        if (f.how === 'chosen') gone.push(vscode.Uri.file(f.fsPath));
+        else await h.mapping.deleteAuto(vscode.Uri.file(f.fsPath));
+        continue;
+      }
       // Same answer as opening the file: CPH data pointing to another problem wins over the name.
-      if (st && f.how !== 'chosen' && f.how !== 'cph') {
+      if (f.how !== 'chosen' && f.how !== 'cph') {
         const cph = await readCphProblem(f.fsPath, h.cphSaveLocation());
         if (cph) {
           const r = resolveProblem({ savedProblemId: null, cph, filePath: f.fsPath, problems: h.data.problemList()?.problems, baseUrl: h.cfg.baseUrl, folders: this.sourceFile(f.fsPath).folders, namePattern: h.cfg.fileNamePattern.pattern });
           if (r.kind === 'match' && r.problem.id !== problemId) continue;
         }
       }
-      // A folder (folder mode / matched by its name) opens its submit file or main file.
-      const open = st?.isDirectory() ? await h.folder.itemFile(f.fsPath) : f.fsPath;
-      if (st && open) found.push({ uri: vscode.Uri.file(open), t: (await fsStat(open).catch(() => null))?.mtimeMs ?? st.mtimeMs, how: f.how });
-      else if (f.how === 'chosen') gone.push(vscode.Uri.file(f.fsPath));
-      else await h.mapping.deleteAuto(vscode.Uri.file(f.fsPath));
+      // A folder (folder mode / matched by its name) opens its submit file or main file; with no source file it has nothing to open.
+      const open = at.kind === 'folder' ? await h.folder.itemFile(f.fsPath) : f.fsPath;
+      if (open) found.push({ uri: vscode.Uri.file(open), t: (await fsStat(open).catch(() => null))?.mtimeMs ?? at.mtimeMs, how: f.how });
     }
     found.sort((a, b) => comparePaths(vscode.workspace.asRelativePath(a.uri), vscode.workspace.asRelativePath(b.uri)));
     return { found, gone };
@@ -240,7 +245,7 @@ export class Links {
       const how = found.find((f) => f.uri.fsPath === target.fsPath)?.how;
       this.tempLink = how && how !== 'chosen' ? { key: pathKey(target.fsPath), problemId } : null;
     }
-    if (target) await vscode.window.showTextDocument(target);
+    if (target) await vscode.commands.executeCommand('vscode.open', target);
   }
 
   /** Problems with a file (saved links + remembered auto-matches), for the row menus. */
@@ -431,7 +436,7 @@ export class Links {
   async openLinkedFile(index: number): Promise<void> {
     const f = this.noticeFiles()[index];
     if (!f) return;
-    if (!(await exists(f.fsPath))) {
+    if (!(await stillThere(f.fsPath))) {
       void this.goToFile(this.host.problem?.id ?? -1); // offers removing the stale link
       return;
     }
@@ -472,7 +477,7 @@ export class Links {
     const dir = vscode.Uri.joinPath(file, '..');
     const taken = async (name: string) => {
       const target = vscode.Uri.joinPath(dir, name);
-      return pathKey(target.fsPath) !== pathKey(file.fsPath) && (await exists(target.fsPath));
+      return pathKey(target.fsPath) !== pathKey(file.fsPath) && (await stillThere(target.fsPath));
     };
     const proposal = renameProposal(file.fsPath, problem.name, h.cfg.fileNamePattern.pattern, problem.id);
     const first = await freeName(proposal, taken); // never overwrite: "<name>_2.<ext>" if taken
@@ -643,7 +648,7 @@ export class Links {
     const h = this.host;
     this.reconnectAsked.add(uri.fsPath);
     const dismissed = new Set(h.ctx.workspaceState.get<string[]>(KEYS.dismissedReconnects, []));
-    const candidates = await reconnectCandidates(await h.mapping.allEntries(), uri.fsPath, exists, dismissed);
+    const candidates = await reconnectCandidates(await h.mapping.allEntries(), uri.fsPath, stillThere, dismissed);
     if (!candidates.length) return;
     const nameOf = (c: LocatedEntry) => h.problemById(c.entry.problemId)?.name ?? c.entry.name;
     let chosen: LocatedEntry | undefined;

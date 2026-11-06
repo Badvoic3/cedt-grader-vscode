@@ -116,6 +116,23 @@ export async function reconnectCandidates(
 
 export const dismissKey = (oldPath: string, newPath: string) => `${oldPath}\u0000${newPath}`;
 
+export type PathState = { kind: 'missing' } | { kind: 'file' | 'folder' | 'unreadable'; mtimeMs: number };
+
+/**
+ * What is at a linked path, wherever it is: being outside the workspace says
+ * nothing. Only "nothing there" counts as missing; a path we may not read
+ * (macOS privacy folders, a locked drive) can still exist, so its link stays.
+ */
+export async function pathState(p: string): Promise<PathState> {
+  try {
+    const st = await stat(p);
+    return { kind: st.isDirectory() ? 'folder' : 'file', mtimeMs: st.mtimeMs };
+  } catch (e) {
+    const code = (e as NodeJS.ErrnoException).code;
+    return code === 'ENOENT' || code === 'ENOTDIR' ? { kind: 'missing' } : { kind: 'unreadable', mtimeMs: 0 };
+  }
+}
+
 export async function pathExists(p: string): Promise<boolean> {
   try {
     await stat(p);
