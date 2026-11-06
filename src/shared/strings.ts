@@ -570,6 +570,7 @@ const EN_W = {
     return `${description ? `${description}. ` : ''}${now}${state === 'off' ? click : click[0].toUpperCase() + click.slice(1)}`;
   },
   defaultOrder: "Default order",
+  defaultOrderReversed: "Default order (reversed)",
   nameAZ: "Name A–Z",
   nameZA: "Name Z–A",
   latestSubmission: "Latest submission",

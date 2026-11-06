@@ -70,6 +70,7 @@ describe('sorting (works with the filters)', () => {
   const ids = (s: Parameters<typeof sortProblems>[1]) => sortProblems([...items], s).map((p) => p.id);
   it('each order; missing keys go last; ties keep grader order', () => {
     expect(ids('default')).toEqual([1, 2, 3, 4]);
+    expect(ids('default-reversed')).toEqual([4, 3, 2, 1]);
     expect(ids('name-asc')).toEqual([2, 1, 4, 3]); // numeric-aware: c_9 before c_10
     expect(ids('name-desc')).toEqual([3, 4, 1, 2]);
     expect(ids('latest')).toEqual([2, 1, 3, 4]);

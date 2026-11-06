@@ -27,6 +27,7 @@ export function filterProblems(items: ProblemView[], f: ProblemFilter, q: string
 export function sorts(): { key: ProblemSort; label: string }[] {
   return [
     { key: 'default', label: W.defaultOrder },
+    { key: 'default-reversed', label: W.defaultOrderReversed },
     { key: 'name-asc', label: W.nameAZ },
     { key: 'name-desc', label: W.nameZA },
     { key: 'latest', label: W.latestSubmission },
@@ -43,6 +44,7 @@ export function sorts(): { key: ProblemSort; label: string }[] {
  */
 export function sortProblems(items: ProblemView[], sort: ProblemSort = 'default'): ProblemView[] {
   if (sort === 'default') return items;
+  if (sort === 'default-reversed') return [...items].reverse();
   const indexed = items.map((p, i) => ({ p, i }));
   const by = (key: (p: ProblemView) => number | null, dir: 1 | -1) =>
     indexed

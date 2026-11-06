@@ -882,7 +882,7 @@ describe.runIf(existsSync(resolve(__dirname, '../esbuild.mjs')))('sidebar webvie
 
     // A second click closes the menu instead of opening it again.
     btn().dispatchEvent(new (doc.defaultView as unknown as typeof globalThis).MouseEvent('mousedown', { bubbles: true }));
-    expect(items()).toHaveLength(7);
+    expect(items()).toHaveLength(8);
     btn().click();
     expect(items()).toHaveLength(0);
     expect(doc.activeElement).toBe(btn());

@@ -51,7 +51,7 @@ export interface ProblemView {
   lastOpened: number | null;
 }
 
-export type ProblemSort = 'default' | 'name-asc' | 'name-desc' | 'latest' | 'score-asc' | 'score-desc' | 'recent';
+export type ProblemSort = 'default' | 'default-reversed' | 'name-asc' | 'name-desc' | 'latest' | 'score-asc' | 'score-desc' | 'recent';
 
 export interface ProblemFilter {
   status: 'all' | 'unsolved' | 'inprogress' | 'solved';

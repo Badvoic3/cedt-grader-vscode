@@ -791,7 +791,7 @@ export class GraderController implements vscode.Disposable {
   /** Persist the problem-list filter per workspace. */
   async setProblemFilter(f: ProblemFilter): Promise<void> {
     const valid: ProblemFilter['status'][] = ['all', 'unsolved', 'inprogress', 'solved'];
-    const sorts = ['default', 'name-asc', 'name-desc', 'latest', 'score-asc', 'score-desc', 'recent'];
+    const sorts = ['default', 'default-reversed', 'name-asc', 'name-desc', 'latest', 'score-asc', 'score-desc', 'recent'];
     await this.mapping.local.update(KEYS.problemFilter, {
       status: valid.includes(f.status) ? f.status : 'all',
       ...cleanTopicFilter(f),

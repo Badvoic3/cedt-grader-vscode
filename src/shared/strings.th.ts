@@ -17,7 +17,7 @@ import type { Strings } from './strings';
  * Everything else was reviewed at checkpoint B (2026-11-03). Add keys here
  * when a new text is translated without review.
  */
-export const TH_REVIEW: readonly string[] = ['S.common.dismiss', 'S.crash.notice', 'S.crash.report', 'S.crash.review', 'S.crash.reviewTitle', 'S.files.saveHere', 'S.folder.cancelRestores', 'S.folder.cancelStopsMatch', 'S.folder.cancelUnlinksFile', 'S.folder.replaceFilesQ', 'W.crashNote', 'W.crashReport', 'W.crashReportLabel', 'W.crashTitle', 'W.sortedBy'];
+export const TH_REVIEW: readonly string[] = ['S.common.dismiss', 'S.crash.notice', 'S.crash.report', 'S.crash.review', 'S.crash.reviewTitle', 'S.files.saveHere', 'S.folder.cancelRestores', 'S.folder.cancelStopsMatch', 'S.folder.cancelUnlinksFile', 'S.folder.replaceFilesQ', 'W.crashNote', 'W.crashReport', 'W.crashReportLabel', 'W.crashTitle', 'W.defaultOrderReversed', 'W.sortedBy'];
 
 export const TH: Strings = {
   HOW_LINKED: {
@@ -565,6 +565,7 @@ export const TH: Strings = {
       return `${description ? `${description} · ` : ''}${now}${click}`;
     },
     defaultOrder: 'ลำดับเริ่มต้น',
+    defaultOrderReversed: 'ลำดับเริ่มต้น (กลับด้าน)',
     nameAZ: 'ชื่อ A–Z',
     nameZA: 'ชื่อ Z–A',
     latestSubmission: 'ส่งล่าสุด',
