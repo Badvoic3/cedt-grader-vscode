@@ -52,7 +52,7 @@ export function parseMappingFile(text: string): MappingFileData {
   for (const [k, v] of Object.entries(files as Record<string, unknown>)) {
     const e = v as Partial<MappingEntry>;
     if (typeof e?.problemId === 'number' && Number.isInteger(e.problemId) && e.problemId > 0) {
-      const rel = normalizeRelPath(k);
+      const rel = mappingKey(k);
       if (!insideWorkspace(rel)) continue;
       const prev = byKey.get(pathKey(rel));
       if (prev !== undefined) delete out.files[prev];
@@ -81,6 +81,14 @@ export function insideWorkspace(rel: string): boolean {
   return !(rel === '..' || rel.startsWith('../') || rel.startsWith('/') || /^[a-zA-Z]:/.test(rel));
 }
 
+/** The key of a link on the workspace folder itself. */
+export const ROOT_KEY = '.';
+
+/** A path's key in `.cedt-grader.json`: the canonical relative path, or `.` for the workspace folder. */
+export function mappingKey(rel: string): string {
+  return normalizeRelPath(rel) || ROOT_KEY;
+}
+
 /** A folder-relative path field, kept only when it stays inside the folder. */
 function insideFolder(key: 'submitFile' | 'runFile', v: unknown): Partial<MappingEntry> {
   if (typeof v !== 'string') return {};
@@ -90,7 +98,7 @@ function insideFolder(key: 'submitFile' | 'runFile', v: unknown): Partial<Mappin
 
 export function serializeMappingFile(d: MappingFileData): string {
   const sorted: Record<string, MappingEntry> = {};
-  for (const k of Object.keys(d.files).sort()) sorted[normalizeRelPath(k)] = d.files[k];
+  for (const k of Object.keys(d.files).sort()) sorted[mappingKey(k)] = d.files[k];
   return JSON.stringify({ version: 1, files: sorted }, null, 2) + '\n';
 }
 

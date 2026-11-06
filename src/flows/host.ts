@@ -86,7 +86,8 @@ export interface Host {
   /** Problem list: cached for the session; `force` = the Refresh button. */
   refreshProblems(force?: boolean): Promise<void>;
   openProblemInBrowser(problemId?: number): Promise<void>;
-  chooseProblemQuickPick(): Promise<void>;
+  /** Pick a problem for the active file; `apply` replaces the default (link what the picker chose to that file). */
+  chooseProblemQuickPick(apply?: (problemId: number) => Promise<void>): Promise<void>;
   /** Set by the sidebar provider: focus something inside the panel. */
   focus(target: 'login' | 'problem-search' | 'submit' | 'result'): void;
 }

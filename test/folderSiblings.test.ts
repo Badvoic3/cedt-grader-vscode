@@ -1,0 +1,305 @@
+/**
+ * Folder mode must follow every file of a linked folder, also when neither
+ * the folder nor its files match a problem by name (docs: causes A–E of the
+ * "folder link not following sibling files" bug). Real MappingStore, FolderMode
+ * and Links over a fake VS Code workspace on a temporary folder.
+ */
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { Host } from '../src/flows/host';
+import { FolderMode } from '../src/flows/folderMode';
+import { Links } from '../src/flows/links';
+import { MappingStore } from '../src/mapping/store';
+
+const env = vi.hoisted(() => ({ folders: [] as { uri: { fsPath: string }; name: string; index: number }[] }));
+
+vi.mock('vscode', async () => {
+  const fs = await import('node:fs/promises');
+  const path = await import('node:path');
+  const file = (p: string) => ({ scheme: 'file', fsPath: p, path: p, toString: () => `file://${p}` });
+  const inside = (p: string, dir: string) => p === dir || p.startsWith(`${dir}/`);
+  const folderOf = (p: string) => env.folders.find((f) => inside(p, f.uri.fsPath));
+  return {
+    Uri: { file, joinPath: (u: { fsPath: string }, ...parts: string[]) => file(path.posix.join(u.fsPath, ...parts)) },
+    workspace: {
+      get workspaceFolders() {
+        return env.folders;
+      },
+      textDocuments: [],
+      getWorkspaceFolder: (u: { fsPath: string }) => folderOf(u.fsPath),
+      // As in VS Code: a workspace folder itself and anything outside come back as the full path.
+      asRelativePath: (u: string | { fsPath: string }) => {
+        const p = typeof u === 'string' ? u : u.fsPath;
+        const f = folderOf(p);
+        return !f || f.uri.fsPath === p ? p : path.posix.relative(f.uri.fsPath, p);
+      },
+      fs: {
+        readFile: (u: { fsPath: string }) => fs.readFile(u.fsPath),
+        writeFile: (u: { fsPath: string }, data: Uint8Array) => fs.writeFile(u.fsPath, data),
+      },
+    },
+    window: { showInformationMessage: async () => undefined, setStatusBarMessage: () => undefined },
+    commands: { executeCommand: async () => undefined },
+  };
+});
+
+const BASE = 'https://grader.example';
+const uri = (p: string) => ({ scheme: 'file', fsPath: p, path: p, toString: () => `file://${p}` }) as never;
+
+class Memo {
+  private data = new Map<string, unknown>();
+  get<T>(key: string, fallback?: T): T {
+    return (this.data.has(key) ? this.data.get(key) : fallback) as T;
+  }
+  async update(key: string, value: unknown): Promise<void> {
+    this.data.set(key, value);
+  }
+}
+
+/** The parts of the controller these flows use. */
+function session() {
+  const mapping = new MappingStore({ workspaceState: new Memo(), globalState: new Memo() } as never);
+  const problems = [
+    { id: 1, name: 'alpha' },
+    { id: 2, name: 'beta' },
+  ];
+  const s = {
+    mapping,
+    problems,
+    cfg: { baseUrl: BASE },
+    fileUri: null as { fsPath: string } | null,
+    problem: null as { id: number; name: string } | null,
+    /** Answer to the inline questions; undefined = dismissed. */
+    answer: undefined as string | undefined,
+    /** Problem the picker returns; undefined = cancelled. */
+    pick: undefined as number | undefined,
+    asked: [] as string[],
+    currentProblem: () => s.problem,
+    allSourceExts: () => ['cpp', 'c', 'h', 'py'],
+    askInline: async (text: string) => {
+      s.asked.push(text);
+      return s.answer;
+    },
+    chooseProblemQuickPick: async (apply: (id: number) => Promise<void>) => {
+      if (s.pick !== undefined) await apply(s.pick);
+    },
+    setActiveFile: async (u: { fsPath: string }) => {
+      s.fileUri = u;
+      const link = await mapping.activeLink(u as never, BASE);
+      await s.folder.load(link?.folder ? { fsPath: link.folder, entry: link.entry } : null);
+      s.problem = link ? { id: link.entry.problemId, name: link.entry.name } : null;
+    },
+    folder: null as unknown as FolderMode,
+    links: null as unknown as Links,
+  };
+  s.folder = new FolderMode(s as unknown as Host);
+  s.links = new Links(s as unknown as Host);
+  return s;
+}
+
+let dir: string;
+let root: string;
+let pkg: string;
+const FILES = ['foo.cpp', 'bar.cpp', 'student.h'];
+
+/** Every file of the folder and which problem / folder link it gets. */
+async function follow(s: ReturnType<typeof session>, folder: string) {
+  const out: Record<string, [number | null, string | null]> = {};
+  for (const f of FILES) {
+    await s.setActiveFile(uri(join(folder, f)));
+    out[f] = [s.problem?.id ?? null, s.folder.link?.fsPath ?? null];
+  }
+  return out;
+}
+const allOn = (problemId: number, folder: string) => Object.fromEntries(FILES.map((f) => [f, [problemId, folder]]));
+
+beforeEach(() => {
+  dir = mkdtempSync(join(tmpdir(), 'siblings-'));
+  root = join(dir, 'ws');
+  pkg = join(root, 'xyz_folder');
+  mkdirSync(pkg, { recursive: true });
+  for (const f of FILES) writeFileSync(join(pkg, f), `// ${f}\n`);
+  env.folders = [{ uri: { fsPath: root }, name: 'ws', index: 0 }];
+});
+afterEach(() => rmSync(dir, { recursive: true, force: true }));
+
+describe('both click orders', () => {
+  it('pick a problem, then link the folder', async () => {
+    const s = session();
+    await s.setActiveFile(uri(join(pkg, 'foo.cpp')));
+    await s.links.mapCurrentFile(1);
+    await s.folder.toggle();
+    expect(await follow(s, pkg)).toEqual(allOn(1, pkg));
+  });
+
+  it('link the folder, then pick a problem', async () => {
+    const s = session();
+    await s.setActiveFile(uri(join(pkg, 'foo.cpp')));
+    s.pick = 1;
+    await s.folder.toggle();
+    expect(await follow(s, pkg)).toEqual(allOn(1, pkg));
+  });
+});
+
+describe('cause A: picking a problem in folder mode', () => {
+  it('moves the folder link, keeps its files, and writes no link for the file', async () => {
+    const s = session();
+    await s.mapping.set(uri(pkg), { problemId: 1, name: 'alpha', baseUrl: BASE, folder: true, submitFile: 'student.h', runFile: 'foo.cpp' });
+    await s.setActiveFile(uri(join(pkg, 'foo.cpp')));
+    await s.links.mapCurrentFile(2);
+    expect(await follow(s, pkg)).toEqual(allOn(2, pkg));
+    expect(await s.mapping.get(uri(pkg), BASE)).toMatchObject({ problemId: 2, name: 'beta', folder: true, submitFile: 'student.h', runFile: 'foo.cpp' });
+    expect(await s.mapping.get(uri(join(pkg, 'foo.cpp')), BASE)).toBeUndefined();
+  });
+
+  it('a folder only matched by its name is not changed: the pick is for the file', async () => {
+    const s = session();
+    await s.setActiveFile(uri(join(pkg, 'foo.cpp')));
+    await s.folder.load({ fsPath: pkg, entry: { problemId: 1, name: 'alpha', baseUrl: BASE, folder: true } }, true);
+    await s.links.mapCurrentFile(2);
+    expect(await s.mapping.get(uri(pkg), BASE)).toBeUndefined();
+    expect((await s.mapping.get(uri(join(pkg, 'foo.cpp')), BASE))?.problemId).toBe(2);
+  });
+});
+
+describe('cause B: Link the whole folder with no problem yet', () => {
+  it('opens the picker and links the folder with the choice', async () => {
+    const s = session();
+    await s.setActiveFile(uri(join(pkg, 'bar.cpp')));
+    s.pick = 2;
+    await s.folder.toggle();
+    expect(await s.mapping.get(uri(pkg), BASE)).toMatchObject({ problemId: 2, folder: true });
+    expect(await s.mapping.get(uri(join(pkg, 'bar.cpp')), BASE)).toBeUndefined();
+  });
+
+  it('a cancelled picker links nothing', async () => {
+    const s = session();
+    await s.setActiveFile(uri(join(pkg, 'bar.cpp')));
+    await s.folder.toggle();
+    expect(await s.mapping.get(uri(pkg), BASE)).toBeUndefined();
+  });
+});
+
+describe('cause C: "not linked" around the folder', () => {
+  const linkFrom = async (s: ReturnType<typeof session>) => {
+    await s.mapping.set(uri(join(pkg, 'foo.cpp')), { problemId: 1, name: 'alpha', baseUrl: BASE });
+    await s.setActiveFile(uri(join(pkg, 'foo.cpp')));
+    await s.folder.toggle();
+  };
+
+  it('is cleared for a sibling file', async () => {
+    const s = session();
+    await s.mapping.setUnlinked(uri(join(pkg, 'bar.cpp')), true);
+    await linkFrom(s);
+    expect(await follow(s, pkg)).toEqual(allOn(1, pkg));
+  });
+
+  it('is cleared for the folder itself', async () => {
+    const s = session();
+    await s.mapping.setUnlinked(uri(pkg), true);
+    await linkFrom(s);
+    expect(await follow(s, pkg)).toEqual(allOn(1, pkg));
+  });
+
+  it('is cleared for a folder above it, not for an unrelated one', async () => {
+    const s = session();
+    const other = join(root, 'other');
+    await s.mapping.setUnlinked(uri(root), true);
+    await s.mapping.setUnlinked(uri(other), true);
+    await linkFrom(s);
+    expect(await follow(s, pkg)).toEqual(allOn(1, pkg));
+    expect(s.mapping.isUnlinked(uri(other))).toBe(true);
+  });
+});
+
+describe('cause D: file links inside the folder', () => {
+  const start = async (s: ReturnType<typeof session>) => {
+    await s.mapping.set(uri(join(pkg, 'foo.cpp')), { problemId: 1, name: 'alpha', baseUrl: BASE });
+    await s.mapping.set(uri(join(pkg, 'bar.cpp')), { problemId: 2, name: 'beta', baseUrl: BASE });
+    await s.setActiveFile(uri(join(pkg, 'foo.cpp')));
+  };
+
+  it('a link to another problem is replaced after asking', async () => {
+    const s = session();
+    await start(s);
+    s.answer = 'replace';
+    await s.folder.toggle();
+    expect(s.asked).toHaveLength(1);
+    expect(await follow(s, pkg)).toEqual(allOn(1, pkg));
+  });
+
+  it('declining leaves everything as it was', async () => {
+    const s = session();
+    await start(s);
+    s.answer = 'cancel';
+    await s.folder.toggle();
+    expect(await s.mapping.get(uri(pkg), BASE)).toBeUndefined();
+    expect((await s.mapping.get(uri(join(pkg, 'bar.cpp')), BASE))?.problemId).toBe(2);
+  });
+
+  it('a link to the same problem is covered without asking', async () => {
+    const s = session();
+    await s.mapping.set(uri(join(pkg, 'foo.cpp')), { problemId: 1, name: 'alpha', baseUrl: BASE });
+    await s.mapping.set(uri(join(pkg, 'bar.cpp')), { problemId: 1, name: 'alpha', baseUrl: BASE });
+    await s.setActiveFile(uri(join(pkg, 'foo.cpp')));
+    await s.folder.toggle();
+    expect(s.asked).toEqual([]);
+    expect(await follow(s, pkg)).toEqual(allOn(1, pkg));
+  });
+
+  it('a stale link never blocks the folder', async () => {
+    const s = session();
+    await s.mapping.set(uri(join(pkg, 'bar.cpp')), { problemId: 2, name: 'beta', baseUrl: BASE, staleSince: '2026-01-01T00:00:00.000Z' });
+    await s.mapping.set(uri(join(pkg, 'foo.cpp')), { problemId: 1, name: 'alpha', baseUrl: BASE });
+    await s.setActiveFile(uri(join(pkg, 'foo.cpp')));
+    await s.folder.toggle();
+    expect(s.asked).toEqual([]);
+    expect(await follow(s, pkg)).toEqual(allOn(1, pkg));
+  });
+
+  it('confirming a folder-name match leaves links to other problems alone', async () => {
+    const s = session();
+    await s.mapping.set(uri(join(pkg, 'bar.cpp')), { problemId: 2, name: 'beta', baseUrl: BASE });
+    await s.mapping.setUnlinked(uri(join(pkg, 'student.h')), true);
+    await s.setActiveFile(uri(join(pkg, 'foo.cpp')));
+    await s.folder.load({ fsPath: pkg, entry: { problemId: 1, name: 'alpha', baseUrl: BASE, folder: true } }, true);
+    expect(await s.folder.keepMatch()).toBe(true);
+    expect((await s.mapping.get(uri(join(pkg, 'bar.cpp')), BASE))?.problemId).toBe(2);
+    expect(s.mapping.isUnlinked(uri(join(pkg, 'student.h')))).toBe(false);
+  });
+});
+
+describe('cause E: the folder is the workspace root, or outside the workspace', () => {
+  it('links the workspace root under the key "."', async () => {
+    env.folders = [{ uri: { fsPath: pkg }, name: 'xyz_folder', index: 0 }];
+    const s = session();
+    await s.mapping.set(uri(join(pkg, 'foo.cpp')), { problemId: 1, name: 'alpha', baseUrl: BASE });
+    await s.setActiveFile(uri(join(pkg, 'foo.cpp')));
+    expect(s.folder.modeTarget().reason).toBeNull();
+    await s.folder.toggle();
+    expect(await follow(s, pkg)).toEqual(allOn(1, pkg));
+    const saved = JSON.parse(readFileSync(join(pkg, '.cedt-grader.json'), 'utf8'));
+    expect(Object.keys(saved.files)).toEqual(['.']);
+    expect(s.folder.view()?.path).toBe('xyz_folder/');
+  });
+
+  it('a workspace-root link is read back from .cedt-grader.json on another machine', async () => {
+    env.folders = [{ uri: { fsPath: pkg }, name: 'xyz_folder', index: 0 }];
+    writeFileSync(join(pkg, '.cedt-grader.json'), JSON.stringify({ version: 1, files: { '.': { problemId: 2, name: 'beta', baseUrl: BASE, folder: true } } }));
+    expect(await follow(session(), pkg)).toEqual(allOn(2, pkg));
+  });
+
+  it('links a folder outside the workspace without touching it', async () => {
+    env.folders = [];
+    const s = session();
+    await s.mapping.set(uri(join(pkg, 'foo.cpp')), { problemId: 1, name: 'alpha', baseUrl: BASE });
+    await s.setActiveFile(uri(join(pkg, 'foo.cpp')));
+    expect(s.folder.modeTarget().reason).toBeNull();
+    await s.folder.toggle();
+    expect(await follow(s, pkg)).toEqual(allOn(1, pkg));
+    expect(existsSync(join(pkg, '.cedt-grader.json'))).toBe(false);
+    expect(s.folder.view()?.path).toBe('xyz_folder/');
+  });
+});

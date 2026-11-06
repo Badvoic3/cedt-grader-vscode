@@ -4,7 +4,7 @@ import type { Problem } from '../grader';
 import { EXTENSION_LANGUAGE } from '../grader/languages';
 import { readCphProblem } from '../mapping/cph';
 import { BINARY_EXTS, excludeGlob, filterSourceFiles, rankCandidates, sourceGlob } from '../mapping/findByName';
-import { autoDetectOutcome, unlinkScope } from '../mapping/linkActions';
+import { autoDetectOutcome, pickScope, unlinkScope } from '../mapping/linkActions';
 import { cleanName, fileNameFor, resolveProblem } from '../mapping/match';
 import { buildMatchIndex, foldersOf, type IndexedFile, matchFile, OnceCache, type SourceFile } from '../mapping/matchIndex';
 import { dismissKey, type LocatedEntry, reconnectCandidates } from '../mapping/mappingOps';
@@ -250,7 +250,9 @@ export class Links {
       return;
     }
     const p = h.problems.find((x) => x.id === problemId);
-    await h.mapping.set(h.fileUri, { problemId, name: p?.name ?? '', baseUrl: h.cfg.baseUrl });
+    const name = p?.name ?? '';
+    if (pickScope({ folderLink: !!h.folder.link, folderMatched: h.folder.matched }) === 'folder') await h.folder.setProblem(problemId, name);
+    else await h.mapping.set(h.fileUri, { problemId, name, baseUrl: h.cfg.baseUrl });
     await h.setActiveFile(h.fileUri);
   }
 

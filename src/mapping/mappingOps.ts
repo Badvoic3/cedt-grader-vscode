@@ -45,6 +45,16 @@ export function nearestFolderLink(entries: LocatedEntry[], fsPath: string, caseI
   return best;
 }
 
+/** Links of single files inside a folder, for this server (stale ones never shadow a folder link). */
+export function fileLinksInside(entries: LocatedEntry[], folder: string, baseUrl: string, caseInsensitive?: boolean): LocatedEntry[] {
+  return entries.filter((e) => !e.entry.folder && !e.entry.staleSince && (!e.entry.baseUrl || e.entry.baseUrl === baseUrl) && isInside(e.fsPath, folder, caseInsensitive));
+}
+
+/** "Not linked" paths a new link on `folder` overrides: the folder, anything inside it, and folders above it. */
+export function unlinkedAround(paths: string[], folder: string, caseInsensitive?: boolean): string[] {
+  return paths.filter((p) => isAtOrInside(p, folder, caseInsensitive) || isAtOrInside(folder, p, caseInsensitive));
+}
+
 /** Absolute path of a folder link's submit file (null when not chosen yet). */
 export function submitFilePath(folderPath: string, submitFile: string | undefined): string | null {
   if (!submitFile) return null;

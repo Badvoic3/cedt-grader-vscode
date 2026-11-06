@@ -287,7 +287,7 @@ export class GraderController implements vscode.Disposable {
       openStatement: (id) => c.openStatement(id),
       refreshProblems: (force) => c.refreshProblems(force),
       openProblemInBrowser: (id) => c.openProblemInBrowser(id),
-      chooseProblemQuickPick: () => c.chooseProblemQuickPick(),
+      chooseProblemQuickPick: (apply) => c.chooseProblemQuickPick(apply),
       focus: (t) => c.focusTarget?.(t),
     };
   }
@@ -1007,8 +1007,7 @@ export class GraderController implements vscode.Disposable {
     // Matching order: saved (the file's own link, else its folder's link) → CPH .prob → exact file name
     // → exact folder name → suggestions (never saved automatically).
     // An explicitly unlinked file (or folder) is left alone ("Not linked to a problem").
-    let link = await this.mapping.resolve(uri, this.cfg.baseUrl);
-    if (link?.folder && this.mapping.isUnlinkedHere(uri)) link = undefined;
+    const link = await this.mapping.activeLink(uri, this.cfg.baseUrl);
     const entry = link?.entry;
     const unlinked = !entry && this.mapping.isUnlinkedHere(uri);
     await this.folder.load(link?.folder ? { fsPath: link.folder, entry: link.entry } : null);
@@ -1233,7 +1232,7 @@ export class GraderController implements vscode.Disposable {
   focusTarget: ((t: 'login' | 'problem-search' | 'submit' | 'result') => void) | null = null;
 
   /** Command-palette flow: searchable QuickPick of the cached problem list. */
-  async chooseProblemQuickPick(): Promise<void> {
+  async chooseProblemQuickPick(apply: (problemId: number) => Promise<void> = (id) => this.links.mapCurrentFile(id)): Promise<void> {
     if (!this.fileUri) {
       void vscode.window.showInformationMessage(S.files.openSourceFirstShort);
       return;
@@ -1255,7 +1254,7 @@ export class GraderController implements vscode.Disposable {
       }),
       { placeHolder: S.files.problemFor(this.fileUri.path.split('/').pop() ?? ''), matchOnDescription: true, matchOnDetail: true },
     );
-    if (pick) await this.links.mapCurrentFile(pick.id);
+    if (pick) await apply(pick.id);
   }
 
   // ------------------------------------------------- panel actions (flows)

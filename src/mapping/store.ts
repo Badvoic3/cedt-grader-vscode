@@ -8,9 +8,10 @@ import {
   countDuplicateEntries,
   parseMappingFile,
   reverseIndex,
+  ROOT_KEY,
   serializeMappingFile,
 } from './mappingFile';
-import { affectedByDelete, expired, type LocatedEntry, nearestFolderLink, planRename, submitFileAfterMove, submitFileDeleted } from './mappingOps';
+import { affectedByDelete, expired, fileLinksInside, type LocatedEntry, nearestFolderLink, planRename, submitFileAfterMove, submitFileDeleted, unlinkedAround } from './mappingOps';
 import { isAtOrInside, normalizeAbsPath, normalizeRelPath, pathKey, remapPath } from './paths';
 import { type AutoMatch, autoAfterDelete, autoAfterRename } from './problemFiles';
 import { LIMITS } from '../shared/constants';
@@ -45,7 +46,8 @@ export class MappingStore {
   private keyFor(uri: vscode.Uri): { memento: vscode.Memento; key: string; oldKey: string; folder?: vscode.WorkspaceFolder; rel?: string } {
     const folder = vscode.workspace.getWorkspaceFolder(uri);
     if (!folder) return { memento: this.ctx.globalState, key: pathKey(uri.fsPath), oldKey: uri.fsPath };
-    const rel = normalizeRelPath(vscode.workspace.asRelativePath(uri, false));
+    // asRelativePath gives the full path for the workspace folder itself.
+    const rel = pathKey(folder.uri.fsPath) === pathKey(uri.fsPath) ? ROOT_KEY : normalizeRelPath(vscode.workspace.asRelativePath(uri, false));
     return { memento: this.ctx.workspaceState, key: `${folder.name}/${pathKey(rel)}`, oldKey: `${folder.name}/${rel}`, folder, rel };
   }
 
@@ -113,6 +115,30 @@ export class MappingStore {
       uri.fsPath,
     );
     return hit ? { entry: hit.entry, folder: hit.fsPath } : undefined;
+  }
+
+  /** The link used for the active file: as `resolve`, but a folder link doesn't reach a file marked "not linked". */
+  async activeLink(uri: vscode.Uri, baseUrl: string): Promise<{ entry: MappingEntry; folder?: string } | undefined> {
+    const link = await this.resolve(uri, baseUrl);
+    return link?.folder && this.isUnlinkedHere(uri) ? undefined : link;
+  }
+
+  /** Links of single files inside a folder (they would win over a folder link there). */
+  async fileLinksIn(folder: vscode.Uri, baseUrl: string): Promise<LocatedEntry[]> {
+    return fileLinksInside(await this.allEntries(), folder.fsPath, baseUrl);
+  }
+
+  /**
+   * Save a folder link so that it reaches every file below it: "not linked"
+   * around the folder is cleared, and so are links of single files inside to
+   * the same problem. Links inside to other problems go only with `replaceOthers`.
+   */
+  async linkFolder(folder: vscode.Uri, entry: MappingEntry, baseUrl: string, replaceOthers: boolean): Promise<void> {
+    for (const e of await this.fileLinksIn(folder, baseUrl)) {
+      if (replaceOthers || e.entry.problemId === entry.problemId) await this.set(vscode.Uri.file(e.fsPath), undefined);
+    }
+    for (const p of unlinkedAround(this.unlinkedPaths(), folder.fsPath)) await this.setUnlinked(vscode.Uri.file(p), false);
+    await this.set(folder, { ...entry, folder: true });
   }
 
   /** Folder mode: remember (or forget → detect again) the file Submit sends / the file CPH runs, relative to the folder. */

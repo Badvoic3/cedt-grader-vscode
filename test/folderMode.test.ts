@@ -10,8 +10,10 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { cphProbPath } from '../src/mapping/cph';
 import { chooseLanguage, type Language } from '../src/grader';
-import { lookup, parseMappingFile, reverseIndex, serializeMappingFile } from '../src/mapping/mappingFile';
-import { affectedByDelete, cphFilesAfterFolderRename, type LocatedEntry, moveCphProblem, nearestFolderLink, planRename, submitFileAfterMove, submitFileDeleted, submitFilePath } from '../src/mapping/mappingOps';
+import { listFolderFiles } from '../src/mapping/folderFiles';
+import { pickScope } from '../src/mapping/linkActions';
+import { lookup, mappingKey, parseMappingFile, reverseIndex, ROOT_KEY, serializeMappingFile } from '../src/mapping/mappingFile';
+import { affectedByDelete, cphFilesAfterFolderRename, fileLinksInside, type LocatedEntry, moveCphProblem, nearestFolderLink, planRename, submitFileAfterMove, submitFileDeleted, submitFilePath, unlinkedAround } from '../src/mapping/mappingOps';
 import { folderNameFor } from '../src/mapping/match';
 import { isAtOrInside, isInside } from '../src/mapping/paths';
 import { type AutoMatch, linkedNotice, mergeProblemFiles } from '../src/mapping/problemFiles';
@@ -38,6 +40,58 @@ describe('.cedt-grader.json: folder links', () => {
     expect(parseMappingFile(serializeMappingFile(d))).toEqual(d);
     expect(reverseIndex(d, BASE).get(7)).toEqual(['pkg/da68_x']);
     expect(lookup(d, 'pkg/da68_x', BASE)?.folder).toBe(true);
+  });
+});
+
+describe('.cedt-grader.json: a link on the workspace folder', () => {
+  it('uses the key "." and survives a round trip', () => {
+    expect(mappingKey('')).toBe(ROOT_KEY);
+    expect(mappingKey('./')).toBe(ROOT_KEY);
+    expect(mappingKey('pkg/')).toBe('pkg');
+    const d = parseMappingFile(JSON.stringify({ version: 1, files: { '.': { problemId: 7, name: 'x', folder: true, submitFile: 'student.h' }, './': { problemId: 8, name: 'y', folder: true } } }));
+    expect(Object.keys(d.files)).toEqual(['.']); // one entry: later spellings win
+    expect(lookup(d, ROOT_KEY, BASE)?.problemId).toBe(8);
+    expect(parseMappingFile(serializeMappingFile(d))).toEqual(d);
+  });
+});
+
+describe('what a folder link overrides', () => {
+  it('single-file links inside it, for this server, not stale', () => {
+    const entries = [E('/w/pkg/a.cpp', 1), E('/w/pkg/sub/b.cpp', 2), E('/w/pkg2/c.cpp', 3), FOLDER('/w/pkg/inner', 4), E('/w/pkg/d.cpp', 5, { baseUrl: 'https://other.example' }), E('/w/pkg/e.cpp', 6, { staleSince: '2026-01-01' }), E('/w/pkg/f.cpp', 7, { baseUrl: BASE })];
+    expect(fileLinksInside(entries, '/w/pkg', BASE, false).map((e) => e.entry.problemId)).toEqual([1, 2, 7]);
+  });
+
+  it('"not linked" on the folder, inside it and above it, nothing beside it', () => {
+    const paths = ['/w/pkg', '/w/pkg/a.cpp', '/w', '/w/pkg2', '/w/other/b.cpp'];
+    expect(unlinkedAround(paths, '/w/pkg', false)).toEqual(['/w/pkg', '/w/pkg/a.cpp', '/w']);
+  });
+
+  it('a pick applies to a linked folder, never to one only matched by name', () => {
+    expect(pickScope({ folderLink: true, folderMatched: false })).toBe('folder');
+    expect(pickScope({ folderLink: true, folderMatched: true })).toBe('file');
+    expect(pickScope({ folderLink: false, folderMatched: false })).toBe('file');
+  });
+});
+
+describe('listing a folder', () => {
+  const tree = () => {
+    const dir = mkdtempSync(join(tmpdir(), 'list-'));
+    mkdirSync(join(dir, 'sub', 'deep'), { recursive: true });
+    mkdirSync(join(dir, 'node_modules', 'x'), { recursive: true });
+    writeFileSync(join(dir, 'main.cpp'), '');
+    writeFileSync(join(dir, 'sub', 'a.h'), '');
+    writeFileSync(join(dir, 'sub', 'deep', 'b.h'), '');
+    writeFileSync(join(dir, 'node_modules', 'x', 'c.h'), '');
+    return dir;
+  };
+
+  it('walks sub-folders with "/" paths and stays out of dependency folders', async () => {
+    expect((await listFolderFiles(tree(), 100)).sort()).toEqual(['main.cpp', 'sub/a.h', 'sub/deep/b.h']);
+  });
+
+  it('stops at the limit, and a missing folder is empty', async () => {
+    expect(await listFolderFiles(tree(), 2)).toHaveLength(2);
+    expect(await listFolderFiles('/no/such/folder', 10)).toEqual([]);
   });
 });
 

@@ -45,6 +45,15 @@ export function autoDetectOutcome(savedProblemId: number | null, m: MatchResult)
 }
 
 /**
+ * What a problem picked for the active file applies to: the folder the user
+ * linked, so every file there follows; a folder only matched by its name is
+ * not theirs yet, so the pick is for the file.
+ */
+export function pickScope(o: { folderLink: boolean; folderMatched: boolean }): 'folder' | 'file' {
+  return o.folderLink && !o.folderMatched ? 'folder' : 'file';
+}
+
+/**
  * What ✕ ("Unlink this file / folder", "Don't match this file / folder")
  * applies to: a folder link, a folder matched by its name, or the file.
  */

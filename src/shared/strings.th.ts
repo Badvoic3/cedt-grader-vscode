@@ -17,7 +17,7 @@ import type { Strings } from './strings';
  * Everything else was reviewed at checkpoint B (2026-11-03). Add keys here
  * when a new text is translated without review.
  */
-export const TH_REVIEW: readonly string[] = [];
+export const TH_REVIEW: readonly string[] = ['S.folder.replaceFilesQ'];
 
 export const TH: Strings = {
   HOW_LINKED: {
@@ -270,9 +270,8 @@ export const TH: Strings = {
 
     folder: {
       openFile: 'เปิดไฟล์ในโฟลเดอร์นั้นก่อน',
-      outsideWorkspace: 'เชื่อมได้เฉพาะโฟลเดอร์ที่อยู่ใน workspace ที่เปิดอยู่เท่านั้น',
-      atRoot: 'ไฟล์นี้อยู่ที่ชั้นนอกสุดของ workspace โปรดย้ายไฟล์ไว้ในโฟลเดอร์ย่อยก่อนจึงจะเชื่อมทั้งโฟลเดอร์ได้',
       replaceQ: (folder, old, name) => `${folder}/ เชื่อมกับ ${old} อยู่ เปลี่ยนไปเชื่อมกับ ${name} แทนไหม?`,
+      replaceFilesQ: (folder: string, n: number, name: string) => `ใน ${folder}/ มี ${n} ไฟล์ที่เชื่อมกับโจทย์อื่นอยู่ จะเชื่อมทั้งโฟลเดอร์กับ ${name} แทนไหม?`,
       replace: 'เชื่อมกับโจทย์นี้',
       nowFolder: (folder) => `$(folder) เชื่อมทั้งโฟลเดอร์ ${folder}/ กับโจทย์แล้ว`,
       nowFile: (file) => `$(file) เชื่อมเฉพาะไฟล์ ${file} แล้ว`,

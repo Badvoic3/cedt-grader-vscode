@@ -269,9 +269,9 @@ const EN_S = {
 
   folder: {
     openFile: 'Open a file of the folder first.',
-    outsideWorkspace: 'Only folders inside the open workspace can be linked.',
-    atRoot: 'This file is at the top of the workspace folder. Put it in its own folder to link a whole folder.',
     replaceQ: (folder: string, old: string, name: string) => `${folder}/ is linked to ${old}. Link it to ${name} instead?`,
+    replaceFilesQ: (folder: string, n: number, name: string) =>
+      `${n === 1 ? '1 file' : `${n} files`} in ${folder}/ ${n === 1 ? 'is' : 'are'} linked to another problem. Link the whole folder to ${name} instead?`,
     replace: 'Link to this problem',
     nowFolder: (folder: string) => `$(folder) ${folder}/ is now linked to the problem`,
     nowFile: (file: string) => `$(file) Only ${file} is linked now`,

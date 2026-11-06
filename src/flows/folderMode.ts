@@ -1,8 +1,9 @@
 import * as vscode from 'vscode';
-import { readFile as fsReadFile, readdir, stat as fsStat } from 'node:fs/promises';
-import { join, relative, sep } from 'node:path';
+import { readFile as fsReadFile, stat as fsStat } from 'node:fs/promises';
+import { basename, join, relative, sep } from 'node:path';
 import type { Problem } from '../grader';
 import { submitCandidates } from '../mapping/attachment';
+import { listFolderFiles } from '../mapping/folderFiles';
 import { filterSourceFiles } from '../mapping/findByName';
 import {
   asksSubmitOrOpen,
@@ -18,7 +19,7 @@ import {
 } from '../mapping/folderRoles';
 import type { MappingEntry } from '../mapping/mappingFile';
 import { submitFilePath } from '../mapping/mappingOps';
-import { isAtOrInside, pathKey } from '../mapping/paths';
+import { pathKey } from '../mapping/paths';
 import { ATTACHMENT, TIMING } from '../shared/constants';
 import type { ViewState } from '../shared/messages';
 import { S } from '../shared/strings';
@@ -71,7 +72,7 @@ export class FolderMode {
     const folder = vscode.Uri.file(link.fsPath);
     if (this.matched) {
       if (!rel) return; // automatic already
-      await h.mapping.set(folder, { ...link.entry, [key]: rel });
+      await h.mapping.linkFolder(folder, { ...link.entry, [key]: rel }, h.cfg.baseUrl, false);
       this.matched = false;
       await h.links.refreshMappedIds();
     } else await h.mapping.setFolderRole(folder, h.cfg.baseUrl, key, rel);
@@ -82,9 +83,25 @@ export class FolderMode {
   async keepMatch(): Promise<boolean> {
     const link = this.link;
     if (!link || !this.matched) return false;
-    await this.host.mapping.set(vscode.Uri.file(link.fsPath), { ...link.entry });
+    await this.host.mapping.linkFolder(vscode.Uri.file(link.fsPath), { ...link.entry }, this.host.cfg.baseUrl, false);
     this.matched = false;
     return true;
+  }
+
+  /** A problem picked in folder mode: the folder link moves to it (its submit / run files stay). */
+  async setProblem(problemId: number, name: string): Promise<void> {
+    const h = this.host;
+    const link = this.link;
+    if (!link) return;
+    await h.mapping.set(vscode.Uri.file(link.fsPath), { ...link.entry, problemId, name, baseUrl: h.cfg.baseUrl });
+    await h.links.refreshMappedIds();
+  }
+
+  /** A folder's name in messages: relative, or its own name for a workspace folder and anything outside. */
+  private label(fsPath: string, withRoot?: boolean): string {
+    const ws = vscode.workspace.getWorkspaceFolder(vscode.Uri.file(fsPath));
+    if (!ws || pathKey(ws.uri.fsPath) === pathKey(fsPath)) return basename(fsPath);
+    return vscode.workspace.asRelativePath(fsPath, withRoot);
   }
 
   /** The card's folder-mode block (submit / run file with why). */
@@ -95,7 +112,7 @@ export class FolderMode {
     const run = this.role('run');
     const why = (w: RoleWhy | undefined, run?: string) => (w ? S.folder.why[w](run ?? '') : null);
     return {
-      path: `${vscode.workspace.asRelativePath(link.fsPath, false)}/`,
+      path: `${this.label(link.fsPath, false)}/`,
       matched: this.matched,
       submitFile: sub?.file ?? null,
       submitWhy: why(sub?.why, run?.file),
@@ -124,10 +141,8 @@ export class FolderMode {
 
   /** Source files of a folder (relative, "/" separators, path order; build output and binaries skipped). */
   async sources(folder: string): Promise<string[]> {
-    const all = await readdir(folder, { recursive: true }).catch(() => [] as string[]);
-    const rels = all.slice(0, ATTACHMENT.maxEntries).map((r) => String(r).split(sep).join('/'));
     const exts = this.host.allSourceExts();
-    return submitCandidates(filterSourceFiles(rels, exts), exts);
+    return submitCandidates(filterSourceFiles(await listFolderFiles(folder, ATTACHMENT.maxEntries), exts), exts);
   }
 
   /** The C/C++ texts of a folder's source files (role detection), each read up to a size cap. */
@@ -141,15 +156,10 @@ export class FolderMode {
     return out;
   }
 
-  /** The folder "Link the whole folder" would link for the active file, or why it can't. */
+  /** The folder "Link the whole folder" would link for the active file (a workspace folder or one outside the workspace too), or why it can't. */
   modeTarget(): { dir: vscode.Uri | null; reason: string | null } {
     const file = this.host.fileUri;
-    if (!file) return { dir: null, reason: S.folder.openFile };
-    const dir = vscode.Uri.joinPath(file, '..');
-    const ws = vscode.workspace.getWorkspaceFolder(file);
-    if (!ws) return { dir: null, reason: S.folder.outsideWorkspace };
-    if (pathKey(ws.uri.fsPath) === pathKey(dir.fsPath)) return { dir: null, reason: S.folder.atRoot };
-    return { dir, reason: null };
+    return file ? { dir: vscode.Uri.joinPath(file, '..'), reason: null } : { dir: null, reason: S.folder.openFile };
   }
 
   /**
@@ -157,52 +167,62 @@ export class FolderMode {
    * (command, header icon, header menu). File → folder: the active file's
    * folder is linked; its submit / run files are detected (when no submit
    * file is found, the active file is it). Folder → file: the folder link goes
-   * and the submit file (else the active file) is linked on its own.
+   * and the submit file (else the active file) is linked on its own. With no
+   * problem yet, the picker opens and the folder is linked to the choice.
    */
   async toggle(): Promise<void> {
     const h = this.host;
     const file = h.fileUri;
-    const problem = h.currentProblem();
-    if (!file || !problem) {
-      void vscode.window.showInformationMessage(file ? S.submit.chooseFirst : S.submit.openToSubmit);
+    if (!file) {
+      void vscode.window.showInformationMessage(S.submit.openToSubmit);
       return;
     }
-    const entry = { problemId: problem.id, name: problem.name, baseUrl: h.cfg.baseUrl };
+    const problem = h.currentProblem();
+    if (!problem) {
+      await h.chooseProblemQuickPick(async (id) => {
+        const picked = h.problems.find((p) => p.id === id);
+        if (picked) await this.linkActiveFolder(picked);
+      });
+      return;
+    }
     if (this.link && !this.matched) {
       const folder = vscode.Uri.file(this.link.fsPath);
       const keep = this.targetUri() ?? file;
       await h.mapping.set(folder, undefined);
-      await h.mapping.set(keep, entry);
+      await h.mapping.set(keep, { problemId: problem.id, name: problem.name, baseUrl: h.cfg.baseUrl });
       await h.setActiveFile(file);
       void vscode.window.setStatusBarMessage(S.folder.nowFile(keep.path.split('/').pop() ?? ''), TIMING.statusMessageMs);
       return;
     }
-    const { dir, reason } = this.modeTarget();
-    if (!dir) {
-      void h.askInline(reason ?? S.folder.atRoot, [{ id: 'ok', label: S.common.ok }]);
-      return;
-    }
+    await this.linkActiveFolder(problem);
+  }
+
+  /** Link the active file's folder to a problem, so that every file in it follows. */
+  private async linkActiveFolder(problem: Pick<Problem, 'id' | 'name'>): Promise<void> {
+    const h = this.host;
+    const file = h.fileUri;
+    const { dir } = this.modeTarget();
+    if (!file || !dir) return;
+    const label = this.label(dir.fsPath);
+    const replace = [
+      { id: 'replace', label: S.folder.replace, primary: true },
+      { id: 'cancel', label: S.common.cancel },
+    ];
     const existing = await h.mapping.get(dir, h.cfg.baseUrl);
     if (existing?.folder && existing.problemId !== problem.id) {
-      const pick = await h.askInline(S.folder.replaceQ(vscode.workspace.asRelativePath(dir), existing.name || `#${existing.problemId}`, problem.name), [
-        { id: 'replace', label: S.folder.replace, primary: true },
-        { id: 'cancel', label: S.common.cancel },
-      ]);
-      if (pick !== 'replace') return;
+      if ((await h.askInline(S.folder.replaceQ(label, existing.name || `#${existing.problemId}`, problem.name), replace)) !== 'replace') return;
     }
-    // Links of files inside to this same problem are now covered by the folder; links to other problems stay (they win).
-    for (const l of await h.mapping.linksFor(problem.id, h.cfg.baseUrl)) {
-      if (!l.folder && isAtOrInside(l.uri.fsPath, dir.fsPath)) await h.mapping.set(l.uri, undefined);
-    }
+    const others = (await h.mapping.fileLinksIn(dir, h.cfg.baseUrl)).filter((e) => e.entry.problemId !== problem.id);
+    if (others.length && (await h.askInline(S.folder.replaceFilesQ(label, others.length, problem.name), replace)) !== 'replace') return;
     const files = await this.sources(dir.fsPath);
     const detected = detectFolderRoles(await this.textsOf(dir.fsPath, files)).submit;
     const own = relative(dir.fsPath, file.fsPath).split(sep).join('/');
-    await h.mapping.set(dir, { ...entry, folder: true, ...(detected || files.length === 1 ? {} : { submitFile: own }) });
-    await h.mapping.setUnlinked(file, false); // an explicit choice clears "not linked"
+    const entry = { problemId: problem.id, name: problem.name, baseUrl: h.cfg.baseUrl, ...(detected || files.length === 1 ? {} : { submitFile: own }) };
+    await h.mapping.linkFolder(dir, entry, h.cfg.baseUrl, true);
     h.links.clearTempLink();
     await h.links.refreshMappedIds();
     await h.setActiveFile(file);
-    void vscode.window.setStatusBarMessage(S.folder.nowFolder(vscode.workspace.asRelativePath(dir)), TIMING.statusMessageMs);
+    void vscode.window.setStatusBarMessage(S.folder.nowFolder(label), TIMING.statusMessageMs);
   }
 
   /** The file that stands for a folder item (row click, notice, newer-file check); null when it has none. */
@@ -239,7 +259,7 @@ export class FolderMode {
     if (known) return known;
     const files = role === 'submit' ? this.files : runChoices(this.files, this.roles);
     if (!files.length) {
-      void h.askInline(S.folder.noSources(vscode.workspace.asRelativePath(link.fsPath)), [{ id: 'ok', label: S.common.ok }], { tone: 'warn', near });
+      void h.askInline(S.folder.noSources(this.label(link.fsPath)), [{ id: 'ok', label: S.common.ok }], { tone: 'warn', near });
       return null;
     }
     let pick: string | undefined;
