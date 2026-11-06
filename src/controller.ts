@@ -18,7 +18,6 @@ import {
   languageNameForPath,
   NetworkError,
   ProblemUnavailableError,
-  parseGraderComment,
   type Problem,
   type ProblemList,
   resultWord,
@@ -749,7 +748,7 @@ export class GraderController implements vscode.Disposable {
       language: h.language ? (pretty.get(h.language) ?? h.language) : null,
       compileError: h.status === 'compilation_error',
       counted: h.id === countedId,
-      verdicts: h.status === 'compilation_error' ? [] : parseGraderComment(h.comment),
+      verdicts: h.status === 'compilation_error' ? [] : this.client.parseVerdicts(h.comment),
     }));
     let expanded: ViewState['history']['expanded'] = null;
     if (this.expandedSubmission !== null && items.some((h) => h.id === this.expandedSubmission)) {

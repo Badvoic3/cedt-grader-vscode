@@ -1,5 +1,6 @@
 import type { Verdict } from '../../types';
 import { G } from '../../../shared/strings';
+import { resultWord } from '../../verdictWords';
 
 /**
  * cafe-grader result codes (`Evaluation::RESULT_CODE`, `config/locales/en.yml`,
@@ -60,17 +61,7 @@ export function parseGraderComment(comment: string | null | undefined): Verdict[
   });
 }
 
-/** "Group 2 of 3: 2/3 passed. Tests in a box are …" (passed = tiles with code P, as on the website). */
-export function groupLabel(group: number, groupCount: number, members: Pick<Verdict, 'ok'>[]): string {
-  return G.groupOf(group, groupCount, members.filter((m) => m.ok).length, members.length, G.groupHint);
-}
-
 /** Legend rows ("Reading the results"), in the current display language. */
 export function verdictLegend(): { code: string; kind: string; word: string }[] {
   return Object.entries(CODES).map(([code, v]) => ({ code, kind: v.kind, word: resultWord(v.kind) }));
-}
-
-/** Word for an evaluation `result` kind (`correct` → `Correct`), or the raw kind. */
-export function resultWord(kind: string | null | undefined): string {
-  return (kind && G.verdict[kind]) || kind || G.unknownVerdict;
 }

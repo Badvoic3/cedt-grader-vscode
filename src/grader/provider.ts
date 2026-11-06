@@ -1,7 +1,9 @@
 import type { Attachment } from './attachment';
-import type { FetchLike, Logger } from './providers/cafeGrader/http';
 import type { Redactor } from './redact';
-import type { GraderUser, Language, Problem, StoredToken, SubmissionBrief, SubmissionDetail, TestcaseInfo, TopicTag } from './types';
+import type { GraderUser, Language, Problem, StoredToken, SubmissionBrief, SubmissionDetail, TestcaseInfo, TopicTag, Verdict } from './types';
+
+export type FetchLike = (input: string, init?: RequestInit) => Promise<Response>;
+export type Logger = (line: string) => void;
 
 /** What a grader server can do; the UI hides what a provider cannot. */
 export interface GraderCapabilities {
@@ -71,6 +73,8 @@ export interface GraderProvider {
   /** Whether the last list page was an exam/contest page (null if none fetched). */
   readonly contestPage: boolean | null;
   url(path: string): string;
+  /** One verdict per test from a submission's comment; `[]` when it is plain text. */
+  parseVerdicts(comment: string | null | undefined): Verdict[];
   restore(): Promise<boolean>;
   login(creds?: Credentials): Promise<GraderUser>;
   logout(): Promise<void>;

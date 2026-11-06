@@ -10,20 +10,17 @@ import type {
   Language,
   ListScoreInfo,
   Problem,
-
   SubmissionBrief,
   SubmissionDetail,
   TestcaseInfo,
   TopicTag,
+  Verdict,
 } from '../../types';
 import { parseGraderComment } from './verdicts';
 import type { WebSession } from './web';
 import { isFinalStatus } from '../../provider';
 import type { Credentials, GraderCapabilities, GraderProvider, GraderProviderOptions, PollOptions, ProblemList } from '../../provider';
-export { isFinalStatus };
-export type { Credentials, GraderProviderOptions as GraderClientOptions, PollOptions, ProblemList, TokenStore } from '../../provider';
 
-export { DEFAULT_BASE_URL } from '../../../shared/constants';
 import { ATTACHMENT, DEFAULT_BASE_URL, STATEMENT, TIMING } from '../../../shared/constants';
 
 const MIN_POLL_MS = TIMING.pollMinMs;
@@ -87,6 +84,10 @@ export class GraderClient implements GraderProvider {
       this.webSession ??= new WebSession(this.baseUrl, this.opts.fetch, this.log, this.redactor);
     }
     return this.webSession;
+  }
+
+  parseVerdicts(comment: string | null | undefined): Verdict[] {
+    return parseGraderComment(comment);
   }
 
   url(path: string): string {

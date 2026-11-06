@@ -2,12 +2,12 @@ import { TIMING } from '../../../shared/constants';
 import { G } from '../../../shared/strings';
 import { CookieJar } from 'tough-cookie';
 import { checkRedirect, NetworkError, networkErrorFrom } from '../../errors';
+import type { FetchLike, Logger } from '../../provider';
 import { Redactor } from '../../redact';
+export type { FetchLike, Logger } from '../../provider';
 import { withTimeoutSignal } from '../../timeoutSignal';
 
-export type FetchLike = (input: string, init?: RequestInit) => Promise<Response>;
 
-export type Logger = (line: string) => void;
 
 export interface HttpResult {
   status: number;
