@@ -44,6 +44,8 @@ export const KEYS = {
   cphAutoShowDismissed: 'cedtGrader.cphAutoShowDismissed',
   /** "Remember password on this computer". */
   rememberPassword: 'cedtGrader.rememberPassword',
+  /** Grader addresses a login has accepted: these aren't checked again. */
+  verifiedServers: 'cedtGrader.verifiedServers',
   /** `.prob.bak` files this extension created in the workspace (deleted only from "Clear Cached Data"). */
   backups: 'cedtGrader.backups',
   /** SecretStorage keys written (password / token per address and user), so Log Out removes all of them (src/shared/secrets.ts). */

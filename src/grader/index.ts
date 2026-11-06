@@ -5,7 +5,7 @@ export * from './errors';
 export { DEFAULT_BASE_URL } from '../shared/constants';
 export * from './providers/cafeGrader/client';
 export * from './provider';
-export { createGrader } from './createGrader';
+export { checkGraderServer, createGrader } from './createGrader';
 export * from './contest';
 export * from './languages';
 export * from './score';

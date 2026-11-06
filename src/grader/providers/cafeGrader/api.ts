@@ -94,6 +94,9 @@ const GET_RETRIES = TIMING.getRetries;
 export type Sleep = (ms: number, signal?: AbortSignal) => Promise<void>;
 const realSleep: Sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+/** The check's answer is a line of JSON or a language list; a whole web page may be cut off here. */
+const PROBE_MAX_BYTES = 1024 * 1024;
+
 export class ApiClient {
   private token: string | null = null;
 
@@ -125,6 +128,13 @@ export class ApiClient {
     if (!res.ok || !body.token) throw new AuthError(body.error ?? G.loginFailedHttp(res.status), 'unknown');
     this.setToken(body.token);
     return body as ApiLoginResponse;
+  }
+
+  /** One anonymous GET, no retry, with the same redirect lock and timeout as every other request. */
+  async probe(path: string): Promise<{ status: number; contentType: string; text: string }> {
+    const res = await this.raw('GET', path, undefined, false, undefined, true);
+    const text = new TextDecoder().decode(await readCapped(res, PROBE_MAX_BYTES));
+    return { status: res.status, contentType: res.headers.get('content-type') ?? '', text };
   }
 
   /** Idempotent GET: retried with back-off on 429 / 5xx (never for POSTs or login). */

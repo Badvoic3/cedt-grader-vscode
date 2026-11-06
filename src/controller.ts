@@ -10,6 +10,7 @@ import {
   classifyConnectionError,
   type ConnectionProblem,
   type Credentials,
+  checkGraderServer,
   createGrader,
   type GraderProvider,
   GraderError,
@@ -41,7 +42,7 @@ import { MappingStore } from './mapping/store';
 import { pathKey } from './mapping/paths';
 import { matchNote, type MatchInfo, NO_MATCH_INFO } from './mapping/linkActions';
 import { nameMatchesProblem, renameProposal } from './mapping/renameToProblem';
-import { LIMITS, SUBMISSION_SCHEME, TIMING, troubleshootingUrl, WEB_PATHS } from './shared/constants';
+import { DEFAULT_BASE_URL, LIMITS, SUBMISSION_SCHEME, TIMING, troubleshootingUrl, WEB_PATHS } from './shared/constants';
 import { MATCH_SOURCE, S, W } from './shared/strings';
 import { KEYS } from './shared/stateKeys';
 import { SecretLedger, type SecretKind, secretKey } from './shared/secrets';
@@ -55,6 +56,7 @@ import type { CurrentProblem, Host } from './flows/host';
 import { Links } from './flows/links';
 import { type AskOptions, type InlinePrompt, InlinePrompts } from './flows/prompts';
 import { countedSubmissionId } from './flows/results';
+import { ServerFlow } from './flows/server';
 import { SubmitFlow } from './flows/submit';
 import { TestCases } from './flows/testcases';
 
@@ -96,7 +98,9 @@ export class GraderController implements vscode.Disposable {
   private selectedLanguageId: number | null = null;
   private expandedSubmission: number | null = null;
   private refreshSeq = 0;
-  private changingUsername = false;
+  /** A login is writing the username / address itself: the settings event must not reset the session too. */
+  private changingAccount = false;
+  private readonly server: ServerFlow;
   /** Matching details for the active file (picker suggestions, ambiguous candidates). */
   private matchInfo: MatchInfo = NO_MATCH_INFO;
   /** Problems the grader no longer offers (missing from the list, or 404/403 this session). */
@@ -155,6 +159,16 @@ export class GraderController implements vscode.Disposable {
     });
     this.cph = new CphPresence(vscode.extensions, () => this.emit());
     this.host = this.makeHost();
+    this.server = new ServerFlow({
+      verified: () => this.ctx.globalState.get<string[]>(KEYS.verifiedServers, []),
+      saveVerified: async (list) => void (await this.ctx.globalState.update(KEYS.verifiedServers, list)),
+      check: (url) => checkGraderServer(url, { log: (line) => this.requestLog(line) }),
+      confirmInsecure: async (url) => {
+        const send = S.account.insecureSend;
+        return (await vscode.window.showWarningMessage(S.account.insecureTitle(new URL(url).host), { modal: true, detail: S.account.insecureDetail }, send)) === send;
+      },
+      changed: () => this.emit(),
+    });
     this.prompts = new InlinePrompts(
       () => this.emit(),
       () => void vscode.commands.executeCommand('cedtGrader.panel.focus'),
@@ -439,7 +453,7 @@ export class GraderController implements vscode.Disposable {
       this.warnBadPattern();
       if (this.fileUri) void this.setActiveFile(this.fileUri);
     }
-    if (this.changingUsername && prev.baseUrl === this.cfg.baseUrl) {
+    if (this.changingAccount) {
       this.emit();
       return;
     }
@@ -669,6 +683,7 @@ export class GraderController implements vscode.Disposable {
         hasSavedPassword: this.hasSavedPassword,
         rememberPassword: this.rememberPassword,
         error: this.accountError,
+        server: this.server.view(),
       },
       file: file
         ? {
@@ -910,34 +925,52 @@ export class GraderController implements vscode.Disposable {
    * password goes to SecretStorage (macOS Keychain); without it, only the
    * token is kept, in memory.
    */
-  async loginWith(username: string, password: string, remember: boolean): Promise<boolean> {
+  async loginWith(username: string, password: string, remember: boolean, server?: string): Promise<boolean> {
     username = username.trim();
     if (!username || !password) {
       this.accountError = S.account.enterBoth;
       this.emit();
       return false;
     }
+    // Before anything is stored or sent: a blocked address leaves the account as it was.
+    const gate = await this.server.gate(server, this.cfg.baseUrl);
+    if (!gate.ok) return false;
+    this.server.reset();
     await this.ctx.globalState.update(KEYS.rememberPassword, remember);
-    if (username !== this.cfg.username) {
-      await this.secrets.forgetAccount(this.cfg.baseUrl, this.cfg.username);
-      this.changingUsername = true;
-      try {
-        await vscode.workspace.getConfiguration('cedtGrader').update('username', username, vscode.ConfigurationTarget.Global);
-      } finally {
-        this.changingUsername = false;
-      }
-      this.cfg = readConfig();
-      await this.client.logout();
-      this.client = this.makeClient();
-      this.resetSessionState();
-    }
+    if (username !== this.cfg.username || gate.url !== this.cfg.baseUrl) await this.switchAccount(username, gate.url);
     if (remember) await this.secrets.store(this.secretKey('password'), password);
     else await this.secrets.delete(this.secretKey('password'));
     this.hasSavedPassword = remember;
     return this.doLogin({ username, password });
   }
 
-  /** Log in with the stored password (explicit user action). */
+  /** Another user or grader: the previous one's saved password and token don't stay behind. */
+  private async switchAccount(username: string, baseUrl: string): Promise<void> {
+    const prev = this.cfg;
+    await this.secrets.forgetAccount(prev.baseUrl, prev.username);
+    this.changingAccount = true;
+    try {
+      const settings = vscode.workspace.getConfiguration('cedtGrader');
+      if (username !== prev.username) await settings.update('username', username, vscode.ConfigurationTarget.Global);
+      if (baseUrl !== prev.baseUrl) await settings.update('baseUrl', baseUrl === DEFAULT_BASE_URL ? undefined : baseUrl, vscode.ConfigurationTarget.Global);
+    } finally {
+      this.changingAccount = false;
+    }
+    this.cfg = readConfig();
+    await this.client.logout();
+    this.client = this.makeClient();
+    this.resetSessionState();
+  }
+
+  /** Show whether an address typed at login answers like a grader. Sends no credentials. */
+  checkServer(url: string): Promise<void> {
+    return this.server.inspect(url);
+  }
+
+  /**
+   * Log in with the stored password (explicit user action). It isn't checked
+   * again: a password is stored per address, so this one has already gone there.
+   */
   async login(): Promise<boolean> {
     const password = await this.getPassword();
     if (!this.cfg.username || !password) {

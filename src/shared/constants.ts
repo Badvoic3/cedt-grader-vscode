@@ -174,6 +174,8 @@ export const MATCH = {
 // ------------------------------------------------------------------ limits
 
 export const LIMITS = {
+  /** Accepted grader addresses remembered; an older one is just checked again. */
+  verifiedServers: 20,
   /** Remembered auto-matches (oldest dropped). */
   autoMatchesMax: 500,
   /** "Recently opened" problems remembered for sorting. */

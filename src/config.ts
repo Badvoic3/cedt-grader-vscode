@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
-import { DEFAULT_BASE_URL } from './shared/constants';
-import { CACHE } from './shared/constants';
+import { CACHE, DEFAULT_BASE_URL } from './shared/constants';
+import { normalizeServerUrl } from './shared/serverUrl';
 import type { LangSetting } from './shared/i18n';
 import { checkPattern, type PatternCheck } from './mapping/namePattern';
 import { normalizeSections, type SectionId } from './shared/layout';
@@ -47,14 +47,7 @@ export function readConfig(): GraderConfig {
     const i = c.inspect<T>(key);
     return (i?.globalValue ?? i?.defaultValue ?? fallback) as T;
   };
-  const rawBase = String(userValue('baseUrl', DEFAULT_BASE_URL) || DEFAULT_BASE_URL).trim();
-  let baseUrl = DEFAULT_BASE_URL;
-  try {
-    const u = new URL(rawBase);
-    if (u.protocol === 'https:' || u.protocol === 'http:') baseUrl = u.origin + u.pathname.replace(/\/+$/, '');
-  } catch {
-    /* keep default */
-  }
+  const baseUrl = normalizeServerUrl(String(userValue('baseUrl', DEFAULT_BASE_URL) || DEFAULT_BASE_URL)) ?? DEFAULT_BASE_URL;
   return {
     baseUrl,
     username: String(userValue('username', '')).trim(),

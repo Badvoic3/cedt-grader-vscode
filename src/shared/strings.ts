@@ -235,6 +235,12 @@ const EN_S = {
 
   account: {
     enterBoth: 'Enter your username and password.',
+    serverInvalid: "That isn't a web address.",
+    serverIncompatible: "This address isn't a supported grader, so you can't log in yet. Your password wasn't sent.",
+    serverUnreachable: (host: string | number) => `Couldn't reach ${host}, so you can't log in yet. Your password wasn't sent. Check the address and try again.`,
+    insecureTitle: (host: string | number) => `Send your password to ${host} without encryption?`,
+    insecureDetail: 'This address uses http://, so others on the network could read your password.',
+    insecureSend: 'Send anyway',
   },
 
   penaltyNote: {

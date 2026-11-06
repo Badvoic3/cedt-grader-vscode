@@ -54,6 +54,10 @@ export interface GraderProviderOptions {
   sleep?: (ms: number, signal?: AbortSignal) => Promise<void>;
 }
 
+/** What an address turned out to be, from one anonymous request. */
+export type ServerCheck = { status: 'compatible' | 'incompatible' | 'unreachable' };
+export type ServerCheckOptions = Pick<GraderProviderOptions, 'fetch' | 'log'>;
+
 /** Final states: the submission will not change any more (safe to cache forever). */
 export function isFinalStatus(status: string): boolean {
   return GRADED.has(status);

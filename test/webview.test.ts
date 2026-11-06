@@ -36,7 +36,7 @@ const score = (counted: number | null, extra: Partial<ScoreView> = {}): ScoreVie
 const base: ViewState = {
   baseUrl: 'https://cedt-grader.nattee.net',
   layout: { sections: ['account', 'current', 'result', 'history', 'problems'], compact: false },
-  account: { status: 'logged-out', username: '', fullName: null, hasSavedPassword: false, rememberPassword: true, error: null },
+  account: { status: 'logged-out', username: '', fullName: null, hasSavedPassword: false, rememberPassword: true, error: null, server: { draft: null, status: 'idle', message: null } },
   file: null,
   problem: null,
   matching: { suggestions: [], ambiguous: null, note: null },
@@ -64,7 +64,7 @@ const base: ViewState = {
 
 const loggedIn: ViewState = {
   ...base,
-  account: { status: 'logged-in', username: 'student', fullName: null, hasSavedPassword: true, rememberPassword: true, error: null },
+  account: { status: 'logged-in', username: 'student', fullName: null, hasSavedPassword: true, rememberPassword: true, error: null, server: { draft: null, status: 'idle', message: null } },
   file: { path: 'grader/00 11 intro.cpp', name: '00 11 intro.cpp', languageGuess: 'C++', supported: true, renameTo: null },
   problem: { id: 1360, name: '00_Intro_11', fullName: '<img src=x onerror=alert(1)>', score: score(70, { latest: 40, attempts: 3, latestBelowCounted: true, penaltyLabel: '-10 AI assist' }), source: 'saved', sourceLabel: 'saved', unavailable: false, hasFile: true, hasTestcase: true, hasAttachment: false, status: 'solved', tags: ['ComProg'], lastSubmissionTime: null, lastOpened: null },
   languages: { loading: false, items: [{ id: 1, name: 'C' }, { id: 2, name: 'C++' }], selectedId: 2, mismatch: null },

@@ -134,6 +134,13 @@ export interface SubmissionDetailView {
   evaluations: EvaluationView[];
 }
 
+/** The address typed at login and what the check said about it. */
+export interface ServerView {
+  draft: string | null;
+  status: 'idle' | 'checking' | 'ok' | 'bad' | 'unreachable';
+  message: string | null;
+}
+
 export interface ViewState {
   baseUrl: string;
   /** Panel layout settings (sections shown and their order, compact mode). */
@@ -147,6 +154,7 @@ export interface ViewState {
     /** Default for the "Remember password on this computer" checkbox. */
     rememberPassword: boolean;
     error: string | null;
+    server: ServerView;
   };
   file: {
     path: string;
@@ -269,7 +277,8 @@ export type ToWebview = { type: 'state'; state: ViewState } | { type: 'focus'; t
 /** Webview → host. The password is only ever carried by `login`. */
 export type FromWebview =
   | { type: 'ready' }
-  | { type: 'login'; username: string; password: string; remember: boolean }
+  | { type: 'login'; username: string; password: string; remember: boolean; server?: string }
+  | { type: 'checkServer'; url: string }
   | { type: 'loginSaved' }
   | { type: 'logout' }
   | { type: 'submit' }
