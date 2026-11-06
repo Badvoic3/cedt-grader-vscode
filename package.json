@@ -2,7 +2,7 @@
   "name": "cedt-grader-submit",
   "displayName": "CEDT Grader Submit",
   "description": "%extension.description%",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "publisher": "Badvoic3",
   "license": "MIT",
   "icon": "media/icon.png",
@@ -339,8 +339,14 @@
         },
         "cedtGrader.panel.topicClickOrder": {
           "type": "string",
-          "enum": ["showFirst", "hideFirst"],
-          "enumDescriptions": ["%config.panel.topicClickOrder.showFirst%", "%config.panel.topicClickOrder.hideFirst%"],
+          "enum": [
+            "showFirst",
+            "hideFirst"
+          ],
+          "enumDescriptions": [
+            "%config.panel.topicClickOrder.showFirst%",
+            "%config.panel.topicClickOrder.hideFirst%"
+          ],
           "default": "showFirst",
           "markdownDescription": "%config.panel.topicClickOrder.description%"
         },
