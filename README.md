@@ -18,7 +18,7 @@ This is an unofficial homework tool. It is not made by the grader's maintainers.
 
 ## Install
 
-You need **VS Code 1.90 or newer**.
+You need **VS Code 1.82 or newer**.
 
 ### In VS Code (Marketplace)
 

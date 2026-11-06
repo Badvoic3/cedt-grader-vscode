@@ -3,6 +3,7 @@ import { G } from '../shared/strings';
 import { CookieJar } from 'tough-cookie';
 import { checkRedirect, NetworkError, networkErrorFrom } from './errors';
 import { Redactor } from './redact';
+import { withTimeoutSignal } from './timeoutSignal';
 
 export type FetchLike = (input: string, init?: RequestInit) => Promise<Response>;
 
@@ -78,8 +79,7 @@ export class HttpSession {
       // FormData: let fetch set the multipart boundary.
 
       let res: Response;
-      const timeout = AbortSignal.timeout(REQUEST_TIMEOUT_MS);
-      const signal = opts.signal ? AbortSignal.any([opts.signal, timeout]) : timeout;
+      const signal = withTimeoutSignal(REQUEST_TIMEOUT_MS, opts.signal);
       try {
         res = await this.fetchImpl(url, { method, headers, body, redirect: 'manual', signal });
       } catch (err) {

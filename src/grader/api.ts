@@ -3,6 +3,7 @@ import { TIMING } from '../shared/constants';
 import { AuthError, checkRedirect, GraderError, NetworkError, LanguageNotAllowedError, networkErrorFrom, ProblemUnavailableError, ServerBusyError, SessionExpiredError, SubmitRejectedError } from './errors';
 import type { FetchLike, Logger } from './http';
 import type { Redactor } from './redact';
+import { withTimeoutSignal } from './timeoutSignal';
 
 /**
  * Thin client for cafe-grader's JSON API (`/api/v1`, JWT bearer auth).
@@ -249,7 +250,7 @@ export class ApiClient {
       if (!this.token) throw new SessionExpiredError(G.notLoggedIn, true);
       headers['Authorization'] = `Bearer ${this.token}`;
     }
-    const timeout = AbortSignal.timeout(TIMEOUT_MS);
+    const limited = withTimeoutSignal(TIMEOUT_MS, signal);
     let res: Response;
     // Redirects are followed here, not by fetch (`redirect: 'manual'`), and only within the
     // grader's origin: fetch would re-send a 307/308 login body (the password) to any host,
@@ -265,7 +266,7 @@ export class ApiClient {
           headers,
           body: sendBody,
           redirect: 'manual',
-          signal: signal ? AbortSignal.any([signal, timeout]) : timeout,
+          signal: limited,
         });
       } catch (err) {
         if (signal?.aborted) throw err;

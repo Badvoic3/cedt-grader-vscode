@@ -62,7 +62,7 @@ const host = await context({
   outfile: 'dist/extension.js',
   platform: 'node',
   format: 'cjs',
-  target: 'node20',
+  target: 'node18',
   external: ['vscode'],
   // Node reads the bundle as UTF-8: keep the Thai texts as they are (\uXXXX escapes made it 60 KB larger).
   charset: 'utf8',

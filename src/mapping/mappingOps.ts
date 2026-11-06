@@ -1,8 +1,10 @@
-import { STALE_LINK_DAYS } from '../shared/constants';
+import { LIMITS, STALE_LINK_DAYS } from '../shared/constants';
 import { mkdir, readdir, readFile, rename, stat, writeFile } from 'node:fs/promises';
 import { basename, dirname, join, relative } from 'node:path';
 import { isAtOrInside, isInside, pathKey, remapPath } from './paths';
 import { cphProbPath, type CphProblem } from './cph';
+import { EXCLUDED_DIRS } from './findByName';
+import { listFolderFiles } from './folderFiles';
 import type { MappingEntry } from './mappingFile';
 
 /**
@@ -184,8 +186,8 @@ export async function cphFilesAfterFolderRename(
   if (saveLocation) {
     probs = (await readdir(saveLocation).catch(() => [] as string[])).filter((f) => f.endsWith('.prob')).map((f) => join(saveLocation, f));
   } else {
-    const all = await readdir(newFolder, { recursive: true }).catch(() => [] as string[]);
-    probs = all.map(String).filter((r) => /(^|[\\/])\.cph[\\/][^\\/]+\.prob$/.test(r)).map((r) => join(newFolder, r));
+    const all = await listFolderFiles(newFolder, LIMITS.indexMaxFiles, (name) => name === '.cph' || !EXCLUDED_DIRS.includes(name));
+    probs = all.filter((r) => /(^|\/)\.cph\/[^/]+\.prob$/.test(r)).map((r) => join(newFolder, r));
   }
   const out: { prob: string; oldSrc: string; newSrc: string }[] = [];
   for (const prob of probs) {

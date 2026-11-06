@@ -4,7 +4,7 @@ import { KEYS } from './stateKeys';
  * SecretStorage keys (password and API token per grader address and user)
  * and a list of every key written, kept in globalState, so Log Out and a
  * change of user or grader address remove what earlier users left behind
- * (VS Code 1.90's SecretStorage can't list its keys). No `vscode` import.
+ * (VS Code's SecretStorage can't list its keys). No `vscode` import.
  */
 
 export type SecretKind = 'password' | 'token';

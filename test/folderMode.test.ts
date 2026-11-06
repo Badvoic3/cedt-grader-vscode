@@ -6,7 +6,7 @@
  */
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { cphProbPath } from '../src/mapping/cph';
 import { chooseLanguage, type Language } from '../src/grader';
@@ -216,6 +216,22 @@ describe('CPH test cases follow a renamed folder (their file name holds the md5 
     expect(moved.tests).toHaveLength(1);
     expect(existsSync(`${found[0].prob}.bak`)).toBe(true);
     expect(await cphFilesAfterFolderRename(oldDir, newDir)).toEqual([]); // nothing orphaned any more
+  });
+
+  it('finds .prob files in sub-folders, not in build or dependency folders', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'cedt-cphmv-'));
+    const oldDir = join(root, 'pkg');
+    const newDir = join(root, 'renamed');
+    const place = (rel: string) => {
+      const prob = cphProbPath(join(oldDir, rel));
+      const moved = join(newDir, prob.slice(oldDir.length));
+      mkdirSync(dirname(moved), { recursive: true });
+      writeFileSync(moved, JSON.stringify({ name: 'x', url: '', tests: [], srcPath: join(oldDir, rel) }));
+    };
+    place('sub/deep/a.cpp');
+    place('node_modules/b.cpp');
+    const found = await cphFilesAfterFolderRename(oldDir, newDir);
+    expect(found.map((f) => f.newSrc)).toEqual([join(newDir, 'sub', 'deep', 'a.cpp')]);
   });
 
   it('with a CPH save location: the .prob stayed there and is found by its srcPath', async () => {
