@@ -1,0 +1,83 @@
+import type { ChildProcessWithoutNullStreams, SpawnOptionsWithoutStdio } from 'node:child_process';
+
+/**
+ * The built-in runner's shared data (no `vscode` import). These shapes serve
+ * both the runner and the Test split view; `ProblemCases` is what is stored
+ * on disk, everything else lives in memory.
+ */
+
+/** Where a case came from (the badge). `sample` = read from the statement PDF. */
+export type CaseSource = 'grader' | 'sample' | 'custom';
+
+export interface RunnerCase {
+  /** Stable across edits and reorders. */
+  id: string;
+  source: CaseSource;
+  input: string;
+  expected: string;
+  /** Grader cases: the server's id, so a second Load updates the case instead of adding it again. */
+  testcaseId?: number;
+}
+
+/** One problem's runner list, as stored in `runner-cases/<host>/<problemId>.json`. */
+export interface ProblemCases {
+  version: 1;
+  problemId: number;
+  /** Array order is the display order. */
+  cases: RunnerCase[];
+  /** Last limits read from the grader, kept for offline use. */
+  limits?: { timeMs: number; memoryMB: number; fetchedAt: string };
+  sampleTip?: { failedRuns: number; dismissed: boolean };
+}
+
+export interface RunLimits {
+  timeMs: number;
+  memoryMB: number;
+  source: 'grader' | 'default';
+}
+
+/** Text kept from a stream: cut at the display limit, `truncated` says so. */
+export interface Captured {
+  text: string;
+  truncated: boolean;
+}
+
+/** `OLE`: output limit. `MLE` is an estimate (the grader may report the same run differently). */
+export type Verdict = 'AC' | 'WA' | 'TLE' | 'MLE' | 'RE' | 'OLE';
+
+export interface CaseRun {
+  caseId: string;
+  state: 'pending' | 'running' | 'done' | 'stopped';
+  verdict?: Verdict;
+  timeMs?: number;
+  /** Estimate; null shows "—" (Windows, or measuring failed). */
+  memoryKB?: number | null;
+  exitCode?: number | null;
+  signal?: string | null;
+  actual?: Captured;
+  stderr?: Captured;
+}
+
+export type RunSummary =
+  | { kind: 'no-cases' }
+  | { kind: 'not-run' }
+  | { kind: 'compiling' }
+  | { kind: 'running'; done: number; total: number }
+  | { kind: 'done'; passed: number; total: number }
+  | { kind: 'compile-error' };
+
+export interface CompileFailure {
+  message: string;
+  file: string | null;
+  line: number | null;
+}
+
+/** The part of a spawned process the runner uses; a fake in tests. */
+export type RunnerChild = Pick<ChildProcessWithoutNullStreams, 'pid' | 'stdin' | 'stdout' | 'stderr' | 'on' | 'once' | 'kill'>;
+
+/** Everything that starts or stops a process goes through here, so tests never start one. */
+export interface ProcessApi {
+  spawn(command: string, args: readonly string[], options: SpawnOptionsWithoutStdio): RunnerChild;
+  /** Kill the process and everything it started. Never throws. */
+  killTree(child: RunnerChild): void;
+}
