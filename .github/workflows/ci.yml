@@ -15,8 +15,6 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest]
     runs-on: ${{ matrix.os }}
-    # Windows has never been run here: report its failures without blocking until it passes.
-    continue-on-error: ${{ matrix.os == 'windows-latest' }}
     steps:
       - run: git config --global core.autocrlf false
       - uses: actions/checkout@v5
