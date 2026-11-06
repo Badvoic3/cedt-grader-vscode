@@ -90,6 +90,23 @@ export class FolderMode {
     return true;
   }
 
+  /**
+   * Auto-detect found this folder: the user asked for it, so the match becomes
+   * the folder link and every file follows (files inside linked to other
+   * problems are asked about first; declined, it stays an unsaved match).
+   */
+  async saveMatch(): Promise<void> {
+    const h = this.host;
+    const link = this.link;
+    const file = h.fileUri;
+    if (!link || !this.matched || !file) return;
+    const folder = vscode.Uri.file(link.fsPath);
+    if (!(await this.mayReplaceFileLinks(folder, link.entry.problemId, link.entry.name))) return;
+    await h.mapping.linkFolder(folder, { ...link.entry }, h.cfg.baseUrl, true);
+    await h.links.refreshMappedIds();
+    await h.setActiveFile(file);
+  }
+
   /** A problem picked in folder mode: the folder link moves to it (its submit / run files stay), and every file follows. */
   async setProblem(problemId: number, name: string): Promise<void> {
     const h = this.host;

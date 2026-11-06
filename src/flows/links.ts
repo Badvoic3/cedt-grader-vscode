@@ -401,6 +401,7 @@ export class Links {
       if (pick !== 'switch') return;
       await h.mapping.set(uri, undefined);
       await h.setActiveFile(uri);
+      await h.folder.saveMatch();
     } else if (o.kind === 'agrees') {
       void h.askInline(S.autoDetect.agrees(o.problem.name, how[o.source] ?? ''), ok);
     } else if (o.kind === 'kept') {
@@ -408,6 +409,7 @@ export class Links {
     } else {
       await h.setActiveFile(uri);
       if (o.none) void h.askInline(S.autoDetect.none, ok);
+      else await h.folder.saveMatch();
     }
   }
 

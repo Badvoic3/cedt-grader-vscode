@@ -6,7 +6,7 @@
  */
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Host } from '../src/flows/host';
 import { FolderMode } from '../src/flows/folderMode';
@@ -62,14 +62,16 @@ class Memo {
 function session() {
   const mapping = new MappingStore({ workspaceState: new Memo(), globalState: new Memo() } as never);
   const problems = [
-    { id: 1, name: 'alpha' },
-    { id: 2, name: 'beta' },
-    { id: 3, name: 'gamma' },
+    { id: 1, name: 'alpha', fullName: 'alpha', tags: [] },
+    { id: 2, name: 'beta', fullName: 'beta', tags: [] },
+    { id: 3, name: 'gamma', fullName: 'gamma', tags: [] },
   ];
   const s = {
     mapping,
     problems,
-    cfg: { baseUrl: BASE },
+    cfg: { baseUrl: BASE, fileNamePattern: { pattern: '{name}.{ext}' } },
+    data: { problemList: () => ({ problems }) },
+    cphSaveLocation: () => '',
     fileUri: null as { fsPath: string } | null,
     problem: null as { id: number; name: string } | null,
     /** Answer to the inline questions; undefined = dismissed. */
@@ -91,6 +93,12 @@ function session() {
       const link = await mapping.activeLink(u as never, BASE);
       await s.folder.load(link?.folder ? { fsPath: link.folder, entry: link.entry } : null);
       s.problem = link ? { id: link.entry.problemId, name: link.entry.name } : null;
+      // As the controller does: a file with no link in a folder named like a problem is folder mode, unsaved.
+      const byName = link ? undefined : problems.find((p) => p.name === basename(dirname(u.fsPath)));
+      if (byName) {
+        await s.folder.load({ fsPath: dirname(u.fsPath), entry: { problemId: byName.id, name: byName.name, baseUrl: BASE, folder: true } }, true);
+        s.problem = byName;
+      }
     },
     folder: null as unknown as FolderMode,
     links: null as unknown as Links,
@@ -304,6 +312,58 @@ describe('cause D: file links inside the folder', () => {
     expect(await s.folder.keepMatch()).toBe(true);
     expect((await s.mapping.get(uri(join(pkg, 'bar.cpp')), BASE))?.problemId).toBe(2);
     expect(s.mapping.isUnlinked(uri(join(pkg, 'student.h')))).toBe(false);
+  });
+});
+
+describe('Auto-detect on a folder matched by its name', () => {
+  let named: string;
+  beforeEach(() => {
+    named = join(root, 'alpha');
+    mkdirSync(named);
+    for (const f of FILES) writeFileSync(join(named, f), `// ${f}\n`);
+  });
+  const start = async (s: ReturnType<typeof session>) => {
+    await s.mapping.set(uri(join(named, 'bar.cpp')), { problemId: 2, name: 'beta', baseUrl: BASE });
+    await s.setActiveFile(uri(join(named, 'foo.cpp')));
+  };
+
+  it('saves the folder link: no second click on Link the whole folder', async () => {
+    const s = session();
+    await s.setActiveFile(uri(join(named, 'foo.cpp')));
+    expect(s.folder.matched).toBe(true);
+    await s.links.autoDetect();
+    expect(s.asked).toEqual([]);
+    expect(s.folder.matched).toBe(false);
+    expect(await s.mapping.get(uri(named), BASE)).toMatchObject({ problemId: 1, folder: true });
+    expect(await follow(s, named)).toEqual(allOn(1, named));
+  });
+
+  it('asks about a file linked to another problem, then every file follows', async () => {
+    const s = session();
+    await start(s);
+    s.answer = 'replace';
+    await s.links.autoDetect();
+    expect(s.asked).toHaveLength(1);
+    expect(await follow(s, named)).toEqual(allOn(1, named));
+  });
+
+  it('declining saves nothing', async () => {
+    const s = session();
+    await start(s);
+    s.answer = 'cancel';
+    await s.links.autoDetect();
+    expect(s.folder.matched).toBe(true);
+    expect(await s.mapping.get(uri(named), BASE)).toBeUndefined();
+    expect((await s.mapping.get(uri(join(named, 'bar.cpp')), BASE))?.problemId).toBe(2);
+  });
+
+  it('a file matched on its own name is not saved', async () => {
+    const s = session();
+    writeFileSync(join(pkg, 'beta.cpp'), '');
+    await s.setActiveFile(uri(join(pkg, 'beta.cpp')));
+    await s.links.autoDetect();
+    expect(await s.mapping.get(uri(pkg), BASE)).toBeUndefined();
+    expect(await s.mapping.get(uri(join(pkg, 'beta.cpp')), BASE)).toBeUndefined();
   });
 });
 
