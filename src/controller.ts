@@ -423,7 +423,7 @@ export class GraderController implements vscode.Disposable {
   /** `cedtGrader.debugRequests`: method, path, status and cache hit/miss only. Never tokens. */
   private requestLog(line: string): void {
     if (!this.cfg.debugRequests) return;
-    if (!this.debugChannel) this.debugChannel = vscode.window.createOutputChannel('CEDT Grader: Requests');
+    if (!this.debugChannel) this.debugChannel = vscode.window.createOutputChannel('Grader Submit: Requests');
     const isHttp = /^(GET|POST) /.test(line);
     if (isHttp) this.requestCount++;
     const t = new Date().toISOString().slice(11, 23);
@@ -437,7 +437,7 @@ export class GraderController implements vscode.Disposable {
         .then((p) => p && vscode.commands.executeCommand('workbench.action.openSettings', 'cedtGrader.debugRequests'));
       return;
     }
-    if (!this.debugChannel) this.debugChannel = vscode.window.createOutputChannel('CEDT Grader: Requests');
+    if (!this.debugChannel) this.debugChannel = vscode.window.createOutputChannel('Grader Submit: Requests');
     this.debugChannel.show(true);
   }
 

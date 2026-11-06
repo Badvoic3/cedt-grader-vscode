@@ -6,7 +6,7 @@ import { type FromWebview, isFromWebview, type ToWebview } from '../shared/messa
 import { currentLang } from '../shared/i18n';
 
 /**
- * The "CEDT Grader" sidebar. Renders `ViewState` snapshots from the
+ * The Grader sidebar. Renders `ViewState` snapshots from the
  * controller; every action is a typed message handled here in the extension
  * host (the webview never talks to the network).
  */
@@ -230,7 +230,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider, vscode.Dispo
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <link rel="stylesheet" href="${uri('dist', 'codicon.css')}">
 <link rel="stylesheet" href="${uri('dist', 'webview.css')}">
-<title>CEDT Grader</title>
+<title>Grader Submit</title>
 </head>
 <body>
 <div id="app" aria-live="polite"></div>

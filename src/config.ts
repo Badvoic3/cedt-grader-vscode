@@ -10,7 +10,7 @@ export interface GraderConfig {
   username: string;
   pollIntervalSeconds: number;
   confirmBeforeSubmit: boolean;
-  /** Log method, path, status and cache hit/miss to the "CEDT Grader: Requests" channel. */
+  /** Log method, path, status and cache hit/miss to the "Grader Submit: Requests" channel. */
   debugRequests: boolean;
   /** Open problem statements beside the code (ViewColumn.Beside). */
   statementBeside: boolean;

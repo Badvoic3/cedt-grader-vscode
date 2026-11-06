@@ -1,5 +1,5 @@
 /*
- * CEDT Grader sidebar webview. Plain DOM, no framework.
+ * Grader sidebar webview. Plain DOM, no framework.
  *
  * Security: every string that may come from the grader is inserted with
  * textContent / attributes only, never innerHTML. The webview has no network

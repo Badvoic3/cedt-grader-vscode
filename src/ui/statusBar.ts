@@ -7,7 +7,7 @@ export class GraderStatusBar implements vscode.Disposable {
   private readonly item = vscode.window.createStatusBarItem('cedtGrader.status', vscode.StatusBarAlignment.Left, 50);
 
   constructor() {
-    this.item.name = 'CEDT Grader';
+    this.item.name = 'Grader Submit';
     this.item.command = 'cedtGrader.focus';
   }
 

@@ -40,8 +40,8 @@ function osUser(): string | undefined {
  * the machine unless the user presses the button: `open` is the only way out.
  */
 export class CrashReporter implements vscode.Disposable {
-  /** The "CEDT Grader" channel; it lives here so that it exists when activation fails. */
-  readonly output = vscode.window.createOutputChannel('CEDT Grader');
+  /** The "Grader Submit" channel; it lives here so that it exists when activation fails. */
+  readonly output = vscode.window.createOutputChannel('Grader Submit');
   /** Set by the controller. Until then the panel doesn't exist. */
   onChange: () => void = () => {};
   panelReady: () => boolean = () => false;

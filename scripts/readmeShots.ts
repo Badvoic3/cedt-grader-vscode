@@ -156,7 +156,7 @@ function installHtml(lang: Lang): string {
   const desc = nls['extension.description'] ?? '';
   const iconPng = pathToFileURL(join(ROOT, 'media', 'icon.png')).href;
   const iconSvg = readFileSync(join(ROOT, 'media', 'icon.svg'), 'utf8').trim();
-  const hint = lang === 'th' ? 'ไอคอน CEDT Grader จะแสดงตรงนี้หลังติดตั้ง' : 'CEDT Grader appears here after install';
+  const hint = lang === 'th' ? 'ไอคอน Grader จะแสดงตรงนี้หลังติดตั้ง' : 'CEDT Grader appears here after install';
   return `<style>
     .inst-wrap { display: flex; width: ${WIDTH}px; background: #181818; color: #cccccc; font-family: -apple-system, BlinkMacSystemFont, sans-serif; border-top: 1px solid #2b2b2b; border-bottom: 1px solid #2b2b2b; }
     .inst-act { width: 48px; flex-shrink: 0; background: #181818; border-right: 1px solid #2b2b2b; display: flex; flex-direction: column; align-items: center; padding: 2px 0 4px; box-sizing: border-box; }
@@ -211,7 +211,7 @@ function installHtml(lang: Lang): string {
       </div>
       <div class="inst-search-wrap">
         <div class="inst-search">
-          <span class="inst-search-text">CEDT Grader Submit</span>
+          <span class="inst-search-text">Grader Submit</span>
           <span class="inst-search-right">
             <span class="inst-step">2</span>
             <span class="codicon codicon-clear-all"></span>
@@ -222,7 +222,7 @@ function installHtml(lang: Lang): string {
       <div class="inst-row">
         <img class="inst-icon" src="${iconPng}" alt="">
         <div class="inst-main">
-          <div class="inst-title-row"><span class="inst-title">CEDT Grader Submit</span></div>
+          <div class="inst-title-row"><span class="inst-title">Grader Submit</span></div>
           <div class="inst-desc">${desc}</div>
           <div class="inst-foot">
             <span class="inst-pub">Badvoic3</span>

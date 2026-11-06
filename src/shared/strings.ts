@@ -50,7 +50,7 @@ const EN_S = {
     modified: (when: string) => `modified ${when}`,
   },
 
-  requestLogOff: 'Request logging is off. Turn on the setting "CEDT Grader: Debug Requests".',
+  requestLogOff: 'Request logging is off. Turn on the setting "Debug Requests".',
   submitLabel: 'Submit to Grader',
 
   exam: {
@@ -308,7 +308,7 @@ const EN_S = {
   },
 
   crash: {
-    notice: 'CEDT Grader hit a problem. Nothing has been sent.',
+    notice: 'Grader Submit hit a problem. Nothing has been sent.',
     review: 'Review Report',
     reviewTitle: 'This text opens in a new GitHub issue. Nothing is posted until you submit it there.',
     report: 'Report on GitHub',
@@ -448,7 +448,7 @@ const EN_W = {
   cphTip: "Want to run test cases inside VS Code? Install the Competitive Programming Helper (CPH) extension.",
   install: "Install",
   cphInstallTip: "Open CPH's page in the Extensions view",
-  crashTitle: "CEDT Grader hit a problem",
+  crashTitle: "Grader Submit hit a problem",
   crashNote: "Nothing has been sent. GitHub opens with this text, and you decide whether to post it.",
   crashReport: "Report on GitHub",
   crashReportLabel: "Report text",
@@ -653,11 +653,11 @@ const EN_G = {
     counted: (n: string) => `, counted ${n}`,
   },
   rawSumTip: 'This problem adds up raw test scores (raw-sum scoring), so there is no fixed maximum.',
-  statusGradingTip: "CEDT Grader: waiting for the result. Click to open the panel.",
+  statusGradingTip: "Grader Submit: waiting for the result. Click to open the panel.",
   statusConnectionTip: (message: string | number) => `${message} Click to open the panel.`,
-  statusChooseTip: "Choose the CEDT Grader problem for this file",
+  statusChooseTip: "Choose the grader problem for this file",
   statusLastTip: (name: string | number, id: string | number, score: string | number, counted: string | number) => `${name} (#${id}): last score ${score}${counted}. Click to open the panel.`,
-  statusOpenTip: (name: string | number, id: string | number) => `${name} (#${id}): open the CEDT Grader panel`,
+  statusOpenTip: (name: string | number, id: string | number) => `${name} (#${id}): open the Grader panel`,
   statementHidden: "The grader doesn't show this statement in VS Code. Use \"Open in Browser\".",
   statementMissing: "This problem has no statement.",
   loginThrottledTitle: "Too many login attempts",
@@ -686,7 +686,7 @@ const EN_G = {
   redirectRefused: (from: string, to: string) =>
     `The grader (${from}) sent the request on to another address (${to}), so it was stopped. If that is the grader's address, put it in the cedtGrader.baseUrl setting.`,
   tooManyRedirects: 'Too many redirects from the grader.',
-  logInFirst: "Log in to CEDT Grader first.",
+  logInFirst: "Log in to the grader first.",
   loginExpired: "Your grader login has expired. Log in again.",
   noWebSession: "Not logged in to the grader website. Log in again.",
   fileEmpty: "The file is empty. Write your solution first.",

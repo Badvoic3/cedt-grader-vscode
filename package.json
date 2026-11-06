@@ -1,6 +1,6 @@
 {
   "name": "cedt-grader-submit",
-  "displayName": "CEDT Grader Submit",
+  "displayName": "Grader Submit",
   "description": "%extension.description%",
   "version": "1.0.1",
   "publisher": "Badvoic3",

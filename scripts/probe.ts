@@ -1,5 +1,5 @@
 /**
- * Protocol probe for cafe-grader-web (CEDT Grader). Read-only unless --submit is given.
+ * Protocol probe for cafe-grader-web. Read-only unless --submit is given.
  *
  *   npx tsx scripts/probe.ts [--list] [--problem <id>] [--fixtures]
  *   npx tsx scripts/probe.ts --problem <id> --submit path/to/sol.cpp [--language <id>]

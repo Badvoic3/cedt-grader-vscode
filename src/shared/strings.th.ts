@@ -17,7 +17,7 @@ import type { Strings } from './strings';
  * Everything else was reviewed at checkpoint B (2026-11-03). Add keys here
  * when a new text is translated without review.
  */
-export const TH_REVIEW: readonly string[] = ['S.common.dismiss', 'S.crash.notice', 'S.crash.report', 'S.crash.review', 'S.crash.reviewTitle', 'S.files.saveHere', 'S.folder.cancelRestores', 'S.folder.cancelStopsMatch', 'S.folder.cancelUnlinksFile', 'S.folder.replaceFilesQ', 'W.websiteTip', 'W.server', 'W.serverLine', 'W.changeServer', 'W.checkingServer', 'W.serverWorks', 'W.useDefaultServer', 'S.account.serverInvalid', 'S.account.serverIncompatible', 'S.account.serverUnreachable', 'S.account.insecureTitle', 'S.account.insecureDetail', 'S.account.insecureSend', 'W.crashNote', 'W.crashReport', 'W.crashReportLabel', 'W.crashTitle', 'W.defaultOrderReversed', 'W.sortedBy'];
+export const TH_REVIEW: readonly string[] = ['S.common.dismiss', 'S.crash.notice', 'S.crash.report', 'S.crash.review', 'S.crash.reviewTitle', 'S.files.saveHere', 'S.folder.cancelRestores', 'S.folder.cancelStopsMatch', 'S.folder.cancelUnlinksFile', 'S.folder.replaceFilesQ', 'W.websiteTip', 'S.requestLogOff', 'W.crashTitle', 'G.statusGradingTip', 'G.statusChooseTip', 'G.statusOpenTip', 'G.logInFirst', 'W.server', 'W.serverLine', 'W.changeServer', 'W.checkingServer', 'W.serverWorks', 'W.useDefaultServer', 'S.account.serverInvalid', 'S.account.serverIncompatible', 'S.account.serverUnreachable', 'S.account.insecureTitle', 'S.account.insecureDetail', 'S.account.insecureSend', 'W.crashNote', 'W.crashReport', 'W.crashReportLabel', 'W.crashTitle', 'W.defaultOrderReversed', 'W.sortedBy'];
 
 export const TH: Strings = {
   HOW_LINKED: {
@@ -52,7 +52,7 @@ export const TH: Strings = {
       modified: (when) => `แก้ไขเมื่อ ${when}`,
     },
 
-    requestLogOff: 'การบันทึกคำขอปิดอยู่ เปิดได้ที่การตั้งค่า "CEDT Grader: Debug Requests"',
+    requestLogOff: 'การบันทึกคำขอปิดอยู่ เปิดได้ที่การตั้งค่า "Debug Requests"',
     submitLabel: 'Submit ไปยัง Grader',
 
     exam: {
@@ -308,7 +308,7 @@ export const TH: Strings = {
     },
 
     crash: {
-      notice: 'CEDT Grader เกิดปัญหา ยังไม่มีการส่งข้อมูลใด ๆ',
+      notice: 'Grader Submit เกิดปัญหา ยังไม่มีการส่งข้อมูลใด ๆ',
       review: 'ตรวจรายงาน',
       reviewTitle: 'ข้อความนี้จะเปิดเป็น issue ใหม่บน GitHub และจะไม่ถูกโพสต์จนกว่าคุณจะกดส่งที่นั่น',
       report: 'รายงานบน GitHub',
@@ -446,7 +446,7 @@ export const TH: Strings = {
     cphTip: 'อยากรัน test case ใน VS Code ไหม? ติดตั้งส่วนขยาย Competitive Programming Helper (CPH) ได้เลย',
     install: 'ติดตั้ง',
     cphInstallTip: 'เปิดหน้า CPH ในแถบ Extensions',
-    crashTitle: 'CEDT Grader เกิดปัญหา',
+    crashTitle: 'Grader Submit เกิดปัญหา',
     crashNote: 'ยังไม่มีการส่งข้อมูลใด ๆ GitHub จะเปิดพร้อมข้อความนี้ และคุณเลือกเองว่าจะโพสต์หรือไม่',
     crashReport: 'รายงานบน GitHub',
     crashReportLabel: 'ข้อความรายงาน',
@@ -644,11 +644,11 @@ export const TH: Strings = {
       counted: (n) => `, คะแนนที่นับ ${n}`,
     },
     rawSumTip: 'โจทย์ข้อนี้คิดคะแนนแบบรวมคะแนนดิบจากแต่ละเคส (ไม่มีคะแนนเต็มตายตัว)',
-    statusGradingTip: 'CEDT Grader: กำลังรอผลตรวจ คลิกเพื่อเปิดแผง',
+    statusGradingTip: 'Grader Submit: กำลังรอผลตรวจ คลิกเพื่อเปิดแผง',
     statusConnectionTip: (message) => `${message} คลิกเพื่อเปิดแผง`,
-    statusChooseTip: 'เลือกโจทย์ CEDT Grader สำหรับไฟล์นี้',
+    statusChooseTip: 'เลือกโจทย์เกรดเดอร์สำหรับไฟล์นี้',
     statusLastTip: (name, id, score, counted) => `${name} (#${id}): คะแนนล่าสุด ${score}${counted} คลิกเพื่อเปิดแผง`,
-    statusOpenTip: (name, id) => `${name} (#${id}): เปิดแผง CEDT Grader`,
+    statusOpenTip: (name, id) => `${name} (#${id}): เปิดแผง Grader`,
     statementHidden: 'Grader ไม่เปิดให้ดูโจทย์ข้อนี้ใน VS Code โปรดใช้ "เปิดในเบราว์เซอร์" แทน',
     statementMissing: 'โจทย์ข้อนี้ไม่มีเนื้อหาหรือไฟล์ PDF ให้แสดง',
     loginThrottledTitle: 'พยายามเข้าสู่ระบบมากเกินไป',
@@ -677,7 +677,7 @@ export const TH: Strings = {
     redirectRefused: (from, to) =>
       `Grader (${from}) ส่งคำขอต่อไปยังที่อยู่อื่น (${to}) จึงหยุดไว้เพื่อความปลอดภัย หากนั่นคือที่อยู่ของ Grader ให้ใส่ที่อยู่นั้นในการตั้งค่า cedtGrader.baseUrl`,
     tooManyRedirects: 'Grader เปลี่ยนเส้นทาง (redirect) มากเกินไป',
-    logInFirst: 'เข้าสู่ระบบ CEDT Grader ก่อน',
+    logInFirst: 'เข้าสู่ระบบเกรดเดอร์ก่อน',
     loginExpired: 'การเข้าสู่ระบบ Grader หมดอายุแล้ว โปรดเข้าสู่ระบบใหม่',
     noWebSession: 'ยังไม่ได้เข้าสู่ระบบเว็บ Grader โปรดเข้าสู่ระบบใหม่',
     fileEmpty: 'ไฟล์ว่างเปล่า เขียนโค้ดคำตอบก่อนส่ง',
