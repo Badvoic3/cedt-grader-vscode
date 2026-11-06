@@ -17,7 +17,7 @@ import type { Strings } from './strings';
  * Everything else was reviewed at checkpoint B (2026-11-03). Add keys here
  * when a new text is translated without review.
  */
-export const TH_REVIEW: readonly string[] = ['S.files.saveHere', 'S.folder.replaceFilesQ'];
+export const TH_REVIEW: readonly string[] = ['S.common.dismiss', 'S.files.saveHere', 'S.folder.cancelRestores', 'S.folder.cancelStopsMatch', 'S.folder.cancelUnlinksFile', 'S.folder.replaceFilesQ'];
 
 export const TH: Strings = {
   HOW_LINKED: {
@@ -41,6 +41,7 @@ export const TH: Strings = {
     common: {
       ok: 'ตกลง',
       cancel: 'ยกเลิก',
+      dismiss: 'ปิด',
       keep: 'คงไว้',
       no: 'ไม่',
       notNow: 'ไว้ทีหลัง',
@@ -272,6 +273,9 @@ export const TH: Strings = {
       openFile: 'เปิดไฟล์ในโฟลเดอร์นั้นก่อน',
       replaceQ: (folder, old, name) => `${folder}/ เชื่อมกับ ${old} อยู่ เปลี่ยนไปเชื่อมกับ ${name} แทนไหม?`,
       replaceFilesQ: (folder: string, n: number, name: string) => `ใน ${folder}/ มี ${n} ไฟล์ที่เชื่อมกับโจทย์อื่นอยู่ จะเชื่อมทั้งโฟลเดอร์กับ ${name} แทนไหม?`,
+      cancelUnlinksFile: (file: string, name: string) => `ปุ่มยกเลิกจะเลิกเชื่อม ${file} กับ ${name} ส่วนปุ่มปิดจะไม่เปลี่ยนแปลงอะไร`,
+      cancelStopsMatch: (folder: string, name: string) => `ปุ่มยกเลิกจะเลิกจับคู่ ${folder} กับ ${name} ส่วนปุ่มปิดจะไม่เปลี่ยนแปลงอะไร`,
+      cancelRestores: (file: string, name: string) => `ปุ่มยกเลิกจะเชื่อม ${file} กับ ${name} อีกครั้ง ส่วนปุ่มปิดจะไม่เปลี่ยนแปลงอะไร`,
       replace: 'เชื่อมกับโจทย์นี้',
       nowFolder: (folder) => `$(folder) เชื่อมทั้งโฟลเดอร์ ${folder}/ กับโจทย์แล้ว`,
       nowFile: (file) => `$(file) เชื่อมเฉพาะไฟล์ ${file} แล้ว`,

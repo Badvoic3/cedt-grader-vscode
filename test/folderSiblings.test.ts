@@ -81,13 +81,17 @@ function session() {
     asked: [] as string[],
     /** Options of the last question, and its answer callback while `hold` is on. */
     askOpts: undefined as { stays?: boolean } | undefined,
+    askButtons: [] as string[],
+    askDetail: undefined as string | undefined,
     hold: false,
     release: null as ((id: string | undefined) => void) | null,
     currentProblem: () => s.problem,
     allSourceExts: () => ['cpp', 'c', 'h', 'py'],
-    askInline: async (text: string, _buttons: unknown, opts?: { stays?: boolean }) => {
+    askInline: async (text: string, buttons: { id: string }[], opts?: { detail?: string; stays?: boolean }) => {
       s.asked.push(text);
       s.askOpts = opts;
+      s.askButtons = buttons.map((b) => b.id);
+      s.askDetail = opts?.detail;
       return s.hold ? new Promise<string | undefined>((resolve) => (s.release = resolve)) : s.answer;
     },
     chooseProblemQuickPick: async (apply: (id: number) => Promise<void>) => {
@@ -99,7 +103,7 @@ function session() {
       await s.folder.load(link?.folder ? { fsPath: link.folder, entry: link.entry } : null);
       s.problem = link ? { id: link.entry.problemId, name: link.entry.name } : null;
       // As the controller does: a file with no link in a folder named like a problem is folder mode, unsaved.
-      const byName = link ? undefined : problems.find((p) => p.name === basename(dirname(u.fsPath)));
+      const byName = link || mapping.isUnlinkedHere(u as never) ? undefined : problems.find((p) => p.name === basename(dirname(u.fsPath)));
       if (byName) {
         await s.folder.load({ fsPath: dirname(u.fsPath), entry: { problemId: byName.id, name: byName.name, baseUrl: BASE, folder: true } }, true);
         s.problem = byName;
@@ -279,13 +283,54 @@ describe('cause D: file links inside the folder', () => {
     expect(await follow(s, pkg)).toEqual(allOn(1, pkg));
   });
 
-  it('declining leaves everything as it was', async () => {
+  it('Dismiss leaves everything as it was', async () => {
+    const s = session();
+    await start(s);
+    s.answer = 'dismiss';
+    await s.folder.toggle();
+    expect(s.askButtons).toEqual(['replace', 'cancel', 'dismiss']);
+    expect(await s.mapping.get(uri(pkg), BASE)).toBeUndefined();
+    expect((await s.mapping.get(uri(join(pkg, 'foo.cpp')), BASE))?.problemId).toBe(1);
+    expect((await s.mapping.get(uri(join(pkg, 'bar.cpp')), BASE))?.problemId).toBe(2);
+  });
+
+  it('Cancel removes the link that raised the question, and says so first', async () => {
     const s = session();
     await start(s);
     s.answer = 'cancel';
     await s.folder.toggle();
+    expect(s.askDetail).toContain('foo.cpp');
     expect(await s.mapping.get(uri(pkg), BASE)).toBeUndefined();
+    expect(await s.mapping.get(uri(join(pkg, 'foo.cpp')), BASE)).toBeUndefined();
+    expect(s.mapping.isUnlinked(uri(join(pkg, 'foo.cpp')))).toBe(true);
     expect((await s.mapping.get(uri(join(pkg, 'bar.cpp')), BASE))?.problemId).toBe(2);
+    expect(s.problem).toBeNull();
+  });
+
+  it('Cancel from another file still removes the link of the file that raised it', async () => {
+    const s = session();
+    await start(s);
+    s.hold = true;
+    const action = s.folder.toggle();
+    while (!s.release) await new Promise((r) => setTimeout(r, 1));
+    await s.setActiveFile(uri(join(pkg, 'bar.cpp')));
+    s.release('cancel');
+    await action;
+    expect(await s.mapping.get(uri(join(pkg, 'foo.cpp')), BASE)).toBeUndefined();
+    expect(s.fileUri?.fsPath).toBe(join(pkg, 'bar.cpp'));
+    expect(s.problem?.id).toBe(2);
+  });
+
+  it('nothing to undo when the problem came from the picker: Link or Cancel only', async () => {
+    const s = session();
+    await s.mapping.set(uri(join(pkg, 'bar.cpp')), { problemId: 2, name: 'beta', baseUrl: BASE });
+    await s.setActiveFile(uri(join(pkg, 'foo.cpp')));
+    s.pick = 1;
+    s.answer = 'cancel';
+    await s.folder.toggle();
+    expect(s.askButtons).toEqual(['replace', 'cancel']);
+    expect(s.mapping.isUnlinked(uri(join(pkg, 'foo.cpp')))).toBe(false);
+    expect(await s.mapping.get(uri(pkg), BASE)).toBeUndefined();
   });
 
   it('a link to the same problem is covered without asking', async () => {
@@ -352,14 +397,54 @@ describe('Auto-detect on a folder matched by its name', () => {
     expect(await follow(s, named)).toEqual(allOn(1, named));
   });
 
-  it('declining saves nothing', async () => {
+  it('Dismiss saves nothing and keeps the match', async () => {
     const s = session();
     await start(s);
-    s.answer = 'cancel';
+    s.answer = 'dismiss';
     await s.links.autoDetect();
     expect(s.folder.matched).toBe(true);
     expect(await s.mapping.get(uri(named), BASE)).toBeUndefined();
     expect((await s.mapping.get(uri(join(named, 'bar.cpp')), BASE))?.problemId).toBe(2);
+  });
+
+  it('Cancel drops the match: the folder is no longer matched', async () => {
+    const s = session();
+    await start(s);
+    s.answer = 'cancel';
+    await s.links.autoDetect();
+    expect(s.mapping.isUnlinked(uri(named))).toBe(true);
+    expect(s.problem).toBeNull();
+    expect(s.folder.link).toBeNull();
+    expect((await s.mapping.get(uri(join(named, 'bar.cpp')), BASE))?.problemId).toBe(2);
+  });
+
+  it('the folder icon on a folder match: Cancel drops the match too', async () => {
+    const s = session();
+    await start(s);
+    s.answer = 'cancel';
+    await s.folder.toggle();
+    expect(s.askDetail).toContain('alpha/');
+    expect(s.mapping.isUnlinked(uri(named))).toBe(true);
+    expect(s.problem).toBeNull();
+  });
+
+  it('Cancel after switching from a chosen link puts that link back', async () => {
+    const s = session();
+    await s.mapping.set(uri(join(named, 'bar.cpp')), { problemId: 2, name: 'beta', baseUrl: BASE });
+    await s.mapping.set(uri(join(named, 'foo.cpp')), { problemId: 3, name: 'gamma', baseUrl: BASE });
+    await s.setActiveFile(uri(join(named, 'foo.cpp')));
+    const answers = ['switch', 'cancel'];
+    s.askInline = async (text: string, buttons: { id: string }[], opts?: { detail?: string; stays?: boolean }) => {
+      s.asked.push(text);
+      s.askButtons = buttons.map((b) => b.id);
+      s.askDetail = opts?.detail;
+      return answers.shift();
+    };
+    await s.links.autoDetect();
+    expect(s.askDetail).toContain('gamma');
+    expect((await s.mapping.get(uri(join(named, 'foo.cpp')), BASE))?.problemId).toBe(3);
+    expect(s.problem?.id).toBe(3);
+    expect(s.mapping.isUnlinked(uri(named))).toBe(false);
   });
 
   it('a file matched on its own name is not saved', async () => {

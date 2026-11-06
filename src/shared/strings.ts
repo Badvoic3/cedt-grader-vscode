@@ -39,6 +39,7 @@ const EN_S = {
   common: {
     ok: 'OK',
     cancel: 'Cancel',
+    dismiss: 'Dismiss',
     keep: 'Keep',
     no: 'No',
     notNow: 'Not Now',
@@ -273,6 +274,9 @@ const EN_S = {
     replaceFilesQ: (folder: string, n: number, name: string) =>
       `${n === 1 ? '1 file' : `${n} files`} in ${folder}/ ${n === 1 ? 'is' : 'are'} linked to another problem. Link the whole folder to ${name} instead?`,
     replace: 'Link to this problem',
+    cancelUnlinksFile: (file: string, name: string) => `Cancel removes the link from ${file} to ${name}. Dismiss changes nothing.`,
+    cancelStopsMatch: (folder: string, name: string) => `Cancel stops matching ${folder} to ${name}. Dismiss changes nothing.`,
+    cancelRestores: (file: string, name: string) => `Cancel links ${file} to ${name} again. Dismiss changes nothing.`,
     nowFolder: (folder: string) => `$(folder) ${folder}/ is now linked to the problem`,
     nowFile: (file: string) => `$(file) Only ${file} is linked now`,
     noSources: (folder: string) => `${folder}/ has no source file to submit.`,

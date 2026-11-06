@@ -20,6 +20,7 @@ import {
 } from '../mapping/folderRoles';
 import type { MappingEntry } from '../mapping/mappingFile';
 import { submitFilePath } from '../mapping/mappingOps';
+import { unlinkScope } from '../mapping/linkActions';
 import { pathKey } from '../mapping/paths';
 import { ATTACHMENT, TIMING } from '../shared/constants';
 import type { ViewState } from '../shared/messages';
@@ -28,6 +29,9 @@ import type { Host } from './host';
 import type { InlinePrompt } from './prompts';
 
 export type FolderLink = { fsPath: string; entry: MappingEntry };
+
+/** What Cancel takes back on a folder question, and the line that says so. */
+type Undo = { detail: string; run: () => Promise<void> };
 
 /**
  * Folder mode: a package folder linked to a problem (or matched by its
@@ -93,14 +97,20 @@ export class FolderMode {
   /**
    * Auto-detect found this folder: the user asked for it, so the match becomes
    * the folder link and every file follows (files inside linked to other
-   * problems are asked about first; declined, it stays an unsaved match).
+   * problems are asked about first). Cancel takes the match back: `previous`,
+   * the link Auto-detect replaced, returns; otherwise the folder is no longer
+   * matched. Dismiss leaves it an unsaved match.
    */
-  async saveMatch(): Promise<void> {
+  async saveMatch(previous?: MappingEntry): Promise<void> {
     const h = this.host;
     const link = this.link;
-    if (!link || !this.matched) return;
+    const file = h.fileUri;
+    if (!link || !this.matched || !file) return;
     const folder = vscode.Uri.file(link.fsPath);
-    if (!(await this.mayReplaceFileLinks(folder, link.entry.problemId, link.entry.name))) return;
+    const undo: Undo = previous
+      ? { detail: S.folder.cancelRestores(basename(file.fsPath), previous.name || `#${previous.problemId}`), run: () => h.mapping.set(file, previous) }
+      : this.undoMatch(file, 'folder-name', link.entry.name);
+    if (!(await this.mayReplaceFileLinks(folder, link.entry.problemId, link.entry.name, undo))) return;
     await h.mapping.linkFolder(folder, { ...link.entry }, h.cfg.baseUrl, true);
     await h.links.refreshMappedIds();
     if (h.fileUri) await h.setActiveFile(h.fileUri); // the user may have moved on while the question was open
@@ -118,18 +128,37 @@ export class FolderMode {
   }
 
   /** Links of files inside to other problems would keep those files out of the folder: true when there are none or the user says replace them. */
-  private async mayReplaceFileLinks(folder: vscode.Uri, problemId: number, name: string): Promise<boolean> {
+  private async mayReplaceFileLinks(folder: vscode.Uri, problemId: number, name: string, undo?: Undo): Promise<boolean> {
     const h = this.host;
     const others = (await h.mapping.fileLinksIn(folder, h.cfg.baseUrl)).filter((e) => e.entry.problemId !== problemId);
-    if (!others.length) return true;
-    return (await h.askInline(S.folder.replaceFilesQ(this.label(folder.fsPath), others.length, name), this.replaceButtons(), { stays: true })) === 'replace';
+    return !others.length || this.askReplace(S.folder.replaceFilesQ(this.label(folder.fsPath), others.length, name), undo);
   }
 
-  private replaceButtons(): InlinePrompt['buttons'] {
-    return [
+  /**
+   * A folder question: true = go ahead. Cancel takes back what raised it (when
+   * there is something to take back), Dismiss only closes it. It stays open on
+   * a file switch, so everything here works from whichever file is active then.
+   */
+  private async askReplace(text: string, undo?: Undo): Promise<boolean> {
+    const h = this.host;
+    const buttons: InlinePrompt['buttons'] = [
       { id: 'replace', label: S.folder.replace, primary: true },
       { id: 'cancel', label: S.common.cancel },
+      ...(undo ? [{ id: 'dismiss', label: S.common.dismiss }] : []),
     ];
+    const pick = await h.askInline(text, buttons, { stays: true, ...(undo ? { detail: undo.detail } : {}) });
+    if (pick === 'cancel' && undo) {
+      await undo.run();
+      await h.links.refreshMappedIds();
+      if (h.fileUri) await h.setActiveFile(h.fileUri);
+    }
+    return pick === 'replace';
+  }
+
+  /** Cancel on a match or a file link: the same as ✕ on that file or folder. */
+  private undoMatch(file: vscode.Uri, scope: 'file' | 'folder-name', name: string): Undo {
+    const detail = scope === 'file' ? S.folder.cancelUnlinksFile(basename(file.fsPath), name) : S.folder.cancelStopsMatch(`${this.label(dirname(file.fsPath))}/`, name);
+    return { detail, run: () => this.host.links.forgetLink(file, scope) };
   }
 
   /** Is this file, matched by `source`, at the top of a workspace folder that holds a whole package? */
@@ -224,7 +253,7 @@ export class FolderMode {
     if (!problem) {
       await h.chooseProblemQuickPick(async (id) => {
         const picked = h.problems.find((p) => p.id === id);
-        if (picked) await this.linkActiveFolder(picked);
+        if (picked) await this.linkActiveFolder(picked); // nothing is linked yet, so Cancel has nothing to take back
       });
       return;
     }
@@ -237,11 +266,12 @@ export class FolderMode {
       void vscode.window.setStatusBarMessage(S.folder.nowFile(keep.path.split('/').pop() ?? ''), TIMING.statusMessageMs);
       return;
     }
-    await this.linkActiveFolder(problem);
+    const scope = unlinkScope({ folderLink: !!this.link, folderMatched: this.matched, source: problem.source });
+    await this.linkActiveFolder(problem, this.undoMatch(file, scope === 'folder-name' ? scope : 'file', problem.name));
   }
 
   /** Link the active file's folder to a problem, so that every file in it follows. */
-  private async linkActiveFolder(problem: Pick<Problem, 'id' | 'name'>): Promise<void> {
+  private async linkActiveFolder(problem: Pick<Problem, 'id' | 'name'>, undo?: Undo): Promise<void> {
     const h = this.host;
     const file = h.fileUri;
     const { dir } = this.modeTarget();
@@ -249,9 +279,9 @@ export class FolderMode {
     const label = this.label(dir.fsPath);
     const existing = await h.mapping.get(dir, h.cfg.baseUrl);
     if (existing?.folder && existing.problemId !== problem.id) {
-      if ((await h.askInline(S.folder.replaceQ(label, existing.name || `#${existing.problemId}`, problem.name), this.replaceButtons(), { stays: true })) !== 'replace') return;
+      if (!(await this.askReplace(S.folder.replaceQ(label, existing.name || `#${existing.problemId}`, problem.name), undo))) return;
     }
-    if (!(await this.mayReplaceFileLinks(dir, problem.id, problem.name))) return;
+    if (!(await this.mayReplaceFileLinks(dir, problem.id, problem.name, undo))) return;
     const files = await this.sources(dir.fsPath);
     const detected = detectFolderRoles(await this.textsOf(dir.fsPath, files)).submit;
     const own = relative(dir.fsPath, file.fsPath).split(sep).join('/');

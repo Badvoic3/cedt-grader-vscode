@@ -277,24 +277,31 @@ export class Links {
     const file = h.fileUri;
     if (!file) return;
     const scope = unlinkScope({ folderLink: !!h.folder.link, folderMatched: h.folder.matched, source: h.problem?.source ?? null });
-    if (scope !== 'file') {
-      const folder = h.folder.link ? vscode.Uri.file(h.folder.link.fsPath) : vscode.Uri.joinPath(file, '..');
-      if (scope === 'folder-link') await h.mapping.set(folder, undefined);
+    if (scope === 'folder-link') {
+      const folder = vscode.Uri.file(h.folder.link!.fsPath);
+      await h.mapping.set(folder, undefined);
       await h.mapping.setUnlinked(folder, true);
       this.tempLink = null;
-      h.forgetProblem();
-      await this.refreshMappedIds();
-      await h.setActiveFile(file);
-      return;
-    }
-    // Works for every state: a chosen link is removed; a name / CPH match, a suggestion
-    // or a temporary link just becomes "not linked" (sticky; auto-detect leaves it alone).
-    await h.mapping.set(file, undefined);
-    await h.mapping.dropAuto(file);
-    await h.mapping.setUnlinked(file, true);
-    this.tempLink = null;
+    } else await this.forgetLink(file, scope);
     h.forgetProblem();
+    await this.refreshMappedIds();
     await h.setActiveFile(file);
+  }
+
+  /**
+   * Take back a file's link or match, or the match of its folder. Works for every
+   * state: a chosen link is removed; a name / CPH match, a suggestion or a temporary
+   * link just becomes "not linked" (sticky; auto-detect leaves it alone).
+   */
+  async forgetLink(file: vscode.Uri, scope: 'file' | 'folder-name'): Promise<void> {
+    const h = this.host;
+    if (scope === 'folder-name') await h.mapping.setUnlinked(vscode.Uri.joinPath(file, '..'), true);
+    else {
+      await h.mapping.set(file, undefined);
+      await h.mapping.dropAuto(file);
+      await h.mapping.setUnlinked(file, true);
+    }
+    this.tempLink = null;
   }
 
   /**
@@ -401,7 +408,7 @@ export class Links {
       if (pick !== 'switch') return;
       await h.mapping.set(uri, undefined);
       await h.setActiveFile(uri);
-      await h.folder.saveMatch();
+      await h.folder.saveMatch(entry);
     } else if (o.kind === 'agrees') {
       void h.askInline(S.autoDetect.agrees(o.problem.name, how[o.source] ?? ''), ok);
     } else if (o.kind === 'kept') {
