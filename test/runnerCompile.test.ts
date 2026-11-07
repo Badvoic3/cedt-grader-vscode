@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { Builder, compileCommand, javaMainClass, localFiles, needsStaging, parseCompileError, runCommand } from '../src/runner/compile';
+import { Builder, compileCommand, compileLimitMs, javaMainClass, localFiles, needsStaging, parseCompileError, runCommand } from '../src/runner/compile';
 import type { Toolset } from '../src/runner/languages';
 import { S } from '../src/shared/strings';
 import { type FakeCall, FakeProcessApi } from './fakeProcess';
@@ -46,6 +46,15 @@ describe('compileCommand', () => {
   });
   it('no compile step for an interpreted language', () => {
     expect(compileCommand(input({ language: 'python', tools: { runtime: tool('python3') } }))).toBeNull();
+  });
+});
+
+describe('compileLimitMs', () => {
+  it('60 s, and longer for GHC, which can pass that on a slow Windows machine', () => {
+    expect(compileLimitMs('cpp')).toBe(60_000);
+    expect(compileLimitMs('rust')).toBe(60_000);
+    expect(compileLimitMs('haskell')).toBe(180_000);
+    expect(S.runner.compileTimedOut(180)).toBe('Compiling took over 180 seconds and was stopped.');
   });
 });
 

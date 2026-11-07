@@ -296,7 +296,7 @@ export const TH: Strings = {
 
     runner: {
       missingTool: (tools) => `รันไม่ได้: ไม่พบ ${tools} ในเครื่อง หรือไม่ได้อยู่ใน PATH`,
-      compileTimedOut: 'คอมไพล์นานเกิน 60 วินาที จึงหยุดแล้ว',
+      compileTimedOut: (seconds) => `คอมไพล์นานเกิน ${seconds} วินาที จึงหยุดแล้ว`,
       compilerFailed: (why) => `เปิดคอมไพเลอร์ไม่ได้: ${why}`,
       bitsStdc: 'Apple clang ไม่มี <bits/stdc++.h> ให้ include เฉพาะ header ที่ใช้ หรือติดตั้ง GCC',
       untrusted: 'ต้องเชื่อถือ workspace นี้ก่อนจึงจะรันเทสได้ เพราะการรันจะคอมไพล์และเปิดโค้ดในนั้น',

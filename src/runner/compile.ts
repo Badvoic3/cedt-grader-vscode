@@ -91,6 +91,9 @@ export function compileCommand(i: CommandInput): { command: string; args: string
   }
 }
 
+/** How long one compile may take. */
+export const compileLimitMs = (language: RunnerLanguage): number => (language === 'haskell' ? RUNNER.slowCompileTimeoutMs : RUNNER.compileTimeoutMs);
+
 /** The class to start: the one holding `main`, with its package. */
 export function javaMainClass(text: string, fileStem: string): string {
   const code = text.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/\/\/[^\n]*/g, ' ');
@@ -220,9 +223,9 @@ export class Builder {
     try {
       const staged = needsStaging([i.folder, ...i.sources, this.root], platform) ? await this.stage(i, files, work) : null;
       const cmd = compileCommand({ ...base, folder: staged?.folder ?? i.folder, sources: staged?.sources ?? i.sources, outDir: work, extraArgs: i.extraArgs })!;
-      const r = await runToEnd(this.proc, cmd.command, cmd.args, { timeoutMs: RUNNER.compileTimeoutMs, maxBytes: 4 * RUNNER.compileMessageChars, cwd: staged?.folder ?? i.folder, env: this.env(), signal: i.signal });
+      const r = await runToEnd(this.proc, cmd.command, cmd.args, { timeoutMs: compileLimitMs(i.language), maxBytes: 4 * RUNNER.compileMessageChars, cwd: staged?.folder ?? i.folder, env: this.env(), signal: i.signal });
       if (i.signal?.aborted) return { ok: false, failure: null };
-      if (r.timedOut) return { ok: false, failure: { message: S.runner.compileTimedOut, file: null, line: null } };
+      if (r.timedOut) return { ok: false, failure: { message: S.runner.compileTimedOut(compileLimitMs(i.language) / 1000), file: null, line: null } };
       if (r.spawnError) return { ok: false, failure: { message: S.runner.compilerFailed(r.spawnError.message), file: null, line: null } };
       const said = `${r.stderr}\n${r.stdout}`.trim();
       if (r.code !== 0) return { ok: false, failure: failureFrom(said) };

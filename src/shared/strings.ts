@@ -297,7 +297,7 @@ const EN_S = {
 
   runner: {
     missingTool: (tools: string) => `Can't run this: ${tools} isn't installed, or isn't on PATH.`,
-    compileTimedOut: 'Compiling took over 60 seconds and was stopped.',
+    compileTimedOut: (seconds: number) => `Compiling took over ${seconds} seconds and was stopped.`,
     compilerFailed: (why: string) => `The compiler couldn't start: ${why}`,
     bitsStdc: "<bits/stdc++.h> doesn't come with Apple clang. Include the headers you use, or install GCC.",
     untrusted: 'Trust this workspace to run tests: running compiles and starts the code in it.',

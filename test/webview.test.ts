@@ -1231,14 +1231,21 @@ describe.runIf(existsSync(resolve(__dirname, '../esbuild.mjs')))('sidebar webvie
     };
     type('p'); // warm up
     type('');
-    const times: number[] = [];
-    for (const v of ['p_1', 'p_', 'p_2', 'p', '', 'p_0', '']) {
-      const t = performance.now();
-      type(v);
-      times.push(performance.now() - t);
-    }
-    times.sort((a, b) => a - b);
-    expect(times[Math.floor(times.length / 2)]).toBeLessThan(process.env.CI ? 30 : 10); // median keystroke, ms
+    const rows = () => [...doc.querySelectorAll('#sec-problems .problem-row')];
+    const before = new Set(rows());
+    // The best of several rounds: a busy machine only ever adds time, so its slowest moments say nothing
+    // about the code. A rebuild of the rows would be many times over the limit in every round.
+    const round = () => {
+      const times: number[] = [];
+      for (const v of ['p_1', 'p_', 'p_2', 'p', '', 'p_0', '']) {
+        const t = performance.now();
+        type(v);
+        times.push(performance.now() - t);
+      }
+      return times.sort((a, b) => a - b)[Math.floor(times.length / 2)]; // median keystroke, ms
+    };
+    expect(Math.min(...Array.from({ length: 5 }, round))).toBeLessThan(30);
+    expect(rows().every((r) => before.has(r))).toBe(true); // moved, never rebuilt
     expect(doc.querySelectorAll('#sec-problems .problem-list > :not([hidden])')).toHaveLength(292);
   });
 

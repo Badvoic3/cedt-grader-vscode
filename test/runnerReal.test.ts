@@ -54,7 +54,7 @@ const CAT = {
   haskell: ['a.hs', 'main :: IO ()\nmain = getLine >>= putStrLn\n'],
 } as const;
 
-describe('real programs', { timeout: 120_000 }, () => {
+describe('real programs', { timeout: 240_000 }, () => {
   it.each(Object.keys(CAT) as (keyof typeof CAT)[])('%s runs a case to AC and a wrong one to WA', async (language) => {
     const [name, text] = CAT[language];
     const b = await build(language, name, text);

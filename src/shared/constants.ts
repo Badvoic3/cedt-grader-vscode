@@ -106,6 +106,8 @@ export const RUNNER = {
   /** No run lasts longer, whatever the limit. */
   hardStopMs: 60_000,
   compileTimeoutMs: 60_000,
+  /** GHC alone: it took 24 to 70 s for one line on a Windows CI runner. */
+  slowCompileTimeoutMs: 180_000,
   /** Compiler text kept; the grader cuts at the same length. */
   compileMessageChars: 15_000,
   /** After `'exit'`, wait this long for the streams to end. */
