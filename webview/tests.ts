@@ -96,8 +96,9 @@ app.append(el('div', { class: 'tv' }, top, list));
 function renderTop(h: TestsHead): void {
   top.replaceChildren();
   list.hidden = h.title === null || !order.length;
+  const close = () => iconButton('close', W.closeTests, () => { flushEdits(); send({ type: 'close' }); });
   if (h.title === null) {
-    top.append(el('p', { class: 'muted small' }, W.testsNoFile));
+    top.append(el('div', { class: 'th' }, el('p', { class: 'muted small grow' }, W.testsNoFile), close()));
     return;
   }
   const pill = summaryPill(h.summary);
@@ -106,7 +107,9 @@ function renderTop(h: TestsHead): void {
     el('div', { class: 'th' },
       el('strong', { class: 'name' }, h.title),
       h.problemId !== null ? el('span', { class: 'muted' }, `#${h.problemId}`) : null,
+      el('span', { class: 'sp' }),
       empty ? null : el('span', { class: `pill run-pill ${pill.tone}` }, pill.text),
+      close(),
     ),
   );
   const load = h.load;

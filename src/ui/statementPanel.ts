@@ -34,6 +34,7 @@ export type FromStatement =
   | { type: 'ready' }
   | { type: 'refresh' }
   | { type: 'openInBrowser' }
+  | { type: 'close' }
   | { type: 'viewState'; state: StatementViewState; problemId?: number };
 
 const VIEW_KEY = KEYS.statementView;
@@ -188,6 +189,7 @@ export class StatementPanels implements vscode.Disposable {
       if (m?.type === 'ready') void load(false);
       else if (m?.type === 'refresh') void load(true);
       else if (m?.type === 'openInBrowser') this.opts.openInBrowser(t.problemId);
+      else if (m?.type === 'close') panel.dispose();
       else if (m?.type === 'viewState') {
         // The webview says which problem the view belongs to (a save can arrive after a switch).
         const id = typeof m.problemId === 'number' ? m.problemId : t.problemId;

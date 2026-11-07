@@ -6,7 +6,8 @@ body { padding: 0; background: var(--vscode-sideBar-background, var(--vscode-edi
 .tv-top { display: contents; }
 .th { display: flex; align-items: center; gap: 6px; font-size: 1.1em; min-width: 0; }
 .th .name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.th .run-pill { margin-left: auto; font-size: 0.85em; }
+.th .run-pill { font-size: 0.85em; }
+.th p { margin: 0; }
 
 .tools { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; }
 .tools .btn { flex: 1 1 calc(50% - 3px); min-width: 0; overflow: hidden; }

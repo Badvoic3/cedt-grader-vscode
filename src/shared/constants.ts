@@ -116,6 +116,8 @@ export const RUNNER = {
   compileMessageChars: 15_000,
   /** After `'exit'`, wait this long for the streams to end. */
   closeDeadlineMs: 2_000,
+  /** A fresh program's first case under this is run again: the first run's time isn't the program's. */
+  freshRerunMs: 2_000,
   /** Peak memory sampling on Linux, and the safety check on macOS. */
   memoryPollLinuxMs: 100,
   memoryPollMacMs: 500,

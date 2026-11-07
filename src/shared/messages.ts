@@ -378,6 +378,7 @@ export type FromTests =
   | { type: 'compare'; caseId: string }
   | { type: 'openStatement' }
   | { type: 'dismissTip' }
+  | { type: 'close' }
   | { type: 'loadTestcases' }
   | { type: 'loadSamples' }
   | { type: 'webviewError'; message: string; stack: string };

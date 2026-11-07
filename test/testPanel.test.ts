@@ -142,6 +142,12 @@ describe('TestPanel', () => {
     expect(v.posted[2]).toMatchObject({ fresh: true, cases: [{ id: 'a' }] });
   });
 
+  it('the page\'s Close button closes the tab', async () => {
+    await make().open();
+    await send({ type: 'close' });
+    expect((v.panel as { dispose: ReturnType<typeof vi.fn> }).dispose).toHaveBeenCalled();
+  });
+
   it('a closed tab opens anew', async () => {
     const p = make();
     await p.open();

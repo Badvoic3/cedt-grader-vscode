@@ -36,6 +36,7 @@ const tb = buildToolbar({
   nextMatch: () => find(true, false),
   refresh: () => send({ type: 'refresh' }),
   openInBrowser: () => send({ type: 'openInBrowser' }),
+  close: () => send({ type: 'close' }),
 });
 const { toolbar, pageInput, pageCount, zoomLabel, search, matches, titleEl } = tb;
 const container = el('div', { id: 'viewerContainer', tabindex: '0' }, el('div', { id: 'viewer', class: 'pdfViewer' }));
@@ -44,6 +45,15 @@ const status = el('div', { class: 'status', role: 'status' });
 const noteEl = el('div', { class: 'note', role: 'status' });
 noteEl.hidden = true;
 app.append(toolbar, noteEl, status, container, textView);
+// In a narrow split the toolbar takes two rows, and a page set to the width follows the split's size.
+let refit = 0;
+new ResizeObserver(() => {
+  document.documentElement.style.setProperty('--toolbar-height', `${toolbar.offsetHeight}px`);
+  cancelAnimationFrame(refit);
+  refit = requestAnimationFrame(() => {
+    if (viewer?.currentScaleValue === 'page-width') viewer.currentScaleValue = 'page-width';
+  });
+}).observe(document.body);
 installTooltips(document);
 
 // -------------------------------------------------------------------- pdf

@@ -292,8 +292,9 @@ export async function runCases(o: RunCasesInput): Promise<{ noexec: boolean }> {
       };
       let r = await once();
       if (r.spawnError && (r.spawnError.code === 'EACCES' || r.spawnError.code === 'EPERM')) return { noexec: true };
-      // A first run after compiling can be held up by antivirus, so it gets one more try.
-      if (first && verdictOf(r, o.limits, c.expected) === 'TLE') r = await once();
+      // The system checks a new program on its first run (about 300 ms on macOS, antivirus on Windows), and
+      // that lands in the case's time. So the first case runs again, unless it is too slow for that to matter.
+      if (first && (r.timeMs < RUNNER.freshRerunMs || verdictOf(r, o.limits, c.expected) === 'TLE')) r = await once();
       first = false;
       const verdict = verdictOf(r, o.limits, c.expected);
       if (!verdict) {

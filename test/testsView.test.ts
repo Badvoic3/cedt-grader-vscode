@@ -321,6 +321,19 @@ describe('Test view', () => {
     expect(doc.querySelector('.dt .dl .n')!.textContent).toBe('1998');
   });
 
+  it('Close saves what was typed, then closes the tab; it is there with no file too', () => {
+    const { dom, doc, sent, post, label } = boot();
+    post({ fresh: true, head: head(), order: ['a'], cases: [kase('a')] });
+    label('Show this case').click();
+    const box = doc.querySelector('textarea')!;
+    box.value = 'x';
+    box.dispatchEvent(new dom.window.Event('input'));
+    label('Close tests').click();
+    expect(sent.slice(-2)).toEqual([{ type: 'edit', caseId: 'a', input: 'x' }, { type: 'close' }]);
+    post({ fresh: true, head: head({ title: null, problemId: null, load: null }) });
+    expect(label('Close tests')).not.toBeNull();
+  });
+
   it('Compare in VS Code asks the host, with the case', () => {
     const { sent, post, button } = boot();
     post({ fresh: true, head: head(), order: ['a'], cases: [kase('a')], runs: { a: done('a', 'WA') } });

@@ -613,6 +613,8 @@ const EN_W = {
   stopTestsTip: 'Stop the run',
   openTests: 'Open tests',
   openTestsTip: 'Open the test cases beside the code',
+  closeTests: 'Close tests',
+  closeStatement: 'Close statement',
   runNoCases: 'No cases',
   runNotRun: 'Not run',
   runCompiling: 'Compiling…',

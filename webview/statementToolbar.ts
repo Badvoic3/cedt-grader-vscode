@@ -26,6 +26,7 @@ export interface ToolbarHandlers {
   nextMatch(): void;
   refresh(): void;
   openInBrowser(): void;
+  close(): void;
 }
 
 export function buildToolbar(h: ToolbarHandlers) {
@@ -36,27 +37,35 @@ export function buildToolbar(h: ToolbarHandlers) {
   const matches = el('span', { class: 'muted matches' }, '');
   const titleEl = el('span', { class: 'title' }, '');
   const pdfTools = el('div', { class: 'group pdf-only' },
-    btn('zoom-out', W.zoomOutTip, h.zoomOut),
-    zoomLabel,
-    btn('zoom-in', W.zoomInTip, h.zoomIn),
-    btn('screen-full', W.fitWidthTip, h.fitWidth),
+    el('div', { class: 'group' },
+      btn('zoom-out', W.zoomOutTip, h.zoomOut),
+      zoomLabel,
+      btn('zoom-in', W.zoomInTip, h.zoomIn),
+      btn('screen-full', W.fitWidthTip, h.fitWidth),
+    ),
     el('span', { class: 'sep' }),
-    btn('chevron-up', W.previousPage, h.prevPage),
-    pageInput,
-    pageCount,
-    btn('chevron-down', W.nextPage, h.nextPage),
+    el('div', { class: 'group' },
+      btn('chevron-up', W.previousPage, h.prevPage),
+      pageInput,
+      pageCount,
+      btn('chevron-down', W.nextPage, h.nextPage),
+    ),
     el('span', { class: 'sep' }),
-    search,
-    btn('arrow-up', W.previousMatchTip, h.prevMatch),
-    btn('arrow-down', W.nextMatchTip, h.nextMatch),
-    matches,
+    el('div', { class: 'group find' },
+      search,
+      btn('arrow-up', W.previousMatchTip, h.prevMatch),
+      btn('arrow-down', W.nextMatchTip, h.nextMatch),
+      matches,
+    ),
   );
   const toolbar = el('div', { class: 'toolbar', role: 'toolbar', 'aria-label': W.statement },
     titleEl,
     pdfTools,
-    el('span', { class: 'grow' }),
-    btn('refresh', W.refreshStatementTip, h.refresh),
-    btn('globe', W.openInBrowser, h.openInBrowser),
+    el('span', { class: 'group end' },
+      btn('refresh', W.refreshStatementTip, h.refresh),
+      btn('globe', W.openInBrowser, h.openInBrowser),
+      btn('close', W.closeStatement, h.close),
+    ),
   );
   return { toolbar, pageInput, pageCount, zoomLabel, search, matches, titleEl };
 }import { W } from '../src/shared/strings';

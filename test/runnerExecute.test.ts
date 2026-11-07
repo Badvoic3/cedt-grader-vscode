@@ -298,6 +298,17 @@ describe('runCases', () => {
     expect((await run(p)).r.noexec).toBe(true);
   });
 
+  it('a fresh program runs its first case twice and keeps the second time, since the first has the system\'s check in it', async () => {
+    let n = 0;
+    const p = new FakeProcessApi((c) => setTimeout(() => c.child.finish(0), n++ === 0 ? 60 : 0));
+    const { updates } = await run(p, { fresh: true });
+    expect(p.calls).toHaveLength(3); // a, a again, b
+    expect(updates.find((u) => u.caseId === 'a' && u.state === 'done')!.timeMs).toBeLessThan(50);
+    const q = new FakeProcessApi((c) => setTimeout(() => c.child.finish(0), 0));
+    await run(q, { fresh: false });
+    expect(q.calls).toHaveLength(2);
+  });
+
   it('a TLE on the first case after compiling gets one more try; later ones do not', async () => {
     const tiny = { ...limits, timeMs: 1 };
     const slow = (c: FakeCall) => setTimeout(() => c.child.finish(0), 20);

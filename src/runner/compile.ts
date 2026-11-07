@@ -27,7 +27,7 @@ export interface BuildInput {
 export interface Program {
   command: string;
   args: string[];
-  /** Compiled just now, not reused: the first case may be slowed by antivirus. */
+  /** Compiled just now, not reused: the first run is slowed by the system's check of a new program. */
   fresh: boolean;
   /** Compiler text of a successful build. */
   warnings: string;

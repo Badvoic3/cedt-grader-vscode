@@ -120,6 +120,10 @@ export class TestPanel implements vscode.Disposable {
       this.opts.webviewError(m.message, m.stack);
       return;
     }
+    if (m.type === 'close') {
+      this.panel?.dispose();
+      return;
+    }
     await this.opts.started;
     const r = this.opts.runner();
     switch (m.type) {

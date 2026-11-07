@@ -9,15 +9,17 @@ body {
   font-size: var(--vscode-font-size);
 }
 .toolbar {
-  position: absolute; top: 0; left: 0; right: 0; height: 32px;
-  display: flex; align-items: center; gap: 2px; padding: 0 6px;
+  position: absolute; top: 0; left: 0; right: 0; min-height: 32px;
+  display: flex; flex-wrap: wrap; align-items: center; gap: 2px; padding: 4px 6px;
   background: var(--vscode-editorWidget-background, var(--vscode-sideBar-background));
   border-bottom: 1px solid var(--vscode-widget-border, var(--vscode-contrastBorder, transparent));
   overflow: hidden; white-space: nowrap; z-index: 2;
 }
 .toolbar .title { font-weight: 600; margin-right: 8px; overflow: hidden; text-overflow: ellipsis; max-width: 30%; }
 .group { display: flex; align-items: center; gap: 2px; }
-.grow { flex: 1; }
+/* Zoom, pages and find are the toolbar's own items: in a narrow split each moves to the next row whole. */
+.pdf-only { display: contents; }
+.group.end { margin-left: auto; }
 .sep { width: 1px; height: 18px; margin: 0 4px; background: var(--vscode-widget-border, var(--muted)); opacity: 0.5; }
 .muted { color: var(--muted); }
 .zoom { min-width: 3.2em; text-align: center; font-variant-numeric: tabular-nums; }
@@ -32,20 +34,21 @@ input {
   border: 1px solid var(--vscode-input-border, transparent); border-radius: 2px; font: inherit; padding: 1px 4px;
 }
 input.page { width: 3.5em; text-align: right; }
-input.search { width: 12em; }
-.matches { min-width: 5em; padding-left: 4px; }
-#viewerContainer { position: absolute; top: 32px; left: 0; right: 0; bottom: 0; overflow: auto; outline: none; }
+.group.find { flex: 1 1 14em; min-width: 11em; max-width: 22em; }
+input.search { flex: 1 1 auto; min-width: 0; }
+.matches { padding-left: 4px; }
+#viewerContainer { position: absolute; top: var(--toolbar-height, 32px); left: 0; right: 0; bottom: 0; overflow: auto; outline: none; }
 #viewerContainer .pdfViewer .page { margin: 8px auto; border: none; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35); }
-.text-view { position: absolute; top: 32px; left: 0; right: 0; bottom: 0; overflow: auto; padding: 12px 20px; line-height: 1.55; }
+.text-view { position: absolute; top: var(--toolbar-height, 32px); left: 0; right: 0; bottom: 0; overflow: auto; padding: 12px 20px; line-height: 1.55; }
 .text-view pre.text { white-space: pre-wrap; font-family: var(--vscode-font-family); }
 .text-view pre, .text-view code { font-family: var(--vscode-editor-font-family); }
 .text-view pre { background: var(--vscode-textCodeBlock-background); padding: 6px 8px; border-radius: 3px; overflow-x: auto; }
 .text-view a { color: var(--vscode-textLink-foreground); }
-.status { position: absolute; top: 40px; left: 16px; right: 16px; color: var(--muted); z-index: 1; }
+.status { position: absolute; top: calc(var(--toolbar-height, 32px) + 8px); left: 16px; right: 16px; color: var(--muted); z-index: 1; }
 .status.error { color: var(--vscode-errorForeground); }
 body:not(.mode-pdf) .pdf-only, body:not(.mode-pdf) #viewerContainer { display: none; }
 body:not(.mode-html) .text-view { display: none; }
-@media (max-width: 560px) { .toolbar .title { display: none; } input.search { width: 7em; } }
+@media (max-width: 560px) { .toolbar .title { display: none; } }
 
 /* ---------------------------------------------------------------- tooltip */
 
@@ -66,7 +69,7 @@ body:not(.mode-html) .text-view { display: none; }
 }
 .tooltip[hidden] { display: none; }
 .note {
-  position: absolute; top: 32px; left: 0; right: 0; z-index: 2; padding: 4px 10px; font-size: 12px;
+  position: absolute; top: var(--toolbar-height, 32px); left: 0; right: 0; z-index: 2; padding: 4px 10px; font-size: 12px;
   color: var(--vscode-inputValidation-warningForeground, var(--vscode-foreground));
   background: var(--vscode-inputValidation-warningBackground, var(--vscode-editorWidget-background));
   border-bottom: 1px solid var(--vscode-inputValidation-warningBorder, transparent);
