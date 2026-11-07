@@ -1,54 +1,48 @@
 import * as vscode from 'vscode';
-import {
-  emptyMapping,
-  lookup,
-  MAPPING_FILE_NAME,
-  type MappingEntry,
-  type MappingFileData,
-  countDuplicateEntries,
-  parseMappingFile,
-  reverseIndex,
-  ROOT_KEY,
-  serializeMappingFile,
-} from './mappingFile';
+import { addMissing, inScope, LinkTable, type Links, type MappingEntry, type StoredLink } from './linkTable';
 import { affectedByDelete, expired, fileLinksInside, type LocatedEntry, nearestFolderLink, planRename, submitFileAfterMove, submitFileDeleted, unlinkedAround } from './mappingOps';
 import { isAtOrInside, normalizeAbsPath, normalizeRelPath, pathKey, remapPath } from './paths';
 import { type AutoMatch, autoAfterDelete, autoAfterRename } from './problemFiles';
 import { LIMITS } from '../shared/constants';
 import { KEYS } from '../shared/stateKeys';
 
-const STATE_KEY = KEYS.mappings;
-const LEGACY_KEY = KEYS.legacyMapping;
 /** Files the user explicitly unlinked: auto-detection must not re-link them. */
 const UNLINKED_KEY = KEYS.unlinked;
 /** Remembered auto-matches (file name / CPH data) of files that were open. */
 const AUTO_KEY = KEYS.autoMatches;
+/** The key of the workspace folder itself in "not linked". */
+const ROOT_KEY = '.';
 
-/** workspaceState entry: also remembers the absolute path, for reverse lookup. */
-interface StateEntry extends MappingEntry {
-  fsPath: string;
+/** A saved link without what only the table needs. */
+function entryOf(link: StoredLink): MappingEntry {
+  const { fsPath: _path, outside: _outside, ...entry } = link;
+  return entry;
 }
 
+const located = (link: StoredLink): LocatedEntry => ({ fsPath: link.fsPath, entry: entryOf(link) });
+
 /**
- * File → problem mapping.
- * - workspaceState, keyed by the file's path relative to its workspace folder
- *   (`<folder name>/<relative path>`); files outside any folder use globalState
- *   keyed by absolute path;
- * - plus `<folder>/.cedt-grader.json` (relative paths) so mappings survive
- *   moving machines.
+ * File → problem links, in the link table (linkTable.ts): nothing is ever
+ * written to the user's folders. "Not linked" and remembered auto-matches stay
+ * in workspaceState, or globalState for files outside any folder.
+ *
+ * A path always finds its link, whichever folder is open. What lists links
+ * (`allEntries`, `linksFor`, …) shows only those of this window, see `inScope`.
  */
 export class MappingStore {
-  private cache = new Map<string, MappingFileData>();
+  private readonly table: LinkTable;
 
-  constructor(private readonly ctx: vscode.ExtensionContext) {}
+  constructor(private readonly ctx: vscode.ExtensionContext) {
+    this.table = new LinkTable(ctx.globalStorageUri.fsPath);
+  }
 
-  /** State key: `<folder name>/<pathKey(relative path)>` (or pathKey of the absolute path outside folders). */
-  private keyFor(uri: vscode.Uri): { memento: vscode.Memento; key: string; oldKey: string; folder?: vscode.WorkspaceFolder; rel?: string } {
+  /** Where "not linked" keeps a path: `<folder name>/<pathKey(relative path)>`, or pathKey of the absolute path outside folders. */
+  private keyFor(uri: vscode.Uri): { memento: vscode.Memento; key: string } {
     const folder = vscode.workspace.getWorkspaceFolder(uri);
-    if (!folder) return { memento: this.ctx.globalState, key: pathKey(uri.fsPath), oldKey: uri.fsPath };
+    if (!folder) return { memento: this.ctx.globalState, key: pathKey(uri.fsPath) };
     // asRelativePath gives the full path for the workspace folder itself.
     const rel = pathKey(folder.uri.fsPath) === pathKey(uri.fsPath) ? ROOT_KEY : normalizeRelPath(vscode.workspace.asRelativePath(uri, false));
-    return { memento: this.ctx.workspaceState, key: `${folder.name}/${pathKey(rel)}`, oldKey: `${folder.name}/${rel}`, folder, rel };
+    return { memento: this.ctx.workspaceState, key: `${folder.name}/${pathKey(rel)}` };
   }
 
   // ------------------------------------------------- remembered auto-matches
@@ -116,7 +110,7 @@ export class MappingStore {
     const own = await this.get(uri, baseUrl);
     if (own && !own.folder) return { entry: own };
     const hit = nearestFolderLink(
-      (await this.allEntries()).filter((e) => !e.entry.baseUrl || e.entry.baseUrl === baseUrl),
+      (await this.everyEntry()).filter((e) => !e.entry.baseUrl || e.entry.baseUrl === baseUrl),
       uri.fsPath,
     );
     return hit ? { entry: hit.entry, folder: hit.fsPath } : undefined;
@@ -130,7 +124,7 @@ export class MappingStore {
 
   /** Links of single files inside a folder (they would win over a folder link there). */
   async fileLinksIn(folder: vscode.Uri, baseUrl: string): Promise<LocatedEntry[]> {
-    return fileLinksInside(await this.allEntries(), folder.fsPath, baseUrl);
+    return fileLinksInside(await this.everyEntry(), folder.fsPath, baseUrl);
   }
 
   /**
@@ -165,19 +159,8 @@ export class MappingStore {
   }
 
   async get(uri: vscode.Uri, baseUrl: string): Promise<MappingEntry | undefined> {
-    const { memento, key, oldKey, folder, rel } = this.keyFor(uri);
-    const all = memento.get<Record<string, StateEntry>>(STATE_KEY, {});
-    const fromState = all[key] ?? all[oldKey] ?? this.legacy(memento)[uri.fsPath];
-    if (fromState?.staleSince) return undefined;
-    if (fromState && (!fromState.baseUrl || fromState.baseUrl === baseUrl)) return fromState;
-    const inFile = folder && rel ? lookup(await this.readFile(folder), rel, baseUrl) : undefined;
-    return inFile ?? this.savedOutside(uri, baseUrl);
-  }
-
-  /** A link saved while the file was outside every workspace folder: the file can be inside one now. */
-  private savedOutside(uri: vscode.Uri, baseUrl: string): StateEntry | undefined {
-    const e = this.ctx.globalState.get<Record<string, StateEntry>>(STATE_KEY, {})[pathKey(uri.fsPath)];
-    return e && !e.staleSince && (!e.baseUrl || e.baseUrl === baseUrl) ? e : undefined;
+    const link = (await this.table.read())[pathKey(uri.fsPath)];
+    return link && !link.staleSince && (!link.baseUrl || link.baseUrl === baseUrl) ? entryOf(link) : undefined;
   }
 
   /** Forget a global record of a path (kept there while it was outside every workspace folder). */
@@ -189,36 +172,20 @@ export class MappingStore {
     await this.ctx.globalState.update(stateKey, all);
   }
 
-  async set(uri: vscode.Uri, entry: MappingEntry | undefined): Promise<void> {
-    const { memento, key, oldKey, folder, rel } = this.keyFor(uri);
-    const all = { ...memento.get<Record<string, StateEntry>>(STATE_KEY, {}) };
-    delete all[oldKey];
-    if (entry) all[key] = { ...entry, fsPath: normalizeAbsPath(uri.fsPath) };
-    else delete all[key];
-    await memento.update(STATE_KEY, all);
-    if (memento !== this.ctx.globalState) await this.dropGlobal(STATE_KEY, uri);
-    if (entry && this.isUnlinked(uri)) await this.setUnlinked(uri, false); // choosing a problem clears "not linked"
-    const legacy = this.legacy(memento);
-    if (legacy[uri.fsPath]) {
-      const rest = { ...legacy };
-      delete rest[uri.fsPath];
-      await memento.update(LEGACY_KEY, rest);
-    }
+  /** The table entry for a path. */
+  private linkFor(fsPath: string, entry: MappingEntry): StoredLink {
+    const outside = !vscode.workspace.getWorkspaceFolder(vscode.Uri.file(fsPath));
+    return { ...entry, fsPath: normalizeAbsPath(fsPath), ...(outside ? { outside: true as const } : {}) };
+  }
 
-    if (folder && rel) {
-      const data = await this.readFile(folder);
-      for (const k of Object.keys(data.files)) if (pathKey(k) === pathKey(rel)) delete data.files[k];
-      if (entry) data.files[rel] = entry;
-      this.cache.set(folder.uri.toString(), data);
-      try {
-        await vscode.workspace.fs.writeFile(
-          vscode.Uri.joinPath(folder.uri, MAPPING_FILE_NAME),
-          new TextEncoder().encode(serializeMappingFile(data)),
-        );
-      } catch {
-        // Read-only folder: workspaceState still has it.
-      }
-    }
+  async set(uri: vscode.Uri, entry: MappingEntry | undefined): Promise<void> {
+    const k = pathKey(uri.fsPath);
+    await this.table.change((links) => {
+      if (!entry && !links[k]) return false;
+      if (entry) links[k] = this.linkFor(uri.fsPath, entry);
+      else delete links[k];
+    });
+    if (entry && this.isUnlinked(uri)) await this.setUnlinked(uri, false); // choosing a problem clears "not linked"
   }
 
   /** Files (and linked folders) mapped to a problem (saved mappings only, no workspace scan). */
@@ -237,70 +204,60 @@ export class MappingStore {
   }
 
   private async reverse(baseUrl: string): Promise<Map<number, { uri: vscode.Uri; folder: boolean }[]>> {
-    const seen = new Set<string>();
     const out = new Map<number, { uri: vscode.Uri; folder: boolean }[]>();
-    const add = (id: number, uri: vscode.Uri, folder: boolean) => {
-      const k = pathKey(uri.fsPath);
-      if (seen.has(k)) return;
-      seen.add(k);
-      out.set(id, [...(out.get(id) ?? []), { uri, folder }]);
-    };
-    for (const memento of [this.ctx.workspaceState, this.ctx.globalState]) {
-      for (const e of Object.values(memento.get<Record<string, StateEntry>>(STATE_KEY, {}))) {
-        if ((!e.baseUrl || e.baseUrl === baseUrl) && !e.staleSince) add(e.problemId, vscode.Uri.file(e.fsPath), !!e.folder);
-      }
-      for (const [fsPath, e] of Object.entries(this.legacy(memento))) {
-        if (!e.baseUrl || e.baseUrl === baseUrl) add(e.problemId, vscode.Uri.file(fsPath), false);
-      }
-    }
-    for (const folder of vscode.workspace.workspaceFolders ?? []) {
-      const data = await this.readFile(folder);
-      for (const [id, rels] of reverseIndex(data, baseUrl)) {
-        for (const rel of rels) add(id, vscode.Uri.joinPath(folder.uri, rel), !!data.files[rel]?.folder);
-      }
+    for (const { fsPath, entry: e } of await this.allEntries()) {
+      if ((e.baseUrl && e.baseUrl !== baseUrl) || e.staleSince) continue;
+      out.set(e.problemId, [...(out.get(e.problemId) ?? []), { uri: vscode.Uri.file(fsPath), folder: !!e.folder }]);
     }
     return out;
   }
 
-  /** Every saved mapping with its absolute path (state first, then .cedt-grader.json files). */
+  /** This window's links with their absolute paths: see `inScope`. */
   async allEntries(): Promise<LocatedEntry[]> {
-    const out = new Map<string, LocatedEntry>();
-    for (const memento of [this.ctx.workspaceState, this.ctx.globalState]) {
-      for (const e of Object.values(memento.get<Record<string, StateEntry>>(STATE_KEY, {}))) {
-        const { fsPath, ...entry } = e;
-        if (!out.has(pathKey(fsPath))) out.set(pathKey(fsPath), { fsPath, entry });
-      }
-      for (const [fsPath, entry] of Object.entries(this.legacy(memento))) if (!out.has(pathKey(fsPath))) out.set(pathKey(fsPath), { fsPath, entry });
-    }
-    for (const folder of vscode.workspace.workspaceFolders ?? []) {
-      for (const [rel, entry] of Object.entries((await this.readFile(folder)).files)) {
-        const fsPath = vscode.Uri.joinPath(folder.uri, rel).fsPath;
-        if (!out.has(pathKey(fsPath))) out.set(pathKey(fsPath), { fsPath, entry });
-      }
-    }
-    return [...out.values()];
+    const folders = (vscode.workspace.workspaceFolders ?? []).map((f) => f.uri.fsPath);
+    return Object.values(await this.table.read()).filter((l) => inScope(l, folders)).map(located);
+  }
+
+  /** Every link in the table, also those of folders not open here (a moved folder reconnects from these). */
+  async everyEntry(): Promise<LocatedEntry[]> {
+    return Object.values(await this.table.read()).map(located);
+  }
+
+  /** Copy links in without touching any that exist; returns how many were added. */
+  async addMissing(incoming: readonly StoredLink[]): Promise<number> {
+    let added = 0;
+    await this.table.change((links) => {
+      added = addMissing(links, incoming);
+      return added > 0;
+    });
+    return added;
   }
 
   /** Move mappings for a renamed file or folder. Returns what moved (how it was chosen is kept). */
   async rename(oldUri: vscode.Uri, newUri: vscode.Uri): Promise<{ from: string; to: string; entry: MappingEntry }[]> {
-    const plan = planRename(await this.allEntries(), oldUri.fsPath, newUri.fsPath);
-    for (const m of plan) {
-      await this.set(vscode.Uri.file(m.from), undefined);
-      await this.set(vscode.Uri.file(m.to), m.entry);
-    }
-    // Folder mode: the chosen submit / run file follows a rename inside its folder (moved out → detected again).
-    for (const e of await this.allEntries()) {
-      if (!e.entry.folder) continue;
-      let entry = e.entry;
-      for (const role of ['submitFile', 'runFile'] as const) {
-        const next = submitFileAfterMove(e.fsPath, entry[role], oldUri.fsPath, newUri.fsPath);
-        if (next === null) continue;
-        entry = { ...entry };
-        delete entry[role];
-        if (next) entry[role] = next;
+    let plan: { from: string; to: string; entry: MappingEntry }[] = [];
+    await this.table.change((links) => {
+      plan = planRename(Object.values(links).map(located), oldUri.fsPath, newUri.fsPath);
+      let changed = plan.length > 0;
+      for (const m of plan) delete links[pathKey(m.from)];
+      for (const m of plan) links[pathKey(m.to)] = this.linkFor(m.to, m.entry);
+      // Folder mode: the chosen submit / run file follows a rename inside its folder (moved out → detected again).
+      for (const [k, link] of Object.entries(links)) {
+        if (!link.folder) continue;
+        let next = link;
+        for (const role of ['submitFile', 'runFile'] as const) {
+          const moved = submitFileAfterMove(link.fsPath, next[role], oldUri.fsPath, newUri.fsPath);
+          if (moved === null) continue;
+          next = { ...next };
+          delete next[role];
+          if (moved) next[role] = moved;
+          changed = true;
+        }
+        links[k] = next;
       }
-      if (entry !== e.entry) await this.set(vscode.Uri.file(e.fsPath), entry);
-    }
+      return changed;
+    });
+    for (const m of plan) if (this.isUnlinked(vscode.Uri.file(m.to))) await this.setUnlinked(vscode.Uri.file(m.to), false);
     // "Not linked" follows the file too.
     for (const memento of [this.ctx.workspaceState, this.ctx.globalState]) {
       for (const fsPath of Object.values(memento.get<Record<string, string>>(UNLINKED_KEY, {}))) {
@@ -316,61 +273,58 @@ export class MappingStore {
 
   /** A mapped file (or folder) was deleted: keep the mapping but mark it stale, so a moved file can reconnect. */
   async markDeleted(uri: vscode.Uri, now = new Date()): Promise<number> {
-    const all = await this.allEntries();
-    const hit = affectedByDelete(all, uri.fsPath);
-    for (const e of hit) await this.set(vscode.Uri.file(e.fsPath), { ...e.entry, staleSince: now.toISOString() });
-    // Folder mode: a deleted submit / run file is detected (or asked) again.
-    for (const e of all) {
-      if (!e.entry.folder || e.entry.staleSince) continue;
-      const gone = (['submitFile', 'runFile'] as const).filter((r) => submitFileDeleted(e.fsPath, e.entry[r], uri.fsPath));
-      if (!gone.length) continue;
-      const rest = { ...e.entry };
-      for (const r of gone) delete rest[r];
-      await this.set(vscode.Uri.file(e.fsPath), rest);
-    }
-    return hit.length;
+    let count = 0;
+    await this.table.change((links) => {
+      const all = Object.values(links).map(located);
+      const hit = affectedByDelete(all, uri.fsPath);
+      count = hit.length;
+      let changed = count > 0;
+      for (const e of hit) {
+        const k = pathKey(e.fsPath);
+        links[k] = { ...links[k], staleSince: now.toISOString() };
+      }
+      // Folder mode: a deleted submit / run file is detected (or asked) again.
+      for (const e of all) {
+        if (!e.entry.folder || e.entry.staleSince) continue;
+        const gone = (['submitFile', 'runFile'] as const).filter((r) => submitFileDeleted(e.fsPath, e.entry[r], uri.fsPath));
+        if (!gone.length) continue;
+        const k = pathKey(e.fsPath);
+        const rest = { ...links[k] };
+        for (const r of gone) delete rest[r];
+        links[k] = rest;
+        changed = true;
+      }
+      return changed;
+    });
+    return count;
   }
 
-  /** Remove stale mappings older than 30 days. */
-  async expireStale(now = new Date()): Promise<number> {
-    const old = expired(await this.allEntries(), now);
-    for (const e of old) await this.set(vscode.Uri.file(e.fsPath), undefined);
-    return old.length;
+  private async remove(pick: (links: Links) => readonly { fsPath: string }[]): Promise<number> {
+    let count = 0;
+    await this.table.change((links) => {
+      const gone = pick(links);
+      count = gone.length;
+      for (const e of gone) delete links[pathKey(e.fsPath)];
+      return count > 0;
+    });
+    return count;
   }
 
-  /** "Clear Cached Data": remove every stale link (file missing), whatever its age. */
+  /** Remove stale mappings older than 30 days, of every folder. */
+  expireStale(now = new Date()): Promise<number> {
+    return this.remove((links) => expired(Object.values(links).map(located), now));
+  }
+
+  /** "Clear Cached Data": remove every stale link (file missing) of this window, whatever its age. */
   async removeStale(): Promise<number> {
     const stale = (await this.allEntries()).filter((e) => e.entry.staleSince);
-    for (const e of stale) await this.set(vscode.Uri.file(e.fsPath), undefined);
-    return stale.length;
+    return this.remove(() => stale);
   }
 
-  /**
-   * "Clear Cached Data" → links: empty the entries of every `.cedt-grader.json`
-   * (the file is kept). A file with unsaved edits in an editor is left alone.
-   * The workspaceState keys are removed by the caller.
-   */
-  async emptyMappingFiles(): Promise<{ emptied: number; skippedDirty: number }> {
-    let emptied = 0;
-    let skippedDirty = 0;
-    for (const folder of vscode.workspace.workspaceFolders ?? []) {
-      const uri = vscode.Uri.joinPath(folder.uri, MAPPING_FILE_NAME);
-      const open = vscode.workspace.textDocuments.find((d) => d.uri.toString() === uri.toString());
-      if (open?.isDirty) {
-        skippedDirty++;
-        continue;
-      }
-      const data = await this.readFile(folder);
-      if (!Object.keys(data.files).length) continue;
-      try {
-        await this.writeMappingText(uri, open, serializeMappingFile(emptyMapping()));
-        emptied++;
-      } catch {
-        // Read-only folder: nothing to do.
-      }
-    }
-    this.invalidate();
-    return { emptied, skippedDirty };
+  /** "Clear Cached Data" → links: remove this window's links. */
+  async clearLinks(): Promise<number> {
+    const mine = await this.allEntries();
+    return this.remove(() => mine);
   }
 
   /** Re-link a mapping that belonged to a file moved outside VS Code. */
@@ -378,99 +332,5 @@ export class MappingStore {
     const { staleSince: _drop, ...entry } = from.entry;
     await this.set(vscode.Uri.file(from.fsPath), undefined);
     await this.set(to, entry);
-  }
-
-  /**
-   * Remove duplicate links: a file stored under both the old (absolute path)
-   * and the new key, or duplicate entries in `.cedt-grader.json`. Returns how
-   * many duplicates were removed (the caller tells the user).
-   */
-  async cleanupDuplicates(): Promise<number> {
-    let removed = 0;
-    // 1. Workspace state: one entry per file (canonical key; legacy absolute-path keys folded in).
-    for (const memento of [this.ctx.workspaceState, this.ctx.globalState]) {
-      const current = memento.get<Record<string, StateEntry>>(STATE_KEY, {});
-      const legacy = this.legacy(memento);
-      const rebuilt: Record<string, StateEntry> = {};
-      const add = (fsPath: string, entry: MappingEntry) => {
-        const { key } = this.keyFor(vscode.Uri.file(fsPath));
-        if (rebuilt[key]) removed++;
-        else rebuilt[key] = { ...entry, fsPath: normalizeAbsPath(fsPath) };
-      };
-      for (const e of Object.values(current)) {
-        const { fsPath, ...entry } = e;
-        add(fsPath, entry);
-      }
-      for (const [fsPath, entry] of Object.entries(legacy)) add(fsPath, entry);
-      const changed =
-        Object.keys(legacy).length > 0 || JSON.stringify(Object.keys(rebuilt).sort()) !== JSON.stringify(Object.keys(current).sort());
-      if (changed) {
-        await memento.update(STATE_KEY, rebuilt);
-        if (Object.keys(legacy).length) await memento.update(LEGACY_KEY, undefined);
-      }
-    }
-    // 2. .cedt-grader.json: duplicate / same-path keys (./x.cpp vs x.cpp, NFD vs NFC, case on macOS).
-    for (const folder of vscode.workspace.workspaceFolders ?? []) {
-      const uri = vscode.Uri.joinPath(folder.uri, MAPPING_FILE_NAME);
-      const open = vscode.workspace.textDocuments.find((d) => d.uri.toString() === uri.toString());
-      if (open?.isDirty) continue; // never clobber unsaved edits; cleaned on the next save
-      let text: string;
-      try {
-        text = open ? open.getText() : new TextDecoder().decode(await vscode.workspace.fs.readFile(uri));
-      } catch {
-        continue;
-      }
-      const before = countDuplicateEntries(text);
-      const data = parseMappingFile(text); // later entries win, like JSON.parse
-      const cleaned = serializeMappingFile(data);
-      if (!before && cleaned.trim() === text.trim()) continue;
-      if (!before) {
-        // Only spelling changes (e.g. "./"): rewrite quietly.
-        await this.writeMappingText(uri, open, cleaned);
-        this.cache.set(folder.uri.toString(), data);
-        continue;
-      }
-      await this.writeMappingText(uri, open, cleaned);
-      this.cache.set(folder.uri.toString(), data);
-      // Count only what really changed on disk.
-      const after = countDuplicateEntries(new TextDecoder().decode(await vscode.workspace.fs.readFile(uri)));
-      removed += Math.max(0, before - after);
-    }
-    return removed;
-  }
-
-  /** Write `.cedt-grader.json`; through the open editor if it is open (so the change is visible and saved). */
-  private async writeMappingText(uri: vscode.Uri, open: vscode.TextDocument | undefined, text: string): Promise<void> {
-    if (open) {
-      const edit = new vscode.WorkspaceEdit();
-      edit.replace(uri, new vscode.Range(open.positionAt(0), open.positionAt(open.getText().length)), text);
-      await vscode.workspace.applyEdit(edit);
-      await open.save();
-      return;
-    }
-    await vscode.workspace.fs.writeFile(uri, new TextEncoder().encode(text));
-  }
-
-  private legacy(memento: vscode.Memento): Record<string, MappingEntry> {
-    return memento.get<Record<string, MappingEntry>>(LEGACY_KEY, {});
-  }
-
-  invalidate(): void {
-    this.cache.clear();
-  }
-
-  private async readFile(folder: vscode.WorkspaceFolder): Promise<MappingFileData> {
-    const key = folder.uri.toString();
-    const cached = this.cache.get(key);
-    if (cached) return cached;
-    let data = emptyMapping();
-    try {
-      const bytes = await vscode.workspace.fs.readFile(vscode.Uri.joinPath(folder.uri, MAPPING_FILE_NAME));
-      data = parseMappingFile(new TextDecoder().decode(bytes));
-    } catch {
-      /* no file yet */
-    }
-    this.cache.set(key, data);
-    return data;
   }
 }

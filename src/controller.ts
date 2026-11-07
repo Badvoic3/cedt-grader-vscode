@@ -40,6 +40,7 @@ import { BINARY_EXTS } from './mapping/findByName';
 import { EXTENSION_LANGUAGE } from './grader/languages';
 import { stat as fsStat } from 'node:fs/promises';
 import { cphFilesAfterFolderRename, moveCphProblem, remapPath } from './mapping/mappingOps';
+import { importOldLinks } from './migration/importLinks';
 import { cleanName, placeholder, resolveProblem } from './mapping/match';
 import { MappingStore } from './mapping/store';
 import { pathKey } from './mapping/paths';
@@ -284,13 +285,7 @@ export class GraderController implements vscode.Disposable {
           this.emit();
         });
       }),
-      vscode.workspace.onDidSaveTextDocument((d) => {
-        if (d.fileName.endsWith('.cedt-grader.json')) {
-          this.mapping.invalidate();
-          void this.links.cleanupDuplicates();
-          if (this.fileUri) void this.setActiveFile(this.fileUri);
-        }
-      }),
+      vscode.workspace.onDidChangeWorkspaceFolders(() => void this.importOldLinks().then(() => this.links.refreshMappedIds()).then(() => this.emit())),
     );
   }
 
@@ -355,6 +350,15 @@ export class GraderController implements vscode.Disposable {
     };
   }
 
+  /** Copy links older versions kept into the link table. Never stops a start: what failed is tried again on the next one. */
+  private async importOldLinks(): Promise<void> {
+    try {
+      await importOldLinks(this.ctx, this.mapping);
+    } catch (err) {
+      this.log(`old links not imported: ${err instanceof Error ? err.message : err}`);
+    }
+  }
+
   /** Restores a stored API token (no network). Never logs in on its own. */
   /**
    * Read the saved login, links and active file. Runs after activation, while the panel's webview
@@ -362,7 +366,7 @@ export class GraderController implements vscode.Disposable {
    */
   async init(): Promise<void> {
     try {
-      await this.links.cleanupDuplicates();
+      await this.importOldLinks();
       this.warnBadPattern();
       this.hasSavedPassword = !!(await this.getPassword());
       if (await this.client.restore()) {
@@ -1304,7 +1308,6 @@ export class GraderController implements vscode.Disposable {
 
   /** "Clear Cached Data": what the controller resets after the cache flow cleared the stores. */
   private async afterClear(resetData: boolean): Promise<void> {
-    this.mapping.invalidate();
     this.links.invalidateIndex();
     this.selectedLanguageId = null;
     if (resetData) {

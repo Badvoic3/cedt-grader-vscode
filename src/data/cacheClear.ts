@@ -6,7 +6,6 @@ import { KEYS } from '../shared/stateKeys';
  *
  * Nothing in the workspace is deleted except the `.prob.bak` files this
  * extension recorded creating, and only with "backups" selected.
- * `.cedt-grader.json` is emptied (never deleted) only with "links".
  */
 export type ClearCategory = 'files' | 'custom' | 'lists' | 'links' | 'login' | 'backups';
 
@@ -30,7 +29,7 @@ export interface ClearPlan {
   resetData: boolean;
   /** Remove stale links (file missing) even when the other links are kept. */
   staleLinks: boolean;
-  /** Remove every link, including the entries in each `.cedt-grader.json`. */
+  /** Remove this window's links from the link table. */
   allLinks: boolean;
   /** Same as Log Out: delete the saved password and token. */
   logout: boolean;
@@ -56,8 +55,7 @@ export function planClear(
     gl.add(KEYS.unlinked); // files outside any folder
   }
   if (selected.has('links')) {
-    for (const k of [KEYS.mappings, KEYS.legacyMapping, KEYS.languageByFile]) ws.add(k);
-    for (const k of [KEYS.mappings, KEYS.legacyMapping]) gl.add(k);
+    ws.add(KEYS.languageByFile);
   }
   const has = (list: readonly string[]) => (k: string) => list.includes(k);
   return {

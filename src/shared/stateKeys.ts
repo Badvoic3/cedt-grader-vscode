@@ -10,10 +10,12 @@ export const KEYS = {
   // ---- workspaceState
   /** Problem list saved for a quick start, `cedtGrader.problems.v2:<baseUrl>:<user>` (older versions: other `cedtGrader.problems…` keys). */
   problemsPrefix: 'cedtGrader.problems',
-  /** File → problem links (also globalState for files outside any folder). */
+  /** Old file → problem links (also globalState), read once by src/migration/importLinks.ts and then removed. */
   mappings: 'cedtGrader.mappings',
-  /** Links saved by the first versions (absolute-path keys). */
+  /** Links saved by the first versions (absolute-path keys): as `mappings`. */
   legacyMapping: 'cedtGrader.mapping',
+  /** Workspace folders whose `.cedt-grader.json` was copied into the link table. "Clear Cached Data" leaves it, or cleared links would return. */
+  linksImported: 'cedtGrader.linksImported',
   /** Files explicitly marked "not linked" (also globalState for files outside any folder). */
   unlinked: 'cedtGrader.unlinked',
   /** Remembered auto-matches (file name / CPH / suggestion) of files that were open. */

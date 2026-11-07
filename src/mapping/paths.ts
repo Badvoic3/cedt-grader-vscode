@@ -2,7 +2,7 @@ import { posix } from 'node:path';
 
 /**
  * The one path normalization used for file links everywhere (mappings,
- * `.cedt-grader.json`, rename handling, reverse lookup, reconnect).
+ * the link table, rename handling, reverse lookup, reconnect).
  */
 
 /** File systems that ignore case by default (macOS APFS/HFS+, Windows NTFS). */

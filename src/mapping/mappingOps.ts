@@ -5,7 +5,7 @@ import { isAtOrInside, isInside, pathKey, remapPath } from './paths';
 import { cphProbPath, type CphProblem } from './cph';
 import { EXCLUDED_DIRS } from './findByName';
 import { listFolderFiles } from './folderFiles';
-import type { MappingEntry } from './mappingFile';
+import type { MappingEntry } from './linkTable';
 
 /**
  * Pure helpers for keeping file → problem mappings correct when files move

@@ -17,7 +17,7 @@ import type { Strings } from './strings';
  * Everything else was reviewed at checkpoint B (2026-11-03). Add keys here
  * when a new text is translated without review.
  */
-export const TH_REVIEW: readonly string[] = ['S.common.dismiss', 'S.crash.notice', 'S.crash.report', 'S.crash.review', 'S.crash.reviewTitle', 'S.files.saveHere', 'S.folder.cancelRestores', 'S.folder.cancelStopsMatch', 'S.folder.cancelUnlinksFile', 'S.folder.replaceFilesQ', 'W.websiteTip', 'S.requestLogOff', 'W.crashTitle', 'G.statusGradingTip', 'G.statusChooseTip', 'G.statusOpenTip', 'G.logInFirst', 'W.server', 'W.serverLine', 'W.changeServer', 'W.checkingServer', 'W.serverWorks', 'W.useDefaultServer', 'S.account.serverInvalid', 'S.account.settingsNotSaved', 'S.account.serverIncompatible', 'S.account.serverUnreachable', 'S.account.insecureTitle', 'S.account.insecureDetail', 'S.account.insecureSend', 'W.crashNote', 'W.crashReport', 'W.crashReportLabel', 'W.crashTitle', 'W.defaultOrderReversed', 'W.sortedBy', 'S.cache.custom', 'S.cache.customDetail', 'S.runner', 'S.runTests', 'S.testsTab', 'S.compareTab', 'W.closeTests', 'W.closeStatement', 'W.compareInCode', 'W.compareInCodeTip', 'W.spacesDontCount', 'W.sampleTip', 'S.testcases.loaded', 'S.samples.loaded', 'W.loadTestCasesTip', 'W.runFileTip', 'W.runFileAsk', 'W.runTestsTip', 'W.stopTests', 'W.stopTestsTip', 'W.openTests', 'W.openTestsTip', 'W.runNoCases', 'W.runNotRun', 'W.runCompiling', 'W.runRunning', 'W.runPassed', 'W.runCompileError', 'W.testsNoFile', 'W.runAll', 'W.runAllTip', 'W.runAllNoCases', 'W.addCase', 'W.addCaseTip', 'W.testsLimit', 'W.noCasesLoad', 'W.noCasesAdd', 'W.nothingRun', 'W.leftOut', 'W.caseN', 'W.sourceGrader', 'W.sourceSample', 'W.sourceCustom', 'W.runCase', 'W.deleteCase', 'W.moveCaseTip', 'W.openCase', 'W.closeCase', 'W.caseInput', 'W.caseExpected', 'W.caseActual', 'W.caseStderr', 'W.editExpected', 'W.copyInput', 'W.copyExpected', 'W.copyActual', 'W.copyStderr', 'W.copyError', 'W.setExpected', 'W.setExpectedCut', 'W.textCut', 'W.outputCut', 'W.memoryEstimate', 'W.caseStopped', 'W.exitCode', 'W.exitSignal'];
+export const TH_REVIEW: readonly string[] = ['S.common.dismiss', 'S.crash.notice', 'S.crash.report', 'S.crash.review', 'S.crash.reviewTitle', 'S.files.saveHere', 'S.folder.cancelRestores', 'S.folder.cancelStopsMatch', 'S.folder.cancelUnlinksFile', 'S.folder.replaceFilesQ', 'W.websiteTip', 'S.requestLogOff', 'W.crashTitle', 'G.statusGradingTip', 'G.statusChooseTip', 'G.statusOpenTip', 'G.logInFirst', 'W.server', 'W.serverLine', 'W.changeServer', 'W.checkingServer', 'W.serverWorks', 'W.useDefaultServer', 'S.account.serverInvalid', 'S.account.settingsNotSaved', 'S.account.serverIncompatible', 'S.account.serverUnreachable', 'S.account.insecureTitle', 'S.account.insecureDetail', 'S.account.insecureSend', 'W.crashNote', 'W.crashReport', 'W.crashReportLabel', 'W.crashTitle', 'W.defaultOrderReversed', 'W.sortedBy', 'S.cache.custom', 'S.cache.customDetail', 'S.cache.linksDetail', 'S.runner', 'S.runTests', 'S.testsTab', 'S.compareTab', 'W.closeTests', 'W.closeStatement', 'W.compareInCode', 'W.compareInCodeTip', 'W.spacesDontCount', 'W.sampleTip', 'S.testcases.loaded', 'S.samples.loaded', 'W.loadTestCasesTip', 'W.runFileTip', 'W.runFileAsk', 'W.runTestsTip', 'W.stopTests', 'W.stopTestsTip', 'W.openTests', 'W.openTestsTip', 'W.runNoCases', 'W.runNotRun', 'W.runCompiling', 'W.runRunning', 'W.runPassed', 'W.runCompileError', 'W.testsNoFile', 'W.runAll', 'W.runAllTip', 'W.runAllNoCases', 'W.addCase', 'W.addCaseTip', 'W.testsLimit', 'W.noCasesLoad', 'W.noCasesAdd', 'W.nothingRun', 'W.leftOut', 'W.caseN', 'W.sourceGrader', 'W.sourceSample', 'W.sourceCustom', 'W.runCase', 'W.deleteCase', 'W.moveCaseTip', 'W.openCase', 'W.closeCase', 'W.caseInput', 'W.caseExpected', 'W.caseActual', 'W.caseStderr', 'W.editExpected', 'W.copyInput', 'W.copyExpected', 'W.copyActual', 'W.copyStderr', 'W.copyError', 'W.setExpected', 'W.setExpectedCut', 'W.textCut', 'W.outputCut', 'W.memoryEstimate', 'W.caseStopped', 'W.exitCode', 'W.exitSignal'];
 
 export const TH: Strings = {
   HOW_LINKED: {
@@ -70,7 +70,6 @@ export const TH: Strings = {
       createNew: '$(new-file) สร้างไฟล์ใหม่',
       findByName: '$(search) ค้นหาไฟล์ที่ตรงกับโจทย์',
       openStatement: '$(file-pdf) เปิดโจทย์',
-      cleanedDuplicates: (n) => `ลบการเชื่อมไฟล์ที่ซ้ำกัน ${n} รายการออกจาก .cedt-grader.json แล้ว`,
       unlinkOthers: (what, problem) => `ยกเลิกการเชื่อม ${what} กับ ${problem} ไหม?`,
       nOtherFiles: (n) => `อีก ${n} ไฟล์`,
       unlink: 'ยกเลิกการเชื่อม',
@@ -175,7 +174,7 @@ export const TH: Strings = {
       listsDetail:
         'รายการโจทย์ที่บันทึกไว้ ประวัติการส่ง โจทย์ที่จับคู่อัตโนมัติ ไฟล์ที่ตั้งค่าไม่ให้เชื่อม ข้อความแจ้งเตือนที่ปิดไป โจทย์ที่เปิดล่าสุด และการเชื่อมของไฟล์ที่ถูกลบไปแล้ว',
       links: 'การเชื่อมไฟล์กับโจทย์',
-      linksDetail: 'โจทย์ทั้งหมดที่คุณเลือกไว้ให้ไฟล์ รวมถึงข้อมูลใน .cedt-grader.json (ตัวไฟล์ไม่ถูกลบ)',
+      linksDetail: 'โจทย์ทั้งหมดที่คุณเลือกไว้ให้ไฟล์ในหน้าต่างนี้',
       login: 'ข้อมูลเข้าสู่ระบบที่บันทึกไว้',
       loginDetail: 'รหัสผ่านและโทเค็นเข้าสู่ระบบที่บันทึกไว้ (เหมือนกับการออกจากระบบ)',
       backups: 'ไฟล์สำรองจากการนำเข้า test case',
@@ -183,7 +182,6 @@ export const TH: Strings = {
       confirm: (what) => `ล้าง${what}ไหม? เมื่อล้างแล้วจะกู้คืนไม่ได้`,
       clear: 'ล้างข้อมูล',
       cleared: (size) => `ล้างข้อมูลแคชแล้ว (ได้พื้นที่คืน ${size})`,
-      skippedDirty: (n) => `มีไฟล์ .cedt-grader.json จำนวน ${n} ไฟล์ที่ยังไม่ได้บันทึก จึงไม่ได้ล้างข้อมูลข้างใน`,
     },
 
     submit: {

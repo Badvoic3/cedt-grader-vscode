@@ -4,7 +4,7 @@
  * "folder link not following sibling files" bug). Real MappingStore, FolderMode
  * and Links over a fake VS Code workspace on a temporary folder.
  */
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, dirname, join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -13,6 +13,7 @@ import { FolderMode } from '../src/flows/folderMode';
 import { Links } from '../src/flows/links';
 import { pathState } from '../src/mapping/mappingOps';
 import { MappingStore } from '../src/mapping/store';
+import { importOldLinks } from '../src/migration/importLinks';
 
 const env = vi.hoisted(() => ({ folders: [] as { uri: { fsPath: string }; name: string; index: number }[], dialog: undefined as unknown, opened: [] as string[] }));
 
@@ -67,13 +68,15 @@ class Memo {
 
 /** The parts of the controller these flows use. */
 function session() {
-  const mapping = new MappingStore({ workspaceState: new Memo(), globalState: new Memo() } as never);
+  const ctx = { workspaceState: new Memo(), globalState: new Memo(), globalStorageUri: { fsPath: mkdtempSync(join(dir, 'links-')) } } as never;
+  const mapping = new MappingStore(ctx);
   const problems = [
     { id: 1, name: 'alpha', fullName: 'alpha', tags: [] },
     { id: 2, name: 'beta', fullName: 'beta', tags: [] },
     { id: 3, name: 'gamma', fullName: 'gamma', tags: [] },
   ];
   const s = {
+    ctx,
     mapping,
     problems,
     cfg: { baseUrl: BASE, fileNamePattern: { pattern: '{name}.{ext}' } },
@@ -530,7 +533,7 @@ describe('moving to another file while a folder question is open', () => {
 });
 
 describe('cause E: the folder is the workspace root, or outside the workspace', () => {
-  it('links the workspace root under the key "."', async () => {
+  it('links the workspace root by its path, and writes nothing into it', async () => {
     env.folders = [{ uri: { fsPath: pkg }, name: 'xyz_folder', index: 0 }];
     const s = session();
     await s.mapping.set(uri(join(pkg, 'foo.cpp')), { problemId: 1, name: 'alpha', baseUrl: BASE });
@@ -538,15 +541,17 @@ describe('cause E: the folder is the workspace root, or outside the workspace', 
     expect(s.folder.modeTarget().reason).toBeNull();
     await s.folder.toggle();
     expect(await follow(s, pkg)).toEqual(allOn(1, pkg));
-    const saved = JSON.parse(readFileSync(join(pkg, '.cedt-grader.json'), 'utf8'));
-    expect(Object.keys(saved.files)).toEqual(['.']);
+    expect((await s.mapping.allEntries()).map((e) => e.fsPath)).toEqual([pkg]);
+    expect(existsSync(join(pkg, '.cedt-grader.json'))).toBe(false);
     expect(s.folder.view()?.path).toBe('xyz_folder/');
   });
 
-  it('a workspace-root link is read back from .cedt-grader.json on another machine', async () => {
+  it('a workspace-root link from another machine comes in from .cedt-grader.json', async () => {
     env.folders = [{ uri: { fsPath: pkg }, name: 'xyz_folder', index: 0 }];
     writeFileSync(join(pkg, '.cedt-grader.json'), JSON.stringify({ version: 1, files: { '.': { problemId: 2, name: 'beta', baseUrl: BASE, folder: true } } }));
-    expect(await follow(session(), pkg)).toEqual(allOn(2, pkg));
+    const s = session();
+    await importOldLinks(s.ctx, s.mapping);
+    expect(await follow(s, pkg)).toEqual(allOn(2, pkg));
   });
 
   it('links a folder outside the workspace without touching it', async () => {

@@ -15,7 +15,7 @@ import { HttpSession } from '../src/grader/http';
 import { Redactor } from '../src/grader/redact';
 import { isProtectedName, planZip, writeExtracted } from '../src/mapping/attachment';
 import { folderNameFor, fileNameFor } from '../src/mapping/match';
-import { parseMappingFile, serializeMappingFile } from '../src/mapping/mappingFile';
+import { parseMappingFile } from '../src/migration/oldLinks';
 import { nearestFolderLink } from '../src/mapping/mappingOps';
 import { saveTestcasesAsFiles, testsFolderFor } from '../src/mapping/testCases';
 import { ATTACHMENT, STATEMENT } from '../src/shared/constants';
@@ -396,11 +396,6 @@ describe('L4: .cedt-grader.json entries outside the workspace are ignored', () =
     const ws = '/Users/me/hw';
     const located = Object.entries(m.files).map(([rel, entry]) => ({ fsPath: join(ws, rel), entry }));
     expect(nearestFolderLink(located, '/Users/me/hw/sub/main.cpp', false)).toBeUndefined();
-  });
-
-  it('a file with only valid entries is written back byte for byte', () => {
-    const ok = serializeMappingFile(parseMappingFile(JSON.stringify({ version: 1, files: { 'hw/a.cpp': { problemId: 1, name: 'a' }, pkg: { problemId: 2, name: 'b', folder: true, submitFile: 'student.h' } } })));
-    expect(serializeMappingFile(parseMappingFile(ok))).toBe(ok);
   });
 });
 

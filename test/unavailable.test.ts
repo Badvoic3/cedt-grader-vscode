@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { DataService } from '../src/data/dataService';
 import { GraderClient, ProblemUnavailableError, SubmitRejectedError } from '../src/grader';
-import { countDuplicateEntries, parseMappingFile } from '../src/mapping/mappingFile';
+import { parseMappingFile } from '../src/migration/oldLinks';
 import { FakeGrader } from './fakeServer';
 
 async function setup() {
@@ -51,7 +51,7 @@ describe('problem no longer available on the grader', () => {
 });
 
 describe('duplicate links in .cedt-grader.json', () => {
-  it('counts duplicate keys and keys that are the same path', () => {
+  it('duplicate keys and keys that are the same path become one entry', () => {
     const text = `{"version":1,"files":{
       "a.cpp": {"problemId":1,"name":"x"},
       "./a.cpp": {"problemId":2,"name":"y"},
@@ -60,12 +60,7 @@ describe('duplicate links in .cedt-grader.json', () => {
       "d.cpp": {"problemId":4,"name":"w"},
       "d.cpp": {"problemId":5,"name":"v"}
     }}`;
-    expect(countDuplicateEntries(text)).toBe(3);
     const cleaned = parseMappingFile(text);
     expect(Object.keys(cleaned.files).sort()).toEqual(['a.cpp', 'b/c.cpp', 'd.cpp']);
-  });
-  it('no duplicates → 0', () => {
-    expect(countDuplicateEntries('{"version":1,"files":{"a.cpp":{"problemId":1,"name":"x"}}}')).toBe(0);
-    expect(countDuplicateEntries('not json')).toBe(0);
   });
 });

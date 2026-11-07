@@ -382,12 +382,6 @@ export class Links {
     else if (pick?.id === 'statement') await h.openStatement(problemId);
   }
 
-  /** Remove duplicate link entries (and tell the user). */
-  async cleanupDuplicates(): Promise<void> {
-    const n = await this.host.mapping.cleanupDuplicates();
-    if (n) void vscode.window.showInformationMessage(S.files.cleanedDuplicates(n));
-  }
-
   /** Re-run matching for the active file, ignoring the saved link; ask before replacing a manual link. */
   async autoDetect(): Promise<void> {
     const h = this.host;
@@ -648,7 +642,7 @@ export class Links {
     const h = this.host;
     this.reconnectAsked.add(uri.fsPath);
     const dismissed = new Set(h.ctx.workspaceState.get<string[]>(KEYS.dismissedReconnects, []));
-    const candidates = await reconnectCandidates(await h.mapping.allEntries(), uri.fsPath, stillThere, dismissed);
+    const candidates = await reconnectCandidates(await h.mapping.everyEntry(), uri.fsPath, stillThere, dismissed);
     if (!candidates.length) return;
     const nameOf = (c: LocatedEntry) => h.problemById(c.entry.problemId)?.name ?? c.entry.name;
     let chosen: LocatedEntry | undefined;

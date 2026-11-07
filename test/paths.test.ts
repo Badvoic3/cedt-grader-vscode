@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { countDuplicateEntries, lookup, parseMappingFile, reverseIndex, serializeMappingFile } from '../src/mapping/mappingFile';
+import { parseMappingFile } from '../src/migration/oldLinks';
 import { reconnectCandidates } from '../src/mapping/mappingOps';
 import { normalizeRelPath, pathKey, remapPath } from '../src/mapping/paths';
 
@@ -47,33 +47,20 @@ describe('one path normalization', () => {
 describe('.cedt-grader.json uses it everywhere', () => {
   const text = (files: Record<string, number>) => JSON.stringify({ version: 1, files: Object.fromEntries(Object.entries(files).map(([k, v]) => [k, { problemId: v, name: `p${v}` }])) });
 
-  it('"./x.cpp" and "x.cpp" are one entry; cleanup really rewrites to one key', () => {
-    const raw = text({ './x.cpp': 1, 'x.cpp': 2 });
-    expect(countDuplicateEntries(raw)).toBe(1);
-    const cleaned = serializeMappingFile(parseMappingFile(raw));
-    expect(Object.keys(JSON.parse(cleaned).files)).toEqual(['x.cpp']);
-    expect(JSON.parse(cleaned).files['x.cpp'].problemId).toBe(2); // the later entry wins, like JSON.parse
-    expect(countDuplicateEntries(cleaned)).toBe(0); // fixed for real
+  it('"./x.cpp" and "x.cpp" are one entry, and the later one wins, like JSON.parse', () => {
+    const d = parseMappingFile(text({ './x.cpp': 1, 'x.cpp': 2 }));
+    expect(Object.keys(d.files)).toEqual(['x.cpp']);
+    expect(d.files['x.cpp'].problemId).toBe(2);
   });
 
-  it('NFD and NFC Thai/accented names collapse; lookups match either spelling', () => {
-    const raw = text({ [`hw/${ACCENT_NFD}`]: 1, [`hw/${ACCENT_NFC}`]: 1 });
-    expect(countDuplicateEntries(raw)).toBe(1);
-    const d = parseMappingFile(raw);
+  it('NFD and NFC Thai/accented names collapse', () => {
+    const d = parseMappingFile(text({ [`hw/${ACCENT_NFD}`]: 1, [`hw/${ACCENT_NFC}`]: 1 }));
     expect(Object.keys(d.files)).toEqual([`hw/${ACCENT_NFC}`]);
-    expect(lookup(d, `hw/${ACCENT_NFD}`, 'https://x')?.problemId).toBe(1);
   });
 
   it('case differences collapse on macOS (case-insensitive)', () => {
-    const raw = text({ 'HW/Sol.cpp': 1, 'hw/sol.cpp': 2 });
     const ci = process.platform === 'darwin' || process.platform === 'win32';
-    expect(countDuplicateEntries(raw)).toBe(ci ? 1 : 0);
-    expect(lookup(parseMappingFile(raw), 'hw/SOL.cpp', 'https://x') !== undefined).toBe(ci);
-  });
-
-  it('reverse lookup and reconnect use the same normalization', () => {
-    const d = parseMappingFile(text({ './a/x.cpp': 7 }));
-    expect(reverseIndex(d, 'https://x').get(7)).toEqual(['a/x.cpp']);
+    expect(Object.keys(parseMappingFile(text({ 'HW/Sol.cpp': 1, 'hw/sol.cpp': 2 })).files)).toHaveLength(ci ? 1 : 2);
   });
 
   it('reconnect matches a moved NFD-named file by its NFC name', async () => {

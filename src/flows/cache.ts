@@ -128,7 +128,6 @@ export class CacheCare {
 
     const plan = planClear(new Set(picked.map((p) => p.id)), { workspace: ws.keys(), global: h.ctx.globalState.keys() });
     let freed = 0;
-    let skippedDirty = 0;
     if (plan.logout) await this.logout();
     if (plan.cacheFiles) {
       freed += (await clearCacheFiles(this.root)).bytes;
@@ -141,7 +140,7 @@ export class CacheCare {
       await h.runner.refresh();
     }
     if (plan.staleLinks) await h.mapping.removeStale();
-    if (plan.allLinks) skippedDirty = (await h.mapping.emptyMappingFiles()).skippedDirty;
+    if (plan.allLinks) await h.mapping.clearLinks();
     for (const k of plan.workspaceKeys) await ws.update(k, undefined);
     for (const k of plan.globalKeys) await h.ctx.globalState.update(k, undefined);
     if (plan.resetData) freed += listBytes;
@@ -159,6 +158,5 @@ export class CacheCare {
     }
     await this.afterClear(plan.resetData);
     void vscode.window.setStatusBarMessage(S.cache.cleared(formatBytes(freed)), TIMING.statusMessageMs * 2);
-    if (skippedDirty) void vscode.window.showWarningMessage(S.cache.skippedDirty(skippedDirty));
   }
 }

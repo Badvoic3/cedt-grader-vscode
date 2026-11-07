@@ -2,7 +2,7 @@
  * Upgrading from an older version keeps working: data written by v0.7.0
  * (`.cedt-grader.json`, saved problem lists, CPH files with imported tests)
  * reads the same with the current code, and nothing is turned into a folder
- * link or rewritten just by being read.
+ * link just by being read.
  */
 import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -13,8 +13,8 @@ import { normalizeProblem } from '../src/grader/types';
 import { cphProbPath } from '../src/mapping/cph';
 import { importIntoCph } from '../src/mapping/cphImport';
 import { GRADER_ID_BASE, type GraderCase } from '../src/mapping/testCases';
-import { parseMappingFile, serializeMappingFile } from '../src/mapping/mappingFile';
 import { type LocatedEntry, nearestFolderLink } from '../src/mapping/mappingOps';
+import { collectOldLinks, parseMappingFile } from '../src/migration/oldLinks';
 
 /** `.cedt-grader.json` exactly as v0.7.0 writes it (file links only; a stale one; another server). */
 const V070_MAPPING =
@@ -32,11 +32,10 @@ const V070_MAPPING =
   ) + '\n';
 
 describe('upgrade from v0.7.0', () => {
-  it('an old .cedt-grader.json reads the same and is written back byte for byte', () => {
+  it('an old .cedt-grader.json reads the same', () => {
     const d = parseMappingFile(V070_MAPPING);
     expect(Object.keys(d.files)).toEqual(['hw/a.cpp', 'hw/pkg/main.cpp', 'old/gone.cpp']);
     for (const e of Object.values(d.files)) expect(e).not.toHaveProperty('folder');
-    expect(serializeMappingFile(d)).toBe(V070_MAPPING);
   });
 
   it('old file links never act as folder links', () => {
@@ -69,6 +68,49 @@ describe('upgrade from v0.7.0', () => {
       [1, '1\n2\n'],
       [2, '0\n'],
     ]);
+  });
+});
+
+describe('old links, gathered for the link table', () => {
+  const file = (folder: string, files: object) => ({ folder, text: JSON.stringify({ version: 1, files }) });
+
+  it('a v0.7.0 file gives full paths, keeping server and staleness', () => {
+    const links = collectOldLinks({ files: [{ folder: '/w', text: V070_MAPPING }] });
+    expect(links.map((l) => l.fsPath)).toEqual(['/w/hw/a.cpp', '/w/hw/pkg/main.cpp', '/w/old/gone.cpp']);
+    expect(links[1].baseUrl).toBe('https://grader.example');
+    expect(links[2].staleSince).toBe('2026-10-01T00:00:00.000Z');
+    for (const l of links) expect(l).not.toHaveProperty('outside');
+  });
+
+  it('a v1.0.0 folder link keeps its roles, and "." is the folder itself', () => {
+    const [root, pkg] = collectOldLinks({
+      files: [file('/w', { '.': { problemId: 1, name: 'r', folder: true }, pkg: { problemId: 2, name: 'p', folder: true, submitFile: 'student.h', runFile: 'main.cpp' } })],
+    });
+    expect(root).toMatchObject({ fsPath: '/w', folder: true });
+    expect(pkg).toEqual({ problemId: 2, name: 'p', folder: true, submitFile: 'student.h', runFile: 'main.cpp', fsPath: '/w/pkg' });
+  });
+
+  it('state wins over the file, as it did in the old store', () => {
+    const links = collectOldLinks({
+      workspaceState: { 'w/a.cpp': { problemId: 7, name: 'state', fsPath: '/w/a.cpp' } },
+      files: [file('/w', { 'a.cpp': { problemId: 8, name: 'file' } })],
+    });
+    expect(links).toEqual([{ problemId: 7, name: 'state', fsPath: '/w/a.cpp' }]);
+  });
+
+  it('global links stay visible in every window; first-version keys are read; broken entries are skipped', () => {
+    const links = collectOldLinks({
+      globalState: { '/o/a.cpp': { problemId: 1, name: 'a', fsPath: '/o/a.cpp' }, bad: { problemId: 2, name: 'no path' } },
+      workspaceLegacy: { '/w/old.cpp': { problemId: 3, name: 'old' }, '/w/bad.cpp': { problemId: -1, name: 'x' } },
+    });
+    expect(links).toEqual([
+      { problemId: 3, name: 'old', fsPath: '/w/old.cpp' },
+      { problemId: 1, name: 'a', fsPath: '/o/a.cpp', outside: true },
+    ]);
+  });
+
+  it('a file outside the folder is ignored', () => {
+    expect(collectOldLinks({ files: [file('/w', { '../x.cpp': { problemId: 1, name: 'x' } })] })).toEqual([]);
   });
 });
 

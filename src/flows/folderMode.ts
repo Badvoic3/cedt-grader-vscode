@@ -19,7 +19,7 @@ import {
   runSources,
   standInFile,
 } from '../mapping/folderRoles';
-import type { MappingEntry } from '../mapping/mappingFile';
+import type { MappingEntry } from '../mapping/linkTable';
 import { submitFilePath } from '../mapping/mappingOps';
 import { unlinkScope } from '../mapping/linkActions';
 import { pathKey } from '../mapping/paths';

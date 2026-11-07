@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { resolveProblem } from '../src/mapping/match';
 import type { Problem } from '../src/grader';
 import { cphProbPath, matchCphProblem, readCphProblem } from '../src/mapping/cph';
-import { lookup, parseMappingFile, serializeMappingFile } from '../src/mapping/mappingFile';
+import { parseMappingFile } from '../src/migration/oldLinks';
 
 const BASE = 'https://cedt-grader.nattee.net';
 const P = (id: number, name: string, fullName = name): Problem => ({
@@ -15,21 +15,14 @@ const P = (id: number, name: string, fullName = name): Problem => ({
 const problems = [P(1360, '00_Intro_11', '00_Intro_★_Hello_World'), P(1759, 'DigLo69_Exam2__1'), P(1271, '01_Expr_11')];
 
 describe('.cedt-grader.json', () => {
-  it('round-trips and normalizes paths', () => {
+  it('normalizes paths', () => {
     const d = parseMappingFile(JSON.stringify({ version: 1, files: { '.\\a\\b.cpp': { problemId: 1360, name: '00_Intro_11' } } }));
     expect(Object.keys(d.files)).toEqual(['a/b.cpp']);
-    expect(parseMappingFile(serializeMappingFile(d))).toEqual(d);
   });
 
   it('ignores garbage and invalid entries', () => {
     expect(parseMappingFile('not json').files).toEqual({});
     expect(parseMappingFile('{"files":{"x.cpp":{"problemId":"7"},"y.cpp":{"problemId":-1}}}').files).toEqual({});
-  });
-
-  it('ignores entries for another server', () => {
-    const d = parseMappingFile(JSON.stringify({ files: { 'a.cpp': { problemId: 1, name: 'x', baseUrl: 'https://other' } } }));
-    expect(lookup(d, 'a.cpp', BASE)).toBeUndefined();
-    expect(lookup(d, 'a.cpp', 'https://other')?.problemId).toBe(1);
   });
 });
 

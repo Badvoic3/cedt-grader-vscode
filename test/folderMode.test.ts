@@ -12,7 +12,7 @@ import { cphProbPath } from '../src/mapping/cph';
 import { chooseLanguage, type Language } from '../src/grader';
 import { listFolderFiles } from '../src/mapping/folderFiles';
 import { pickScope } from '../src/mapping/linkActions';
-import { lookup, mappingKey, parseMappingFile, reverseIndex, ROOT_KEY, serializeMappingFile } from '../src/mapping/mappingFile';
+import { mappingKey, parseMappingFile, ROOT_KEY } from '../src/migration/oldLinks';
 import { affectedByDelete, cphFilesAfterFolderRename, fileLinksInside, type LocatedEntry, moveCphProblem, nearestFolderLink, planRename, submitFileAfterMove, submitFileDeleted, submitFilePath, unlinkedAround } from '../src/mapping/mappingOps';
 import { folderNameFor } from '../src/mapping/match';
 import { isAtOrInside, isInside } from '../src/mapping/paths';
@@ -37,21 +37,17 @@ describe('.cedt-grader.json: folder links', () => {
     expect(d.files['pkg/da68_x']).toEqual({ problemId: 7, name: 'da68_x', folder: true, submitFile: 'sub/student.h', runFile: 'main.cpp' });
     expect(d.files['pkg/evil']).toEqual({ problemId: 8, name: 'e', folder: true });
     expect(d.files['a.cpp']).toEqual({ problemId: 9, name: 'a' }); // submitFile only means something for folders
-    expect(parseMappingFile(serializeMappingFile(d))).toEqual(d);
-    expect(reverseIndex(d, BASE).get(7)).toEqual(['pkg/da68_x']);
-    expect(lookup(d, 'pkg/da68_x', BASE)?.folder).toBe(true);
   });
 });
 
 describe('.cedt-grader.json: a link on the workspace folder', () => {
-  it('uses the key "." and survives a round trip', () => {
+  it('uses the key "."', () => {
     expect(mappingKey('')).toBe(ROOT_KEY);
     expect(mappingKey('./')).toBe(ROOT_KEY);
     expect(mappingKey('pkg/')).toBe('pkg');
     const d = parseMappingFile(JSON.stringify({ version: 1, files: { '.': { problemId: 7, name: 'x', folder: true, submitFile: 'student.h' }, './': { problemId: 8, name: 'y', folder: true } } }));
     expect(Object.keys(d.files)).toEqual(['.']); // one entry: later spellings win
-    expect(lookup(d, ROOT_KEY, BASE)?.problemId).toBe(8);
-    expect(parseMappingFile(serializeMappingFile(d))).toEqual(d);
+    expect(d.files[ROOT_KEY].problemId).toBe(8);
   });
 });
 

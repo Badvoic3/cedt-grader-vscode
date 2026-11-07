@@ -68,7 +68,6 @@ const EN_S = {
     createNew: '$(new-file) Create a new file',
     findByName: '$(search) Find a matching file',
     openStatement: '$(file-pdf) Open statement',
-    cleanedDuplicates: (n: number) => `Removed ${plural(n, 'duplicate file link')} from .cedt-grader.json.`,
     unlinkOthers: (what: string, problem: string) => `Unlink ${what} from ${problem}?`,
     nOtherFiles: (n: number) => `${n} other files`,
     unlink: 'Unlink',
@@ -174,7 +173,7 @@ const EN_S = {
     listsDetail:
       'Saved problem list, submission history, remembered automatic matches, "not linked" files, dismissed notices, recently opened problems and links of deleted files.',
     links: 'File-to-problem links',
-    linksDetail: 'Every problem you chose for a file, also the entries in .cedt-grader.json (the file itself is kept).',
+    linksDetail: 'Every problem you chose for a file in this window.',
     login: 'Saved login',
     loginDetail: 'Your saved password and login token (the same as Log Out).',
     backups: 'Backup files from test-case imports',
@@ -182,7 +181,6 @@ const EN_S = {
     confirm: (what: string) => `Clear ${what}? This can't be undone.`,
     clear: 'Clear',
     cleared: (size: string) => `Cached data cleared (${size} freed).`,
-    skippedDirty: (n: number) => `${plural(n, '.cedt-grader.json file has', '.cedt-grader.json files have')} unsaved changes and ${n === 1 ? 'was' : 'were'} not emptied.`,
   },
 
   submit: {

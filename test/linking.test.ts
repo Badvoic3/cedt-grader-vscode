@@ -9,7 +9,6 @@ import { importIntoCph } from '../src/mapping/cphImport';
 import { GRADER_ID_BASE, normalizeEol } from '../src/mapping/testCases';
 import { cleanName, decideSuggestion, fileNameFor, normalizeName, resolveProblem, scoreCandidates, suggest } from '../src/mapping/match';
 import { MATCH } from '../src/shared/constants';
-import { parseMappingFile, reverseIndex } from '../src/mapping/mappingFile';
 import { createFileNoOverwrite } from '../src/mapping/newFile';
 import { FakeGrader } from './fakeServer';
 import { fixture } from './helpers';
@@ -108,15 +107,6 @@ describe('matching order', () => {
     expect(s(inFolder, 1272) - s(plain, 1272)).toBeCloseTo(MATCH.folderTagBonus);
     expect(s(inFolder, 1271)).toBe(s(plain, 1271));
     expect(m({ filePath: '/w/expr/01_expr.cpp', problems: tagged, folders: ['expr'] })).toMatchObject({ kind: 'match', source: 'suggested', problem: { id: 1272 } });
-  });
-});
-
-describe('reverse lookup', () => {
-  it('problem id → mapped files, other servers ignored', () => {
-    const d = parseMappingFile(JSON.stringify({ files: { 'a.cpp': { problemId: 1, name: 'x' }, 'b/a.cpp': { problemId: 1, name: 'x' }, 'c.cpp': { problemId: 2, name: 'y', baseUrl: 'https://other' } } }));
-    const r = reverseIndex(d, BASE);
-    expect(r.get(1)).toEqual(['a.cpp', 'b/a.cpp']);
-    expect(r.has(2)).toBe(false);
   });
 });
 

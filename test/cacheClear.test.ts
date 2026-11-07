@@ -49,11 +49,11 @@ describe('Clear Cached Data: what each checkbox removes', () => {
     expect(p.workspaceKeys).not.toContain(KEYS.mappings);
   });
 
-  it('links: every link (state + .cedt-grader.json) and per-file languages', () => {
+  it('links: every link of this window (the store) and per-file languages', () => {
     const p = plan('links');
     expect(p).toMatchObject({ allLinks: true, staleLinks: false, resetData: false });
-    expect(p.workspaceKeys).toEqual([KEYS.languageByFile, KEYS.legacyMapping, KEYS.mappings].sort());
-    expect(p.globalKeys).toEqual([KEYS.mappings]); // legacy key not present globally
+    expect(p.workspaceKeys).toEqual([KEYS.languageByFile]);
+    expect(p.globalKeys).toEqual([]);
   });
 
   it('login and backups are flags only', () => {
