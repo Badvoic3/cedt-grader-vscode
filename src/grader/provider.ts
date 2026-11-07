@@ -1,6 +1,6 @@
 import type { Attachment } from './attachment';
 import type { Redactor } from './redact';
-import type { GraderUser, Language, Problem, StoredToken, SubmissionBrief, SubmissionDetail, TestcaseInfo, TopicTag, Verdict } from './types';
+import type { GraderUser, Language, Problem, ProblemLimits, StoredToken, SubmissionBrief, SubmissionDetail, TestcaseInfo, TopicTag, Verdict } from './types';
 
 export type FetchLike = (input: string, init?: RequestInit) => Promise<Response>;
 export type Logger = (line: string) => void;
@@ -87,6 +87,8 @@ export interface GraderProvider {
   languagesFor(p: Pick<Problem, 'permittedLanguageIds'>): Promise<Language[]>;
   listProblems(opts?: { penalties?: boolean; previous?: Problem[]; previousTopics?: TopicTag[] | null }): Promise<ProblemList>;
   listTestcases(problemId: number): Promise<TestcaseInfo[] | null>;
+  /** The problem's time and memory limits; null when the server doesn't say. */
+  problemLimits(problemId: number): Promise<ProblemLimits | null>;
   getTestcaseFile(testcaseId: number, which: 'input' | 'sol'): Promise<{ text: string; truncated: boolean; byteSize: number | null }>;
   getStatementPdf(id: number): Promise<StatementPdfResult>;
   getAttachment(id: number): Promise<AttachmentResult>;

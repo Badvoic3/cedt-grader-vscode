@@ -24,6 +24,12 @@ export interface ListScoreInfo {
   rawSum: boolean;
 }
 
+/** A problem's limits on the grader. */
+export interface ProblemLimits {
+  timeMs: number;
+  memoryMB: number;
+}
+
 export interface Problem {
   id: number;
   /** Short code name (the file-name stem students use), e.g. `hw01_sum`. */

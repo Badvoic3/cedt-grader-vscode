@@ -10,6 +10,7 @@ import type {
   Language,
   ListScoreInfo,
   Problem,
+  ProblemLimits,
   SubmissionBrief,
   SubmissionDetail,
   TestcaseInfo,
@@ -246,6 +247,34 @@ export class GraderClient implements GraderProvider {
       const creds = await this.opts.getStoredCredentials?.();
       if (!creds) throw err;
       return this.setListHtml(await web.login(creds.username, creds.password));
+    }
+  }
+
+  /**
+   * The limits, from the problem's web page (the API has no such field). One
+   * page, through the same cookie session as `/main/list`; a session that
+   * expired logs in again once, only with a stored password.
+   */
+  async problemLimits(problemId: number): Promise<ProblemLimits | null> {
+    assertId(problemId);
+    const web = await this.web();
+    const creds = async () => {
+      const c = await this.opts.getStoredCredentials?.();
+      if (!c) throw new SessionExpiredError(G.noWebSession, false);
+      return c;
+    };
+    const { parseProblemLimits } = await import('./parsers');
+    if (!web.isLoggedIn) {
+      const c = await creds();
+      this.setListHtml(await web.login(c.username, c.password));
+    }
+    try {
+      return parseProblemLimits(await web.problemPage(problemId));
+    } catch (err) {
+      if (!(err instanceof SessionExpiredError)) throw err;
+      const c = await creds();
+      this.setListHtml(await web.login(c.username, c.password));
+      return parseProblemLimits(await web.problemPage(problemId));
     }
   }
 

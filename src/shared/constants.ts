@@ -111,6 +111,8 @@ export const RUNNER = {
   /** Peak memory sampling on Linux, and the safety check on macOS. */
   memoryPollLinuxMs: 100,
   memoryPollMacMs: 500,
+  /** A run with no saved limits waits this long for the grader's before using the defaults. */
+  limitsWaitMs: 3_000,
   /** The panels hear about run progress at most this often. */
   updateMs: 100,
   /** Builds kept in the build folder. */

@@ -143,10 +143,10 @@ export class Runner {
       Object.assign(st, { phase: 'compiling', failure: null, leftOut: target.leftOut, warnings: '' });
       this.changed(true);
       try {
-        const program = await this.compile(target, st, abort.signal);
+        const [program, limits] = await Promise.all([this.compile(target, st, abort.signal), this.limitsFor(target.owner, list)]);
         if (program) {
           st.phase = 'running';
-          await this.execute(target, program, cases, st, abort.signal);
+          await this.execute(target, program, cases, st, limits, abort.signal);
         }
       } catch (err) {
         st.failure = { message: h.describe(err), file: null, line: null };
@@ -180,13 +180,13 @@ export class Runner {
     return null;
   }
 
-  private async execute(t: RunTarget, program: Program, cases: readonly RunnerCase[], st: RunState, signal: AbortSignal): Promise<void> {
+  private async execute(t: RunTarget, program: Program, cases: readonly RunnerCase[], st: RunState, limits: RunLimits, signal: AbortSignal): Promise<void> {
     const start = (p: Program) =>
       runCases({
         proc: this.proc,
         cases,
         program: p,
-        limits: this.limits(),
+        limits,
         scratchRoot: tmpdir(),
         env: { ...process.env, PYTHONUTF8: '1' },
         platform: process.platform,
@@ -208,9 +208,47 @@ export class Runner {
     if (again) await start(again);
   }
 
-  private limits(): RunLimits {
+  private defaultLimits(): RunLimits {
     const c = this.host.cfg;
     return { timeMs: c.runnerDefaultTimeSeconds * 1000, memoryMB: c.runnerDefaultMemoryMB, source: 'default' };
+  }
+
+  /** The limits on the list now: the grader's last known ones, else the defaults. */
+  knownLimits(list: CaseList | null = this.list): RunLimits {
+    return list?.limits ? { timeMs: list.limits.timeMs, memoryMB: list.limits.memoryMB, source: 'grader' } : this.defaultLimits();
+  }
+
+  /** Ask the grader once per session (`DataService.limits`), and keep what it says for offline use. */
+  private async readLimits(problemId: number): Promise<RunLimits | null> {
+    const h = this.host;
+    const got = await h.data.limits(problemId);
+    if (!got) return null;
+    const saved = (await h.cases.read({ problemId })).limits;
+    if (saved?.timeMs !== got.timeMs || saved?.memoryMB !== got.memoryMB) {
+      await h.cases.setMeta(problemId, { limits: { ...got, fetchedAt: new Date().toISOString() } });
+      await this.reload();
+    }
+    return { ...got, source: 'grader' };
+  }
+
+  /** The test view opened: the limit line should be right before the first run. */
+  fetchLimits(): void {
+    const owner = this.owner();
+    if (owner && 'problemId' in owner) void this.readLimits(owner.problemId);
+  }
+
+  /** Saved limits start a run at once. Without any, a slow server only delays it by `limitsWaitMs`. */
+  private async limitsFor(owner: CaseOwner, list: CaseList): Promise<RunLimits> {
+    if ('file' in owner) return this.defaultLimits();
+    const read = this.readLimits(owner.problemId);
+    if (list.limits) return this.knownLimits(list);
+    let timer: NodeJS.Timeout | undefined;
+    const late = new Promise<null>((resolve) => {
+      timer = setTimeout(() => resolve(null), RUNNER.limitsWaitMs);
+    });
+    const got = await Promise.race([read, late]);
+    clearTimeout(timer);
+    return got ?? this.defaultLimits();
   }
 
   private async target(): Promise<RunTarget | null> {

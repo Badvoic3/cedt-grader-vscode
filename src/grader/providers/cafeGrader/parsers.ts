@@ -1,11 +1,30 @@
 import * as cheerio from 'cheerio/slim';
-import type { ListScoreInfo } from '../../types';
+import type { ListScoreInfo, ProblemLimits } from '../../types';
 
 /**
  * HTML parsers for the few things the JSON API does not cover: the web login
  * form and the `/main/list` score column (hint / AI-assist penalties,
  * raw-sum mode).
  */
+
+/**
+ * `Limit: 10.0 s, 512 MB` at the top of `/submissions/direct_edit_problem/:id`
+ * (`app/views/submissions/edit.html.haml`). The API doesn't give the limits.
+ * Only an `<em>` is read, so a statement that mentions "Limit:" can't be taken
+ * for it. Null when the line isn't there: a viva exam redirects away, and a
+ * newer server may lay the page out differently.
+ */
+export function parseProblemLimits(html: string): ProblemLimits | null {
+  const $ = cheerio.load(html);
+  for (const em of $('em').toArray()) {
+    const m = /^Limit:\s*(\d+(?:\.\d+)?)\s*s\s*,\s*(\d+(?:\.\d+)?)\s*MB\b/i.exec(cleanText($(em).text()));
+    if (!m) continue;
+    const timeMs = Math.round(Number(m[1]) * 1000);
+    const memoryMB = Number(m[2]);
+    return timeMs > 0 && memoryMB > 0 ? { timeMs, memoryMB } : null;
+  }
+  return null;
+}
 
 /** Remove zero-width spaces (cafe-grader inserts `_&ZeroWidthSpace;`) and collapse whitespace. */
 export function cleanText(s: string | undefined | null): string {

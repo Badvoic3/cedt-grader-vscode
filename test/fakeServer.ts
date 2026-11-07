@@ -191,8 +191,25 @@ export class FakeGrader {
       return redirect('/main/list', `_cafe_grader_session=${s}; path=/`);
     }
     if (method === 'GET' && p === '/main/list') return loggedIn ? page(this.listHtml) : redirect('/main/login');
+    const problemPage = /^\/submissions\/direct_edit_problem\/(\d+)$/.exec(p);
+    if (method === 'GET' && problemPage) {
+      if (!loggedIn) return redirect('/main/login');
+      this.problemPageHits++;
+      return page(this.problemPage(Number(problemPage[1])));
+    }
     return new Response('not found', { status: 404 });
   }
+
+  /** Requests for `/submissions/direct_edit_problem/:id`. */
+  problemPageHits = 0;
+  /** Shape of `app/views/submissions/edit.html.haml`; replace to test other pages. */
+  problemPage: (id: number) => string = () => `<div class="row"><div class="col-md-6"><em>
+Limit:
+1.5
+<span class="text-body-tertiary">s</span>,
+<span>256</span>
+<span class="text-body-tertiary">MB</span>
+</em></div></div>`;
 
   expireTokens(): void {
     this.validTokens.clear();

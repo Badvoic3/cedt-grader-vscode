@@ -2,6 +2,7 @@ import { AuthError, ParseError, SessionExpiredError } from '../../errors';
 import { HttpSession, type FetchLike, type Logger } from './http';
 import { extractAlerts, extractCsrf, hasLoginForm, parseLoginForm } from './parsers';
 import type { Redactor } from '../../redact';
+import { WEB_PATHS } from '../../../shared/constants';
 import { G } from '../../../shared/strings';
 
 /**
@@ -50,6 +51,16 @@ export class WebSession {
     }
     this.loggedIn = true;
     this.http.redactor.add(extractCsrf(res.body));
+    return res.body;
+  }
+
+  /** The problem's page (`/submissions/direct_edit_problem/:id`, read-only); throws SessionExpiredError when bounced to the login page. */
+  async problemPage(id: number): Promise<string> {
+    const res = await this.http.request(WEB_PATHS.problem(id));
+    if (hasLoginForm(res.body) || /\/main\/login$/.test(res.path)) {
+      this.loggedIn = false;
+      throw new SessionExpiredError('Web session expired.', true);
+    }
     return res.body;
   }
 

@@ -1,7 +1,7 @@
 import { type GraderProvider, isFinalStatus, type ProblemList } from '../grader/provider';
 import { classifyConnectionError } from '../grader/connection';
 import { normalizeProblem } from '../grader/types';
-import type { Language, Problem, SubmissionBrief, SubmissionDetail } from '../grader/types';
+import type { Language, Problem, ProblemLimits, SubmissionBrief, SubmissionDetail } from '../grader/types';
 import { type Freshness, RequestCache } from './cache';
 import { TIMING } from '../shared/constants';
 
@@ -71,6 +71,8 @@ export class DataService {
   private pendingProblems = false;
   private readonly states = new Map<string, LoadState>();
   private readonly downloads = new Map<number, ReturnType<GraderProvider['getAttachment']>>();
+  private readonly limitsCache = new Map<number, Promise<ProblemLimits | null>>();
+  private readonly limitsDone = new Set<number>();
   private readonly setTimer: NonNullable<DataServiceOptions['setTimer']>;
   private readonly clearTimer: NonNullable<DataServiceOptions['clearTimer']>;
   private readonly log: (line: string) => void;
@@ -248,6 +250,8 @@ export class DataService {
 
   clear(): void {
     if (this.timer !== null) this.clearTimer(this.timer);
+    this.limitsCache.clear();
+    this.limitsDone.clear();
     this.persistedAt = null;
     this.timer = null;
     this.cache.clear();
@@ -279,6 +283,28 @@ export class DataService {
       })
       .finally(() => this.downloads.delete(problemId));
     this.downloads.set(problemId, p);
+    return p;
+  }
+
+  /**
+   * A problem's limits: one request per problem per session, only when the
+   * runner asks, shared while in flight. Any failure means no limits (the
+   * runner has defaults), with no banner: a run works offline.
+   */
+  limits(problemId: number): Promise<ProblemLimits | null> {
+    const key = `limits:${problemId}`;
+    const known = this.limitsCache.get(problemId);
+    if (known) {
+      this.log(`cache ${this.limitsDone.has(problemId) ? 'hit ' : 'dedup'} ${key}`);
+      return known;
+    }
+    if (!this.opts.canFetch()) return Promise.resolve(null);
+    this.log(`cache miss ${key}`);
+    const p = this.opts.client().problemLimits(problemId).catch((err) => {
+      this.log(`limits not read for ${problemId}: ${err instanceof Error ? err.message : String(err)}`);
+      return null;
+    }).finally(() => this.limitsDone.add(problemId));
+    this.limitsCache.set(problemId, p);
     return p;
   }
 

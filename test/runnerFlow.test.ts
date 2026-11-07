@@ -51,6 +51,7 @@ describe('Runner', () => {
   let emits: number;
   let h: Record<string, unknown> & { problem: { id: number } | null; folder: Record<string, unknown> };
   const P = { problemId: 7 };
+  let limitsFromGrader: ReturnType<typeof vi.fn>;
 
   const uri = (fsPath: string) => ({ fsPath, toString: () => `file://${fsPath}` });
   const make = (p: FakeProcessApi) => new Runner(h as unknown as Host, p);
@@ -65,12 +66,14 @@ describe('Runner', () => {
     store = new CaseStore(join(dir, 'storage'), () => 'https://g.example');
     told = [];
     emits = 0;
+    limitsFromGrader = vi.fn(async () => null);
     v.isTrusted = true;
     v.textDocuments = [];
     h = {
       ctx: { globalStorageUri: { fsPath: join(dir, 'storage') } },
       cfg: { runnerDefaultTimeSeconds: 5, runnerDefaultMemoryMB: 256, runnerCompilerPaths: { 'g++': join(dir, 'bin', 'g++') }, runnerExtraCompileArgs: {} },
       cases: store,
+      data: { limits: limitsFromGrader },
       problem: { id: 7 },
       fileUri: uri(file),
       languages: [],
@@ -319,6 +322,50 @@ describe('Runner', () => {
     r.reset();
     await r.onActiveFile();
     expect(r.summary()).toEqual({ kind: 'not-run' });
+  });
+
+  describe('limits', () => {
+    const slow = (ms: number) => programs({ run: (c) => setTimeout(() => c.child.finish(0), ms) });
+
+    it('the grader\'s limit decides the verdict, and is saved for offline use', async () => {
+      limitsFromGrader.mockResolvedValue({ timeMs: 1, memoryMB: 64 });
+      await store.add(P, { input: '', expected: '' });
+      const r = make(slow(30));
+      expect(await r.run()).toEqual({ kind: 'done', passed: 0, total: 1 });
+      const saved = await store.read(P);
+      expect(saved.limits).toMatchObject({ timeMs: 1, memoryMB: 64 });
+      expect(r.knownLimits(saved)).toEqual({ timeMs: 1, memoryMB: 64, source: 'grader' });
+    });
+
+    it('no answer from the grader: the defaults, and the run goes ahead', async () => {
+      await store.add(P, { input: '', expected: '' });
+      const r = make(slow(5));
+      expect(await r.run()).toEqual({ kind: 'done', passed: 1, total: 1 });
+      expect(r.knownLimits(await store.read(P))).toEqual({ timeMs: 5000, memoryMB: 256, source: 'default' });
+    });
+
+    it('saved limits are used at once, even while the grader is silent', async () => {
+      limitsFromGrader.mockReturnValue(new Promise(() => {}));
+      await store.add(P, { input: '', expected: '' });
+      await store.setMeta(7, { limits: { timeMs: 1, memoryMB: 64, fetchedAt: 'then' } });
+      expect(await make(slow(30)).run()).toEqual({ kind: 'done', passed: 0, total: 1 });
+    });
+
+    it('an unlinked file never asks the grader', async () => {
+      h.problem = null;
+      await store.add({ file }, { input: 'x', expected: 'x' });
+      await make(programs()).run();
+      expect(limitsFromGrader).not.toHaveBeenCalled();
+    });
+
+    it('opening the test view asks once for the shown problem', async () => {
+      const r = make(programs());
+      r.fetchLimits();
+      expect(limitsFromGrader).toHaveBeenCalledWith(7);
+      h.problem = null;
+      r.fetchLimits();
+      expect(limitsFromGrader).toHaveBeenCalledTimes(1);
+    });
   });
 
   it('should the split open: not on a full pass or a run that never started', () => {
