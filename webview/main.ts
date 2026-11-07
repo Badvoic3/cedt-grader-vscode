@@ -614,16 +614,12 @@ function renderCurrent(s: ViewState): void {
         p?.hasAttachment
           ? iconButton('cloud-download', W.downloadAttachment, () => send({ type: 'downloadAttachment', problemId: p.id }), { disabledReason: s.attachment.busy === p.id ? W.downloading : null })
           : null,
-        // The grader's test cases as .in / .out files (also with CPH installed).
-        p?.hasTestcase
-          ? iconButton('save-as', W.saveTestcasesAsFiles, () => send({ type: 'loadTestcases', asFiles: true }), { disabledReason: s.testcases.busy ? W.downloadingTestCases : null })
-          : null,
         // Also with no problem yet: the picker opens and the folder is linked to the choice.
         s.folderMode
           ? iconButton(s.folderMode.on ? 'file' : 'folder', s.folderMode.on ? W.linkOnlyFile : W.linkFolder, () => send({ type: 'toggleFolderMode' }), { disabledReason: s.folderMode.disabledReason })
           : null,
         iconButton('sparkle', W.autoDetectTip, () => send({ type: 'autoDetect' })),
-        // Every state: a chosen link is unlinked; a name / CPH match or a suggestion becomes "not linked".
+        // Every state: a chosen link is unlinked; a name match or a suggestion becomes "not linked".
         p ? iconButton('close', unlinkLabel(p, s, true), () => send({ type: 'unmapProblem' })) : null,
       ),
       combo,
@@ -692,19 +688,6 @@ function renderCurrent(s: ViewState): void {
           button(W.change, () => openPicker()),
         ),
         el('p', { class: 'small muted' }, W.acceptedLanguages(mm.allowed.join(', '))),
-      ),
-    );
-  }
-
-  if (s.cphTip) {
-    b.append(
-      el('div', { class: 'notice tip', role: 'note' },
-        el('div', { class: 'row' }, icon('lightbulb'), el('span', { class: 'grow small' }, W.cphTip)),
-        el('div', { class: 'row gap' },
-          button(W.install, () => send({ type: 'cphTip', action: 'install' }), { kind: 'primary', title: W.cphInstallTip }),
-          button(W.notNow, () => send({ type: 'cphTip', action: 'later' }), { title: W.notNowTip }),
-          el('button', { class: 'link small', type: 'button', title: W.dontShowAgainTip, onclick: () => send({ type: 'cphTip', action: 'never' }) }, W.dontShowAgain),
-        ),
       ),
     );
   }
@@ -970,9 +953,6 @@ function headerMenuItems(p: ViewState['problem']): MenuItem[] {
     ...(p?.hasAttachment
       ? [{ icon: 'cloud-download', label: W.downloadAttachment, onclick: () => send({ type: 'downloadAttachment', problemId: p.id }), disabledReason: state?.attachment.busy === p.id ? W.downloading : null }]
       : []),
-    ...(p?.hasTestcase
-      ? [{ icon: 'save-as', label: W.saveTestcasesAsFiles, onclick: () => send({ type: 'loadTestcases', asFiles: true }), disabledReason: state?.testcases.busy ? W.downloadingTestCases : null }]
-      : []),
     ...(state?.folderMode
       ? [{
           icon: state.folderMode.on ? 'file' : 'folder',
@@ -1119,7 +1099,7 @@ function linkedFilesNotice(s: ViewState): HTMLElement {
   return box;
 }
 
-const SOURCE_ICON: Record<string, string> = { saved: 'pinned', filename: 'file', folder: 'folder', cph: 'beaker', suggested: 'lightbulb' };
+const SOURCE_ICON: Record<string, string> = { saved: 'pinned', filename: 'file', folder: 'folder', suggested: 'lightbulb' };
 const SOURCE_TEXT: Record<string, string> = W_SOURCE;
 
 /** "How matched" line under the problem selector (text, not icon-only). Only "Suggested" stands out, with Confirm. */
@@ -1385,7 +1365,7 @@ function sectionKeys(s: ViewState): Record<string, string> {
     crash: j(s.crash),
     prompt: j([s.prompt, promptNearSubmit(s)]),
     account: j([s.account, s.baseUrl, showLoginForm]),
-    current: j([promptNearSubmit(s) ? s.prompt : null, s.notLinked, s.linkedNotice, s.linkedFiles, s.file, s.problem, s.languages, s.submit, s.matching, s.testcases, s.cph, s.gradingElsewhere, s.folder, s.folderMode, s.attachment, s.runTests, pickerOpen, pickerOpen ? s.problems : s.problems.loaded]),
+    current: j([promptNearSubmit(s) ? s.prompt : null, s.notLinked, s.linkedNotice, s.linkedFiles, s.file, s.problem, s.languages, s.submit, s.matching, s.testcases, s.gradingElsewhere, s.folder, s.folderMode, s.attachment, s.runTests, pickerOpen, pickerOpen ? s.problems : s.problems.loaded]),
     result: j([s.result, legendOpen === 'result', s.problem?.score.rawSum]),
     history: j([pid, s.history, legendOpen === 'history', s.problem?.score.rawSum]),
     problems: j([{ ...s.problems, items: s.problems.items.length }, problemHits(s).length, ui.filter, s.attachment]),

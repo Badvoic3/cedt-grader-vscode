@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { resolveProblem } from '../src/mapping/match';
 import type { Problem } from '../src/grader';
-import { cphProbPath, matchCphProblem, readCphProblem } from '../src/mapping/cph';
+import { cphProbPath, matchCphProblem, readCphProblem } from '../src/migration/cph';
 import { parseMappingFile } from '../src/migration/oldLinks';
 
 const BASE = 'https://cedt-grader.nattee.net';
@@ -62,7 +62,7 @@ describe('CPH .prob files', () => {
 describe('matcher memo', () => {
   it('a problem renamed in place is matched by its new name', () => {
     const p = { id: 1, name: 'old_name', fullName: 'old_name', bestScore: null, lastScore: null, lastResult: null, lastSubmissionId: null, lastSubmissionTime: null, submissionCount: 0, hasTestcase: false, hasAttachment: false, permittedLanguageIds: null, tags: [], list: null };
-    const run = (file: string) => resolveProblem({ savedProblemId: null, cph: null, filePath: file, problems: [p], baseUrl: 'https://x', namePattern: '{id}_{name}.{ext}' });
+    const run = (file: string) => resolveProblem({ savedProblemId: null, filePath: file, problems: [p], baseUrl: 'https://x', namePattern: '{id}_{name}.{ext}' });
     expect(run('/w/old_name.cpp')).toMatchObject({ kind: 'match', source: 'filename' });
     p.name = 'new_name';
     p.fullName = 'new_name';

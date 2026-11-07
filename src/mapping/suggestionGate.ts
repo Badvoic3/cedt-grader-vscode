@@ -30,7 +30,7 @@ export async function confirmSuggestion(opts: {
  * Which question Submit asks about the problem before sending (pure):
  * - a suggestion (not confirmed) → the suggestion question, always (even with confirmations off);
  * - chosen by the user (a saved file or folder link) → nothing, ever;
- * - an automatic match (file name, folder name, CPH data) → one confirmation while
+ * - an automatic match (file name, folder name) → one confirmation while
  *   "Confirm Before Submit" is on; answering Submit saves the link, so it becomes
  *   "Chosen by you" and is not asked again.
  * `answered`: another question just covered it (the exam warning, or folder mode's "which file").

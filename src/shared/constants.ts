@@ -45,7 +45,7 @@ export const CRASH = {
   maxPanelErrorChars: 4000,
 } as const;
 
-/** URI scheme of the read-only documents serving a past submission's source (diff view; also the CPH reload placeholder). */
+/** URI scheme of the read-only documents serving a past submission's source (diff view). */
 export const SUBMISSION_SCHEME = 'cedt-grader-submission';
 /** Read-only Expected and Actual texts for Compare in VS Code. */
 export const COMPARE_SCHEME = 'cedt-grader-compare';

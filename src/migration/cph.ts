@@ -3,8 +3,14 @@ import { readFile } from 'node:fs/promises';
 import { basename, dirname, join } from 'node:path';
 import type { Problem } from '../grader/types';
 
+/** 7e15: a safe integer, far above CPH ms-timestamp ids (~1.8e12). Grader cases: GRADER_ID_BASE + grader testcase id. */
+export const GRADER_ID_BASE = 7_000_000_000_000_000;
+/** Statement samples: STATEMENT_ID_BASE + their number (1, 2, …). Above every grader marker, below MAX_SAFE_INTEGER. */
+export const STATEMENT_ID_BASE = 7_500_000_000_000_000;
+
 /**
- * Read-only access to Competitive Programming Helper problem files.
+ * Read-only access to Competitive Programming Helper problem files, for the
+ * one-time import only: nothing else may use this (`test/retiredCph.test.ts`).
  *
  * Format confirmed from CPH 2026.10 (dist/extension.js `getProbSaveLocation`)
  * and real `.prob` files:

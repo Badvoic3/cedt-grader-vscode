@@ -43,7 +43,6 @@ const base: ViewState = {
   linkedFiles: [],
   linkedNotice: null,
   crash: null,
-  cphTip: false,
   notLinked: false,
   prompt: null,
   testcases: { busy: false },
@@ -51,7 +50,6 @@ const base: ViewState = {
   folderMode: null,
   attachment: { busy: null },
   runTests: null,
-  cph: { installed: true },
   languages: { loading: false, items: [], selectedId: null, mismatch: null },
   connection: null,
   submit: { enabled: false, busy: false, reason: 'Open a source file to submit it.', label: 'Submit to Grader' },
@@ -309,17 +307,14 @@ describe.runIf(existsSync(resolve(__dirname, '../esbuild.mjs')))('sidebar webvie
     expect(cur.querySelector('.combo .source-icon')).toBeNull(); // not inside the dropdown any more
     // All header icons visible again, in the original order.
     expect([...header(doc).querySelectorAll('button')].map((b) => b.getAttribute('aria-label'))).toEqual([
-      'Open statement', 'Copy problem name', 'Open on the grader website', "Save the grader's test cases as .in / .out files", 'Auto-detect the problem for this file again', "Unlink this file (removes your choice; auto-detect won't link it again)",
+      'Open statement', 'Copy problem name', 'Open on the grader website', 'Auto-detect the problem for this file again', "Unlink this file (removes your choice; auto-detect won't link it again)",
     ]);
     expect([...cur.querySelectorAll('button')].some((b) => b.textContent === 'Change')).toBe(false); // removed: same as the dropdown
     expect(cur.querySelector('[aria-label^="More actions"]')).toBeNull(); // no "…" menu
     header(doc).querySelector<HTMLButtonElement>('[aria-label="Copy problem name"]')!.click();
     expect(sent.at(-1)).toEqual({ type: 'copyName', problemId: 1360 });
     // Right-click on the header: the same actions.
-    expect(rightClick(doc, header(doc))).toEqual(['Open statement', 'Copy problem name', 'Open on the grader website', "Save the grader's test cases as .in / .out files", 'Auto-detect the problem for this file again', 'Unlink this file']);
-    doc.dispatchEvent(new (doc.defaultView as unknown as typeof globalThis).KeyboardEvent('keydown', { key: 'Escape' }));
-    header(doc).querySelector<HTMLButtonElement>(`[aria-label="Save the grader's test cases as .in / .out files"]`)!.click();
-    expect(sent.at(-1)).toEqual({ type: 'loadTestcases', asFiles: true });
+    expect(rightClick(doc, header(doc))).toEqual(['Open statement', 'Copy problem name', 'Open on the grader website', 'Auto-detect the problem for this file again', 'Unlink this file']);
     doc.dispatchEvent(new (doc.defaultView as unknown as typeof globalThis).KeyboardEvent('keydown', { key: 'Escape' }));
     expect(doc.querySelector('.context-menu')).toBeNull();
     doc.querySelector<HTMLButtonElement>('#sec-current .combo')!.click();
@@ -370,15 +365,6 @@ describe.runIf(existsSync(resolve(__dirname, '../esbuild.mjs')))('sidebar webvie
     expect(doc.querySelector('#sec-current')!.textContent).toContain('Several problems match this file name');
     doc.querySelector<HTMLButtonElement>('#sec-current .combo')!.click();
     expect(doc.querySelector('.picker-group')!.textContent).toBe('Matches for this file');
-  });
-
-  it('CPH not installed: same UI, neutral texts, no "CPH" in the main UI', () => {
-    const { doc, post } = boot();
-    post({ ...loggedIn, cph: { installed: false } });
-    expect(doc.querySelector('#submit-btn')).not.toBeNull();
-    expect(doc.querySelectorAll('#sec-problems .problem-row:not([hidden])')).toHaveLength(2);
-    // "CPH" only appears where it is actually used (tooltips), not as visible UI text.
-    expect(doc.body.textContent).not.toMatch(/CPH/);
   });
 
   it('Run tests row: summary pill, Stop while running, Open tests, for a file with or without a problem; Load is only in the Test view', () => {
@@ -1000,20 +986,6 @@ describe.runIf(existsSync(resolve(__dirname, '../esbuild.mjs')))('sidebar webvie
     expect([...doc.querySelectorAll('#sec-account .account-actions button')].map((b) => b.textContent!.trim())).toEqual(['Log out']);
   });
 
-  it('CPH tip: Install / Not now / Don\'t show again', () => {
-    const { doc, sent, post } = boot();
-    post({ ...loggedIn, cph: { installed: false }, cphTip: true });
-    const tip = doc.querySelector('#sec-current .notice.tip')!;
-    expect(tip.textContent).toContain('Install the Competitive Programming Helper (CPH) extension');
-    const b = (t: string) => [...tip.querySelectorAll<HTMLButtonElement>('button')].find((x) => x.textContent === t)!;
-    b('Install').click();
-    expect(sent.at(-1)).toEqual({ type: 'cphTip', action: 'install' });
-    b('Not now').click();
-    expect(sent.at(-1)).toEqual({ type: 'cphTip', action: 'later' });
-    b("Don't show again").click();
-    expect(sent.at(-1)).toEqual({ type: 'cphTip', action: 'never' });
-  });
-
   it('open on website (problem and each submission), auto-detect, sort menu', () => {
     const { doc, sent, post } = boot();
     post(loggedIn);
@@ -1333,10 +1305,10 @@ describe.runIf(existsSync(resolve(__dirname, '../esbuild.mjs')))('sidebar webvie
 
   it('inline prompt (no modal): text, detail and plain buttons answer by id', () => {
     const { doc, sent, post } = boot();
-    post({ ...loggedIn, prompt: { id: 7, text: 'Auto-detect found 104_exam67_1_P2 (from CPH data).', detail: null, tone: 'info', buttons: [{ id: 'switch', label: 'Switch to it', primary: true }, { id: 'keep', label: 'Keep current' }], near: null } });
+    post({ ...loggedIn, prompt: { id: 7, text: 'Auto-detect found 104_exam67_1_P2 (from the file name).', detail: null, tone: 'info', buttons: [{ id: 'switch', label: 'Switch to it', primary: true }, { id: 'keep', label: 'Keep current' }], near: null } });
     const bar = doc.querySelector<HTMLElement>('.prompt')!;
     expect(bar.hidden).toBe(false);
-    expect(bar.textContent).toContain('Auto-detect found 104_exam67_1_P2 (from CPH data).');
+    expect(bar.textContent).toContain('Auto-detect found 104_exam67_1_P2 (from the file name).');
     [...bar.querySelectorAll<HTMLButtonElement>('button')].find((b) => b.textContent === 'Keep current')!.click();
     expect(sent.at(-1)).toEqual({ type: 'promptAnswer', id: 7, button: 'keep' });
     post({ ...loggedIn, prompt: null });
@@ -1390,13 +1362,12 @@ describe.runIf(existsSync(resolve(__dirname, '../esbuild.mjs')))('sidebar webvie
     expect(doc.activeElement).toBe(doc.querySelector('.picker-search'));
   });
 
-  it('✕ in every state: "Unlink this file" for a chosen link, "Don\'t match this file" for name / CPH matches and suggestions', () => {
+  it('✕ in every state: "Unlink this file" for a chosen link, "Don\'t match this file" for name matches and suggestions', () => {
     const { doc, sent, post } = boot();
     const x = () => header(doc).querySelector<HTMLButtonElement>('.codicon-close')!.closest('button')!;
     for (const [source, label] of [
       ['saved', "Unlink this file (removes your choice; auto-detect won't link it again)"],
       ['filename', "Don't match this file (auto-detect won't link it to a problem again)"],
-      ['cph', "Don't match this file (auto-detect won't link it to a problem again)"],
       ['suggested', "Don't match this file (auto-detect won't link it to a problem again)"],
     ] as const) {
       post({ ...loggedIn, problem: { ...loggedIn.problem!, source, sourceLabel: source } });

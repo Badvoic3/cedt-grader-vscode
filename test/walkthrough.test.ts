@@ -14,7 +14,7 @@ const steps: Step[] = walkthrough?.steps ?? [];
 describe('Getting Started walkthrough (package.json)', () => {
   it('exists with the expected steps', () => {
     expect(walkthrough).toBeTruthy();
-    expect(steps.map((s) => s.id)).toEqual(['openPanel', 'login', 'openFile', 'checkProblem', 'submit', 'cph']);
+    expect(steps.map((s) => s.id)).toEqual(['openPanel', 'login', 'openFile', 'checkProblem', 'submit']);
   });
 
   it('every step has a markdown page that exists and is packaged', () => {

@@ -8,7 +8,7 @@ import { KEYS } from '../shared/stateKeys';
 
 /** Files the user explicitly unlinked: auto-detection must not re-link them. */
 const UNLINKED_KEY = KEYS.unlinked;
-/** Remembered auto-matches (file name / CPH data) of files that were open. */
+/** Remembered auto-matches (file name, folder name, suggestion) of files that were open. */
 const AUTO_KEY = KEYS.autoMatches;
 /** The key of the workspace folder itself in "not linked". */
 const ROOT_KEY = '.';
@@ -53,11 +53,12 @@ export class MappingStore {
   }
 
   autoMatches(): AutoMatch[] {
-    return this.local.get<AutoMatch[]>(AUTO_KEY, []);
+    // v1.0.0 also kept matches from CPH data: a `.prob` URL comes back as a link (src/migration/).
+    return this.local.get<(Omit<AutoMatch, 'how'> & { how: string })[]>(AUTO_KEY, []).filter((a): a is AutoMatch => a.how !== 'cph');
   }
 
   /** Remember that an open file matched a problem automatically (never over a manual link or "not linked"). */
-  async recordAuto(uri: vscode.Uri, problemId: number, how: 'cph' | 'filename' | 'folder' | 'suggested'): Promise<void> {
+  async recordAuto(uri: vscode.Uri, problemId: number, how: 'filename' | 'folder' | 'suggested'): Promise<void> {
     const k = pathKey(uri.fsPath);
     const list = this.autoMatches().filter((a) => pathKey(a.fsPath) !== k);
     list.push({ fsPath: normalizeAbsPath(uri.fsPath), problemId, how, at: Date.now() });
@@ -140,7 +141,7 @@ export class MappingStore {
     await this.set(folder, { ...entry, folder: true });
   }
 
-  /** Folder mode: remember (or forget → detect again) the file Submit sends / the file CPH runs, relative to the folder. */
+  /** Folder mode: remember (or forget → detect again) the file Submit sends / the file the runner runs, relative to the folder. */
   async setFolderRole(folder: vscode.Uri, baseUrl: string, role: 'submitFile' | 'runFile', rel: string | undefined): Promise<void> {
     const e = await this.get(folder, baseUrl);
     if (!e?.folder) return;

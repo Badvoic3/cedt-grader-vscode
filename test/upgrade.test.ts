@@ -1,18 +1,13 @@
 /**
  * Upgrading from an older version keeps working: data written by v0.7.0
- * (`.cedt-grader.json`, saved problem lists, CPH files with imported tests)
+ * (`.cedt-grader.json`, saved problem lists)
  * reads the same with the current code, and nothing is turned into a folder
  * link just by being read.
  */
-import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import type { GraderCase } from '../src/mapping/testCases';
 import { stripGraderKey } from '../src/data/testcaseStore';
 import { normalizeProblem } from '../src/grader/types';
-import { cphProbPath } from '../src/mapping/cph';
-import { importIntoCph } from '../src/mapping/cphImport';
-import { GRADER_ID_BASE, type GraderCase } from '../src/mapping/testCases';
 import { type LocatedEntry, nearestFolderLink } from '../src/mapping/mappingOps';
 import { collectOldLinks, parseMappingFile } from '../src/migration/oldLinks';
 
@@ -50,25 +45,6 @@ describe('upgrade from v0.7.0', () => {
     expect(p).toMatchObject({ id: 5, name: 'x', bestScore: 70, hasAttachment: false, hasTestcase: false, tags: [], permittedLanguageIds: null, list: null });
   });
 
-  it('tests imported into CPH by an older version (with the KEY line) are updated in place on the next import', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'cedt-upgrade-'));
-    const src = join(dir, 'main.cpp');
-    writeFileSync(src, 'int main() {}\n');
-    const graderCases: GraderCase[] = [
-      { testcaseId: 1, num: 1, input: '3\n', output: '1\n2\nKEY: abc\n' },
-      { testcaseId: 2, num: 2, input: '4\n', output: '0\nKEY: abc\n' },
-    ];
-    await importIntoCph({ srcPath: src, problemName: 'p', problemUrl: 'u', cases: graderCases }); // what the old version wrote
-    const { cases, key } = stripGraderKey(graderCases, readFileSync(src, 'utf8'));
-    expect(key).toBe('abc');
-    const r = await importIntoCph({ srcPath: src, problemName: 'p', problemUrl: 'u', cases });
-    expect([r.added, r.updated]).toEqual([0, 2]);
-    const prob = JSON.parse(readFileSync(cphProbPath(src), 'utf8')) as { tests: { id: number; output: string }[] };
-    expect(prob.tests.map((t) => [t.id - GRADER_ID_BASE, t.output])).toEqual([
-      [1, '1\n2\n'],
-      [2, '0\n'],
-    ]);
-  });
 });
 
 describe('old links, gathered for the link table', () => {

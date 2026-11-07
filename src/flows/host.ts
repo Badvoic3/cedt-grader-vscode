@@ -1,5 +1,4 @@
 import type * as vscode from 'vscode';
-import type { CphPresence } from '../cphIntegration';
 import type { GraderConfig } from '../config';
 import type { DataService } from '../data/dataService';
 import type { StatementStore } from '../data/statementStore';
@@ -29,7 +28,6 @@ export interface Host {
   readonly client: GraderProvider;
   readonly data: DataService;
   readonly mapping: MappingStore;
-  readonly cph: CphPresence;
   readonly statementStore: StatementStore;
   /** The runner's case lists. */
   readonly cases: CaseStore;
@@ -81,9 +79,6 @@ export interface Host {
   isUnavailable(problemId: number): boolean;
 
   url(path: string): string;
-  cphSaveLocation(): string;
-  /** Remember a `.prob.bak` this extension wrote ("Clear Cached Data" offers to remove it). */
-  recordBackup(path: string | null | undefined): Promise<void>;
   /** Files were created / deleted / renamed (debounced refresh of the match index and folder roles). */
   onFileEvent(): void;
   focusProblemPicker(): Promise<void>;

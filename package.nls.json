@@ -24,7 +24,6 @@
   "command.toggleFolderMode.title": "Switch Between Linking This File and the Whole Folder",
   "command.loadTestcases.title": "Load Test Cases from the Grader",
   "command.loadSampleCases.title": "Load Sample Cases from the Statement",
-  "command.saveTestcasesAsFiles.title": "Save Test Cases as .in / .out Files",
   "command.clearCache.title": "Clear Cached Data…",
   "command.openWalkthrough.title": "Get Started",
   "command.openTroubleshooting.title": "Troubleshooting",
@@ -48,7 +47,7 @@
   "config.baseUrl.description": "Base URL of the cafe-grader-web server. Read from user settings only (a workspace cannot change where your password is sent).",
   "config.username.description": "Your grader login name. The password is stored in the OS keychain (VS Code SecretStorage), never in settings.",
   "config.pollIntervalSeconds.description": "Seconds between status checks while a submission is graded (minimum 3). Polling only runs right after a submission and stops after 3 minutes.",
-  "config.confirmBeforeSubmit.description": "Ask once before submitting a file whose problem was matched automatically (by file name, folder name or CPH data). Submitting saves the match as your choice, so it isn't asked again. Problems you chose yourself are never asked; suggestions always are.",
+  "config.confirmBeforeSubmit.description": "Ask once before submitting a file whose problem was matched automatically (by file name or folder name). Submitting saves the match as your choice, so it isn't asked again. Problems you chose yourself are never asked; suggestions always are.",
   "config.saveBeforeSubmit.description": "Save the file before submitting, so the grader gets exactly what is on disk. Save actions such as format on save run first. Turn off to submit the editor's text without saving.",
   "config.revealResultAfterSubmit.description": "When grading finishes, open the **Result** section in the panel and scroll it into view. Keyboard focus stays in your editor.",
   "config.debugRequests.description": "Log every grader request (method, path, status) and cache hit/miss to the **Grader Submit: Requests** output channel, to check request counts. Never logs passwords or tokens.",
@@ -78,8 +77,5 @@
   "walkthrough.checkProblem.media": "media/walkthrough/checkProblem.md",
   "walkthrough.submit.title": "Submit",
   "walkthrough.submit.description": "Press **Submit to Grader** in the panel. The verdict of every test and your counted score appear when grading is done.\n[Submit Current File](command:cedtGrader.submit)",
-  "walkthrough.submit.media": "media/walkthrough/submit.md",
-  "walkthrough.cph.title": "Optional: install CPH",
-  "walkthrough.cph.description": "Competitive Programming Helper runs test cases on your computer. With it, **Load test cases** puts the grader's test cases into CPH. Everything else works without it.\n[Show CPH](command:extension.open?%5B%22DivyanshuAgrawal.competitive-programming-helper%22%5D)",
-  "walkthrough.cph.media": "media/walkthrough/cph.md"
+  "walkthrough.submit.media": "media/walkthrough/submit.md"
 }

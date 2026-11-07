@@ -7,7 +7,7 @@ import type { Strings } from './strings';
  *
  * Style: natural, polite Thai a student would use, without ครับ/ค่ะ (UI text).
  * Words students use in English stay English: Submit, test case, compile
- * error, Grader, CPH, verdict words (as on the website), file extensions.
+ * error, Grader, verdict words (as on the website), file extensions.
  * Thai has no plural: counts are written as "3 ไฟล์".
  * Grader content (problem names, compiler messages) is never translated.
  */
@@ -17,14 +17,13 @@ import type { Strings } from './strings';
  * Everything else was reviewed at checkpoint B (2026-11-03). Add keys here
  * when a new text is translated without review.
  */
-export const TH_REVIEW: readonly string[] = ['S.common.dismiss', 'S.crash.notice', 'S.crash.report', 'S.crash.review', 'S.crash.reviewTitle', 'S.files.saveHere', 'S.folder.cancelRestores', 'S.folder.cancelStopsMatch', 'S.folder.cancelUnlinksFile', 'S.folder.replaceFilesQ', 'W.websiteTip', 'S.requestLogOff', 'W.crashTitle', 'G.statusGradingTip', 'G.statusChooseTip', 'G.statusOpenTip', 'G.logInFirst', 'W.server', 'W.serverLine', 'W.changeServer', 'W.checkingServer', 'W.serverWorks', 'W.useDefaultServer', 'S.account.serverInvalid', 'S.account.settingsNotSaved', 'S.account.serverIncompatible', 'S.account.serverUnreachable', 'S.account.insecureTitle', 'S.account.insecureDetail', 'S.account.insecureSend', 'W.crashNote', 'W.crashReport', 'W.crashReportLabel', 'W.crashTitle', 'W.defaultOrderReversed', 'W.sortedBy', 'S.cache.custom', 'S.cache.customDetail', 'S.cache.linksDetail', 'S.runner', 'S.runTests', 'S.testsTab', 'S.compareTab', 'W.closeTests', 'W.closeStatement', 'W.compareInCode', 'W.compareInCodeTip', 'W.spacesDontCount', 'W.sampleTip', 'S.testcases.loaded', 'S.samples.loaded', 'W.loadTestCasesTip', 'W.runFileTip', 'W.runFileAsk', 'W.runTestsTip', 'W.stopTests', 'W.stopTestsTip', 'W.openTests', 'W.openTestsTip', 'W.runNoCases', 'W.runNotRun', 'W.runCompiling', 'W.runRunning', 'W.runPassed', 'W.runCompileError', 'W.testsNoFile', 'W.runAll', 'W.runAllTip', 'W.runAllNoCases', 'W.addCase', 'W.addCaseTip', 'W.testsLimit', 'W.noCasesLoad', 'W.noCasesAdd', 'W.nothingRun', 'W.leftOut', 'W.caseN', 'W.sourceGrader', 'W.sourceSample', 'W.sourceCustom', 'W.runCase', 'W.deleteCase', 'W.moveCaseTip', 'W.openCase', 'W.closeCase', 'W.caseInput', 'W.caseExpected', 'W.caseActual', 'W.caseStderr', 'W.editExpected', 'W.copyInput', 'W.copyExpected', 'W.copyActual', 'W.copyStderr', 'W.copyError', 'W.setExpected', 'W.setExpectedCut', 'W.textCut', 'W.outputCut', 'W.memoryEstimate', 'W.caseStopped', 'W.exitCode', 'W.exitSignal'];
+export const TH_REVIEW: readonly string[] = ['S.common.dismiss', 'S.crash.notice', 'S.crash.report', 'S.crash.review', 'S.crash.reviewTitle', 'S.files.saveHere', 'S.folder.cancelRestores', 'S.folder.cancelStopsMatch', 'S.folder.cancelUnlinksFile', 'S.folder.replaceFilesQ', 'W.websiteTip', 'S.requestLogOff', 'W.crashTitle', 'G.statusGradingTip', 'G.statusChooseTip', 'G.statusOpenTip', 'G.logInFirst', 'W.server', 'W.serverLine', 'W.changeServer', 'W.checkingServer', 'W.serverWorks', 'W.useDefaultServer', 'S.account.serverInvalid', 'S.account.settingsNotSaved', 'S.account.serverIncompatible', 'S.account.serverUnreachable', 'S.account.insecureTitle', 'S.account.insecureDetail', 'S.account.insecureSend', 'W.crashNote', 'W.crashReport', 'W.crashReportLabel', 'W.crashTitle', 'W.defaultOrderReversed', 'W.sortedBy', 'S.cache.custom', 'S.cache.customDetail', 'S.cache.linksDetail', 'S.match.severalMatch', 'W.autoDetectAgainTip', 'S.runner', 'S.runTests', 'S.testsTab', 'S.compareTab', 'W.closeTests', 'W.closeStatement', 'W.compareInCode', 'W.compareInCodeTip', 'W.spacesDontCount', 'W.sampleTip', 'S.testcases.loaded', 'S.samples.loaded', 'W.loadTestCasesTip', 'W.runFileTip', 'W.runFileAsk', 'W.runTestsTip', 'W.stopTests', 'W.stopTestsTip', 'W.openTests', 'W.openTestsTip', 'W.runNoCases', 'W.runNotRun', 'W.runCompiling', 'W.runRunning', 'W.runPassed', 'W.runCompileError', 'W.testsNoFile', 'W.runAll', 'W.runAllTip', 'W.runAllNoCases', 'W.addCase', 'W.addCaseTip', 'W.testsLimit', 'W.noCasesLoad', 'W.noCasesAdd', 'W.nothingRun', 'W.leftOut', 'W.caseN', 'W.sourceGrader', 'W.sourceSample', 'W.sourceCustom', 'W.runCase', 'W.deleteCase', 'W.moveCaseTip', 'W.openCase', 'W.closeCase', 'W.caseInput', 'W.caseExpected', 'W.caseActual', 'W.caseStderr', 'W.editExpected', 'W.copyInput', 'W.copyExpected', 'W.copyActual', 'W.copyStderr', 'W.copyError', 'W.setExpected', 'W.setExpectedCut', 'W.textCut', 'W.outputCut', 'W.memoryEstimate', 'W.caseStopped', 'W.exitCode', 'W.exitSignal'];
 
 export const TH: Strings = {
   HOW_LINKED: {
     chosen: 'คุณเลือกเอง',
     filename: 'ตรงกับชื่อไฟล์',
     folder: 'ตรงกับชื่อโฟลเดอร์',
-    cph: 'ตรงกับข้อมูล CPH',
     suggested: 'แนะนำ',
   },
 
@@ -32,7 +31,6 @@ export const TH: Strings = {
     chosen: 'เชื่อมไว้',
     filename: 'ตรงกับชื่อไฟล์',
     folder: 'ตรงกับชื่อโฟลเดอร์',
-    cph: 'ตรงกับข้อมูล CPH',
     suggested: 'แนะนำ',
   },
 
@@ -43,7 +41,6 @@ export const TH: Strings = {
       cancel: 'ยกเลิก',
       dismiss: 'ปิด',
       keep: 'คงไว้',
-      no: 'ไม่',
       notNow: 'ไว้ทีหลัง',
       showLog: 'ดูบันทึก',
       openSetting: 'เปิดการตั้งค่า',
@@ -105,14 +102,7 @@ export const TH: Strings = {
       whichLink: (file) => `${file} อาจเป็นไฟล์ที่ย้ายมา จะคงการเชื่อมไหนไว้?`,
       noneOfThese: 'ไม่ใช่สักอัน',
       skip: 'ข้าม',
-      moveCphQuestion: (one, n) =>
-        one !== null ? `ย้าย test case ใน CPH ไปยังไฟล์ใหม่ด้วยไหม? (${one})` : `ย้าย test case ใน CPH ของทั้ง ${n} ไฟล์ที่เปลี่ยนชื่อด้วยไหม?`,
-      moveCph: 'ย้าย test case',
       entry: (path, problem) => `${path} (เชื่อมกับ ${problem})`,
-      movedCph: (done, skipped) =>
-        `ย้าย test case ใน CPH ของ ${done} ไฟล์แล้ว (เก็บไฟล์เดิมไว้เป็น .bak)` +
-        (skipped ? ` · ข้ามไป ${skipped} ไฟล์เพราะไฟล์ใหม่มี test case ใน CPH อยู่แล้ว` : '') +
-        ' CPH จะแสดงผลเมื่อคุณสลับไปที่ไฟล์นั้น',
     },
 
     autoDetect: {
@@ -123,26 +113,15 @@ export const TH: Strings = {
       ambiguousKept: (n) => `พบโจทย์ที่ตรงกัน ${n} ข้อ จึงคงโจทย์ที่คุณเลือกไว้ตามเดิม`,
       noneKept: 'ไม่พบโจทย์ที่ตรงกันพอดี จึงคงโจทย์ที่คุณเลือกไว้ตามเดิม',
       none: 'ไม่พบโจทย์ที่ตรงกับไฟล์นี้ โปรดเลือกเองจากรายการ',
-      how: { cph: 'จากข้อมูล CPH', filename: 'จากชื่อไฟล์', folder: 'จากชื่อโฟลเดอร์', suggested: 'แนะนำ' },
+      how: { filename: 'จากชื่อไฟล์', folder: 'จากชื่อโฟลเดอร์', suggested: 'แนะนำ' },
     },
 
     testcases: {
       none: (name) => `${name} ไม่มี test case ให้ดาวน์โหลด`,
       notAllowed: (name) => `Grader ไม่เปิดให้ดาวน์โหลด test case ของ ${name}`,
-      tooLarge: (n) => ` (ข้ามไป ${n} เคสเพราะขนาดใหญ่เกินไป)`,
       downloadAgain: 'ดาวน์โหลดอีกครั้ง',
       downloadProgress: (done, total) => `กำลังดาวน์โหลด ${done} / ${total}`,
-      createFolderQ: (folder, n) => `สร้างโฟลเดอร์ ${folder}/ สำหรับ ${n} test case ไหม?`,
-      createFolder: 'สร้างโฟลเดอร์',
-      unchanged: (n) => `ไม่เปลี่ยนแปลง ${n} ไฟล์`,
-      keptExisting: (n) => `คงไฟล์เดิมไว้ ${n} ไฟล์ (ไม่เขียนทับ)`,
-      showFolder: 'เปิดดูโฟลเดอร์',
-      savedFiles: (written, total, folder, tooLarge, extra) =>
-        `บันทึก ${written} จาก ${total} test case ลงใน ${folder}/ แล้ว${tooLarge}${extra ? ` (${extra})` : ''}`,
       loaded: (added, kept, tooLarge) => `โหลด ${added} test case แล้ว${kept ? ` มีอยู่ในรายการแล้ว ${kept}` : ''}${tooLarge ? ` ใหญ่เกินดาวน์โหลด ${tooLarge}` : ''}`,
-      alreadyPresent: (n) => `มีอยู่แล้ว ${n}`,
-      updated: (n) => `อัปเดต ${n}`,
-      added: (n) => `เพิ่มใหม่ ${n}`,
       keyRemoved: ' ตัดบรรทัดสุดท้าย "KEY: …" ออกจากผลลัพธ์ที่คาดหวังแล้ว เพราะมีเฉพาะ main ของ Grader เท่านั้นที่พิมพ์บรรทัดนี้',
       failed: (why) => `โหลด test case ไม่สำเร็จ: ${why}`,
       suggestedQ: (name, sub) => `โหลด test case ของ ${name}${sub ? ` (${sub})` : ''} ไหม?`,
@@ -177,8 +156,6 @@ export const TH: Strings = {
       linksDetail: 'โจทย์ทั้งหมดที่คุณเลือกไว้ให้ไฟล์ในหน้าต่างนี้',
       login: 'ข้อมูลเข้าสู่ระบบที่บันทึกไว้',
       loginDetail: 'รหัสผ่านและโทเค็นเข้าสู่ระบบที่บันทึกไว้ (เหมือนกับการออกจากระบบ)',
-      backups: 'ไฟล์สำรองจากการนำเข้า test case',
-      backupsDetail: (n) => `ไฟล์สำรอง CPH เดิม (.prob.bak) จำนวน ${n} ไฟล์ที่ส่วนขยายเก็บไว้ในโฟลเดอร์ของคุณ`,
       confirm: (what) => `ล้าง${what}ไหม? เมื่อล้างแล้วจะกู้คืนไม่ได้`,
       clear: 'ล้างข้อมูล',
       cleared: (size) => `ล้างข้อมูลแคชแล้ว (ได้พื้นที่คืน ${size})`,
@@ -249,13 +226,13 @@ export const TH: Strings = {
 
     match: {
       severalCould: 'มีหลายโจทย์ที่น่าจะตรงกับไฟล์นี้ โปรดเลือก 1 โจทย์',
-      severalMatch: (cph) => `มีหลายโจทย์ที่ตรงกับ${cph ? 'ข้อมูล CPH ของไฟล์นี้' : 'ชื่อไฟล์นี้'} โปรดเลือก 1 โจทย์`,
+      severalMatch: 'มีหลายโจทย์ที่ตรงกับชื่อไฟล์นี้ เลือกหนึ่งโจทย์',
       severalMatchFolder: 'มีหลายโจทย์ที่ตรงกับชื่อโฟลเดอร์นี้ โปรดเลือก 1 โจทย์',
     },
 
     rename: {
       title: 'เปลี่ยนชื่อไฟล์ให้ตรงกับโจทย์',
-      prompt: (current) => `ชื่อใหม่สำหรับ ${current} (การเชื่อม ไฟล์ที่เปิดอยู่ และ test case ใน CPH จะย้ายตาม และกด Undo ได้)`,
+      prompt: (current) => `ชื่อใหม่สำหรับ ${current} (การเชื่อมและไฟล์ที่เปิดอยู่จะย้ายตาม และกด Undo ได้)`,
       existsSuggest: (name, free) => `มีไฟล์ ${name} อยู่แล้ว ลองใช้ ${free} แทน`,
       invalid: {
         empty: 'พิมพ์ชื่อไฟล์',
@@ -313,15 +290,6 @@ export const TH: Strings = {
       report: 'รายงานบน GitHub',
     },
 
-    cphAutoShow: {
-      question: 'CPH จะเปิดแผงของตัวเองทุกครั้งที่คุณสลับไปที่ไฟล์ source ซึ่งอาจบังแผงนี้ ต้องการปิดไว้ไหม?',
-      detail: 'การเปลี่ยนนี้จะปิดการตั้งค่า "Auto Show Judge" ของ CPH คุณยังเปิดแผง CPH เองได้ และเปิดกลับได้ในการตั้งค่าของ VS Code',
-      turnOff: 'ปิดไว้',
-      keep: 'คงไว้ตามเดิม',
-      never: 'ไม่ต้องถามอีก',
-      done: 'CPH จะไม่เปิดแผงขึ้นมาเองอีก',
-      failed: (why) => `เปลี่ยนการตั้งค่าของ CPH ไม่สำเร็จ: ${why}`,
-    },
 
     attachment: {
       none: (name) => `${name} ไม่มีไฟล์แนบบน Grader`,
@@ -419,7 +387,7 @@ export const TH: Strings = {
     notLinkedToAProblem: 'ยังไม่ได้เชื่อมกับโจทย์',
     chooseProblemTip: 'เลือกโจทย์บน Grader สำหรับไฟล์นี้',
     autoDetect: 'ตรวจหาอัตโนมัติ',
-    autoDetectAgainTip: 'ค้นหาโจทย์สำหรับไฟล์นี้อีกครั้ง (จากชื่อไฟล์หรือข้อมูล CPH)',
+    autoDetectAgainTip: 'ค้นหาโจทย์สำหรับไฟล์นี้อีกครั้ง (จากชื่อไฟล์)',
     problemUnavailableMsg: 'ไม่มีโจทย์นี้บน Grader แล้ว',
     changeProblem: 'เปลี่ยนโจทย์',
     changeProblemTitle: 'เชื่อมไฟล์นี้กับโจทย์อื่น',
@@ -435,7 +403,6 @@ export const TH: Strings = {
     loadTestCases: 'โหลด test case',
     downloadingTestCases: 'กำลังดาวน์โหลด test case จาก Grader…',
     loadTestCasesTip: 'ดาวน์โหลด test case จาก Grader เข้ารายการนี้',
-    saveTestcasesAsFiles: 'บันทึก test case จาก Grader เป็นไฟล์ .in / .out',
     loadSampleCases: 'โหลดตัวอย่าง',
     readingSampleCases: 'กำลังอ่าน…',
     readingStatementTip: 'กำลังอ่านตารางตัวอย่างในโจทย์…',
@@ -443,17 +410,11 @@ export const TH: Strings = {
     languageNotAccepted: (language) => `โจทย์นี้ไม่รับภาษา ${language} เลือกโจทย์ผิดหรือเปล่า?`,
     change: 'เปลี่ยน',
     acceptedLanguages: (languages) => `ภาษาที่รับ: ${languages}`,
-    cphTip: 'อยากรัน test case ใน VS Code ไหม? ติดตั้งส่วนขยาย Competitive Programming Helper (CPH) ได้เลย',
-    install: 'ติดตั้ง',
-    cphInstallTip: 'เปิดหน้า CPH ในแถบ Extensions',
     crashTitle: 'Grader Submit เกิดปัญหา',
     crashNote: 'ยังไม่มีการส่งข้อมูลใด ๆ GitHub จะเปิดพร้อมข้อความนี้ และคุณเลือกเองว่าจะโพสต์หรือไม่',
     crashReport: 'รายงานบน GitHub',
     crashReportLabel: 'ข้อความรายงาน',
     notNow: 'ไว้ทีหลัง',
-    notNowTip: 'ซ่อนไว้จนกว่าจะเปิด VS Code ใหม่',
-    dontShowAgainTip: 'ไม่ต้องแสดงคำแนะนำนี้อีก',
-    dontShowAgain: 'ไม่ต้องแสดงอีก',
     gradingOtherFile: (problem) => `กำลังตรวจ ${problem} ของอีกไฟล์…`,
     verdictPerTest: 'ผลตรวจรายเคส',
     legendBox: 'กรอบเส้นประ = กลุ่มเคสที่คิดคะแนนร่วมกัน',
@@ -665,7 +626,6 @@ export const TH: Strings = {
     saved: 'คุณเลือกเอง',
     filename: 'ตรงกับชื่อไฟล์',
     folder: 'ตรงกับชื่อโฟลเดอร์',
-    cph: 'ตรงกับข้อมูล CPH',
     suggested: 'แนะนำ',
   },
 
@@ -761,7 +721,6 @@ export const TH: Strings = {
 
   MATCH_SOURCE: {
     saved: 'คุณเลือกเอง',
-    cph: 'ตรงกับข้อมูล CPH',
     filename: 'ตรงกับชื่อไฟล์',
     folder: 'ตรงกับชื่อโฟลเดอร์',
     suggested: 'แนะนำ — คลิกเพื่อยืนยัน',

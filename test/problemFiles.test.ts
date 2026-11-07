@@ -10,7 +10,7 @@ const rel = (p: string) => p.replace('/w/', '');
 const base = { problemId: 1731, chosen: [] as string[], auto: [] as AutoMatch[], matched: [] as { fsPath: string; how: 'filename' | 'suggested' }[], unlinked: [] as string[], linkedElsewhere: [] as string[], caseInsensitive: false };
 /** Name matches as the matcher reports them. */
 const N = (...paths: string[]) => paths.map((fsPath) => ({ fsPath, how: 'filename' as const }));
-const auto = (fsPath: string, problemId = 1731, how: 'filename' | 'cph' = 'filename'): AutoMatch => ({ fsPath, problemId, how, at: 1 });
+const auto = (fsPath: string, problemId = 1731, how: 'filename' | 'folder' = 'filename'): AutoMatch => ({ fsPath, problemId, how, at: 1 });
 
 describe('files for a problem (one function for notice, row click, submit check)', () => {
   it('chosen + name-matched: both listed, each with how it is linked', () => {
@@ -120,9 +120,8 @@ describe('remembered auto-matches follow renames and deletes', () => {
     expect(autoAfterRename([auto(A)], '/w/data algo', '/w/algo', name, false)).toEqual([auto('/w/algo/da68_f2_zero_one_subset_sum.cpp')]);
   });
 
-  it('renamed to a non-matching name: dropped; CPH matches dropped on rename', () => {
+  it('renamed to a non-matching name: dropped', () => {
     expect(autoAfterRename([auto(A)], A, '/w/data algo/scratch.cpp', name, false)).toEqual([]);
-    expect(autoAfterRename([auto(A, 1731, 'cph')], A, '/w/x/da68_f2_zero_one_subset_sum.cpp', name, false)).toEqual([]);
   });
 
   it('unrelated entries untouched; deleted file or folder removes them', () => {

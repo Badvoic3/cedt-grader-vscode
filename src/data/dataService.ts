@@ -63,7 +63,7 @@ export class DataService {
   onError: (err: unknown, key: string) => void = () => {};
   /** A load succeeded (the connection banner can be hidden). */
   onSuccess: () => void = () => {};
-  /** Called after the problem list was (re)loaded, e.g. to re-run local CPH matching. */
+  /** Called after the problem list was (re)loaded, e.g. to re-run local matching. */
   onProblemsLoaded: () => void = () => {};
 
   private visible = false;

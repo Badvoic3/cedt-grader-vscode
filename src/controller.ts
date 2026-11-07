@@ -30,20 +30,15 @@ import {
   problemStatus,
 } from './grader';
 import { dirname } from 'node:path';
-import { CPH_AUTO_SHOW_KEY, CPH_AUTO_SHOW_SECTION, CPH_EXTENSION_ID, cphAutoShowScope, CphPresence } from './cphIntegration';
 import { TestcaseStore } from './data/testcaseStore';
 import { CaseStore } from './runner/store';
 import { pdfjsLoader } from './data/pdfSamples';
-import { cphProbPath as cphProbPathFor, readCphProblem } from './mapping/cph';
-import { pathExists as exists } from './mapping/newFile';
 import { BINARY_EXTS } from './mapping/findByName';
 import { EXTENSION_LANGUAGE } from './grader/languages';
-import { stat as fsStat } from 'node:fs/promises';
-import { cphFilesAfterFolderRename, moveCphProblem, remapPath } from './mapping/mappingOps';
+import { remapPath } from './mapping/mappingOps';
 import { importOldLinks } from './migration/importLinks';
 import { cleanName, placeholder, resolveProblem } from './mapping/match';
 import { MappingStore } from './mapping/store';
-import { pathKey } from './mapping/paths';
 import { matchNote, type MatchInfo, NO_MATCH_INFO } from './mapping/linkActions';
 import { nameMatchesProblem, renameProposal } from './mapping/renameToProblem';
 import { DEFAULT_BASE_URL, LIMITS, SUBMISSION_SCHEME, TIMING, troubleshootingUrl, WEB_PATHS } from './shared/constants';
@@ -116,16 +111,11 @@ export class GraderController implements vscode.Disposable {
   /** The active file was explicitly unlinked (auto-detection is off for it). */
   private notLinked = false;
   private fileEventTimer: ReturnType<typeof setTimeout> | undefined;
-  /** CPH tip: "Not now" hides it for this session. */
-  /** The "CPH opens its panel on every switch" question was answered this session (or is showing). */
-  private cphAutoShowAsked = false;
   /** The problem the statement tab last followed (undefined: not yet). */
   private followedProblemId: number | null | undefined = undefined;
   /** Statement PDFs / descriptions on disk (shared by the statement tabs and "Load sample cases"). */
   private readonly statementStore: StatementStore;
   private readonly cases: CaseStore;
-  /** CPH is optional: only used when installed (re-checked when extensions change). */
-  readonly cph: CphPresence;
   /** Connection banner (null = all good) and what its Retry button re-runs. */
   private connection: ConnectionProblem | null = null;
   private retryAction: (() => Promise<unknown>) | null = null;
@@ -168,7 +158,6 @@ export class GraderController implements vscode.Disposable {
         save: (at, list) => void ctx.workspaceState.update(this.problemsKey(), { at, list }),
       },
     });
-    this.cph = new CphPresence(vscode.extensions, () => this.emit());
     this.host = this.makeHost();
     this.server = new ServerFlow({
       verified: () => this.ctx.globalState.get<string[]>(KEYS.verifiedServers, []),
@@ -245,7 +234,7 @@ export class GraderController implements vscode.Disposable {
       webviewError: (message, stack) => this.crash.panelError(message, stack),
       log: (msg) => this.log(msg),
     });
-    // A late (deferred) list load: re-resolve the open file (local only: mapping file and CPH .prob).
+    // A late (deferred) list load: re-resolve the open file (local only).
     this.data.onProblemsLoaded = () => {
       // Problems back in the list are available again.
       const ids = new Set(this.problems.map((p) => p.id));
@@ -257,7 +246,6 @@ export class GraderController implements vscode.Disposable {
       this.output,
       this.statements,
       this.testPanel,
-      this.cph,
       vscode.window.onDidChangeActiveTextEditor((e) => {
         if (e && e.document.uri.scheme === 'file') void this.setActiveFile(e.document.uri);
       }),
@@ -298,7 +286,6 @@ export class GraderController implements vscode.Disposable {
       get client() { return c.client; },
       data: c.data,
       mapping: c.mapping,
-      cph: c.cph,
       get statementStore() { return c.statementStore; },
       get cases() { return c.cases; },
       get prompts() { return c.prompts; },
@@ -338,8 +325,6 @@ export class GraderController implements vscode.Disposable {
       markUnavailable: (id) => c.markUnavailable(id),
       isUnavailable: (id) => c.unavailableIds.has(id),
       url: (path) => c.url(path),
-      cphSaveLocation: () => c.cphSaveLocation(),
-      recordBackup: (path) => c.cache.recordBackup(path),
       onFileEvent: () => c.onFileEvent(),
       focusProblemPicker: () => c.focusProblemPicker(),
       openStatement: (id) => c.openStatement(id),
@@ -428,7 +413,6 @@ export class GraderController implements vscode.Disposable {
       void this.ensureLanguages();
       void this.ensureMe();
       void this.links.refreshLinkedFiles(); // the name search runs only while the panel shows the problem
-      void this.maybeAskCphAutoShow();
     }
   }
 
@@ -606,10 +590,6 @@ export class GraderController implements vscode.Disposable {
     return fresh ? { ...fresh, source: this.problem.source } : this.problem;
   }
 
-  private cphSaveLocation(): string {
-    return vscode.workspace.getConfiguration('cph').get<string>('general.saveLocation') ?? '';
-  }
-
   /** Every known source extension: the server's languages (non-binary) + the fallback table. */
   private allSourceExts(): string[] {
     const exts = new Set<string>(Object.keys(EXTENSION_LANGUAGE).map((e) => e.slice(1)));
@@ -761,14 +741,12 @@ export class GraderController implements vscode.Disposable {
       runTests: file ? { ...this.runner.panelView(), testsOpen: this.testPanel.showing } : null,
       folderMode: file ? { on: !!folderLink && !this.folder.matched, disabledReason: folderLink ? null : this.folder.modeTarget().reason } : null,
       attachment: { busy: problem && this.data.isDownloading(problem.id) ? problem.id : null },
-      cphTip: false, // the built-in runner replaces it; the rest goes with CPH in v1.0.4
       matching: {
         suggestions: this.matchInfo.suggestions.map((p) => this.problemView(p)),
         ambiguous: this.matchInfo.ambiguous?.map((p) => this.problemView(p)) ?? null,
         note: matchNote(this.matchInfo),
       },
       testcases: { busy: this.tests.busy },
-      cph: { installed: this.cph.installed },
       languages: {
         loading: languagesLoading,
         items: problem ? this.allowedLanguages(problem).map((l) => ({ id: l.id, name: l.name })) : [],
@@ -924,50 +902,6 @@ export class GraderController implements vscode.Disposable {
       this.emit();
     } catch {
       /* the login ID is shown instead */
-    }
-  }
-
-  // ---------------------------------------------------------------- CPH
-
-  async cphTip(action: 'install' | 'later' | 'never'): Promise<void> {
-    if (action === 'install') await vscode.commands.executeCommand('extension.open', CPH_EXTENSION_ID);
-    if (action === 'never') await this.ctx.globalState.update(KEYS.cphTipDismissed, true);
-    this.emit();
-  }
-
-  /**
-   * CPH's "Auto Show Judge" (on by default) opens CPH's panel on every switch to a
-   * source file, which can cover this one. Ask once per session, in the panel, only
-   * while the panel is visible and nothing else is being asked. A question cancelled
-   * by a file switch or another question comes back later; "Keep it" = this session,
-   * "Don't ask again" = never.
-   */
-  private async maybeAskCphAutoShow(): Promise<void> {
-    if (this.cphAutoShowAsked || this.prompts.current || !this.cph.installed || !this.fileUri || !this.data.isVisible()) return;
-    if (this.ctx.globalState.get<boolean>(KEYS.cphAutoShowDismissed, false)) return;
-    const cfg = vscode.workspace.getConfiguration(CPH_AUTO_SHOW_SECTION, this.fileUri);
-    const scope = cphAutoShowScope(cfg.inspect(CPH_AUTO_SHOW_KEY));
-    if (!scope) return;
-    this.cphAutoShowAsked = true;
-    const pick = await this.askInline(S.cphAutoShow.question, [
-      { id: 'off', label: S.cphAutoShow.turnOff, primary: true },
-      { id: 'keep', label: S.cphAutoShow.keep },
-      { id: 'never', label: S.cphAutoShow.never },
-    ], { detail: S.cphAutoShow.detail });
-    if (pick === undefined) {
-      this.cphAutoShowAsked = false; // replaced or cancelled by a file switch: ask again later
-      return;
-    }
-    if (pick === 'never') await this.ctx.globalState.update(KEYS.cphAutoShowDismissed, true);
-    if (pick !== 'off') return;
-    // Turn it off where it is turned on (a workspace value would override a user-level change).
-    const target =
-      scope === 'workspaceFolder' ? vscode.ConfigurationTarget.WorkspaceFolder : scope === 'workspace' ? vscode.ConfigurationTarget.Workspace : vscode.ConfigurationTarget.Global;
-    try {
-      await cfg.update(CPH_AUTO_SHOW_KEY, false, target);
-      void this.askInline(S.cphAutoShow.done, [{ id: 'ok', label: S.common.ok }]);
-    } catch (err) {
-      void this.askInline(S.cphAutoShow.failed(this.describe(err)), [{ id: 'ok', label: S.common.ok }], { tone: 'warn' });
     }
   }
 
@@ -1139,7 +1073,7 @@ export class GraderController implements vscode.Disposable {
       this.expandedSubmission = null;
     }
 
-    // Matching order: saved (the file's own link, else its folder's link) → CPH .prob → exact file name
+    // Matching order: saved (the file's own link, else its folder's link) → exact file name
     // → exact folder name → suggestions (never saved automatically).
     // An explicitly unlinked file (or folder) is left alone ("Not linked to a problem").
     const link = await this.mapping.activeLink(uri, this.cfg.baseUrl);
@@ -1147,12 +1081,10 @@ export class GraderController implements vscode.Disposable {
     const unlinked = !entry && this.mapping.isUnlinkedHere(uri);
     await this.folder.load(link?.folder ? { fsPath: link.folder, entry: link.entry } : null);
     const list = this.data.problemList()?.problems;
-    const cph = entry || unlinked ? null : await readCphProblem(uri.fsPath, this.cphSaveLocation());
     const m = unlinked
       ? ({ kind: 'none', suggestions: [] } as const)
       : resolveProblem({
           savedProblemId: entry?.problemId ?? null,
-          cph,
           filePath: uri.fsPath,
           problems: list,
           baseUrl: this.cfg.baseUrl,
@@ -1203,7 +1135,7 @@ export class GraderController implements vscode.Disposable {
       this.matchInfo = { suggestions: [temp, ...this.matchInfo.suggestions.filter((x) => x.id !== temp.id)], ambiguous: null, ambiguousSource: null };
     }
     // Remember automatic matches of open files (never over a manual link or "not linked").
-    if (!entry && !unlinked && m.kind === 'match' && (m.source === 'filename' || m.source === 'folder' || m.source === 'cph' || m.source === 'suggested')) await this.mapping.recordAuto(uri, m.problem.id, m.source);
+    if (!entry && !unlinked && m.kind === 'match' && (m.source === 'filename' || m.source === 'folder' || m.source === 'suggested')) await this.mapping.recordAuto(uri, m.problem.id, m.source);
     else if (!entry && list?.length && m.kind !== 'match') await this.mapping.dropAuto(uri);
     await this.links.refreshMappedIds();
     if (seq !== this.refreshSeq) return;
@@ -1221,7 +1153,6 @@ export class GraderController implements vscode.Disposable {
     // One problem only (the top suggestion at most, never several candidates).
     this.data.focusProblem(problem ? problem.id : null);
     if (!entry) this.links.maybeOfferReconnect(uri);
-    void this.maybeAskCphAutoShow();
   }
 
   /**
@@ -1273,37 +1204,8 @@ export class GraderController implements vscode.Disposable {
       }
     }
     await this.ctx.workspaceState.update(KEYS.languageByFile, langs);
-    // CPH names its file after the full source path and does not follow renames. A renamed folder
-    // took its `.cph/` along (or the files stayed in CPH's save location): every source inside is orphaned.
-    const save = this.cphSaveLocation();
-    const inFolders: { prob: string; oldSrc: string; newSrc: string }[] = [];
-    for (const f of files) {
-      if ((await fsStat(f.newUri.fsPath).catch(() => null))?.isDirectory()) inFolders.push(...(await cphFilesAfterFolderRename(f.oldUri.fsPath, f.newUri.fsPath, save)));
-    }
     if (moved.length) this.log(`Updated ${moved.length} mapping(s) after a rename.`);
     if (this.fileUri && (moved.length || this.folder.link)) await this.setActiveFile(this.fileUri); // links / the folder's files may have moved
-
-    // Offer once (for files and folders together).
-    const taken = new Set(inFolders.map((x) => pathKey(x.oldSrc)));
-    const withCph: { from: string; to: string; prob?: string }[] = inFolders.map((x) => ({ from: x.oldSrc, to: x.newSrc, prob: x.prob }));
-    for (const m of moved) if (!taken.has(pathKey(m.from)) && (await exists(cphProbPathFor(m.from, save)))) withCph.push(m);
-    if (!withCph.length) return;
-    const yes = S.moved.moveCph;
-    const pick = await vscode.window.showInformationMessage(
-      S.moved.moveCphQuestion(withCph.length === 1 ? vscode.workspace.asRelativePath(withCph[0].to) : null, withCph.length),
-      yes,
-      S.common.no,
-    );
-    if (pick !== yes) return;
-    let done = 0;
-    let skipped = 0;
-    for (const m of withCph) {
-      const r = await moveCphProblem(m.from, m.to, save, m.prob);
-      await this.cache.recordBackup(r.backup);
-      if (r.status === 'moved') done++;
-      else if (r.status === 'target-exists') skipped++;
-    }
-    void vscode.window.showInformationMessage(S.moved.movedCph(done, skipped));
   }
 
   /** "Clear Cached Data": what the controller resets after the cache flow cleared the stores. */
@@ -1416,7 +1318,7 @@ export class GraderController implements vscode.Disposable {
   toggleFolderMode = () => this.folder.toggle();
   setFolderRole = (role: 'submit' | 'run', rel: string) => this.folder.setRole(role, rel);
   downloadAttachment = (problemId?: number) => this.attachments.download(problemId);
-  loadTestcases = (refresh = false, asFiles = false) => this.tests.loadTestcases(refresh, asFiles);
+  loadTestcases = (refresh = false) => this.tests.loadTestcases(refresh);
   loadSampleCases = () => this.tests.loadSampleCases();
   /** Where the active file is shown; the focus can be in a webview, so not only the active editor. */
   private codeColumn(): vscode.ViewColumn | undefined {

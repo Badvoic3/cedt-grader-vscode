@@ -11,7 +11,7 @@ import type { MatchResult, MatchSource } from './match';
 export interface MatchInfo {
   suggestions: Problem[];
   ambiguous: Problem[] | null;
-  ambiguousSource: 'cph' | 'filename' | 'folder' | 'suggested' | null;
+  ambiguousSource: 'filename' | 'folder' | 'suggested' | null;
 }
 
 export const NO_MATCH_INFO: MatchInfo = { suggestions: [], ambiguous: null, ambiguousSource: null };
@@ -21,7 +21,7 @@ export function matchNote(m: MatchInfo): string | null {
   if (!m.ambiguous) return null;
   if (m.ambiguousSource === 'suggested') return S.match.severalCould;
   if (m.ambiguousSource === 'folder') return S.match.severalMatchFolder;
-  return S.match.severalMatch(m.ambiguousSource === 'cph');
+  return S.match.severalMatch;
 }
 
 /**

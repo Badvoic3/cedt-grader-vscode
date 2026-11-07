@@ -18,7 +18,7 @@ export const KEYS = {
   linksImported: 'cedtGrader.linksImported',
   /** Files explicitly marked "not linked" (also globalState for files outside any folder). */
   unlinked: 'cedtGrader.unlinked',
-  /** Remembered auto-matches (file name / CPH / suggestion) of files that were open. */
+  /** Remembered auto-matches (file name / folder / suggestion) of files that were open. */
   autoMatches: 'cedtGrader.autoMatches',
   /** Dismissed "files for this problem" notices: problem id → notice signature. */
   dismissedNotices: 'cedtGrader.dismissedNotices',
@@ -30,8 +30,6 @@ export const KEYS = {
   languageByFile: 'cedtGrader.languageByFile',
   /** Problem list filter and sort. */
   problemFilter: 'cedtGrader.problemFilter',
-  /** "Save as files" chosen for test cases (no CPH). */
-  testcaseTarget: 'cedtGrader.testcaseTarget',
 
   // ---- globalState
   /** Statement viewer page / zoom / scroll per problem. */
@@ -40,15 +38,11 @@ export const KEYS = {
   lastCleanup: 'cedtGrader.lastMappingCleanup',
   /** Language of the last "New file". */
   lastNewFileLanguage: 'cedtGrader.lastNewFileLanguage',
-  /** "Don't show again" on the CPH tip. */
-  cphTipDismissed: 'cedtGrader.cphTipDismissed',
-  /** "Don't ask again" on the question about CPH opening its panel on every file switch. */
-  cphAutoShowDismissed: 'cedtGrader.cphAutoShowDismissed',
   /** "Remember password on this computer". */
   rememberPassword: 'cedtGrader.rememberPassword',
   /** Grader addresses a login has accepted: these aren't checked again. */
   verifiedServers: 'cedtGrader.verifiedServers',
-  /** `.prob.bak` files this extension created in the workspace (deleted only from "Clear Cached Data"). */
+  /** `.prob.bak` files older versions created: read by the one-time cleanup only. */
   backups: 'cedtGrader.backups',
   /** SecretStorage keys written (password / token per address and user), so Log Out removes all of them (src/shared/secrets.ts). */
   secretKeys: 'cedtGrader.secretKeys',

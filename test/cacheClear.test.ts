@@ -1,7 +1,7 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { backupsToDelete, CLEAR_DEFAULTS, CLEAR_ORDER, type ClearCategory, keepIds, planClear, recordBackup } from '../src/data/cacheClear';
+import { CLEAR_DEFAULTS, CLEAR_ORDER, type ClearCategory, keepIds, planClear } from '../src/data/cacheClear';
 import { KEYS } from '../src/shared/stateKeys';
 
 const WS = [
@@ -16,9 +16,8 @@ const WS = [
   KEYS.recentlyOpened,
   KEYS.languageByFile,
   KEYS.problemFilter,
-  KEYS.testcaseTarget,
 ];
-const GL = [KEYS.statementView, KEYS.mappings, KEYS.unlinked, KEYS.lastCleanup, KEYS.rememberPassword, KEYS.cphTipDismissed, KEYS.backups];
+const GL = [KEYS.statementView, KEYS.mappings, KEYS.unlinked, KEYS.lastCleanup, KEYS.rememberPassword, KEYS.backups];
 const present = { workspace: WS, global: GL };
 const plan = (...c: ClearCategory[]) => planClear(new Set(c), present);
 
@@ -34,7 +33,7 @@ describe('Clear Cached Data: what each checkbox removes', () => {
 
   it('downloaded files: cache files, statement view state, nothing else', () => {
     expect(plan('files')).toEqual({
-      cacheFiles: true, customCases: false, resetData: false, staleLinks: false, allLinks: false, logout: false, backups: false,
+      cacheFiles: true, customCases: false, resetData: false, staleLinks: false, allLinks: false, logout: false,
       workspaceKeys: [], globalKeys: [KEYS.statementView],
     });
   });
@@ -56,15 +55,14 @@ describe('Clear Cached Data: what each checkbox removes', () => {
     expect(p.globalKeys).toEqual([]);
   });
 
-  it('login and backups are flags only', () => {
+  it('login is a flag only', () => {
     expect(plan('login')).toMatchObject({ logout: true, workspaceKeys: [], globalKeys: [] });
-    expect(plan('backups')).toMatchObject({ backups: true, workspaceKeys: [], globalKeys: [] });
   });
 
-  it('never clears settings-like state (filter, test-case target, remember, CPH tip, cleanup time)', () => {
+  it('never clears settings-like state (filter, remember, cleanup time, what was imported)', () => {
     const all = plan(...CLEAR_ORDER);
-    for (const k of [KEYS.problemFilter, KEYS.testcaseTarget]) expect(all.workspaceKeys).not.toContain(k);
-    for (const k of [KEYS.rememberPassword, KEYS.cphTipDismissed, KEYS.lastCleanup, KEYS.backups]) expect(all.globalKeys).not.toContain(k);
+    for (const k of [KEYS.problemFilter, KEYS.linksImported]) expect(all.workspaceKeys).not.toContain(k);
+    for (const k of [KEYS.rememberPassword, KEYS.lastCleanup, KEYS.backups]) expect(all.globalKeys).not.toContain(k);
   });
 
   it('only keys that exist are listed', () => {
@@ -81,23 +79,7 @@ describe('Clear Cached Data: what each checkbox removes', () => {
   });
 });
 
-describe('backups', () => {
-  it('records one entry per path (newest time)', () => {
-    let list = recordBackup([], '/w/.cph/.a.cpp_1.prob.bak', new Date(1000));
-    list = recordBackup(list, '/w/.cph/.a.cpp_1.prob.bak', new Date(2000));
-    expect(list).toEqual([{ path: '/w/.cph/.a.cpp_1.prob.bak', at: new Date(2000).toISOString() }]);
-  });
-
-  it('only our own .prob.bak files that still exist are deleted', () => {
-    const list = [
-      { path: '/w/.cph/.a.cpp_1.prob.bak', at: '' },
-      { path: '/w/.cph/.gone.cpp_2.prob.bak', at: '' },
-      { path: '/w/src/main.cpp', at: '' }, // never, even if somehow recorded
-    ];
-    const exists = (p: string) => p !== '/w/.cph/.gone.cpp_2.prob.bak';
-    expect(backupsToDelete(list, exists).map((b) => b.path)).toEqual(['/w/.cph/.a.cpp_1.prob.bak']);
-  });
-
+describe('statement view state', () => {
   it('keepIds keeps statement view state of cached statements only', () => {
     expect(keepIds({ '1': 'a', '2': 'b', x: 'c' }, new Set([2]))).toEqual({ '2': 'b' });
   });

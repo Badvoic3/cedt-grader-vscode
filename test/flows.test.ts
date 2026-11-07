@@ -131,7 +131,7 @@ describe('link actions', () => {
     expect(matchNote(NO_MATCH_INFO)).toBeNull();
     expect(matchNote({ ...NO_MATCH_INFO, ambiguous: [P(1)], ambiguousSource: 'suggested' })).toBe(S.match.severalCould);
     expect(matchNote({ ...NO_MATCH_INFO, ambiguous: [P(1)], ambiguousSource: 'folder' })).toBe(S.match.severalMatchFolder);
-    expect(matchNote({ ...NO_MATCH_INFO, ambiguous: [P(1)], ambiguousSource: 'cph' })).toBe(S.match.severalMatch(true));
+    expect(matchNote({ ...NO_MATCH_INFO, ambiguous: [P(1)], ambiguousSource: 'filename' })).toBe(S.match.severalMatch);
   });
 
   it('problem subtitle drops a repeated "name:" prefix', () => {

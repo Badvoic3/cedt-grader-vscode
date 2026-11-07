@@ -44,7 +44,7 @@ describe('write actions on a suggested match', () => {
   });
 
   it('linked / name-matched problems are never asked', async () => {
-    for (const source of ['saved', 'filename', 'cph']) {
+    for (const source of ['saved', 'filename']) {
       let asked = 0;
       const ok = await confirmSuggestion({ source, ask: async () => (asked++, 'yes'), confirm: async () => {}, chooseAnother: async () => {} });
       expect(ok).toBe(true);
@@ -61,7 +61,7 @@ describe('the question before Submit', () => {
     expect(q('saved', false)).toBeNull();
   });
   it('automatic matches: asked once while "Confirm Before Submit" is on', () => {
-    for (const source of ['filename', 'folder', 'cph']) {
+    for (const source of ['filename', 'folder']) {
       expect(q(source)).toBe('confirmOnce');
       expect(q(source, false)).toBeNull();
     }

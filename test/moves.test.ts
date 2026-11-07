@@ -1,14 +1,9 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { cphProbPath } from '../src/mapping/cph';
 import {
   affectedByDelete,
   dismissKey,
   expired,
   type LocatedEntry,
-  moveCphProblem,
   planRename,
   reconnectCandidates,
   remapPath,
@@ -83,41 +78,3 @@ describe('deleted files → stale → expired after 30 days', () => {
   });
 });
 
-describe('CPH .prob follows a rename', () => {
-  function setup() {
-    const dir = mkdtempSync(join(tmpdir(), 'cphmove-'));
-    const oldSrc = join(dir, 'a.cpp');
-    const newSrc = join(dir, 'sub', 'b.cpp');
-    mkdirSync(join(dir, 'sub'));
-    writeFileSync(newSrc, '');
-    const from = cphProbPath(oldSrc);
-    mkdirSync(join(from, '..'), { recursive: true });
-    writeFileSync(from, JSON.stringify({ name: 'Local: a', url: oldSrc, tests: [{ id: 1, input: '1', output: '2' }], interactive: false, memoryLimit: 1024, timeLimit: 3000, srcPath: oldSrc, group: 'local', local: true }));
-    return { dir, oldSrc, newSrc, from, to: cphProbPath(newSrc) };
-  }
-
-  it('copies to the name CPH expects for the new path, updates srcPath/url, keeps the old as .bak', async () => {
-    const { oldSrc, newSrc, from, to } = setup();
-    const r = await moveCphProblem(oldSrc, newSrc);
-    expect(r.status).toBe('moved');
-    expect(to).toMatch(/sub[\\/]\.cph[\\/]\.b\.cpp_[0-9a-f]{32}\.prob$/);
-    const p = JSON.parse(readFileSync(to, 'utf8'));
-    expect(p).toMatchObject({ srcPath: newSrc, url: newSrc, tests: [{ id: 1, input: '1', output: '2' }] });
-    expect(existsSync(from)).toBe(false);
-    expect(JSON.parse(readFileSync(`${from}.bak`, 'utf8')).srcPath).toBe(oldSrc);
-  });
-
-  it('never overwrites CPH tests that already exist for the new path', async () => {
-    const { oldSrc, newSrc, from, to } = setup();
-    mkdirSync(join(to, '..'), { recursive: true });
-    writeFileSync(to, '{"mine":true}');
-    expect((await moveCphProblem(oldSrc, newSrc)).status).toBe('target-exists');
-    expect(readFileSync(to, 'utf8')).toBe('{"mine":true}');
-    expect(existsSync(from)).toBe(true);
-  });
-
-  it('nothing to move when the old file has no CPH tests', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'cphmove2-'));
-    expect((await moveCphProblem(join(dir, 'x.cpp'), join(dir, 'y.cpp'))).status).toBe('none');
-  });
-});

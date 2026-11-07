@@ -15,7 +15,7 @@ import { touch, writeAtomic } from './cacheFiles';
  */
 export interface TestcaseSet {
   fetchedAt: string;
-  /** Complete cases, ready for CPH. */
+  /** Complete cases, ready for the runner. */
   cases: GraderCase[];
   /** Cases the grader only showed in part (too large for student access). */
   truncated: { testcaseId: number; num: number }[];

@@ -206,7 +206,7 @@ export class FolderMode {
     return p ? vscode.Uri.file(p) : null;
   }
 
-  /** The file test cases belong to and CPH runs: folder mode → the run file (null until known); otherwise the active file. */
+  /** The file the runner runs: folder mode → the run file (null until known); otherwise the active file. */
   runUri(): vscode.Uri | null {
     if (!this.link) return this.host.fileUri;
     const p = submitFilePath(this.link.fsPath, this.role('run')?.file);
@@ -330,7 +330,7 @@ export class FolderMode {
     if (this.host.fileUri) await this.host.setActiveFile(this.host.fileUri);
   }
 
-  /** Ask once (only when detection found nothing) which file Submit sends / CPH runs. Saved with the folder link. */
+  /** Ask once (only when detection found nothing) which file Submit sends / the runner runs. Saved with the folder link. */
   async askRole(role: 'submit' | 'run', problem: Problem, near?: 'submit'): Promise<string | null> {
     const h = this.host;
     const link = this.link;

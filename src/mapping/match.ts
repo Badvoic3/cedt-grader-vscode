@@ -1,11 +1,9 @@
 import type { Problem } from '../grader/types';
 import { MATCH } from '../shared/constants';
-import type { CphProblem } from './cph';
-import { matchCphProblem } from './cph';
 import { applyPattern, DEFAULT_NAME_PATTERN, isDefaultPattern, stemFor } from './namePattern';
 
 /** How the current file's problem was chosen (an icon next to the problem name). */
-export type MatchSource = 'saved' | 'cph' | 'filename' | 'folder' | 'suggested';
+export type MatchSource = 'saved' | 'filename' | 'folder' | 'suggested';
 
 /** Zero-width characters the grader's problem list contains (`_&ZeroWidthSpace;`). */
 const ZERO_WIDTH = /[​‌‍﻿]/g;
@@ -89,7 +87,6 @@ export function fileStem(path: string): string {
 export interface MatchInput {
   /** Saved mapping for this file, if any. */
   savedProblemId: number | null;
-  cph: CphProblem | null;
   filePath: string;
   /** Problem list; empty/undefined when not loaded yet. */
   problems: Problem[] | undefined;
@@ -103,7 +100,7 @@ export interface MatchInput {
 export type MatchResult =
   | { kind: 'match'; problem: Problem; source: MatchSource; suggestions: Problem[] }
   /** Several problems match equally well (or suggestions too close to call): don't choose, ask. */
-  | { kind: 'ambiguous'; candidates: Problem[]; source: 'cph' | 'filename' | 'folder' | 'suggested' }
+  | { kind: 'ambiguous'; candidates: Problem[]; source: 'filename' | 'folder' | 'suggested' }
   /** A saved link whose problem is no longer on the grader (missing from the list). Kept, shown as unavailable. */
   | { kind: 'unavailable'; problemId: number; suggestions: Problem[] }
   | { kind: 'none'; suggestions: Problem[] };
@@ -112,12 +109,11 @@ export type MatchResult =
  * Matching order for the active file:
  *  1. a saved mapping (always wins; when its problem no longer exists it is
  *     reported as unavailable, never silently replaced),
- *  2. the CPH .prob file (grader URL or problem name),
- *  3. exact normalized match between file name and problem name,
- *  4. exact normalized match between the name of the folder the file is in
+ *  2. exact normalized match between file name and problem name,
+ *  3. exact normalized match between the name of the folder the file is in
  *     and a problem name (source 'folder'), so every file of a package folder
  *     named like a problem belongs to it,
- *  5. otherwise a suggestion: the closest candidate when its score reaches
+ *  4. otherwise a suggestion: the closest candidate when its score reaches
  *     MATCH.suggestMinScore and leads the next one by MATCH.suggestMinMargin
  *     (source 'suggested', not saved); close candidates → ambiguous
  *     ("Several problems could match"); below the threshold → the same rules
@@ -138,17 +134,6 @@ export function resolveProblem(input: MatchInput): MatchResult {
     return { kind: 'unavailable', problemId: input.savedProblemId, suggestions: suggest(normalizeName(fileStem(input.filePath)), problems) };
   }
   if (!loaded) return { kind: 'none', suggestions: [] };
-
-  if (input.cph) {
-    const byUrl = matchCphProblem({ ...input.cph, name: '' }, problems, input.baseUrl);
-    if (byUrl) return { kind: 'match', problem: byUrl, source: 'cph', suggestions: [] };
-    const cphName = normalizeName((input.cph.name ?? '').replace(/^Local:\s*/i, ''));
-    if (cphName) {
-      const hits = problems.filter((p) => normalizeName(p.name) === cphName || normalizeName(p.fullName) === cphName);
-      if (hits.length === 1) return { kind: 'match', problem: hits[0], source: 'cph', suggestions: [] };
-      if (hits.length > 1) return { kind: 'ambiguous', candidates: hits, source: 'cph' };
-    }
-  }
 
   const stem = normalizeName(fileStem(input.filePath));
   const fileHits = exactHits(stem, problems, input.namePattern);

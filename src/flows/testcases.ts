@@ -6,17 +6,14 @@ import type { SampleTable } from '../data/sampleTables';
 import { stripGraderKey, TestcaseStore } from '../data/testcaseStore';
 import { classifyConnectionError, type Problem } from '../grader';
 import { problemSubtitle } from '../mapping/match';
-import { pathExists as exists } from '../mapping/newFile';
 import { sampleCasesToImport } from '../mapping/sampleImport';
-import { type GraderCase, testsFolderOf } from '../mapping/testCases';
-import { caseCounts, writeCases } from '../mapping/writeCases';
+import type { GraderCase } from '../mapping/testCases';
 import { S } from '../shared/strings';
 import type { Host } from './host';
 
 /**
  * Loading test cases for the current problem: the grader's ("Load test cases")
  * and the statement's samples ("Load samples"), both into the runner's list.
- * "Save test cases as files" writes the grader's as `.in` / `.out` files.
  */
 export class TestCases {
   busy = false;
@@ -49,15 +46,12 @@ export class TestCases {
 
   /**
    * Download the grader's test cases (one at a time, cached in globalStorage)
-   * into the runner's list, which they merge with. `asFiles` ("Save test cases
-   * as files"): `<problem>/tests/<n>.in|out` files instead.
+   * into the runner's list, which they merge with.
    */
-  async loadTestcases(refresh = false, asFiles = false): Promise<void> {
+  async loadTestcases(refresh = false): Promise<void> {
     const h = this.host;
     const problem = h.currentProblem();
     if (!problem || !h.fileUri || this.busy) return;
-    // The files go next to the program, so folder mode needs its Runs file. The list belongs to the problem.
-    if (asFiles && h.folder.link && !(await h.folder.askRole('run', problem))) return;
     const file = h.folder.runUri() ?? h.fileUri;
     if (!problem.hasTestcase) {
       void vscode.window.showInformationMessage(S.testcases.none(problem.name));
@@ -100,18 +94,15 @@ export class TestCases {
       }
       const { set } = res;
       const total = set.cases.length + set.truncated.length;
-      const tooLarge = set.truncated.length ? S.testcases.tooLarge(set.truncated.length) : '';
       const programText = await this.programText(file);
       const { cases, key } = stripGraderKey(set.cases, programText);
       const keyNote = key ? S.testcases.keyRemoved : '';
       const refetch = S.testcases.downloadAgain;
       const extra = res.fromCache ? [refetch] : [];
-      const pick = asFiles
-        ? await this.saveAsFiles(problem, file, cases, total, tooLarge + keyNote, extra)
-        : await this.intoList(problem, cases, 'grader', (added, kept) => S.testcases.loaded(added, kept, total - set.cases.length) + keyNote, extra);
-      if (pick === refetch) await this.loadTestcases(true, asFiles);
+      const pick = await this.intoList(problem, cases, 'grader', (added, kept) => S.testcases.loaded(added, kept, total - set.cases.length) + keyNote, extra);
+      if (pick === refetch) await this.loadTestcases(true);
     } catch (err) {
-      if (classifyConnectionError(err)) h.reportError(err, () => this.loadTestcases(refresh, asFiles));
+      if (classifyConnectionError(err)) h.reportError(err, () => this.loadTestcases(refresh));
       else void vscode.window.showErrorMessage(S.testcases.failed(h.describe(err)));
     } finally {
       downloaded();
@@ -195,25 +186,5 @@ export class TestCases {
     );
     await h.runner.onActiveFile();
     return vscode.window.showInformationMessage(message(added, kept), ...extra);
-  }
-
-  /** "Save test cases as files": the tests folder is confirmed before it is created. */
-  private async saveAsFiles(problem: Problem, file: vscode.Uri, cases: GraderCase[], total: number, note: string, extra: string[]): Promise<string | undefined> {
-    const h = this.host;
-    const folder = testsFolderOf(file.fsPath, h.folder.link?.fsPath ?? null, problem.name, problem.id);
-    if (!(await this.confirmTestsFolder(folder, cases.length))) return undefined;
-    const r = await writeCases({ kind: 'files', folder }, cases, 'grader');
-    const open = S.testcases.showFolder;
-    const written = r.target === 'files' ? r.written : 0;
-    const pick = await vscode.window.showInformationMessage(S.testcases.savedFiles(written, total, vscode.workspace.asRelativePath(folder), note, caseCounts(r).join(', ')), open, ...extra);
-    if (pick === open) await vscode.commands.executeCommand('revealInExplorer', vscode.Uri.file(folder));
-    return pick;
-  }
-
-  /** Creating the tests folder is confirmed first. */
-  private async confirmTestsFolder(folder: string, n: number): Promise<boolean> {
-    if (await exists(folder)) return true;
-    const create = S.testcases.createFolder;
-    return (await vscode.window.showInformationMessage(S.testcases.createFolderQ(vscode.workspace.asRelativePath(folder), n), create)) === create;
   }
 }

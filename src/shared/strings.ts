@@ -20,7 +20,6 @@ const EN_HOW_LINKED = {
   chosen: 'chosen by you',
   filename: 'matched by file name',
   folder: 'matched by folder name',
-  cph: 'matched from CPH data',
   suggested: 'suggested',
 } as const;
 
@@ -29,7 +28,6 @@ const EN_PICK_HOW = {
   chosen: 'linked',
   filename: 'matched by file name',
   folder: 'matched by folder name',
-  cph: 'matched from CPH data',
   suggested: 'suggested',
 } as const;
 
@@ -41,7 +39,6 @@ const EN_S = {
     cancel: 'Cancel',
     dismiss: 'Dismiss',
     keep: 'Keep',
-    no: 'No',
     notNow: 'Not Now',
     showLog: 'Show Log',
     openSetting: 'Open Setting',
@@ -103,14 +100,7 @@ const EN_S = {
     whichLink: (file: string) => `${file} may be a moved file. Keep which link?`,
     noneOfThese: 'None of these',
     skip: 'Skip',
-    moveCphQuestion: (one: string | null, n: number) =>
-      one !== null ? `Move CPH test cases to the new file too? (${one})` : `Move CPH test cases of ${n} renamed files too?`,
-    moveCph: 'Move Test Cases',
     entry: (path: string, problem: string) => `${path}, linked to ${problem}`,
-    movedCph: (done: number, skipped: number) =>
-      `Moved CPH test cases for ${plural(done, 'file')} (old files kept as .bak)` +
-      (skipped ? `; ${skipped} skipped because the new file already has CPH tests.` : '.') +
-      ' CPH shows them when you switch to the file.',
   },
 
   autoDetect: {
@@ -121,27 +111,16 @@ const EN_S = {
     ambiguousKept: (n: number) => `Auto-detect found ${n} equally good matches; your choice is kept.`,
     noneKept: 'Auto-detect found no exact match; your choice is kept.',
     none: 'Auto-detect found no matching problem. Choose one from the list.',
-    how: { cph: 'from CPH data', filename: 'from the file name', folder: 'from the folder name', suggested: 'suggested' } as Record<string, string>,
+    how: { filename: 'from the file name', folder: 'from the folder name', suggested: 'suggested' } as Record<string, string>,
   },
 
   testcases: {
     none: (name: string) => `${name} has no test cases you can download.`,
     notAllowed: (name: string) => `The grader doesn't let you download the test cases of ${name}.`,
-    tooLarge: (n: number) => `; ${n} ${n === 1 ? 'was' : 'were'} too large to download`,
     downloadAgain: 'Download Again',
     downloadProgress: (done: number, total: number) => `Downloading ${done} / ${total}`,
-    createFolderQ: (folder: string, n: number) => `Create ${folder}/ for ${plural(n, 'test case')}?`,
-    createFolder: 'Create Folder',
-    unchanged: (n: number) => `${n} unchanged`,
-    keptExisting: (n: number) => `${n} existing files kept (not overwritten)`,
-    showFolder: 'Show Folder',
-    savedFiles: (written: number, total: number, folder: string, tooLarge: string, extra: string) =>
-      `Saved ${written} of ${plural(total, 'test case')} to ${folder}/${tooLarge}${extra ? ` (${extra})` : ''}.`,
     loaded: (added: number, kept: number, tooLarge: number) =>
       `Loaded ${plural(added, 'test case')}${kept ? `; ${kept} already in the list` : ''}${tooLarge ? `; ${tooLarge} too large to download` : ''}.`,
-    alreadyPresent: (n: number) => `${n} already present`,
-    updated: (n: number) => `${n} updated`,
-    added: (n: number) => `${n} added`,
     keyRemoved: ' The last line "KEY: …" was left out of the expected outputs: only the grader\'s own main prints it.',
     failed: (why: string) => `Couldn't load the test cases: ${why}`,
     suggestedQ: (name: string, sub: string) => `Load the test cases of ${name}${sub ? ` (${sub})` : ''}?`,
@@ -176,8 +155,6 @@ const EN_S = {
     linksDetail: 'Every problem you chose for a file in this window.',
     login: 'Saved login',
     loginDetail: 'Your saved password and login token (the same as Log Out).',
-    backups: 'Backup files from test-case imports',
-    backupsDetail: (n: number) => `${plural(n, 'old CPH test file')} (.prob.bak) this extension kept in your folders.`,
     confirm: (what: string) => `Clear ${what}? This can't be undone.`,
     clear: 'Clear',
     cleared: (size: string) => `Cached data cleared (${size} freed).`,
@@ -249,13 +226,13 @@ const EN_S = {
 
   match: {
     severalCould: 'Several problems could match this file. Choose one.',
-    severalMatch: (cph: boolean) => `Several problems match this ${cph ? "file's CPH data" : 'file name'}. Choose one.`,
+    severalMatch: 'Several problems match this file name. Choose one.',
     severalMatchFolder: 'Several problems match the name of this folder. Choose one.',
   },
 
   rename: {
     title: 'Rename file to match the problem',
-    prompt: (current: string) => `New name for ${current} (links, open editors and CPH tests follow; Undo works)`,
+    prompt: (current: string) => `New name for ${current} (links and open editors follow; Undo works)`,
     existsSuggest: (name: string, free: string) => `${name} already exists here. Try ${free}.`,
     invalid: {
       empty: 'Type a file name.',
@@ -314,15 +291,6 @@ const EN_S = {
     report: 'Report on GitHub',
   },
 
-  cphAutoShow: {
-    question: 'CPH opens its own panel every time you switch to a source file, which can hide this panel. Turn that off?',
-    detail: 'This changes CPH\'s setting "Auto Show Judge". You can still open CPH yourself, and turn the setting back on in VS Code\'s settings.',
-    turnOff: 'Turn it off',
-    keep: 'Keep it',
-    never: "Don't ask again",
-    done: 'CPH no longer opens its panel by itself.',
-    failed: (why: string) => `Couldn't change CPH's setting: ${why}`,
-  },
 
   attachment: {
     none: (name: string) => `${name} has no attachment on the grader.`,
@@ -422,7 +390,7 @@ const EN_W = {
   notLinkedToAProblem: "Not linked to a problem",
   chooseProblemTip: "Choose the grader problem for this file",
   autoDetect: "Auto-detect",
-  autoDetectAgainTip: "Find the problem for this file again (from the file name or CPH data)",
+  autoDetectAgainTip: "Find the problem for this file again (from the file name)",
   problemUnavailableMsg: "This problem is no longer available on the grader.",
   changeProblem: "Change problem",
   changeProblemTitle: "Link this file to another problem",
@@ -438,7 +406,6 @@ const EN_W = {
   loadTestCases: "Load test cases",
   downloadingTestCases: "Downloading the grader's test cases…",
   loadTestCasesTip: "Download the grader's test cases into this list",
-  saveTestcasesAsFiles: "Save the grader's test cases as .in / .out files",
   loadSampleCases: 'Load samples',
   readingSampleCases: 'Reading…',
   readingStatementTip: 'Reading the example table in the statement…',
@@ -446,17 +413,11 @@ const EN_W = {
   languageNotAccepted: (language: string | number) => `This problem doesn't accept ${language}. Wrong problem?`,
   change: "Change",
   acceptedLanguages: (languages: string | number) => `Accepted: ${languages}`,
-  cphTip: "Want to run test cases inside VS Code? Install the Competitive Programming Helper (CPH) extension.",
-  install: "Install",
-  cphInstallTip: "Open CPH's page in the Extensions view",
   crashTitle: "Grader Submit hit a problem",
   crashNote: "Nothing has been sent. GitHub opens with this text, and you decide whether to post it.",
   crashReport: "Report on GitHub",
   crashReportLabel: "Report text",
   notNow: "Not now",
-  notNowTip: "Hide until VS Code restarts",
-  dontShowAgainTip: "Don't show this tip again",
-  dontShowAgain: "Don't show again",
   gradingOtherFile: (problem: string | number) => `Grading ${problem} for another file…`,
   verdictPerTest: "Verdict per test",
   legendBox: "a box = tests scored together",
@@ -672,7 +633,6 @@ const EN_W_SOURCE = {
   saved: 'Chosen by you',
   filename: 'Matched by file name',
   folder: 'Matched by folder name',
-  cph: 'Matched from CPH data',
   suggested: 'Suggested',
 } as const;
 
@@ -769,10 +729,9 @@ const EN_G = {
   downloadTooLarge: (mb: number) => `The file is larger than ${mb} MB, so it wasn't downloaded.`,
 } as const;
 
-/** How the problem was chosen (`ViewState.problem.sourceLabel`). "from CPH" only when CPH data was actually used. */
+/** How the problem was chosen (`ViewState.problem.sourceLabel`). */
 const EN_MATCH_SOURCE = {
   saved: 'Chosen by you',
-  cph: 'Matched from CPH data',
   filename: 'Matched by file name',
   folder: 'Matched by folder name',
   suggested: 'Suggested — click to confirm',

@@ -135,7 +135,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider, vscode.Dispo
         if (Number.isInteger(m.problemId)) await c.findFileByName(m.problemId);
         return;
       case 'loadTestcases':
-        await c.loadTestcases(false, m.asFiles === true);
+        await c.loadTestcases(false);
         return;
       case 'loadSampleCases':
         await c.loadSampleCases();
@@ -184,9 +184,6 @@ export class SidebarProvider implements vscode.WebviewViewProvider, vscode.Dispo
         return;
       case 'dismissLinkedNotice':
         await c.dismissLinkedNotice();
-        return;
-      case 'cphTip':
-        if (m.action === 'install' || m.action === 'later' || m.action === 'never') await c.cphTip(m.action);
         return;
       case 'confirmProblem':
         if (Number.isInteger(m.problemId)) await c.mapCurrentFile(m.problemId);

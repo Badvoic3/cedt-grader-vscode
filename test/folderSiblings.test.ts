@@ -81,7 +81,6 @@ function session() {
     problems,
     cfg: { baseUrl: BASE, fileNamePattern: { pattern: '{name}.{ext}' } },
     data: { problemList: () => ({ problems }) },
-    cphSaveLocation: () => '',
     requestLog: () => undefined,
     emit: () => undefined,
     problemById: (id: number) => problems.find((p) => p.id === id),
@@ -578,7 +577,7 @@ describe('a package opened as the workspace folder', () => {
     pkgFiles();
     const s = session();
     expect(await s.folder.atRootPackage(uri(join(pkg, 'main.cpp')), 'filename')).toBe(true);
-    expect(await s.folder.atRootPackage(uri(join(pkg, 'main.cpp')), 'cph')).toBe(true);
+    expect(await s.folder.atRootPackage(uri(join(pkg, 'main.cpp')), 'filename')).toBe(true);
   });
 
   it('a suggestion, or a file further down, changes nothing', async () => {

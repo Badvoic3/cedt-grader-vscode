@@ -104,7 +104,7 @@ describe('zip layouts → roles (after planZip)', () => {
   });
 });
 
-describe('folder state: the file Submit sends / CPH runs', () => {
+describe('folder state: the file Submit sends / the runner runs', () => {
   const texts = M({ 'main.cpp': DRIVER(['student.h']), 'student.h': '// your code here', 'other.h': '' });
   const files = ['main.cpp', 'other.h', 'student.h'];
   const roles = detectFolderRoles(texts);
@@ -153,14 +153,14 @@ describe('package at the workspace root', () => {
   const role = { file: 'x', why: 'main' } as never;
   const roles = { run: role, submit: role };
 
-  it('needs a file-name or CPH match, so a suggestion costs no folder walk', () => {
-    expect(['filename', 'cph'].every(canBeRootPackage)).toBe(true);
+  it('needs a file-name match, so a suggestion costs no folder walk', () => {
+    expect(canBeRootPackage('filename')).toBe(true);
     expect(['suggested', 'saved', 'folder'].some(canBeRootPackage)).toBe(false);
   });
 
   it('needs both roles', () => {
     expect(isRootPackage('filename', roles)).toBe(true);
     expect(isRootPackage('suggested', roles)).toBe(false);
-    expect(isRootPackage('cph', { run: role, submit: null })).toBe(false);
+    expect(isRootPackage('filename', { run: role, submit: null })).toBe(false);
   });
 });

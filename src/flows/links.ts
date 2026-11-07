@@ -2,7 +2,6 @@ import * as vscode from 'vscode';
 import { readFile as fsReadFile, stat as fsStat } from 'node:fs/promises';
 import type { Problem } from '../grader';
 import { EXTENSION_LANGUAGE } from '../grader/languages';
-import { readCphProblem } from '../mapping/cph';
 import { BINARY_EXTS, excludeGlob, filterSourceFiles, rankCandidates, sourceGlob } from '../mapping/findByName';
 import { autoDetectOutcome, pickScope, unlinkScope } from '../mapping/linkActions';
 import { cleanName, fileNameFor, resolveProblem } from '../mapping/match';
@@ -197,14 +196,6 @@ export class Links {
         else await h.mapping.deleteAuto(vscode.Uri.file(f.fsPath));
         continue;
       }
-      // Same answer as opening the file: CPH data pointing to another problem wins over the name.
-      if (f.how !== 'chosen' && f.how !== 'cph') {
-        const cph = await readCphProblem(f.fsPath, h.cphSaveLocation());
-        if (cph) {
-          const r = resolveProblem({ savedProblemId: null, cph, filePath: f.fsPath, problems: h.data.problemList()?.problems, baseUrl: h.cfg.baseUrl, folders: this.sourceFile(f.fsPath).folders, namePattern: h.cfg.fileNamePattern.pattern });
-          if (r.kind === 'match' && r.problem.id !== problemId) continue;
-        }
-      }
       // A folder (folder mode / matched by its name) opens its submit file or main file; with no source file it has nothing to open.
       const open = at.kind === 'folder' ? await h.folder.itemFile(f.fsPath) : f.fsPath;
       if (open) found.push({ uri: vscode.Uri.file(open), t: (await fsStat(open).catch(() => null))?.mtimeMs ?? at.mtimeMs, how: f.how });
@@ -295,7 +286,7 @@ export class Links {
 
   /**
    * Take back a file's link or match, or the match of its folder. Works for every
-   * state: a chosen link is removed; a name / CPH match, a suggestion or a temporary
+   * state: a chosen link is removed; a name match, a suggestion or a temporary
    * link just becomes "not linked" (sticky; auto-detect leaves it alone).
    */
   async forgetLink(file: vscode.Uri, scope: 'file' | 'folder-name'): Promise<void> {
@@ -394,8 +385,7 @@ export class Links {
       await h.refreshProblems(false);
       if (!h.data.problemList()) return;
     }
-    const cph = await readCphProblem(uri.fsPath, h.cphSaveLocation());
-    const m = resolveProblem({ savedProblemId: null, cph, filePath: uri.fsPath, problems: h.data.problemList()!.problems, baseUrl: h.cfg.baseUrl, folders: this.sourceFile(uri.fsPath).folders, namePattern: h.cfg.fileNamePattern.pattern });
+    const m = resolveProblem({ savedProblemId: null, filePath: uri.fsPath, problems: h.data.problemList()!.problems, baseUrl: h.cfg.baseUrl, folders: this.sourceFile(uri.fsPath).folders, namePattern: h.cfg.fileNamePattern.pattern });
     const how = S.autoDetect.how;
     const ok = [{ id: 'ok', label: S.common.ok }];
     const o = autoDetectOutcome(entry?.problemId ?? null, m);
@@ -439,7 +429,7 @@ export class Links {
 
   /**
    * Unlink one other file from the notice: a chosen link is removed; a name /
-   * CPH match gets the explicit "not linked" state ("Don't match this file").
+   * name match gets the explicit "not linked" state ("Don't match this file").
    * Either way auto-detection leaves that file alone afterwards.
    */
   async unlinkLinkedFile(index: number): Promise<void> {
@@ -461,7 +451,7 @@ export class Links {
   /**
    * Rename the active file to "<clean problem name>.<ext>" (editable first).
    * Goes through WorkspaceEdit.renameFile, so open editors, links, our rename
-   * handling and the CPH prompt follow, and Undo works. Never overwrites.
+   * handling follow, and Undo works. Never overwrites.
    */
   async renameFileToProblem(): Promise<void> {
     const h = this.host;

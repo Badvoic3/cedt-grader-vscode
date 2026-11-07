@@ -44,7 +44,7 @@ describe('one matcher: problem → file gives the same answer as file → proble
 
   it('for every fixture file, the index lists it under exactly the problem it resolves to (or nowhere)', () => {
     for (const f of files) {
-      const r = resolveProblem({ savedProblemId: null, cph: null, filePath: f.fsPath, problems, baseUrl: BASE, folders: f.folders });
+      const r = resolveProblem({ savedProblemId: null, filePath: f.fsPath, problems, baseUrl: BASE, folders: f.folders });
       const owner = r.kind === 'match' ? r.problem.id : null;
       const listedUnder = [...index.entries()].filter(([, fs]) => fs.some((x) => x.fsPath === f.fsPath)).map(([id]) => id);
       expect(listedUnder, f.fsPath).toEqual(owner === null ? [] : [owner]);
@@ -70,13 +70,13 @@ describe('one matcher: problem → file gives the same answer as file → proble
   });
 
   it('folder step: exact folder name is its own source; ties between folder names ask', () => {
-    const r = resolveProblem({ savedProblemId: null, cph: null, filePath: '/w/x/01_expr_11/main.cpp', problems, baseUrl: BASE, folders: ['x', '01_expr_11'] });
+    const r = resolveProblem({ savedProblemId: null, filePath: '/w/x/01_expr_11/main.cpp', problems, baseUrl: BASE, folders: ['x', '01_expr_11'] });
     expect(r.kind === 'match' && r.source).toBe('folder');
     const twins = [...problems, P(7, 'dup_pkg'), P(8, 'DUP-PKG')];
-    const t = resolveProblem({ savedProblemId: null, cph: null, filePath: '/w/dup_pkg/main.cpp', problems: twins, baseUrl: BASE, folders: ['dup_pkg'] });
+    const t = resolveProblem({ savedProblemId: null, filePath: '/w/dup_pkg/main.cpp', problems: twins, baseUrl: BASE, folders: ['dup_pkg'] });
     expect(t).toMatchObject({ kind: 'ambiguous', source: 'folder' });
     // A folder named by the file-name pattern ("{id}_{name}") is exact too.
-    const pat = resolveProblem({ savedProblemId: null, cph: null, filePath: '/w/6_hw03_binary_search/main.cpp', problems, baseUrl: BASE, folders: ['6_hw03_binary_search'], namePattern: '{id}_{name}.{ext}' });
+    const pat = resolveProblem({ savedProblemId: null, filePath: '/w/6_hw03_binary_search/main.cpp', problems, baseUrl: BASE, folders: ['6_hw03_binary_search'], namePattern: '{id}_{name}.{ext}' });
     expect(pat.kind === 'match' && [pat.problem.id, pat.source]).toEqual([6, 'folder']);
   });
 

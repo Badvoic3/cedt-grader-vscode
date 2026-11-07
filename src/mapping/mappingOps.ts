@@ -1,10 +1,7 @@
-import { LIMITS, STALE_LINK_DAYS } from '../shared/constants';
-import { mkdir, readdir, readFile, rename, stat, writeFile } from 'node:fs/promises';
-import { basename, dirname, join, relative } from 'node:path';
+import { STALE_LINK_DAYS } from '../shared/constants';
+import { stat } from 'node:fs/promises';
+import { basename, relative } from 'node:path';
 import { isAtOrInside, isInside, pathKey, remapPath } from './paths';
-import { cphProbPath, type CphProblem } from './cph';
-import { EXCLUDED_DIRS } from './findByName';
-import { listFolderFiles } from './folderFiles';
 import type { MappingEntry } from './linkTable';
 
 /**
@@ -142,64 +139,4 @@ export async function pathExists(p: string): Promise<boolean> {
   } catch {
     return false;
   }
-}
-
-/**
- * CPH names its file after the full source path (`.<basename>_<md5(path)>.prob`)
- * and does not follow renames, so the tests of a renamed file are orphaned.
- * Copy them to the name CPH expects for the new path (srcPath updated; `url`
- * too when it held the old path, as for CPH's local problems) and keep the old
- * file as `.bak`. Never overwrites an existing .prob of the new path.
- */
-export async function moveCphProblem(
-  oldSrc: string,
-  newSrc: string,
-  saveLocation?: string,
-  /** Where the old .prob is now (a renamed folder took its `.cph/` along); default: where CPH put it. */
-  fromPath?: string,
-): Promise<{ status: 'moved' | 'none' | 'target-exists'; from: string; to: string; backup?: string }> {
-  const from = fromPath ?? cphProbPath(oldSrc, saveLocation);
-  const to = cphProbPath(newSrc, saveLocation);
-  if (!(await pathExists(from))) return { status: 'none', from, to };
-  if (await pathExists(to)) return { status: 'target-exists', from, to };
-  const p = JSON.parse(await readFile(from, 'utf8')) as CphProblem;
-  const moved: CphProblem = { ...p, srcPath: newSrc, ...(p.url === oldSrc ? { url: newSrc } : {}) };
-  await mkdir(dirname(to), { recursive: true });
-  await writeFile(to, JSON.stringify(moved));
-  const backup = `${from}.bak`;
-  await rename(from, backup); // the old file is kept as a backup
-  return { status: 'moved', from, to, backup };
-}
-
-/**
- * A folder was renamed: CPH files of the sources inside it are named after the
- * OLD full path (md5), so CPH no longer finds them. Without a CPH save
- * location they moved along (`<new folder>/…/.cph/`); with one they stayed
- * there. Returns each orphaned file with the source's old and new path.
- */
-export async function cphFilesAfterFolderRename(
-  oldFolder: string,
-  newFolder: string,
-  saveLocation?: string,
-): Promise<{ prob: string; oldSrc: string; newSrc: string }[]> {
-  let probs: string[];
-  if (saveLocation) {
-    probs = (await readdir(saveLocation).catch(() => [] as string[])).filter((f) => f.endsWith('.prob')).map((f) => join(saveLocation, f));
-  } else {
-    const all = await listFolderFiles(newFolder, LIMITS.indexMaxFiles, (name) => name === '.cph' || !EXCLUDED_DIRS.includes(name));
-    probs = all.filter((r) => /(^|\/)\.cph\/[^/]+\.prob$/.test(r)).map((r) => join(newFolder, r));
-  }
-  const out: { prob: string; oldSrc: string; newSrc: string }[] = [];
-  for (const prob of probs) {
-    let src: unknown;
-    try {
-      src = (JSON.parse(await readFile(prob, 'utf8')) as CphProblem).srcPath;
-    } catch {
-      continue;
-    }
-    if (typeof src !== 'string' || !isAtOrInside(src, oldFolder)) continue;
-    const newSrc = remapPath(src, oldFolder, newFolder);
-    if (newSrc && cphProbPath(newSrc, saveLocation) !== prob) out.push({ prob, oldSrc: src, newSrc });
-  }
-  return out;
 }

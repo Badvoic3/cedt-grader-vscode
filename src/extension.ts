@@ -102,7 +102,6 @@ function start(ctx: vscode.ExtensionContext, crash: CrashReporter): void {
     command('cedtGrader.runTests', () => controller.runTests()),
     command('cedtGrader.openTests', () => controller.toggleTests()),
     command('cedtGrader.loadTestcases', () => controller.loadTestcases(false)),
-    command('cedtGrader.saveTestcasesAsFiles', () => controller.loadTestcases(false, true)),
     command('cedtGrader.loadSampleCases', () => controller.loadSampleCases()),
     command('cedtGrader.showRequestLog', () => controller.showRequestLog()),
     command('cedtGrader.clearCache', () => controller.clearCachedData()),

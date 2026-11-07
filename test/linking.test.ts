@@ -1,12 +1,9 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { TestcaseStore } from '../src/data/testcaseStore';
 import { GraderClient, type Problem } from '../src/grader';
-import { cphProbPath, type CphProblem } from '../src/mapping/cph';
-import { importIntoCph } from '../src/mapping/cphImport';
-import { GRADER_ID_BASE, normalizeEol } from '../src/mapping/testCases';
 import { cleanName, decideSuggestion, fileNameFor, normalizeName, resolveProblem, scoreCandidates, suggest } from '../src/mapping/match';
 import { MATCH } from '../src/shared/constants';
 import { createFileNoOverwrite } from '../src/mapping/newFile';
@@ -45,7 +42,7 @@ describe('name normalization', () => {
 
 describe('matching order', () => {
   const m = (over: Partial<Parameters<typeof resolveProblem>[0]>) =>
-    resolveProblem({ savedProblemId: null, cph: null, filePath: '/w/x.cpp', problems, baseUrl: BASE, ...over });
+    resolveProblem({ savedProblemId: null, filePath: '/w/x.cpp', problems, baseUrl: BASE, ...over });
 
   it('1. a saved mapping always wins', () => {
     const r = m({ savedProblemId: 1759, filePath: '/w/00_Intro_11.cpp' });
@@ -60,13 +57,6 @@ describe('matching order', () => {
 
   it('saved mapping is kept while the problem list is not loaded yet', () => {
     expect(m({ savedProblemId: 999, problems: undefined })).toMatchObject({ kind: 'match', source: 'saved', problem: { id: 999 } });
-  });
-
-  it('2. CPH .prob: grader URL, then problem name', () => {
-    const byUrl = { name: 'whatever', url: `${BASE}/submissions/direct_edit_problem/1271`, tests: [] } as unknown as CphProblem;
-    expect(m({ cph: byUrl, filePath: '/w/00_Intro_11.cpp' })).toMatchObject({ source: 'cph', problem: { id: 1271 } });
-    const byName = { name: 'Local: 01 expr 12', url: '/w/x.cpp', tests: [] } as unknown as CphProblem;
-    expect(m({ cph: byName })).toMatchObject({ source: 'cph', problem: { id: 1272 } });
   });
 
   it('3. exact normalized file name', () => {
@@ -122,86 +112,6 @@ describe('new file for a problem', () => {
     expect(await createFileNoOverwrite(f, async () => 'open')).toBe('open');
     expect(readFileSync(f, 'utf8')).toBe('my code');
     expect(asked).toBe(1);
-  });
-});
-
-describe('CPH import', () => {
-  const cases = [
-    { testcaseId: 21187, num: 2, input: '5 5', output: '10' },
-    { testcaseId: 21186, num: 1, input: '1 2\r\n', output: '3\n' },
-  ];
-
-  function workspace() {
-    const dir = mkdtempSync(join(tmpdir(), 'cphimp-'));
-    const src = join(dir, 'sol.cpp');
-    writeFileSync(src, '');
-    return { dir, src, prob: cphProbPath(src) };
-  }
-
-  it('creates a .prob in CPH format with the problem name and grader URL', async () => {
-    const { src, prob } = workspace();
-    const r = await importIntoCph({ srcPath: src, problemName: '00_Intro_11', problemUrl: `${BASE}/submissions/direct_edit_problem/1360`, cases });
-    expect(r).toMatchObject({ created: true, backupPath: null, added: 2, alreadyPresent: 0, total: 2 });
-    const raw = readFileSync(prob, 'utf8');
-    expect(raw.startsWith('{"name"')).toBe(true); // plain JSON.stringify like CPH
-    const p = JSON.parse(raw) as CphProblem;
-    expect(p).toMatchObject({ name: '00_Intro_11', url: `${BASE}/submissions/direct_edit_problem/1360`, srcPath: src, interactive: false, memoryLimit: 1024, timeLimit: 3000, group: 'local', local: true });
-    // sorted by num, line endings normalized, trailing newline kept, ids marked
-    expect(p.tests).toEqual([
-      { id: GRADER_ID_BASE + 21186, input: '1 2\n', output: '3\n' },
-      { id: GRADER_ID_BASE + 21187, input: '5 5', output: '10' },
-    ]);
-  });
-
-  it('merges into an existing .prob (sanitized real file): backup, own tests first, no duplicates on re-import', async () => {
-    const { src, prob } = workspace();
-    mkdirSync(join(prob, '..'), { recursive: true });
-    const existing = JSON.parse(fixture('cph_local.prob')) as CphProblem;
-    writeFileSync(prob, JSON.stringify({ ...existing, srcPath: src, url: src }));
-    const original = readFileSync(prob, 'utf8');
-
-    const r1 = await importIntoCph({ srcPath: src, problemName: 'x', problemUrl: 'u', cases });
-    expect(r1).toMatchObject({ created: false, added: 2, total: 4 });
-    expect(r1.backupPath).toBe(`${prob}.bak`);
-    expect(readFileSync(`${prob}.bak`, 'utf8')).toBe(original);
-    const p = JSON.parse(readFileSync(prob, 'utf8')) as CphProblem;
-    expect(p.tests.slice(0, 2)).toEqual(existing.tests); // my tests untouched, first
-    expect(p.name).toBe('Local: test'); // existing metadata kept
-
-    const r2 = await importIntoCph({ srcPath: src, problemName: 'x', problemUrl: 'u', cases });
-    expect(r2).toMatchObject({ added: 0, alreadyPresent: 2, updated: 0, total: 4 });
-
-    // A changed grader case is updated in place (found by its marked id).
-    const r3 = await importIntoCph({ srcPath: src, problemName: 'x', problemUrl: 'u', cases: [{ ...cases[0], output: '11' }] });
-    expect(r3).toMatchObject({ updated: 1, added: 0, total: 4 });
-  });
-
-  it('a case equal to one of my own tests is not added again', async () => {
-    const { src, prob } = workspace();
-    mkdirSync(join(prob, '..'), { recursive: true });
-    writeFileSync(prob, JSON.stringify({ name: 'x', url: src, tests: [{ id: 1, input: '5 5', output: '10' }], interactive: false, memoryLimit: 1024, timeLimit: 3000, srcPath: src, group: 'local', local: true }));
-    const r = await importIntoCph({ srcPath: src, problemName: 'x', problemUrl: 'u', cases: [cases[0]] });
-    expect(r).toMatchObject({ added: 0, alreadyPresent: 1, total: 1 });
-  });
-
-  it('an unreadable .prob is left alone', async () => {
-    const { src, prob } = workspace();
-    mkdirSync(join(prob, '..'), { recursive: true });
-    writeFileSync(prob, '{broken');
-    await expect(importIntoCph({ srcPath: src, problemName: 'x', problemUrl: 'u', cases })).rejects.toThrow(/not changed/);
-    expect(readFileSync(prob, 'utf8')).toBe('{broken');
-    expect(existsSync(`${prob}.bak`)).toBe(false);
-  });
-
-  it('honours cph.general.saveLocation', async () => {
-    const { src } = workspace();
-    const save = mkdtempSync(join(tmpdir(), 'cphsave-'));
-    const r = await importIntoCph({ srcPath: src, saveLocation: save, problemName: 'x', problemUrl: 'u', cases });
-    expect(r.probPath.startsWith(save)).toBe(true);
-  });
-
-  it('normalizeEol', () => {
-    expect(normalizeEol('a\r\nb\rc\n')).toBe('a\nb\nc\n');
   });
 });
 

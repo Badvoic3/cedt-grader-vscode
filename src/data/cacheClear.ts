@@ -2,14 +2,11 @@ import { KEYS } from '../shared/stateKeys';
 
 /**
  * "Clear Cached Data": what each checkbox removes. Pure (no `vscode`
- * import); the controller applies the plan.
- *
- * Nothing in the workspace is deleted except the `.prob.bak` files this
- * extension recorded creating, and only with "backups" selected.
+ * import); the controller applies the plan. Nothing in the workspace is deleted.
  */
-export type ClearCategory = 'files' | 'custom' | 'lists' | 'links' | 'login' | 'backups';
+export type ClearCategory = 'files' | 'custom' | 'lists' | 'links' | 'login';
 
-export const CLEAR_ORDER: readonly ClearCategory[] = ['files', 'custom', 'lists', 'links', 'login', 'backups'];
+export const CLEAR_ORDER: readonly ClearCategory[] = ['files', 'custom', 'lists', 'links', 'login'];
 
 export const CLEAR_DEFAULTS: Readonly<Record<ClearCategory, boolean>> = {
   files: true,
@@ -17,7 +14,6 @@ export const CLEAR_DEFAULTS: Readonly<Record<ClearCategory, boolean>> = {
   lists: true,
   links: false,
   login: false,
-  backups: false,
 };
 
 export interface ClearPlan {
@@ -33,8 +29,6 @@ export interface ClearPlan {
   allLinks: boolean;
   /** Same as Log Out: delete the saved password and token. */
   logout: boolean;
-  /** Delete the recorded `.prob.bak` files. */
-  backups: boolean;
   /** Keys to remove (only keys that exist). */
   workspaceKeys: string[];
   globalKeys: string[];
@@ -65,28 +59,9 @@ export function planClear(
     staleLinks: selected.has('lists') && !selected.has('links'),
     allLinks: selected.has('links'),
     logout: selected.has('login'),
-    backups: selected.has('backups'),
     workspaceKeys: [...ws].filter(has(present.workspace)).sort(),
     globalKeys: [...gl].filter(has(present.global)).sort(),
   };
-}
-
-// ------------------------------------------------------------------ backups
-
-export interface BackupRecord {
-  path: string;
-  /** ISO time it was (last) written. */
-  at: string;
-}
-
-/** Remember a backup this extension wrote (one record per path, newest time). */
-export function recordBackup(list: readonly BackupRecord[], path: string, at: Date): BackupRecord[] {
-  return [...list.filter((b) => b.path !== path), { path, at: at.toISOString() }];
-}
-
-/** Recorded backups that may be deleted: our own `.prob.bak` files that still exist. */
-export function backupsToDelete(list: readonly BackupRecord[], exists: (path: string) => boolean): BackupRecord[] {
-  return list.filter((b) => /\.prob\.bak$/.test(b.path) && exists(b.path));
 }
 
 /** Keep only the entries of `record` whose key is one of `ids` (statement view state of statements still cached). */

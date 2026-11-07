@@ -68,7 +68,6 @@
     "competitive programming",
     "submit",
     "test cases",
-    "CPH",
     "Thai"
   ],
   "activationEvents": [
@@ -220,12 +219,6 @@
         "title": "%command.loadTestcases.title%",
         "category": "%command.category%",
         "icon": "$(beaker)"
-      },
-      {
-        "command": "cedtGrader.saveTestcasesAsFiles",
-        "title": "%command.saveTestcasesAsFiles.title%",
-        "category": "%command.category%",
-        "icon": "$(save-as)"
       },
       {
         "command": "cedtGrader.loadSampleCases",
@@ -529,17 +522,6 @@
             },
             "completionEvents": [
               "onContext:cedtGrader.submitted"
-            ]
-          },
-          {
-            "id": "cph",
-            "title": "%walkthrough.cph.title%",
-            "description": "%walkthrough.cph.description%",
-            "media": {
-              "markdown": "%walkthrough.cph.media%"
-            },
-            "completionEvents": [
-              "extensionInstalled:DivyanshuAgrawal.competitive-programming-helper"
             ]
           }
         ]

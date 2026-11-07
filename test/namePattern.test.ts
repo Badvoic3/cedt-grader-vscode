@@ -60,10 +60,10 @@ describe('matcher with a pattern (one rule, both directions)', () => {
   const files = [F('/w/1360_00_Intro_11.cpp'), F('/w/1271_01-expr-11.py'), F('/w/01_Expr_12.cpp'), F('/w/1360_notes.cpp'), F('/w/sol.cpp')];
 
   it('a file named by the pattern is "Matched by file name"', () => {
-    const r = resolveProblem({ savedProblemId: null, cph: null, filePath: '/w/1360_00_Intro_11.cpp', problems, baseUrl: BASE, namePattern: ID_NAME });
+    const r = resolveProblem({ savedProblemId: null, filePath: '/w/1360_00_Intro_11.cpp', problems, baseUrl: BASE, namePattern: ID_NAME });
     expect(r).toMatchObject({ kind: 'match', source: 'filename', problem: { id: 1360 } });
     // Without the pattern it's at most a suggestion.
-    const plain = resolveProblem({ savedProblemId: null, cph: null, filePath: '/w/1360_00_Intro_11.cpp', problems, baseUrl: BASE });
+    const plain = resolveProblem({ savedProblemId: null, filePath: '/w/1360_00_Intro_11.cpp', problems, baseUrl: BASE });
     expect(plain.kind === 'match' ? plain.source : plain.kind).not.toBe('filename');
   });
 

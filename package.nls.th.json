@@ -24,7 +24,6 @@
   "command.toggleFolderMode.title": "สลับระหว่างการเชื่อมเฉพาะไฟล์นี้กับเชื่อมทั้งโฟลเดอร์",
   "command.loadTestcases.title": "โหลด test case จาก Grader",
   "command.loadSampleCases.title": "โหลดตัวอย่างจากโจทย์",
-  "command.saveTestcasesAsFiles.title": "บันทึก test case เป็นไฟล์ .in / .out",
   "command.clearCache.title": "ล้างข้อมูลแคช…",
   "command.openWalkthrough.title": "เริ่มต้นใช้งาน",
   "command.openTroubleshooting.title": "การแก้ปัญหาเบื้องต้น",
@@ -48,7 +47,7 @@
   "config.baseUrl.description": "URL หลักของเซิร์ฟเวอร์ cafe-grader-web อ่านจากการตั้งค่าระดับผู้ใช้ (User Settings) เท่านั้น (การตั้งค่าใน workspace ไม่สามารถเปลี่ยนปลายทางที่ส่งรหัสผ่านไปได้)",
   "config.username.description": "ชื่อผู้ใช้สำหรับเข้าสู่ระบบ Grader ส่วนรหัสผ่านจะเก็บไว้ใน Keychain ของระบบปฏิบัติการ (VS Code SecretStorage) และไม่ถูกบันทึกไว้ในการตั้งค่า",
   "config.pollIntervalSeconds.description": "ระยะเวลา (วินาที) ระหว่างการเช็กสถานะขณะรอผลตรวจ (ต่ำสุด 3 วินาที) ระบบจะเช็กเฉพาะหลังส่งงานเสร็จใหม่ๆ และหยุดเช็กเมื่อครบ 3 นาที",
-  "config.confirmBeforeSubmit.description": "ถามยืนยัน 1 ครั้งก่อนส่งไฟล์ที่ระบบจับคู่โจทย์ให้อัตโนมัติ (จากชื่อไฟล์ ชื่อโฟลเดอร์ หรือข้อมูล CPH) เมื่อส่งแล้วระบบจะจำไว้เป็นโจทย์ที่คุณเลือกเอง และไม่ถามซ้ำอีก โจทย์ที่คุณเลือกเองจะไม่ถามเลย ส่วนโจทย์ที่แนะนำจะถามทุกครั้ง",
+  "config.confirmBeforeSubmit.description": "ถามยืนยัน 1 ครั้งก่อนส่งไฟล์ที่ระบบจับคู่โจทย์ให้อัตโนมัติ (จากชื่อไฟล์หรือชื่อโฟลเดอร์) เมื่อส่งแล้วระบบจะจำไว้เป็นโจทย์ที่คุณเลือกเอง และไม่ถามซ้ำอีก โจทย์ที่คุณเลือกเองจะไม่ถามเลย ส่วนโจทย์ที่แนะนำจะถามทุกครั้ง",
   "config.saveBeforeSubmit.description": "บันทึกไฟล์ลงดิสก์ก่อนส่ง เพื่อให้ Grader ได้รับโค้ดตรงตามไฟล์ที่บันทึกไว้ (คำสั่งที่ทำงานตอนบันทึก เช่น จัดรูปแบบโค้ดอัตโนมัติ จะทำงานก่อน) ปิดการตั้งค่านี้หากต้องการส่งข้อความในเอดิเตอร์โดยไม่บันทึกไฟล์",
   "config.revealResultAfterSubmit.description": "เมื่อตรวจเสร็จแล้ว ให้เปิดส่วน **ผลลัพธ์** (Result) ในแผงและเลื่อนหน้าจอไปที่ส่วนนั้น โดยที่เคอร์เซอร์พิมพ์งานยังอยู่ในเอดิเตอร์ตามเดิม",
   "config.debugRequests.description": "บันทึกทุกคำขอที่ส่งไปยัง Grader (method, path, status) และสถานะแคช (hit/miss) ลงในช่อง Output ชื่อ **Grader Submit: Requests** เพื่อตรวจสอบจำนวนคำขอ โดยจะไม่บันทึกรหัสผ่านหรือโทเค็นเด็ดขาด",
@@ -78,8 +77,5 @@
   "walkthrough.checkProblem.media": "media/walkthrough/th/checkProblem.md",
   "walkthrough.submit.title": "ส่งงาน (Submit)",
   "walkthrough.submit.description": "กด **Submit ไปยัง Grader** ในแผง เมื่อตรวจเสร็จจะเห็นผลตรวจของแต่ละเคสและคะแนนที่นับทันที\n[ส่งไฟล์ปัจจุบัน](command:cedtGrader.submit)",
-  "walkthrough.submit.media": "media/walkthrough/th/submit.md",
-  "walkthrough.cph.title": "ตัวเลือกเสริม: ติดตั้ง CPH",
-  "walkthrough.cph.description": "Competitive Programming Helper ช่วยรัน test case บนเครื่องของคุณ เมื่อติดตั้งแล้ว ปุ่ม **โหลด test case** จะดึง test case จาก Grader เข้าสู่ CPH ทันที (ฟีเจอร์อื่นๆ ทั้งหมดใช้งานได้โดยไม่ต้องมี CPH)\n[ดูส่วนขยาย CPH](command:extension.open?%5B%22DivyanshuAgrawal.competitive-programming-helper%22%5D)",
-  "walkthrough.cph.media": "media/walkthrough/th/cph.md"
+  "walkthrough.submit.media": "media/walkthrough/th/submit.md"
 }

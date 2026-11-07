@@ -8,8 +8,8 @@ import { S } from '../shared/strings';
  *
  * Sources, strongest first:
  *  - chosen:   saved links (chosen by the user, or a confirmed suggestion);
- *  - cph / filename: remembered auto-matches (recorded when the file was open
- *    and matched by CPH data or by its name);
+ *  - filename: remembered auto-matches (recorded when the file was open and
+ *    matched by its name);
  *  - filename / suggested: what the one matcher (matchIndex.ts) says for the
  *    workspace's source files, opened or not (cached index), plus confident
  *    suggestions remembered while open (treated like links).
@@ -20,7 +20,7 @@ import { S } from '../shared/strings';
  * they are in, count as ONE item (the folder), so a package (main.cpp +
  * headers) is one "file" for the notice, the row click and the submit check.
  */
-export type LinkHow = 'chosen' | 'cph' | 'filename' | 'folder' | 'suggested';
+export type LinkHow = 'chosen' | 'filename' | 'folder' | 'suggested';
 
 export interface ProblemFile {
   fsPath: string;
@@ -33,12 +33,12 @@ export interface AutoMatch {
   fsPath: string;
   problemId: number;
   /** 'suggested': the open file's closest (not exact) match; used only to open files (row click), never counted as linked. */
-  how: 'cph' | 'filename' | 'folder' | 'suggested';
+  how: 'filename' | 'folder' | 'suggested';
   /** ms */
   at: number;
 }
 
-const RANK: Record<LinkHow, number> = { chosen: 0, cph: 1, filename: 2, folder: 3, suggested: 4 };
+const RANK: Record<LinkHow, number> = { chosen: 0, filename: 1, folder: 2, suggested: 3 };
 
 /**
  * The one stable order for files of a problem (notice, go-to-file pick,
@@ -145,8 +145,7 @@ export function linkedNotice(files: ProblemFile[], currentFsPath: string, rel: (
 /**
  * Remembered auto-matches after a rename: an entry follows the file only if
  * the one matcher still gives the same problem for the new path
- * (`stillMatches`); CPH matches are dropped (CPH's file belongs to the old
- * path). Returns the new list.
+ * (`stillMatches`). Returns the new list.
  */
 export function autoAfterRename(
   auto: AutoMatch[],
@@ -162,7 +161,7 @@ export function autoAfterRename(
       out.push(a);
       continue;
     }
-    if (a.how !== 'cph' && stillMatches(to, a.problemId)) out.push({ ...a, fsPath: to });
+    if (stillMatches(to, a.problemId)) out.push({ ...a, fsPath: to });
   }
   return out;
 }

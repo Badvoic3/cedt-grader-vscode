@@ -4,13 +4,13 @@ import { pathKey } from './paths';
 
 /**
  * ONE matcher for both directions (no `vscode` import, unit tested):
- *  - file → problem: `matchFile` (= `resolveProblem` without a saved link or CPH data);
+ *  - file → problem: `matchFile` (= `resolveProblem` without a saved link);
  *  - problem → file: `buildMatchIndex` runs the very same function over the
  *    workspace's source files, so clicking a problem finds exactly the files
  *    that would show that problem when opened.
  * Same normalization, confidence score, threshold, tie rule and folder/tag
  * bonus (src/mapping/match.ts, MATCH in src/shared/constants.ts). Saved
- * links and CPH data are layered on top by the caller (they win).
+ * links are layered on top by the caller (they win).
  */
 export interface SourceFile {
   fsPath: string;
@@ -41,7 +41,7 @@ export interface FileMatch {
 
 /** The problem a file would show when opened (null: none, below the threshold, or a tie). */
 export function matchFile(file: SourceFile, problems: Problem[], baseUrl: string, namePattern?: string): FileMatch | null {
-  const r = resolveProblem({ savedProblemId: null, cph: null, filePath: file.fsPath, problems, baseUrl, folders: file.folders, namePattern });
+  const r = resolveProblem({ savedProblemId: null, filePath: file.fsPath, problems, baseUrl, folders: file.folders, namePattern });
   if (r.kind !== 'match') return null;
   if (r.source !== 'filename' && r.source !== 'folder' && r.source !== 'suggested') return null;
   return { problemId: r.problem.id, how: r.source };

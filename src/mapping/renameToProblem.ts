@@ -5,7 +5,7 @@ import { isDefaultPattern, stemFor } from './namePattern';
 /**
  * "Rename file to match the problem" (no `vscode` import, unit tested).
  * The rename itself goes through `WorkspaceEdit.renameFile` in the
- * controller, so editors, links, our rename handling and the CPH prompt
+ * controller, so editors, links and our rename handling
  * all follow, and Undo works.
  */
 

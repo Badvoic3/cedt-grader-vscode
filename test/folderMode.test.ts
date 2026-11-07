@@ -1,19 +1,18 @@
 /**
  * Folder mode: a problem linked to a folder (a package: driver + headers).
- * Link storage in `.cedt-grader.json`, nearest-folder resolution, the
+ * Old links in `.cedt-grader.json`, nearest-folder resolution, the
  * submit file following renames / deletes, "files for this problem" seeing
  * a folder as one item, and `.h` headers as C++ (or C).
  */
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { cphProbPath } from '../src/mapping/cph';
 import { chooseLanguage, type Language } from '../src/grader';
 import { listFolderFiles } from '../src/mapping/folderFiles';
 import { pickScope } from '../src/mapping/linkActions';
 import { mappingKey, parseMappingFile, ROOT_KEY } from '../src/migration/oldLinks';
-import { affectedByDelete, cphFilesAfterFolderRename, fileLinksInside, type LocatedEntry, moveCphProblem, nearestFolderLink, planRename, submitFileAfterMove, submitFileDeleted, submitFilePath, unlinkedAround } from '../src/mapping/mappingOps';
+import { affectedByDelete, fileLinksInside, type LocatedEntry, nearestFolderLink, planRename, submitFileAfterMove, submitFileDeleted, submitFilePath, unlinkedAround } from '../src/mapping/mappingOps';
 import { folderNameFor } from '../src/mapping/match';
 import { isAtOrInside, isInside } from '../src/mapping/paths';
 import { type AutoMatch, linkedNotice, mergeProblemFiles } from '../src/mapping/problemFiles';
@@ -190,53 +189,3 @@ describe('headers are C++ (or C)', () => {
   });
 });
 
-describe('CPH test cases follow a renamed folder (their file name holds the md5 of the old path)', () => {
-  const prob = (src: string) => JSON.stringify({ name: 'x', url: 'u', tests: [{ id: 1, input: '1', output: '2' }], interactive: false, memoryLimit: 1, timeLimit: 1, srcPath: src, group: 'g', local: false });
-
-  it('without a save location: the .cph folder moved along; each .prob is renamed for the new path (.bak kept)', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'cedt-cphmv-'));
-    const oldDir = join(root, 'student');
-    const newDir = join(root, 'da68_x');
-    mkdirSync(join(oldDir, '.cph'), { recursive: true });
-    const oldMain = join(oldDir, 'main.cpp');
-    writeFileSync(oldMain, 'int main(){}');
-    writeFileSync(cphProbPath(oldMain), prob(oldMain));
-    writeFileSync(join(oldDir, '.cph', '.other.cpp_x.prob'), prob('/elsewhere/other.cpp')); // not from this folder
-    renameSync(oldDir, newDir);
-    const found = await cphFilesAfterFolderRename(oldDir, newDir);
-    expect(found.map((f) => [f.oldSrc, f.newSrc])).toEqual([[oldMain, join(newDir, 'main.cpp')]]);
-    const r = await moveCphProblem(found[0].oldSrc, found[0].newSrc, undefined, found[0].prob);
-    expect(r.status).toBe('moved');
-    const moved = JSON.parse(readFileSync(cphProbPath(join(newDir, 'main.cpp')), 'utf8'));
-    expect(moved.srcPath).toBe(join(newDir, 'main.cpp'));
-    expect(moved.tests).toHaveLength(1);
-    expect(existsSync(`${found[0].prob}.bak`)).toBe(true);
-    expect(await cphFilesAfterFolderRename(oldDir, newDir)).toEqual([]); // nothing orphaned any more
-  });
-
-  it('finds .prob files in sub-folders, not in build or dependency folders', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'cedt-cphmv-'));
-    const oldDir = join(root, 'pkg');
-    const newDir = join(root, 'renamed');
-    const place = (rel: string) => {
-      const prob = cphProbPath(join(oldDir, rel));
-      const moved = join(newDir, prob.slice(oldDir.length));
-      mkdirSync(dirname(moved), { recursive: true });
-      writeFileSync(moved, JSON.stringify({ name: 'x', url: '', tests: [], srcPath: join(oldDir, rel) }));
-    };
-    place('sub/deep/a.cpp');
-    place('node_modules/b.cpp');
-    const found = await cphFilesAfterFolderRename(oldDir, newDir);
-    expect(found.map((f) => f.newSrc)).toEqual([join(newDir, 'sub', 'deep', 'a.cpp')]);
-  });
-
-  it('with a CPH save location: the .prob stayed there and is found by its srcPath', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'cedt-cphmv-'));
-    const save = join(root, 'cph-store');
-    mkdirSync(save);
-    const oldMain = join(root, 'pkg', 'main_dense.cpp');
-    writeFileSync(cphProbPath(oldMain, save), prob(oldMain));
-    const found = await cphFilesAfterFolderRename(join(root, 'pkg'), join(root, 'd57_q1_dense'), save);
-    expect(found.map((f) => f.newSrc)).toEqual([join(root, 'd57_q1_dense', 'main_dense.cpp')]);
-  });
-});

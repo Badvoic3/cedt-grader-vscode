@@ -1,7 +1,5 @@
 import * as vscode from 'vscode';
-import { existsSync } from 'node:fs';
-import { rm, stat as fsStat } from 'node:fs/promises';
-import { type BackupRecord, backupsToDelete, CLEAR_DEFAULTS, CLEAR_ORDER, type ClearCategory, keepIds, planClear, recordBackup } from '../data/cacheClear';
+import { CLEAR_DEFAULTS, CLEAR_ORDER, type ClearCategory, keepIds, planClear } from '../data/cacheClear';
 import { cleanupCache, clearCacheFiles, enforceLimit, formatBytes, scanCache, statementIds, totalBytes } from '../data/cacheFiles';
 import type { CaseSource } from '../runner/types';
 import { CACHE, TIMING } from '../shared/constants';
@@ -12,8 +10,7 @@ import type { Host } from './host';
 /**
  * Downloaded-file housekeeping (rules in src/data/cacheFiles.ts and
  * src/data/cacheClear.ts): the size limit after every write, the daily
- * cleanup, `.prob.bak` records and "Clear Cached Data…". Never touches the
- * workspace except the recorded backups the user ticks.
+ * cleanup and "Clear Cached Data…". Never touches the workspace.
  */
 export class CacheCare {
   /** Size-limit runs, one at a time. */
@@ -77,16 +74,6 @@ export class CacheCare {
     if (Object.keys(kept).length !== Object.keys(views).length) await g.update(KEYS.statementView, kept);
   }
 
-  /** Remember a `.prob.bak` this extension wrote, so "Clear Cached Data" can offer to remove it (and nothing else). */
-  async recordBackup(path: string | null | undefined): Promise<void> {
-    if (!path) return;
-    await this.host.ctx.globalState.update(KEYS.backups, recordBackup(this.backups(), path, new Date()));
-  }
-
-  private backups(): BackupRecord[] {
-    return this.host.ctx.globalState.get<BackupRecord[]>(KEYS.backups, []);
-  }
-
   /**
    * "Clear Cached Data": shows the size in use, lets the user tick what to
    * clear (`CLEAR_DEFAULTS`), confirms (modal: can't be undone), then clears.
@@ -98,7 +85,6 @@ export class CacheCare {
     const fileBytes = totalBytes(files);
     const listKeys = ws.keys().filter((k) => k.startsWith(KEYS.problemsPrefix));
     const listBytes = listKeys.reduce((n, k) => n + Buffer.byteLength(JSON.stringify(ws.get(k)) ?? ''), 0);
-    const backups = backupsToDelete(this.backups(), existsSync);
     const linkCount = (await h.mapping.allEntries()).length;
     const customCount = await h.cases.customCount();
     const rows: Record<ClearCategory, { label: string; detail: string; description?: string; show: boolean }> = {
@@ -107,7 +93,6 @@ export class CacheCare {
       lists: { label: S.cache.lists, detail: S.cache.listsDetail, description: formatBytes(listBytes), show: true },
       links: { label: S.cache.links, detail: S.cache.linksDetail, description: linkCount ? String(linkCount) : undefined, show: true },
       login: { label: S.cache.login, detail: S.cache.loginDetail, show: true },
-      backups: { label: S.cache.backups, detail: S.cache.backupsDetail(backups.length), show: backups.length > 0 },
     };
     const items = CLEAR_ORDER.filter((c) => rows[c].show).map((c) => ({
       id: c,
@@ -144,18 +129,6 @@ export class CacheCare {
     for (const k of plan.workspaceKeys) await ws.update(k, undefined);
     for (const k of plan.globalKeys) await h.ctx.globalState.update(k, undefined);
     if (plan.resetData) freed += listBytes;
-    if (plan.backups) {
-      for (const b of backups) {
-        try {
-          const size = (await fsStat(b.path)).size;
-          await rm(b.path, { force: true });
-          freed += size;
-        } catch {
-          /* already gone */
-        }
-      }
-      await h.ctx.globalState.update(KEYS.backups, undefined);
-    }
     await this.afterClear(plan.resetData);
     void vscode.window.setStatusBarMessage(S.cache.cleared(formatBytes(freed)), TIMING.statusMessageMs * 2);
   }

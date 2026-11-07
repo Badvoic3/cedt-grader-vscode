@@ -4,7 +4,7 @@ import { pathKey } from './paths';
  * Folder mode: the two roles of a package folder (no `vscode` import; unit tested).
  *
  *  - run file: the program with `main()` (the provided driver, e.g. `main.cpp`,
- *    `main_dense.cpp`); CPH runs it and the grader's test cases belong to it;
+ *    `main_dense.cpp`); the runner runs it;
  *  - submit file: the file the student edits and submits (e.g. `student.h`,
  *    `densegraph.h`); the grader compiles it with its own driver.
  *
@@ -40,9 +40,9 @@ export function isRootPackage(source: string, roles: Pick<FolderRoles, 'run' | '
   return canBeRootPackage(source) && !!roles.run && !!roles.submit;
 }
 
-/** Only a file-name or CPH match, never a suggestion. */
+/** Only a file-name match, never a suggestion. */
 export function canBeRootPackage(source: string): boolean {
-  return source === 'filename' || source === 'cph';
+  return source === 'filename';
 }
 
 const SOURCE = /\.(c|cc|cpp|cxx)$/i;
@@ -128,7 +128,7 @@ export interface FolderState {
 }
 
 /**
- * The file Submit sends / CPH runs, with why: the user's choice (while it is
+ * The file Submit sends / the runner runs, with why: the user's choice (while it is
  * still a file of the folder), else detected (a chosen run file decides the
  * submit file), else the folder's only source file (submit only); null = asked when needed.
  */

@@ -3,7 +3,7 @@
  * the grader, attachments, statements and `.cedt-grader.json`. The inputs are
  * the reviewer's probe inputs (H1, M1, M2, L1–L9). No network: fake fetch.
  */
-import { existsSync, mkdtempSync, readdirSync } from 'node:fs';
+import { mkdtempSync, readdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { strToU8, zipSync } from 'fflate';
@@ -17,7 +17,6 @@ import { isProtectedName, planZip, writeExtracted } from '../src/mapping/attachm
 import { folderNameFor, fileNameFor } from '../src/mapping/match';
 import { parseMappingFile } from '../src/migration/oldLinks';
 import { nearestFolderLink } from '../src/mapping/mappingOps';
-import { saveTestcasesAsFiles, testsFolderFor } from '../src/mapping/testCases';
 import { ATTACHMENT, STATEMENT } from '../src/shared/constants';
 import { SecretLedger, secretKey } from '../src/shared/secrets';
 import { KEYS } from '../src/shared/stateKeys';
@@ -320,28 +319,16 @@ describe('L1: test-case numbers from the server never become paths', () => {
     expect((await client.listTestcases(201))?.map((t) => t.num)).toEqual([1, 2]);
   });
 
-  it('saving files: a hostile num (e.g. from an old cache) stays inside the tests folder (probe1 #8)', async () => {
-    const base = mkdtempSync(join(tmpdir(), 'cedt-sec-l1-'));
-    const tests = join(base, 'ws', 'hw', 'p', 'tests');
-    const r = await saveTestcasesAsFiles(tests, [{ testcaseId: 1, num: '../../../../escaped' as unknown as number, input: 'in', output: 'out' }]);
-    expect(r.written).toBe(1);
-    expect(existsSync(join(base, 'escaped.in'))).toBe(false);
-    expect(readdirSync(tests).sort()).toEqual(['case1.in', 'case1.out']);
-  });
 });
 
 describe('L2: a problem named "." or ".." gives its id as the folder name', () => {
-  it('tests folder, folder name and file name (probe1 #6)', () => {
-    expect(testsFolderFor('/ws/hw', '..', 42)).toBe(join('/ws/hw', '42', 'tests'));
-    expect(testsFolderFor('/ws/hw', '.', 42)).toBe(join('/ws/hw', '42', 'tests'));
-    expect(testsFolderFor('/ws/hw', '..')).toBe(join('/ws/hw', 'problem', 'tests'));
+  it('folder name and file name (probe1 #6)', () => {
     expect(folderNameFor('..', undefined, 42)).toBe('42');
     expect(folderNameFor('...', '.{name}.{ext}', 42)).toBe('.42');
     expect(fileNameFor('..', 'cpp', undefined, 42)).toBe('42.cpp');
   });
 
   it('ordinary names are unchanged', () => {
-    expect(testsFolderFor('/ws/hw', 'p_ai', 42)).toBe(join('/ws/hw', 'p_ai', 'tests'));
     expect(folderNameFor('a..b', undefined, 42)).toBe('a..b');
     expect(fileNameFor('Mr. Smith', 'cpp')).toBe('Mr. Smith.cpp');
   });

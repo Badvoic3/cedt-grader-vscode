@@ -467,8 +467,7 @@ function assertId(id: number): void {
 
 /**
  * Test-case numbers as the server sent them when every one is a distinct
- * positive integer; otherwise 1, 2, … in list order. They become file names
- * (`<num>.in`), so a value such as `"../../x"` never reaches the disk.
+ * positive integer; otherwise 1, 2, … in list order.
  */
 export function caseNumbers(nums: unknown[]): number[] {
   const ok = nums.every((n) => Number.isSafeInteger(n) && (n as number) > 0) && new Set(nums).size === nums.length;

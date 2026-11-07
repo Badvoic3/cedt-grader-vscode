@@ -70,7 +70,7 @@ export interface ProblemFilter {
   sort?: ProblemSort;
 }
 
-export type MatchSourceView = 'saved' | 'cph' | 'filename' | 'folder' | 'suggested';
+export type MatchSourceView = 'saved' | 'filename' | 'folder' | 'suggested';
 
 export interface LanguageView {
   id: number;
@@ -169,7 +169,7 @@ export interface ViewState {
   problem: (ProblemView & { source: MatchSourceView; sourceLabel: string; unavailable: boolean }) | null;
   /** All files linked to the current problem when there are several (duplicate notice). */
   /** Files for the current problem (2+ → notice); current file first. */
-  linkedFiles: { path: string; current: boolean; how: 'chosen' | 'cph' | 'filename' | 'folder' | 'suggested' }[];
+  linkedFiles: { path: string; current: boolean; how: 'chosen' | 'filename' | 'folder' | 'suggested' }[];
   /** "Another file with the same name also matches…" / "N files are linked to this problem". */
   linkedNotice: string | null;
   /**
@@ -204,8 +204,6 @@ export interface ViewState {
   attachment: { busy: number | null };
   /** A bug was caught: the exact text a GitHub issue would be prefilled with. Nothing is sent until the user asks. */
   crash: { id: number; report: string } | null;
-  /** Show the dismissible "install CPH" tip. */
-  cphTip: boolean;
   /** The file was explicitly unlinked: "Not linked to a problem" (auto-detection off). */
   notLinked: boolean;
   /** Inline question with plain buttons (instead of a modal dialog). */
@@ -221,8 +219,6 @@ export interface ViewState {
     note: string | null;
   };
   testcases: { busy: boolean };
-  /** CPH (optional) installed and enabled. */
-  cph: { installed: boolean };
   languages: {
     loading: boolean;
     items: LanguageView[];
@@ -298,8 +294,7 @@ export type FromWebview =
   | { type: 'newFile'; problemId: number }
   | { type: 'goToFile'; problemId: number }
   | { type: 'findFile'; problemId: number }
-  /** asFiles: "Save test cases as files" (.in / .out even when CPH is installed). */
-  | { type: 'loadTestcases'; asFiles?: boolean }
+  | { type: 'loadTestcases' }
   | { type: 'loadSampleCases' }
   | { type: 'confirmProblem'; problemId: number }
   | { type: 'setFilter'; filter: ProblemFilter }
@@ -317,7 +312,6 @@ export type FromWebview =
   | { type: 'runTests' }
   | { type: 'stopTests' }
   | { type: 'openTests' }
-  | { type: 'cphTip'; action: 'install' | 'later' | 'never' }
   | { type: 'crashAction'; id: number; action: 'open' | 'dismiss' }
   | { type: 'webviewError'; message: string; stack: string }
   | { type: 'showCompilerMessage' }
