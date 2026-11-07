@@ -318,6 +318,7 @@ const EN_S = {
   compareTab: (n: number) => `Case ${n}: Expected ↔ Actual`,
 
   explorer: {
+    category: (names: string) => `Category: ${names}`,
     counted: (score: string) => `counted ${score}`,
     notTried: 'not tried yet',
   },

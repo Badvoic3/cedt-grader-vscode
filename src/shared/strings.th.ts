@@ -317,6 +317,7 @@ export const TH: Strings = {
     compareTab: (n) => `เคส ${n}: ที่ควรได้ ↔ ที่ได้จริง`,
 
     explorer: {
+      category: (names) => `หมวด: ${names}`,
       counted: (score) => `คะแนนที่นับ ${score}`,
       notTried: 'ยังไม่เคยส่ง',
     },

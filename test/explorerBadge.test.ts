@@ -86,9 +86,16 @@ describe('badgeView', () => {
     expect(v?.tooltip).toContain('hw_sum #7');
   });
 
-  it('the tooltip names the problem, its tags, the score and how the file matched', () => {
-    expect(badgeView(problem({ name: 'hw​_sum', bestScore: 72.5, tags: ['Graph', 'DFS'] }), 'suggested', 'score', true)?.tooltip).toBe('hw_sum #7 · Graph, DFS · counted 72.5 · suggested');
+  it('the tooltip names the problem, its category, its tags, the score out of 100 and how the file matched', () => {
+    expect(badgeView(problem({ name: 'hw​_sum', bestScore: 72.5, tags: ['Graph', 'DataAlgo', 'DFS', 'comprog'] }), 'suggested', 'score', true, ['ComProg', 'DataAlgo'])?.tooltip).toBe('hw_sum #7 · Category: DataAlgo, comprog · Graph, DFS · counted 72.5 / 100 · suggested');
+    expect(badgeView(problem({ bestScore: 100, tags: ['ComProg'] }), 'chosen', 'score', true, ['ComProg'])?.tooltip).toBe('hw_sum #7 · Category: ComProg · counted 100 / 100 · linked');
+    expect(badgeView(problem({ bestScore: 70, tags: ['Graph'] }), 'chosen', 'score', true)?.tooltip).toBe('hw_sum #7 · Graph · counted 70 / 100 · linked');
     expect(badgeView(problem({ submissionCount: 0 }), 'folder', 'score', true)?.tooltip).toBe('hw_sum #7 · not tried yet · matched by folder name');
+  });
+
+  it('a raw-sum problem has no maximum, so the tooltip gives just the number', () => {
+    const p = problem({ bestScore: 137.5, list: { cost: 0, hintCount: 0, aiCount: 0, rawSum: true } as Problem['list'] });
+    expect(badgeView(p, 'chosen', 'score', true)?.tooltip).toBe('hw_sum #7 · counted 137.5 · linked');
   });
 
   it('off gives nothing', () => {

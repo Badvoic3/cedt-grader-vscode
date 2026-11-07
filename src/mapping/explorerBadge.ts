@@ -1,4 +1,4 @@
-import { fmt, summarize } from '../grader/score';
+import { scoreText, summarize } from '../grader/score';
 import type { Problem } from '../grader/types';
 import { SERVER_SCORE_CAP } from '../shared/constants';
 import { PICK_HOW, S } from '../shared/strings';
@@ -50,18 +50,30 @@ export function tagColor(tag: string): string {
   return TAG_COLORS[hash % TAG_COLORS.length];
 }
 
+const tagKey = (t: string) => t.trim().toLowerCase();
+
 /** The tag a badge stands for: the first topic tag, or the first tag when none is a topic. */
 export function badgeTag(tags: readonly string[], topics: readonly string[]): string | undefined {
-  const isTopic = new Set(topics.map((t) => t.trim().toLowerCase()));
-  return tags.find((t) => isTopic.has(t.trim().toLowerCase())) ?? tags[0];
+  const isTopic = new Set(topics.map(tagKey));
+  return tags.find((t) => isTopic.has(tagKey(t))) ?? tags[0];
 }
 
 /** Null when `mode` is off. A suggestion is only a guess, so it never takes a colour. */
 export function badgeView(p: Problem, how: LinkHow, mode: BadgeMode, colors: boolean, topics: readonly string[] = []): BadgeView | null {
   if (mode === 'off') return null;
-  const { counted } = summarize(p);
+  const { counted, rawSum } = summarize(p);
   const tag = badgeTag(p.tags, topics);
-  const tooltip = [`${cleanName(p.name)} #${p.id}`, ...(p.tags.length ? [p.tags.join(', ')] : []), counted === null ? S.explorer.notTried : S.explorer.counted(fmt(counted)), PICK_HOW[how]].join(' · ');
+  const isTopic = new Set(topics.map(tagKey));
+  const categories = p.tags.filter((t) => isTopic.has(tagKey(t)));
+  const others = p.tags.filter((t) => !isTopic.has(tagKey(t)));
+  const tooltip = [
+    `${cleanName(p.name)} #${p.id}`,
+    ...(categories.length ? [S.explorer.category(categories.join(', '))] : []),
+    ...(others.length ? [others.join(', ')] : []),
+    // The badge is one character at full score: the tooltip has the number.
+    counted === null ? S.explorer.notTried : S.explorer.counted(scoreText(counted, rawSum).text),
+    PICK_HOW[how],
+  ].join(' · ');
   const color = !colors || how === 'suggested' ? null : mode === 'score' ? scoreColor(counted) : tag ? tagColor(tag) : null;
   return { badge: mode === 'score' ? scoreBadge(counted) : tag ? tagBadge(tag) : undefined, tooltip, color };
 }
