@@ -4,7 +4,7 @@
  * write `.cph` or `.in` / `.out` files.
  */
 import { readdirSync, readFileSync } from 'node:fs';
-import { join, relative } from 'node:path';
+import { join, sep } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 const ROOT = join(__dirname, '..');
@@ -13,7 +13,7 @@ const files = (dir: string): string[] =>
     const p = join(dir, f.name);
     return f.isDirectory() ? files(p) : /\.ts$/.test(f.name) ? [p] : [];
   });
-const code = [...files('src'), ...files('webview')].map((p) => ({ path: relative('.', p), text: readFileSync(join(ROOT, p), 'utf8') }));
+const code = [...files('src'), ...files('webview')].map((p) => ({ path: p.split(sep).join('/'), text: readFileSync(join(ROOT, p), 'utf8') }));
 const outsideMigration = code.filter((f) => !f.path.startsWith('src/migration/'));
 const manifest = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'));
 const CPH_ID = 'DivyanshuAgrawal.competitive-programming-helper';

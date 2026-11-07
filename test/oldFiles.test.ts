@@ -5,7 +5,7 @@
  */
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { MappingStore } from '../src/mapping/store';
 import { binaryOf, casesBySource, GRADER_ID_BASE, isProbPath, planProb, problemIdInUrl, readProb, sourceOf, STATEMENT_ID_BASE } from '../src/migration/cph';
@@ -108,8 +108,9 @@ describe('rules', () => {
   });
 
   it('a moved folder: the source comes from the .prob name beside .cph/', () => {
-    const prob = `/new/hw/.cph/.a.cpp_${'0'.repeat(32)}.prob`;
-    expect(sourceOf(prob, '/old/hw/a.cpp', (p) => p === '/new/hw/a.cpp')).toBe('/new/hw/a.cpp');
+    const prob = join('/new/hw/.cph', `.a.cpp_${'0'.repeat(32)}.prob`);
+    const moved = join('/new/hw', 'a.cpp');
+    expect(sourceOf(prob, '/old/hw/a.cpp', (p) => p === moved)).toBe(moved);
     expect(sourceOf(prob, '/old/hw/a.cpp', (p) => p === '/old/hw/a.cpp')).toBe('/old/hw/a.cpp');
     expect(sourceOf(prob, '/old/hw/a.cpp', () => false)).toBe('/old/hw/a.cpp');
   });
@@ -119,7 +120,7 @@ describe('rules', () => {
     expect(isProbPath('.cph/.a.cpp_1.prob')).toBe(true);
     expect(isProbPath('hw/a.prob')).toBe(false);
     expect(isProbPath('hw/.cph/.a.cpp_1.prob.bak')).toBe(false);
-    expect(binaryOf('/w/hw/a.cpp')).toBe('/w/hw/a.bin');
+    expect(binaryOf(join('/w/hw', 'a.cpp'))).toBe(join('/w/hw', 'a.bin'));
   });
 
   it('a .prob it cannot use is null, and a broken test is dropped', async () => {
@@ -160,7 +161,7 @@ describe('migrateOldFiles', () => {
     mapping,
     cases,
     baseUrl: BASE,
-    nameMatch: (src) => names[src.split('/').pop() ?? ''] ?? null,
+    nameMatch: (src) => names[basename(src)] ?? null,
     problemName: (id) => `p${id}`,
     changed: async () => void changed++,
   });

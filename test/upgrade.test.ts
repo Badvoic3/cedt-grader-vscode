@@ -4,6 +4,7 @@
  * reads the same with the current code, and nothing is turned into a folder
  * link just by being read.
  */
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import type { GraderCase } from '../src/mapping/testCases';
 import { stripGraderKey } from '../src/data/testcaseStore';
@@ -52,7 +53,7 @@ describe('old links, gathered for the link table', () => {
 
   it('a v0.7.0 file gives full paths, keeping server and staleness', () => {
     const links = collectOldLinks({ files: [{ folder: '/w', text: V070_MAPPING }] });
-    expect(links.map((l) => l.fsPath)).toEqual(['/w/hw/a.cpp', '/w/hw/pkg/main.cpp', '/w/old/gone.cpp']);
+    expect(links.map((l) => l.fsPath)).toEqual(['hw/a.cpp', 'hw/pkg/main.cpp', 'old/gone.cpp'].map((r) => join('/w', r)));
     expect(links[1].baseUrl).toBe('https://grader.example');
     expect(links[2].staleSince).toBe('2026-10-01T00:00:00.000Z');
     for (const l of links) expect(l).not.toHaveProperty('outside');
@@ -62,16 +63,16 @@ describe('old links, gathered for the link table', () => {
     const [root, pkg] = collectOldLinks({
       files: [file('/w', { '.': { problemId: 1, name: 'r', folder: true }, pkg: { problemId: 2, name: 'p', folder: true, submitFile: 'student.h', runFile: 'main.cpp' } })],
     });
-    expect(root).toMatchObject({ fsPath: '/w', folder: true });
-    expect(pkg).toEqual({ problemId: 2, name: 'p', folder: true, submitFile: 'student.h', runFile: 'main.cpp', fsPath: '/w/pkg' });
+    expect(root).toMatchObject({ fsPath: join('/w'), folder: true });
+    expect(pkg).toEqual({ problemId: 2, name: 'p', folder: true, submitFile: 'student.h', runFile: 'main.cpp', fsPath: join('/w', 'pkg') });
   });
 
   it('state wins over the file, as it did in the old store', () => {
     const links = collectOldLinks({
-      workspaceState: { 'w/a.cpp': { problemId: 7, name: 'state', fsPath: '/w/a.cpp' } },
+      workspaceState: { 'w/a.cpp': { problemId: 7, name: 'state', fsPath: join('/w', 'a.cpp') } },
       files: [file('/w', { 'a.cpp': { problemId: 8, name: 'file' } })],
     });
-    expect(links).toEqual([{ problemId: 7, name: 'state', fsPath: '/w/a.cpp' }]);
+    expect(links).toEqual([{ problemId: 7, name: 'state', fsPath: join('/w', 'a.cpp') }]);
   });
 
   it('global links stay visible in every window; first-version keys are read; broken entries are skipped', () => {
