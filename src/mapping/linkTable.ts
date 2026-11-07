@@ -99,6 +99,8 @@ export class LinkTable {
   private memo: { stamp: string; links: Links; unusable: boolean } | undefined;
   /** The last write, so writes from this window wait their turn without touching the lock. */
   private queue: Promise<unknown> = Promise.resolve();
+  /** After every write from this window. */
+  onWrite: () => void = () => {};
 
   constructor(root: string) {
     this.root = root;
@@ -170,6 +172,7 @@ export class LinkTable {
         if (now.unusable) await rename(this.path, `${this.path}.bad`).catch(() => {});
         await writeAtomic(this.path, serializeLinks(links));
         this.memo = undefined; // the next read sees this write, or a later one from another window
+        this.onWrite();
       } finally {
         await unlock();
       }

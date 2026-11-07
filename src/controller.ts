@@ -51,6 +51,7 @@ import { currentLang, resolveLang, setLanguage } from './shared/i18n';
 import type { HistoryEntry, ProblemFilter, ProblemView, SubmissionDetailView, ViewState } from './shared/messages';
 import { Attachments } from './flows/attachments';
 import { CacheCare } from './flows/cache';
+import { ExplorerBadges } from './flows/explorerBadges';
 import { FolderMode } from './flows/folderMode';
 import type { CurrentProblem, Host } from './flows/host';
 import { revealPanelOnStart } from './flows/panelReveal';
@@ -136,6 +137,8 @@ export class GraderController implements vscode.Disposable {
 
   /** What the flows see of the controller (see src/flows/host.ts). */
   private readonly host: Host;
+  /** Registered by `extension.ts`. */
+  readonly badges: ExplorerBadges;
   private readonly prompts: InlinePrompts;
   private readonly folder: FolderMode;
   private readonly links: Links;
@@ -170,6 +173,8 @@ export class GraderController implements vscode.Disposable {
       },
     });
     this.host = this.makeHost();
+    this.badges = new ExplorerBadges(this.host);
+    this.mapping.onChanged = () => this.badges.refresh();
     this.server = new ServerFlow({
       verified: () => this.ctx.globalState.get<string[]>(KEYS.verifiedServers, []),
       saveVerified: async (list) => void (await this.ctx.globalState.update(KEYS.verifiedServers, list)),
@@ -321,6 +326,7 @@ export class GraderController implements vscode.Disposable {
       problemById: (id) => c.problemById(id),
       get problems() { return c.problems; },
       get languages() { return c.languages; },
+      canShowScores: () => c.client.isLoggedIn || c.hasSavedPassword,
       allowedLanguages: (p) => c.allowedLanguages(p),
       allSourceExts: () => c.allSourceExts(),
       get selectedLanguageId() { return c.selectedLanguageId; },
@@ -452,6 +458,7 @@ export class GraderController implements vscode.Disposable {
     }
     this.isStarted = true;
     this.markStarted();
+    this.badges.start();
     if (this.panelVisible) this.setPanelVisible(true);
     this.emit();
     revealPanelOnStart(this.cfg.panelOpenOnStartup, this.panelVisible, (c, o) => vscode.commands.executeCommand(c, o)).then(undefined, (err) => this.logError('Reveal failed', err));
@@ -467,6 +474,7 @@ export class GraderController implements vscode.Disposable {
 
   dispose(): void {
     this.submitFlow.stop();
+    this.badges.dispose();
     this.debugChannel?.dispose();
     for (const d of this.disposables) d.dispose();
   }
@@ -646,6 +654,7 @@ export class GraderController implements vscode.Disposable {
   }
 
   private emit(): void {
+    this.badges?.sync();
     const s = this.safeState();
     if (!s) return;
     for (const l of this.listeners) l(s);

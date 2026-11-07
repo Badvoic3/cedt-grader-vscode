@@ -78,5 +78,15 @@
   "walkthrough.checkProblem.media": "media/walkthrough/th/checkProblem.md",
   "walkthrough.submit.title": "ส่งงาน (Submit)",
   "walkthrough.submit.description": "กด **Submit ไปยัง Grader** ในแผง เมื่อตรวจเสร็จจะเห็นผลตรวจของแต่ละเคสและคะแนนที่นับทันที\n[ส่งไฟล์ปัจจุบัน](command:cedtGrader.submit)",
-  "walkthrough.submit.media": "media/walkthrough/th/submit.md"
+  "walkthrough.submit.media": "media/walkthrough/th/submit.md",
+  "color.explorer.solved.description": "ป้ายใน Explorer และชื่อไฟล์: คะแนนเต็ม",
+  "color.explorer.inProgress.description": "ป้ายใน Explorer และชื่อไฟล์: ส่งแล้ว คะแนนยังไม่เต็ม",
+  "color.explorer.zero.description": "ป้ายใน Explorer และชื่อไฟล์: ส่งแล้ว ได้ 0 คะแนน",
+  "color.explorer.untried.description": "ป้ายใน Explorer และชื่อไฟล์: ยังไม่เคยส่ง",
+  "color.explorer.tag.description": "ป้ายใน Explorer และชื่อไฟล์: สีหนึ่งที่ใช้กับแท็ก",
+  "config.explorer.badge.description": "สิ่งที่ป้ายข้างไฟล์ใน Explorer แสดง เฉพาะไฟล์ที่มีโจทย์เท่านั้นที่มีป้าย",
+  "config.explorer.badge.score": "คะแนนที่นับ: ✓ เมื่อได้คะแนนเต็ม และ – เมื่อยังไม่เคยส่ง",
+  "config.explorer.badge.tag": "อักษรสองตัวแรกของแท็กหัวข้อแรกของโจทย์",
+  "config.explorer.badge.off": "ไม่แสดงป้าย",
+  "config.explorer.colors.description": "ใส่สีป้ายและชื่อไฟล์ใน Explorer ตามคะแนนหรือแท็ก ปิดเพื่อใช้สีข้อความปกติ"
 }

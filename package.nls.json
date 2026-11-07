@@ -78,5 +78,15 @@
   "walkthrough.checkProblem.media": "media/walkthrough/checkProblem.md",
   "walkthrough.submit.title": "Submit",
   "walkthrough.submit.description": "Press **Submit to Grader** in the panel. The verdict of every test and your counted score appear when grading is done.\n[Submit Current File](command:cedtGrader.submit)",
-  "walkthrough.submit.media": "media/walkthrough/submit.md"
+  "walkthrough.submit.media": "media/walkthrough/submit.md",
+  "color.explorer.solved.description": "Explorer badge and file name: full score.",
+  "color.explorer.inProgress.description": "Explorer badge and file name: submitted, score below full.",
+  "color.explorer.zero.description": "Explorer badge and file name: submitted, score 0.",
+  "color.explorer.untried.description": "Explorer badge and file name: not tried yet.",
+  "color.explorer.tag.description": "Explorer badge and file name: one of the colours given to tags.",
+  "config.explorer.badge.description": "What the badge beside a file in the Explorer shows. Only files with a problem get one.",
+  "config.explorer.badge.score": "The counted score: ✓ for full score, – if not tried yet.",
+  "config.explorer.badge.tag": "Two letters of the problem's first topic tag.",
+  "config.explorer.badge.off": "No badges.",
+  "config.explorer.colors.description": "Colour Explorer badges and file names by score or tag. Turn off to keep the normal text colour."
 }

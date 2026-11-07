@@ -4,6 +4,7 @@ import { normalizeServerUrl } from './shared/serverUrl';
 import type { LangSetting } from './shared/i18n';
 import { checkPattern, type PatternCheck } from './mapping/namePattern';
 import { normalizeSections, type SectionId } from './shared/layout';
+import type { BadgeMode } from './mapping/explorerBadge';
 
 export interface GraderConfig {
   baseUrl: string;
@@ -41,6 +42,10 @@ export interface GraderConfig {
   runnerCompilerPaths: Record<string, string>;
   /** Language → extra compiler arguments (`cpp`, `c`, `java`, `rust`, `go`, `haskell`). */
   runnerExtraCompileArgs: Record<string, string[]>;
+  /** What an Explorer badge shows (`cedtGrader.explorer.badge`). */
+  explorerBadge: BadgeMode;
+  /** Explorer badges in colour (`cedtGrader.explorer.colors`). */
+  explorerColors: boolean;
   /** `en` (default), `th`, or `auto` (follow VS Code's display language). */
   displayLanguage: LangSetting;
 }
@@ -84,6 +89,8 @@ export function readConfig(): GraderConfig {
     panelOpenOnStartup: c.get<boolean>('panel.openOnStartup', true) !== false,
     topicClickOrder: c.get<string>('panel.topicClickOrder', 'showFirst') === 'hideFirst' ? 'hideFirst' : 'showFirst',
     fileNamePattern: checkPattern(c.get<string>('fileNamePattern', '{name}.{ext}')),
+    explorerBadge: ((v) => (v === 'tag' || v === 'off' ? v : 'score'))(c.get<string>('explorer.badge', 'score')),
+    explorerColors: c.get<boolean>('explorer.colors', true) !== false,
     cacheMaxMB: Math.max(CACHE.maxMbMinimum, Number(c.get('cacheMaxMB', CACHE.maxMbDefault)) || CACHE.maxMbDefault),
     runnerDefaultTimeSeconds: Math.max(0.1, Number(c.get('runner.defaultTimeLimitSeconds', RUNNER.defaultTimeSeconds)) || RUNNER.defaultTimeSeconds),
     runnerDefaultMemoryMB: Math.max(1, Number(c.get('runner.defaultMemoryLimitMB', RUNNER.defaultMemoryMB)) || RUNNER.defaultMemoryMB),

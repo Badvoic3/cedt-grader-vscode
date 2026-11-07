@@ -49,6 +49,8 @@ export interface Host {
   problemById(id: number): Problem | undefined;
   readonly problems: Problem[];
   readonly languages: Language[];
+  /** Logged in, or able to log in by itself: a logged-out person's scores stay off the screen. */
+  canShowScores(): boolean;
   allowedLanguages(p: Pick<Problem, 'permittedLanguageIds'>): Language[];
   /** Every known source extension (server languages + fallback table), without the dot. */
   allSourceExts(): string[];

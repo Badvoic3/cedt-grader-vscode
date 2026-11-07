@@ -30,9 +30,12 @@ const located = (link: StoredLink): LocatedEntry => ({ fsPath: link.fsPath, entr
  */
 export class MappingStore {
   private readonly table: LinkTable;
+  /** A link or "not linked" changed in this window. */
+  onChanged: () => void = () => {};
 
   constructor(private readonly ctx: vscode.ExtensionContext) {
     this.table = new LinkTable(ctx.globalStorageUri.fsPath);
+    this.table.onWrite = () => this.onChanged();
   }
 
   /** Where "not linked" keeps a path: `<folder name>/<pathKey(relative path)>`, or pathKey of the absolute path outside folders. */
@@ -159,6 +162,7 @@ export class MappingStore {
     else delete all[key];
     await memento.update(UNLINKED_KEY, all);
     if (!on) await this.dropGlobal(UNLINKED_KEY, uri);
+    this.onChanged();
   }
 
   async get(uri: vscode.Uri, baseUrl: string): Promise<MappingEntry | undefined> {

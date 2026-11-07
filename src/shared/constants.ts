@@ -60,6 +60,8 @@ export const WEB_PATHS = {
 // ------------------------------------------------------------------ timing (ms)
 
 export const TIMING = {
+  /** Explorer badges redraw once for a burst of changes. */
+  badgeRefreshMs: 150,
   /** Any single HTTP request. */
   requestTimeoutMs: 30_000,
   /** GET retries on 429 / 5xx; waits base × 2^attempt (2 s, 4 s) or Retry-After, capped. */

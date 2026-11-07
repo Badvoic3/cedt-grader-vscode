@@ -57,6 +57,16 @@ describe('LinkTable', () => {
     root = mkdtempSync(join(tmpdir(), 'cedt-table-'));
   });
 
+  it('says so after a write, and only then', async () => {
+    const table = new LinkTable(root);
+    let writes = 0;
+    table.onWrite = () => writes++;
+    await table.change(() => false);
+    expect(writes).toBe(0);
+    await table.change((l) => put(l, L('/w/a.cpp')));
+    expect(writes).toBe(1);
+  });
+
   it('no file is an empty table, and reading creates nothing', async () => {
     expect(await new LinkTable(root).read()).toEqual({});
     expect(existsSync(path())).toBe(false);

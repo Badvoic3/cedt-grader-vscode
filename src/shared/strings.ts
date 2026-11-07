@@ -317,6 +317,11 @@ const EN_S = {
   testsTab: (name: string) => (name ? `Tests: ${name}` : 'Tests'),
   compareTab: (n: number) => `Case ${n}: Expected ↔ Actual`,
 
+  explorer: {
+    counted: (score: string) => `counted ${score}`,
+    notTried: 'not tried yet',
+  },
+
   migration: {
     notice: 'Grader Submit now has its own test runner. Your links and test cases are already copied over.',
     noticeDetail: (n: number) => (n === 1 ? "1 old file in this folder isn't needed any more. Move it to the Trash?" : `${n} old files in this folder aren't needed any more. Move them to the Trash?`),

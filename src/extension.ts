@@ -59,6 +59,7 @@ function start(ctx: vscode.ExtensionContext, crash: CrashReporter): void {
     sidebar,
     statusBar,
     vscode.window.registerWebviewViewProvider(SidebarProvider.viewId, sidebar),
+    vscode.window.registerFileDecorationProvider(controller.badges),
     controller.onState((s) => statusBar.update(s)),
     // Getting Started walkthrough: steps complete through these context keys (set only when they change).
     // VS Code opens the walkthrough once after the extension is installed (workbench.welcomePage.walkthroughs.openOnInstall).
