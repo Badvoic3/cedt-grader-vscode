@@ -97,6 +97,8 @@ export const TIMING = {
 export const RUNNER = {
   /** Output kept for showing, per stream. The compare limit is `max(this, 2 × expected size)`. */
   displayBytes: 64 * 1024,
+  /** A case's input or expected text sent to the Test view: longer text shows cut and can't be edited there. */
+  viewTextChars: 64 * 1024,
   defaultTimeSeconds: 10,
   defaultMemoryMB: 1024,
   /** Kill at the limit plus this, so the real time can be shown (the grader does the same). */

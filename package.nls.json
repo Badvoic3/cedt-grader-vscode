@@ -20,6 +20,7 @@
   "command.renameFileToProblem.title": "Rename File to Match the Problem",
   "command.downloadAttachment.title": "Download Problem Attachment",
   "command.runTests.title": "Run Tests",
+  "command.openTests.title": "Open Tests",
   "command.toggleFolderMode.title": "Switch Between Linking This File and the Whole Folder",
   "command.loadTestcases.title": "Load Test Cases from the Grader",
   "command.loadSampleCases.title": "Load Sample Cases from the Statement",

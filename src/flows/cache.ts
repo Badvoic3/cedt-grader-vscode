@@ -136,7 +136,10 @@ export class CacheCare {
       await h.tests.refreshStatementKind();
     }
     const cleared: CaseSource[] = [...(plan.cacheFiles ? (['grader', 'sample'] as const) : []), ...(plan.customCases ? (['custom'] as const) : [])];
-    if (cleared.length) await h.cases.clear(cleared);
+    if (cleared.length) {
+      await h.cases.clear(cleared);
+      await h.runner.refresh();
+    }
     if (plan.staleLinks) await h.mapping.removeStale();
     if (plan.allLinks) skippedDirty = (await h.mapping.emptyMappingFiles()).skippedDirty;
     for (const k of plan.workspaceKeys) await ws.update(k, undefined);

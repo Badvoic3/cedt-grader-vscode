@@ -77,7 +77,8 @@
     "onLanguage:cpp",
     "onLanguage:python",
     "onLanguage:java",
-    "onWebviewPanel:cedtGrader.statement"
+    "onWebviewPanel:cedtGrader.statement",
+    "onWebviewPanel:cedtGrader.tests"
   ],
   "contributes": {
     "viewsContainers": {
@@ -189,6 +190,12 @@
         "title": "%command.downloadAttachment.title%",
         "category": "%command.category%",
         "icon": "$(cloud-download)"
+      },
+      {
+        "command": "cedtGrader.openTests",
+        "title": "%command.openTests.title%",
+        "category": "%command.category%",
+        "icon": "$(beaker)"
       },
       {
         "command": "cedtGrader.runTests",

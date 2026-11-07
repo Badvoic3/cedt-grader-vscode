@@ -3,6 +3,7 @@ import * as vscode from 'vscode';
 import { GraderController, SUBMISSION_SCHEME } from './controller';
 import { SidebarProvider } from './ui/sidebarProvider';
 import { StatementPanels } from './ui/statementPanel';
+import { TestPanel } from './ui/testPanel';
 import { GraderStatusBar } from './ui/statusBar';
 import { readConfig } from './config';
 import { CrashReporter } from './crashReporter';
@@ -98,6 +99,7 @@ function start(ctx: vscode.ExtensionContext, crash: CrashReporter): void {
     command('cedtGrader.downloadAttachment', () => controller.downloadAttachment()),
     command('cedtGrader.toggleFolderMode', () => controller.toggleFolderMode()),
     command('cedtGrader.runTests', () => controller.runTests()),
+    command('cedtGrader.openTests', () => controller.openTests()),
     command('cedtGrader.loadTestcases', () => controller.loadTestcases(false)),
     command('cedtGrader.saveTestcasesAsFiles', () => controller.loadTestcases(false, true)),
     command('cedtGrader.loadSampleCases', () => controller.loadSampleCases()),
@@ -108,6 +110,9 @@ function start(ctx: vscode.ExtensionContext, crash: CrashReporter): void {
     // Statement tabs reopen after a restart, from the disk cache (no request).
     vscode.window.registerWebviewPanelSerializer(StatementPanels.viewType, {
       deserializeWebviewPanel: async (panel, state) => controller.statements.revive(panel, state as { problemId?: number; name?: string }),
+    }),
+    vscode.window.registerWebviewPanelSerializer(TestPanel.viewType, {
+      deserializeWebviewPanel: async (panel) => controller.testPanel.revive(panel),
     }),
     vscode.workspace.registerTextDocumentContentProvider(SUBMISSION_SCHEME, {
       provideTextDocumentContent: async (uri) => {

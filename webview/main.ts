@@ -13,6 +13,8 @@ import { outOfFor, scoreText } from '../src/grader/score';
 import { verdictLegend } from '../src/grader/verdicts';
 import { groupLabel } from '../src/grader/verdictWords';
 import { menuLabelMax, middleEllipsis } from './text';
+import { appendChildren, type Child, el, icon } from './dom';
+import { summaryPill } from './runSummary';
 import { FlowList } from './flowList';
 import { DEFAULT_BASE_URL, PANEL, SERVER_SCORE_CAP } from '../src/shared/constants';
 import { filterProblems, matches, sorts, sortProblems } from './filters';
@@ -50,34 +52,6 @@ window.addEventListener('unhandledrejection', (e) => {
 
 // ------------------------------------------------------------------ helpers
 
-type Child = Node | string | null | undefined | false | Child[];
-type Attrs = Record<string, string | number | boolean | EventListener | undefined>;
-
-function el<K extends keyof HTMLElementTagNameMap>(tag: K, attrs: Attrs = {}, ...children: Child[]): HTMLElementTagNameMap[K] {
-  const e = document.createElement(tag);
-  for (const [k, v] of Object.entries(attrs)) {
-    if (v === undefined || v === false) continue;
-    if (k.startsWith('on') && typeof v === 'function') e.addEventListener(k.slice(2), v as EventListener);
-    else if (k === 'class') e.className = String(v);
-    // Tooltips use the custom component (native `title` tooltips vanish on re-render).
-    else if (k === 'title') e.dataset.tip = String(v);
-    else if (v === true) e.setAttribute(k, '');
-    else e.setAttribute(k, String(v));
-  }
-  appendChildren(e, children);
-  return e;
-}
-
-function appendChildren(parent: Node & ParentNode, children: Child[]): void {
-  for (const c of children) {
-    if (c === null || c === undefined || c === false) continue;
-    if (Array.isArray(c)) appendChildren(parent, c);
-    else parent.append(typeof c === 'string' ? document.createTextNode(c) : c);
-  }
-}
-
-const icon = (name: string, extra = '') => el('span', { class: `codicon codicon-${name} ${extra}`.trim(), 'aria-hidden': 'true' });
-
 /**
  * Icon-only button: always a tooltip (`title`) and the same `aria-label`.
  * When disabled, the tooltip says why.
@@ -94,29 +68,6 @@ function iconButton(name: string, label: string, onclick: () => void, opts: { di
 
 function button(label: Child, onclick: () => void, opts: { kind?: 'primary' | 'secondary'; disabled?: boolean; title?: string } = {}) {
   return el('button', { class: `btn ${opts.kind ?? 'secondary'}`, type: 'button', disabled: opts.disabled, title: opts.title, onclick }, label);
-}
-
-/**
- * Buttons of a `.test-buttons` grid get one width: the widest one's natural
- * width (labels differ per language), via `--btn-w` (needs layout: measured
- * on the next frame; skipped while hidden).
- */
-let lastBtnW = '';
-function equalWidths(row: HTMLElement): void {
-  if (lastBtnW) row.style.setProperty('--btn-w', lastBtnW); // the section is rebuilt on re-render: no flicker
-  const raf = window.requestAnimationFrame?.bind(window);
-  if (!raf) return;
-  raf(() => {
-    let w = 0;
-    for (const b of row.children as HTMLCollectionOf<HTMLElement>) {
-      b.style.width = 'max-content';
-      w = Math.max(w, b.getBoundingClientRect().width);
-      b.style.width = '';
-    }
-    if (!w) return;
-    lastBtnW = `${Math.ceil(w)}px`;
-    row.style.setProperty('--btn-w', lastBtnW);
-  });
 }
 
 export interface MenuItem {
@@ -603,6 +554,21 @@ function scoreCard(sc: ScoreView): HTMLElement {
   return card;
 }
 
+/** Run tests with its summary, then Open tests: for any open file, linked to a problem or not. */
+function runRows(r: NonNullable<ViewState['runTests']>): HTMLElement {
+  const pill = summaryPill(r.summary);
+  const reason = r.running ? null : r.disabledReason;
+  return el('div', { class: 'run-rows' },
+    el('div', { class: 'row' },
+      r.running
+        ? button([icon('debug-stop'), ` ${W.stopTests}`], () => send({ type: 'stopTests' }), { title: W.stopTestsTip })
+        : button([icon('play', 'run-icon'), ` ${W.runTests}`], () => send({ type: 'runTests' }), { disabled: !!reason, title: reason ? `${W.runTestsTip} (${reason})` : W.runTestsTip }),
+      el('span', { class: `pill run-pill ${pill.tone}` }, pill.text),
+    ),
+    button([icon('beaker'), ` ${W.openTests}`], () => send({ type: 'openTests' }), { title: W.openTestsTip }),
+  );
+}
+
 function renderCurrent(s: ViewState): void {
   const b = sCurrent.body;
   b.replaceChildren();
@@ -714,47 +680,6 @@ function renderCurrent(s: ViewState): void {
         el('p', { class: 'small muted' }, W.submitFileTip),
       );
     }
-    // Test-case buttons, the same width: the grader's (when it has them) and the statement's example
-    // table (unless the cached statement is not a PDF); side by side when they fit, stacked otherwise,
-    // a single one full width, none → no row. Run tests below, full width like Submit.
-    const tests = el('div', { class: 'test-buttons' });
-    if (p.hasTestcase) {
-      tests.append(
-        button(
-          s.testcases.busy ? [icon('loading', 'codicon-modifier-spin'), ' ', W.loadingTestCases] : [icon('beaker'), ' ', W.loadTestCases],
-          () => send({ type: 'loadTestcases' }),
-          {
-            disabled: s.testcases.busy,
-            title: s.testcases.busy
-              ? W.downloadingTestCases
-              : s.cph.installed
-                ? W.loadTestCasesCphTip
-                : W.loadTestCasesFilesTip,
-          },
-        ),
-      );
-    }
-    if (s.samples.available || s.samples.busy) {
-      tests.append(
-        button(
-          s.samples.busy ? [icon('loading', 'codicon-modifier-spin'), ' ', W.readingSampleCases] : [icon('table'), ' ', W.loadSampleCases],
-          () => send({ type: 'loadSampleCases' }),
-          { disabled: s.samples.busy, title: s.samples.busy ? W.readingStatementTip : W.loadSampleCasesTip },
-        ),
-      );
-    }
-    if (tests.children.length) {
-      b.append(tests);
-      equalWidths(tests);
-    }
-    // Run tests (CPH installed only): the run file in folder mode, else this file.
-    if (s.runTests) {
-      b.append(
-        el('button', { class: 'btn secondary wide', type: 'button', disabled: !!s.runTests.disabledReason, title: s.runTests.disabledReason ? `${W.runTestsTip} (${s.runTests.disabledReason})` : W.runTestsTip, onclick: () => send({ type: 'runTests' }) },
-          icon('play'), ` ${W.runTests}`,
-        ),
-      );
-    }
   }
 
   const mm = p ? s.languages.mismatch : null;
@@ -790,6 +715,8 @@ function renderCurrent(s: ViewState): void {
     b.append(box);
     sCurrent.details.open = true;
   }
+
+  if (s.runTests) b.append(runRows(s.runTests));
 
   const sub = s.submit;
   b.append(
@@ -1458,7 +1385,7 @@ function sectionKeys(s: ViewState): Record<string, string> {
     crash: j(s.crash),
     prompt: j([s.prompt, promptNearSubmit(s)]),
     account: j([s.account, s.baseUrl, showLoginForm]),
-    current: j([promptNearSubmit(s) ? s.prompt : null, s.notLinked, s.linkedNotice, s.linkedFiles, s.file, s.problem, s.languages, s.submit, s.matching, s.testcases, s.samples, s.cph, s.gradingElsewhere, s.folder, s.folderMode, s.attachment, s.runTests, pickerOpen, pickerOpen ? s.problems : s.problems.loaded]),
+    current: j([promptNearSubmit(s) ? s.prompt : null, s.notLinked, s.linkedNotice, s.linkedFiles, s.file, s.problem, s.languages, s.submit, s.matching, s.testcases, s.cph, s.gradingElsewhere, s.folder, s.folderMode, s.attachment, s.runTests, pickerOpen, pickerOpen ? s.problems : s.problems.loaded]),
     result: j([s.result, legendOpen === 'result', s.problem?.score.rawSum]),
     history: j([pid, s.history, legendOpen === 'history', s.problem?.score.rawSum]),
     problems: j([{ ...s.problems, items: s.problems.items.length }, problemHits(s).length, ui.filter, s.attachment]),

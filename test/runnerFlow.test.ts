@@ -378,6 +378,144 @@ describe('Runner', () => {
   it('owner keys never collide', () => {
     expect(ownerKey({ problemId: 1 })).not.toBe(ownerKey({ file: '1' }));
   });
+  describe('case actions', () => {
+    const seeded = async () => {
+      await store.add(P, { input: 'a\n', expected: 'a\n' });
+      await store.add(P, { input: 'b\n', expected: 'b\n' });
+      const r = make(programs());
+      await r.onActiveFile();
+      await r.run();
+      return { r, ids: (await store.read(P)).cases.map((c) => c.id) };
+    };
+
+    it('an edit clears that case\'s result only, and a Grader case becomes Custom', async () => {
+      await store.merge(7, [{ input: 'a\n', expected: 'a\n', testcaseId: 1 }, { input: 'b\n', expected: 'b\n', testcaseId: 2 }], 'grader');
+      const r = make(programs());
+      await r.onActiveFile();
+      await r.run();
+      const [first, second] = (await store.read(P)).cases.map((c) => c.id);
+      await r.editCase(first, { expected: 'x\n' });
+      const v = (h.tests = { busy: false, samplesBusy: false, statementNoPdf: false }, r.testsView());
+      expect(v.runs.has(first)).toBe(false);
+      expect(v.runs.get(second)?.verdict).toBe('AC');
+      expect(v.cases[0]).toMatchObject({ source: 'custom', expected: 'x\n' });
+    });
+
+    it('a run waits for edits sent just before it', async () => {
+      const { r, ids } = await seeded();
+      void r.editCase(ids[0], { expected: 'wrong\n' });
+      const s = await r.run();
+      expect(s).toEqual({ kind: 'done', passed: 1, total: 2 });
+    });
+
+    it('add, remove and reorder change the list at once, in order', async () => {
+      const { r, ids } = await seeded();
+      h.tests = { busy: false, samplesBusy: false, statementNoPdf: false };
+      await r.addCase();
+      expect(r.testsView().cases).toHaveLength(3);
+      await r.reorderCases([ids[1], ids[0], r.testsView().cases[2].id]);
+      expect(r.testsView().cases[0].id).toBe(ids[1]);
+      await r.removeCase(ids[1]);
+      expect(r.testsView().cases.map((c) => c.id)).not.toContain(ids[1]);
+      expect(r.testsView().runs.has(ids[1])).toBe(false);
+    });
+
+    it('a failed save is shown, and later changes still work', async () => {
+      const { r, ids } = await seeded();
+      const update = store.update.bind(store);
+      store.update = () => Promise.reject(new Error('disk full'));
+      await r.editCase(ids[0], { expected: 'x\n' });
+      expect(told).toEqual([S.runner.saveFailed('Error: disk full')]);
+      store.update = update;
+      await r.editCase(ids[0], { expected: 'y\n' });
+      expect((await store.read(P)).cases[0].expected).toBe('y\n');
+    });
+
+    it('Set Actual as Expected uses the whole output, and refuses a cut one', async () => {
+      await store.add(P, { input: 'hello\n', expected: 'nope\n' });
+      const p = programs();
+      const r = make(p);
+      await r.onActiveFile();
+      await r.run();
+      const id = (await store.read(P)).cases[0].id;
+      expect(r.textOf(id, 'actual')).toBe('hello\n');
+      await r.setExpected(id);
+      expect((await store.read(P)).cases[0].expected).toBe('hello\n');
+
+      await store.update(P, id, { expected: 'nope\n' });
+      await r.run();
+      const run = (r as unknown as { state(o: unknown): { runs: Map<string, { actual: { truncated: boolean } }> } }).state(P).runs.get(id)!;
+      run.actual.truncated = true;
+      await r.setExpected(id);
+      expect((await store.read(P)).cases[0].expected).toBe('nope\n');
+    });
+
+    it('copies the whole text, also when the view shows it cut', async () => {
+      const big = 'x'.repeat(100_000);
+      await store.add(P, { input: big, expected: 'y\n' });
+      const r = make(programs());
+      await r.onActiveFile();
+      const id = (await store.read(P)).cases[0].id;
+      expect(r.textOf(id, 'input')).toBe(big);
+      expect(r.textOf('nope', 'input')).toBeNull();
+    });
+  });
+
+  describe('views', () => {
+    beforeEach(() => {
+      h.tests = { busy: false, samplesBusy: true, statementNoPdf: false };
+    });
+
+    it('main panel: no cases disables Run tests with a reason', async () => {
+      const r = make(programs());
+      await r.onActiveFile();
+      expect(r.panelView()).toEqual({ summary: { kind: 'no-cases' }, running: false, disabledReason: S.runTests.noCases });
+      await r.addCase();
+      expect(r.panelView()).toEqual({ summary: { kind: 'not-run' }, running: false, disabledReason: null });
+    });
+
+    it('a linked problem has the Load row; a file with no problem has none, default limits and its name as title', async () => {
+      const r = make(programs());
+      h.problem = { id: 7, name: '01_Expr', hasTestcase: true } as never;
+      await r.onActiveFile();
+      expect(r.testsView().head).toMatchObject({ title: '01_Expr', problemId: 7, load: { testcases: { busy: false }, samples: { busy: true } } });
+      h.tests = { busy: false, samplesBusy: false, statementNoPdf: true };
+      h.problem = { id: 7, name: '01_Expr', hasTestcase: false } as never;
+      expect(r.testsView().head.load).toEqual({ testcases: null, samples: null });
+      h.problem = null;
+      await r.onActiveFile();
+      expect(r.testsView().head).toMatchObject({ title: 'a.cpp', problemId: null, load: null, limits: { timeMs: 5000, memoryMB: 256, source: 'default' } });
+    });
+
+    it('right after a file switch the last file\'s cases are not shown as the new one\'s', async () => {
+      await store.add(P, { input: 'a\n', expected: 'a\n' });
+      const r = make(programs());
+      await r.onActiveFile();
+      h.problem = { id: 8 } as never;
+      expect(r.summary()).toEqual({ kind: 'no-cases' });
+      expect(r.testsView().cases).toEqual([]);
+    });
+
+    it('a slow read of the last file never replaces the newest list', async () => {
+      await store.add(P, { input: 'a\n', expected: 'a\n' });
+      const r = make(programs());
+      const read = store.read.bind(store);
+      let release = () => {};
+      const held = new Promise<void>((done) => (release = done));
+      store.read = async (o) => {
+        const got = await read(o);
+        if ('problemId' in o && o.problemId === 7) await held;
+        return got;
+      };
+      const slow = r.onActiveFile();
+      h.problem = { id: 8 } as never;
+      await r.onActiveFile();
+      release();
+      await slow;
+      expect(r.testsView().key).toBe('problem:8');
+      expect(r.testsView().cases).toEqual([]);
+    });
+  });
 });
 
 describe('summarize', () => {

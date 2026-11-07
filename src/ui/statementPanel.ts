@@ -104,6 +104,11 @@ export class StatementPanels implements vscode.Disposable {
     this.retarget.get(panel)?.(target.problemId, target.name);
   }
 
+  /** Where an open statement tab is. */
+  column(): vscode.ViewColumn | undefined {
+    return [...this.panels.values()].at(-1)?.viewColumn;
+  }
+
   async open(problemId: number, name: string, opts: { outdated?: string | null } = {}): Promise<void> {
     this.notes.set(problemId, opts.outdated ?? null);
     const existing = this.panels.get(problemId);

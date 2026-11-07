@@ -20,6 +20,7 @@
   "command.renameFileToProblem.title": "เปลี่ยนชื่อไฟล์ให้ตรงกับโจทย์",
   "command.downloadAttachment.title": "ดาวน์โหลดไฟล์แนบของโจทย์",
   "command.runTests.title": "รันทดสอบ (Run Tests)",
+  "command.openTests.title": "เปิดหน้าทดสอบ (Open Tests)",
   "command.toggleFolderMode.title": "สลับระหว่างการเชื่อมเฉพาะไฟล์นี้กับเชื่อมทั้งโฟลเดอร์",
   "command.loadTestcases.title": "โหลด test case จาก Grader",
   "command.loadSampleCases.title": "โหลดตัวอย่างจากโจทย์",

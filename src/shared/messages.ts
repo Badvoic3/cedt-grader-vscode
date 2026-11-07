@@ -1,3 +1,4 @@
+import type { Captured, CaseRun, CaseSource, CompileFailure, RunLimits, RunSummary } from '../runner/types';
 import type { SectionId } from './layout';
 /**
  * Typed messages between the extension host and the sidebar webview.
@@ -186,7 +187,7 @@ export interface ViewState {
     submitWhy: string | null;
     /** The user picked it (else detected): the dropdown's "Automatic" option is not selected. */
     submitChosen: boolean;
-    /** The program CPH runs and test cases belong to (the driver with main()). */
+    /** The program Run tests runs (the driver with main()). */
     runFile: string | null;
     runWhy: string | null;
     runChosen: boolean;
@@ -195,8 +196,8 @@ export interface ViewState {
     /** C/C++ sources (run choices). */
     runCandidates: string[];
   } | null;
-  /** "Run tests" (CPH installed only; null hides it); disabled with a reason while the run file has no tests. */
-  runTests: { disabledReason: string | null } | null;
+  /** The Run tests row and Open tests (null: no file open); `disabledReason` while there is nothing to run. */
+  runTests: { summary: RunSummary; running: boolean; disabledReason: string | null } | null;
   /** "Link the whole folder" / "Link only this file" (null: no problem or file); `disabledReason` when it can't be switched on. */
   folderMode: { on: boolean; disabledReason: string | null } | null;
   /** Attachment download in progress (problem id). */
@@ -220,8 +221,6 @@ export interface ViewState {
     note: string | null;
   };
   testcases: { busy: boolean };
-  /** "Load sample cases" is reading the statement; available = false when the cached statement is not a PDF. */
-  samples: { busy: boolean; available: boolean };
   /** CPH (optional) installed and enabled. */
   cph: { installed: boolean };
   languages: {
@@ -316,12 +315,67 @@ export type FromWebview =
   | { type: 'toggleFolderMode' }
   | { type: 'setFolderRole'; role: 'submit' | 'run'; file: string }
   | { type: 'runTests' }
+  | { type: 'stopTests' }
+  | { type: 'openTests' }
   | { type: 'cphTip'; action: 'install' | 'later' | 'never' }
   | { type: 'crashAction'; id: number; action: 'open' | 'dismiss' }
   | { type: 'webviewError'; message: string; stack: string }
   | { type: 'showCompilerMessage' }
   | { type: 'openSettings' }
   | { type: 'openTroubleshooting' };
+
+/** One case's texts in the Test view. `truncated`: too long to show whole, so it can't be edited there. */
+export interface TestCaseView {
+  id: string;
+  source: CaseSource;
+  input: Captured;
+  expected: Captured;
+}
+
+/** The Test view, without its cases. */
+export interface TestsHead {
+  /** The problem's name, else the file's. Null: no source file is open. */
+  title: string | null;
+  problemId: number | null;
+  limits: RunLimits;
+  summary: RunSummary;
+  running: boolean;
+  failure: CompileFailure | null;
+  /** Folder mode: files with their own `main()` that weren't compiled. */
+  leftOut: string[];
+  /** The Load row (null: not linked to a problem); a button is null when it doesn't apply. */
+  load: { testcases: { busy: boolean } | null; samples: { busy: boolean } | null } | null;
+}
+
+/**
+ * Host → Test view. `cases` and `runs` hold only what changed since the last
+ * message, so a run never resends the case texts; `fresh` starts over.
+ * A null in `runs`: that case has no result any more.
+ */
+export interface ToTests {
+  type: 'state';
+  head: TestsHead;
+  fresh: boolean;
+  order: string[];
+  cases: TestCaseView[];
+  runs: Record<string, CaseRun | null>;
+}
+
+/** Test view → host. */
+export type FromTests =
+  | { type: 'ready' }
+  | { type: 'run'; caseId?: string }
+  | { type: 'stop' }
+  | { type: 'add' }
+  | { type: 'edit'; caseId: string; input?: string; expected?: string }
+  | { type: 'remove'; caseId: string }
+  | { type: 'reorder'; ids: string[] }
+  | { type: 'setExpected'; caseId: string }
+  | { type: 'copy'; caseId: string; what: 'input' | 'expected' | 'actual' | 'stderr' }
+  | { type: 'copyFailure' }
+  | { type: 'loadTestcases' }
+  | { type: 'loadSamples' }
+  | { type: 'webviewError'; message: string; stack: string };
 
 export function isFromWebview(m: unknown): m is FromWebview {
   return typeof m === 'object' && m !== null && typeof (m as { type?: unknown }).type === 'string';

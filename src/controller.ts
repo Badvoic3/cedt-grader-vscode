@@ -4,6 +4,7 @@ import type { CrashReporter } from './crashReporter';
 import { DataService } from './data/dataService';
 import { StatementStore } from './data/statementStore';
 import { StatementPanels } from './ui/statementPanel';
+import { TestPanel } from './ui/testPanel';
 import {
   AuthError,
   chooseLanguage,
@@ -114,7 +115,6 @@ export class GraderController implements vscode.Disposable {
   private notLinked = false;
   private fileEventTimer: ReturnType<typeof setTimeout> | undefined;
   /** CPH tip: "Not now" hides it for this session. */
-  private cphTipHidden = false;
   /** The "CPH opens its panel on every switch" question was answered this session (or is showing). */
   private cphAutoShowAsked = false;
   /** The problem the statement tab last followed (undefined: not yet). */
@@ -128,6 +128,7 @@ export class GraderController implements vscode.Disposable {
   private connection: ConnectionProblem | null = null;
   private retryAction: (() => Promise<unknown>) | null = null;
   readonly statements: StatementPanels;
+  readonly testPanel: TestPanel;
 
   /** What the flows see of the controller (see src/flows/host.ts). */
   private readonly host: Host;
@@ -220,6 +221,17 @@ export class GraderController implements vscode.Disposable {
         },
       },
     );
+    this.testPanel = new TestPanel(ctx.extensionUri, {
+      runner: () => this.runner,
+      tests: () => this.tests,
+      sharedColumn: () => {
+        const column = this.statements.column();
+        return column === vscode.window.activeTextEditor?.viewColumn ? undefined : column;
+      },
+      started: this.started,
+      webviewError: (message, stack) => this.crash.panelError(message, stack),
+      log: (msg) => this.log(msg),
+    });
     // A late (deferred) list load: re-resolve the open file (local only: mapping file and CPH .prob).
     this.data.onProblemsLoaded = () => {
       // Problems back in the list are available again.
@@ -231,6 +243,7 @@ export class GraderController implements vscode.Disposable {
     this.disposables.push(
       this.output,
       this.statements,
+      this.testPanel,
       this.cph,
       vscode.window.onDidChangeActiveTextEditor((e) => {
         if (e && e.document.uri.scheme === 'file') void this.setActiveFile(e.document.uri);
@@ -344,7 +357,8 @@ export class GraderController implements vscode.Disposable {
         this.accountStatus = 'logged-in';
         void this.data.loadProblems(); // deferred until the panel is visible
       }
-      const ed = vscode.window.activeTextEditor;
+      // A restored Test or statement tab can have the focus: the code is still open beside it.
+      const ed = vscode.window.activeTextEditor ?? vscode.window.visibleTextEditors.find((e) => e.document.uri.scheme === 'file');
       if (ed && ed.document.uri.scheme === 'file') await this.setActiveFile(ed.document.uri);
     } catch (err) {
       // Bad saved data must not stop the extension; the panel still works.
@@ -535,6 +549,7 @@ export class GraderController implements vscode.Disposable {
   private applyLanguage(): void {
     setLanguage(resolveLang(this.cfg.displayLanguage, vscode.env.language));
     this.statements.reloadAll();
+    this.testPanel.reload();
     this.onLanguageChanged?.();
   }
 
@@ -542,6 +557,7 @@ export class GraderController implements vscode.Disposable {
     const s = this.safeState();
     if (!s) return;
     for (const l of this.listeners) l(s);
+    this.testPanel.update();
   }
 
   /** Errors outside a request (e.g. activation) go to the extension's output channel, not the console. */
@@ -725,18 +741,16 @@ export class GraderController implements vscode.Disposable {
       crash: this.crash.view,
       ...this.links.noticeView(problem, file),
       folder: this.folder.view(),
-      runTests: this.cph.installed && problem && file ? { disabledReason: this.tests.runTestCount ? null : S.runTests.noTestsShort } : null,
+      runTests: file ? this.runner.panelView() : null,
       folderMode: file ? { on: !!folderLink && !this.folder.matched, disabledReason: folderLink ? null : this.folder.modeTarget().reason } : null,
       attachment: { busy: problem && this.data.isDownloading(problem.id) ? problem.id : null },
-      cphTip:
-        !this.cph.installed && !this.cphTipHidden && !this.ctx.globalState.get<boolean>(KEYS.cphTipDismissed, false) && !!problem?.hasTestcase,
+      cphTip: false, // the built-in runner replaces it; the rest goes with CPH in v1.0.4
       matching: {
         suggestions: this.matchInfo.suggestions.map((p) => this.problemView(p)),
         ambiguous: this.matchInfo.ambiguous?.map((p) => this.problemView(p)) ?? null,
         note: matchNote(this.matchInfo),
       },
       testcases: { busy: this.tests.busy },
-      samples: { busy: this.tests.samplesBusy, available: !this.tests.statementNoPdf },
       cph: { installed: this.cph.installed },
       languages: {
         loading: languagesLoading,
@@ -901,7 +915,6 @@ export class GraderController implements vscode.Disposable {
   async cphTip(action: 'install' | 'later' | 'never'): Promise<void> {
     if (action === 'install') await vscode.commands.executeCommand('extension.open', CPH_EXTENSION_ID);
     if (action === 'never') await this.ctx.globalState.update(KEYS.cphTipDismissed, true);
-    this.cphTipHidden = true; // never more than once per session
     this.emit();
   }
 
@@ -1274,7 +1287,6 @@ export class GraderController implements vscode.Disposable {
       else if (r.status === 'target-exists') skipped++;
     }
     void vscode.window.showInformationMessage(S.moved.movedCph(done, skipped));
-    await this.tests.refreshRunTests();
   }
 
   /** "Clear Cached Data": what the controller resets after the cache flow cleared the stores. */
@@ -1390,7 +1402,13 @@ export class GraderController implements vscode.Disposable {
   downloadAttachment = (problemId?: number) => this.attachments.download(problemId);
   loadTestcases = (refresh = false, asFiles = false) => this.tests.loadTestcases(refresh, asFiles);
   loadSampleCases = () => this.tests.loadSampleCases();
-  runTests = () => this.tests.runTests();
+  /** The main panel's Run tests: the split opens unless every case passed. */
+  async runTests(): Promise<void> {
+    const summary = await this.runner.run();
+    if (Runner.shouldOpenTests(summary) || (!summary && !this.runner.running && this.runner.summary().kind === 'no-cases' && this.fileUri)) await this.testPanel.open();
+  }
+  stopTests = () => this.runner.stop();
+  openTests = () => this.testPanel.open();
   submit = () => this.submitFlow.submit();
   showLastResult = () => this.submitFlow.showLastResult();
   showCompilerMessage = () => this.submitFlow.showCompilerMessage();

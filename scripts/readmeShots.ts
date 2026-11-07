@@ -100,7 +100,6 @@ function sample() {
     prompt: null,
     matching: { suggestions: [], ambiguous: null, note: null },
     testcases: { busy: false },
-    samples: { busy: false, available: true },
     cph: { installed: true },
     languages: { loading: false, items: [{ id: 1, name: 'C' }, { id: 2, name: 'C++' }, { id: 3, name: 'Python' }, { id: 4, name: 'Java' }], selectedId: 2, mismatch: null },
     connection: null,
@@ -133,7 +132,7 @@ function sample() {
       candidates: ['main.cpp', 'student.h'], runCandidates: ['main.cpp', 'student.h'],
     },
     folderMode: { on: true, disabledReason: null },
-    runTests: { disabledReason: null },
+    runTests: { summary: { kind: 'done', passed: 3, total: 6 }, running: false, disabledReason: null },
     result: null,
     history: { ...state.history, items: [] },
   };

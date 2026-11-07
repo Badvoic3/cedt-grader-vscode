@@ -35,6 +35,7 @@ const copyAssets = {
       await copyFile('node_modules/@vscode/codicons/dist/codicon.ttf', 'media/dist/codicon.ttf');
       await copyFile('webview/style.css', 'media/dist/webview.css');
       await copyFile('webview/statement.css', 'media/dist/statement.css');
+      await copyFile('webview/tests.css', 'media/dist/tests.css');
       // pdf.js assets for the statement viewer (bundled; never loaded from a CDN). The legacy build,
       // like the host's: this worker also serves "Load sample cases" (src/data/pdfSamples.ts).
       const pdfjs = 'node_modules/pdfjs-dist';
@@ -91,7 +92,16 @@ const statement = await context({
   target: 'es2022',
 });
 
-const all = [host, webview, statement];
+const tests = await context({
+  ...common,
+  entryPoints: ['webview/tests.ts'],
+  outfile: 'media/dist/tests.js',
+  platform: 'browser',
+  format: 'iife',
+  target: 'es2022',
+});
+
+const all = [host, webview, statement, tests];
 if (watch) {
   await Promise.all(all.map((c) => c.watch()));
 } else {

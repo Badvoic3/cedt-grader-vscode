@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import { readdir, readFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 import { isAtOrInside } from '../mapping/paths';
 import { Builder, buildRoot, type Program } from '../runner/compile';
 import { runCases } from '../runner/execute';
@@ -11,6 +11,7 @@ import { nodeProcessApi } from '../runner/process';
 import { allPassed, emptyState, type RunState, summarize } from '../runner/state';
 import type { CaseList, CaseOwner, CaseRun, ProcessApi, RunLimits, RunnerCase, RunSummary } from '../runner/types';
 import { RUNNER } from '../shared/constants';
+import type { TestsHead, ViewState } from '../shared/messages';
 import { S } from '../shared/strings';
 import type { Host } from './host';
 
@@ -25,6 +26,8 @@ interface RunTarget {
   /** The folder (folder mode) or the file whose unsaved edits are saved first. */
   saveScope: { folder: string } | { file: string };
 }
+
+const NO_CASES: readonly RunnerCase[] = [];
 
 export const ownerKey = (o: CaseOwner): string => ('file' in o ? `file:${o.file}` : `problem:${o.problemId}`);
 
@@ -41,6 +44,10 @@ export class Runner {
   private notifyTimer: NodeJS.Timeout | undefined;
   /** The active file's list, for the panels (they render synchronously). */
   private list: CaseList | null = null;
+  /** Whose list `list` is: right after a file switch it can still be the last file's. */
+  private listKey: string | null = null;
+  /** Case changes, one at a time: a run starts after the last one. */
+  private edits: Promise<unknown> = Promise.resolve();
 
   constructor(
     private readonly host: Host,
@@ -79,10 +86,111 @@ export class Runner {
     return s;
   }
 
+  private shown(owner: CaseOwner | null): CaseList | null {
+    return owner && this.listKey === ownerKey(owner) ? this.list : null;
+  }
+
   summary(): RunSummary {
     const owner = this.owner();
     if (!owner) return { kind: 'no-cases' };
-    return summarize(this.list?.cases ?? [], this.state(owner));
+    return summarize(this.shown(owner)?.cases ?? [], this.state(owner));
+  }
+
+  /** The main panel's Run tests row. */
+  panelView(): ViewState['runTests'] {
+    const summary = this.summary();
+    return { summary, running: this.running, disabledReason: summary.kind === 'no-cases' ? S.runTests.noCases : null };
+  }
+
+  /** What the Test view shows; `key` changes when another list takes over. */
+  testsView(): { head: TestsHead; key: string | null; cases: readonly RunnerCase[]; runs: ReadonlyMap<string, CaseRun> } {
+    const h = this.host;
+    const owner = this.owner();
+    const list = this.shown(owner);
+    const st = owner ? this.state(owner) : emptyState();
+    const problem = h.problem;
+    const name = h.fileUri ? basename(h.fileUri.fsPath) : null;
+    return {
+      key: owner ? ownerKey(owner) : null,
+      cases: list?.cases ?? NO_CASES,
+      runs: st.runs,
+      head: {
+        title: problem?.name ?? name,
+        problemId: problem?.id ?? null,
+        limits: this.knownLimits(list),
+        summary: this.summary(),
+        running: this.running,
+        failure: st.failure,
+        leftOut: st.leftOut,
+        load: problem
+          ? {
+              testcases: problem.hasTestcase ? { busy: h.tests.busy } : null,
+              samples: !h.tests.statementNoPdf || h.tests.samplesBusy ? { busy: h.tests.samplesBusy } : null,
+            }
+          : null,
+      },
+    };
+  }
+
+  /** One change to the active list. Changes keep their order, and a failed one is shown, not thrown. */
+  private change(apply: (owner: CaseOwner) => Promise<CaseList>): Promise<void> {
+    const owner = this.owner();
+    if (!owner) return Promise.resolve();
+    const key = ownerKey(owner);
+    const next = this.edits.then(async () => {
+      try {
+        const list = await apply(owner);
+        if (this.listKey === key) this.list = list;
+        this.host.emit();
+      } catch (err) {
+        void this.host.tellInline(err, S.runner.saveFailed(this.host.describe(err)));
+      }
+    });
+    this.edits = next;
+    return next;
+  }
+
+  addCase(): Promise<void> {
+    return this.change((o) => this.host.cases.add(o));
+  }
+
+  /** New text: the case's old result no longer says anything about it. */
+  editCase(id: string, text: Partial<Pick<RunnerCase, 'input' | 'expected'>>): Promise<void> {
+    return this.change((o) => {
+      this.state(o).runs.delete(id);
+      return this.host.cases.update(o, id, text);
+    });
+  }
+
+  removeCase(id: string): Promise<void> {
+    return this.change((o) => {
+      this.state(o).runs.delete(id);
+      return this.host.cases.remove(o, id);
+    });
+  }
+
+  reorderCases(ids: readonly string[]): Promise<void> {
+    return this.change((o) => this.host.cases.reorder(o, ids));
+  }
+
+  /** Set Actual as Expected. A cut output isn't the program's whole answer, so it is refused. */
+  async setExpected(id: string): Promise<void> {
+    const owner = this.owner();
+    const actual = owner ? this.state(owner).runs.get(id)?.actual : undefined;
+    if (actual && !actual.truncated) await this.editCase(id, { expected: actual.text });
+  }
+
+  /** The whole text, also when the Test view shows it cut. */
+  textOf(id: string, what: 'input' | 'expected' | 'actual' | 'stderr'): string | null {
+    const owner = this.owner();
+    if (!owner) return null;
+    if (what === 'input' || what === 'expected') return this.shown(owner)?.cases.find((c) => c.id === id)?.[what] ?? null;
+    return this.state(owner).runs.get(id)?.[what === 'actual' ? 'actual' : 'stderr']?.text ?? null;
+  }
+
+  failureText(): string | null {
+    const owner = this.owner();
+    return owner ? (this.state(owner).failure?.message ?? null) : null;
   }
 
   /** The active file changed: its list, after carrying over cases written before the file was linked. */
@@ -95,8 +203,18 @@ export class Runner {
   }
 
   private async reload(owner = this.owner()): Promise<void> {
-    this.list = owner ? await this.host.cases.read(owner) : null;
+    const list = owner ? await this.host.cases.read(owner) : null;
+    // Only the newest file's list: reads of two quick switches can end in either order.
+    const now = this.owner();
+    if ((now && ownerKey(now)) !== (owner && ownerKey(owner))) return;
+    this.list = list;
+    this.listKey = owner ? ownerKey(owner) : null;
     this.host.emit();
+  }
+
+  /** The case files changed from outside this flow (Clear Cached Data). */
+  refresh(): Promise<void> {
+    return this.reload();
   }
 
   /** A file or folder moved. */
@@ -110,6 +228,7 @@ export class Runner {
     this.stop();
     this.states.clear();
     this.list = null;
+    this.listKey = null;
     this.tools.reset();
   }
 
@@ -130,6 +249,7 @@ export class Runner {
         void h.tellInline(null, S.runner.untrusted);
         return null;
       }
+      await this.edits;
       const target = await this.target();
       if (!target) return null;
       await this.saveDirty(target);

@@ -443,13 +443,14 @@ input::placeholder { color: var(--vscode-input-placeholderForeground); }
 
 /* ------------------------------------------------------------- linking */
 
-.test-buttons {
-  display: grid;
-  gap: var(--gap);
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, var(--btn-w, 10em)), 1fr));
-}
-.test-buttons .btn { min-width: 0; overflow: hidden; }
-.btn.wide { width: 100%; }
+.run-rows { display: flex; flex-direction: column; gap: var(--gap); }
+.run-rows .row .btn { flex: 1 1 auto; min-width: 0; }
+.run-icon { color: var(--ok); }
+.run-pill { font-weight: 600; white-space: nowrap; }
+.run-pill.quiet { color: var(--muted); }
+.run-pill.busy { color: var(--vscode-charts-blue, var(--muted)); }
+.run-pill.bad { color: var(--bad); }
+.run-pill.good { color: var(--ok); }
 .row-actions { display: inline-flex; flex: none; opacity: 0; transition: opacity 0.1s; }
 /* Problem rows: the icons float over the row's bottom right (the full name / tags line), so the name keeps
    the row's width. The fade + background (row colour over the sidebar's, for see-through hover colours)

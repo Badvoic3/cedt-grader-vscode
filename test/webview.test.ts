@@ -47,7 +47,6 @@ const base: ViewState = {
   notLinked: false,
   prompt: null,
   testcases: { busy: false },
-  samples: { busy: false, available: true },
   folder: null,
   folderMode: null,
   attachment: { busy: null },
@@ -323,8 +322,6 @@ describe.runIf(existsSync(resolve(__dirname, '../esbuild.mjs')))('sidebar webvie
     expect(sent.at(-1)).toEqual({ type: 'loadTestcases', asFiles: true });
     doc.dispatchEvent(new (doc.defaultView as unknown as typeof globalThis).KeyboardEvent('keydown', { key: 'Escape' }));
     expect(doc.querySelector('.context-menu')).toBeNull();
-    [...cur.querySelectorAll<HTMLButtonElement>('button')].find((b) => b.textContent?.includes('Load test cases'))!.click();
-    expect(sent.at(-1)).toEqual({ type: 'loadTestcases' });
     doc.querySelector<HTMLButtonElement>('#sec-current .combo')!.click();
     expect(doc.activeElement).toBe(doc.querySelector('.picker-search'));
     // Row icons as before the "…" menu (same icons, order, tooltips).
@@ -357,7 +354,6 @@ describe.runIf(existsSync(resolve(__dirname, '../esbuild.mjs')))('sidebar webvie
     confirm.click();
     expect(sent.at(-1)).toEqual({ type: 'confirmProblem', problemId: 1271 });
     // Read-only features as for a link; write actions ask in the extension (one question, then confirmed).
-    expect([...doc.querySelectorAll('#sec-current button')].some((b) => b.textContent?.includes('Load test cases'))).toBe(true);
     expect(doc.querySelector('#sec-current .score-card, #sec-current .score')).not.toBeNull();
     expect(doc.querySelector('#sec-current [aria-label="Open statement"]')).not.toBeNull();
     post({ ...loggedIn, problem: { ...sug, source: 'suggested', sourceLabel: 'Suggested — click to confirm', unavailable: false }, matching: { suggestions: [sug], ambiguous: null, note: null } });
@@ -379,38 +375,53 @@ describe.runIf(existsSync(resolve(__dirname, '../esbuild.mjs')))('sidebar webvie
   it('CPH not installed: same UI, neutral texts, no "CPH" in the main UI', () => {
     const { doc, post } = boot();
     post({ ...loggedIn, cph: { installed: false } });
-    const btn = [...doc.querySelectorAll<HTMLButtonElement>('#sec-current button')].find((b) => b.textContent?.includes('Load test cases'))!;
-    expect(btn.textContent).toBe(' Load test cases');
-    expect(btn.getAttribute('data-tip')).toContain("CPH isn't installed");
     expect(doc.querySelector('#submit-btn')).not.toBeNull();
     expect(doc.querySelectorAll('#sec-problems .problem-row:not([hidden])')).toHaveLength(2);
     // "CPH" only appears where it is actually used (tooltips), not as visible UI text.
     expect(doc.body.textContent).not.toMatch(/CPH/);
   });
 
-  it('Load samples: on one row with Load test cases, for every problem (also without grader test cases), the note in the tooltip', () => {
+  it('Run tests row: summary pill, Stop while running, Open tests, for a file with or without a problem; Load is only in the Test view', () => {
     const { doc, sent, post } = boot();
-    const row = () => [...doc.querySelectorAll('#sec-current .test-buttons button.btn')].map((b) => b.textContent?.trim());
-    post(loggedIn);
-    expect(row()).toEqual(['Load test cases', 'Load samples']);
-    const tip = 'Load the sample cases from the example table in the problem statement (PDF), also for problems without grader test cases. An unusual layout may be read wrong, so check the cases.';
-    const btn = () => doc.querySelectorAll<HTMLButtonElement>('#sec-current .test-buttons button.btn')[row().length - 1];
-    expect(btn().dataset.tip).toBe(tip);
-    expect(btn().hasAttribute('title')).toBe(false);
-    btn().click();
-    expect(sent.at(-1)).toEqual({ type: 'loadSampleCases' });
-    post({ ...loggedIn, problem: { ...loggedIn.problem!, hasTestcase: false } });
-    expect(row()).toEqual(['Load samples']);
-    post({ ...loggedIn, samples: { busy: true, available: true } });
-    expect(btn().disabled).toBe(true);
-    expect(btn().textContent?.trim()).toBe('Reading…');
-    expect(btn().dataset.tip).toBe('Reading the example table in the statement…');
-    // The cached statement is not a PDF: no samples button; the grader's button alone (full width).
-    post({ ...loggedIn, samples: { busy: false, available: false } });
-    expect(row()).toEqual(['Load test cases']);
-    // Neither: no row at all (the rest moves up).
-    post({ ...loggedIn, problem: { ...loggedIn.problem!, hasTestcase: false }, samples: { busy: false, available: false } });
-    expect(doc.querySelector('#sec-current .test-buttons')).toBeNull();
+    const cur = doc.querySelector('#sec-current')!;
+    const find = (t: string) => [...cur.querySelectorAll<HTMLButtonElement>('button')].find((b) => b.textContent?.includes(t));
+    const pill = () => cur.querySelector('.run-pill')!;
+    post({ ...loggedIn, runTests: { summary: { kind: 'no-cases' }, running: false, disabledReason: 'add or load test cases first' } });
+    expect(find('Load test cases')).toBeUndefined();
+    expect(find('Load samples')).toBeUndefined();
+    expect(find('Run tests')!.disabled).toBe(true);
+    expect(find('Run tests')!.dataset.tip).toContain('add or load test cases first');
+    expect(pill().textContent).toBe('No cases');
+    find('Open tests')!.click();
+    expect(sent.at(-1)).toEqual({ type: 'openTests' });
+    // The rows sit right above Submit.
+    expect(cur.querySelector('.run-rows')!.nextElementSibling).toBe(doc.querySelector('#submit-btn'));
+
+    post({ ...loggedIn, runTests: { summary: { kind: 'running', done: 3, total: 6 }, running: true, disabledReason: null } });
+    expect(find('Run tests')).toBeUndefined();
+    expect(pill().textContent).toBe('Running 3/6…');
+    expect(pill().classList.contains('busy')).toBe(true);
+    find('Stop')!.click();
+    expect(sent.at(-1)).toEqual({ type: 'stopTests' });
+
+    post({ ...loggedIn, runTests: { summary: { kind: 'done', passed: 3, total: 6 }, running: false, disabledReason: null } });
+    expect(pill().textContent).toBe('3 / 6 passed');
+    expect(pill().classList.contains('bad')).toBe(true);
+    find('Run tests')!.click();
+    expect(sent.at(-1)).toEqual({ type: 'runTests' });
+    post({ ...loggedIn, runTests: { summary: { kind: 'done', passed: 6, total: 6 }, running: false, disabledReason: null } });
+    expect(pill().classList.contains('good')).toBe(true);
+    post({ ...loggedIn, runTests: { summary: { kind: 'compile-error' }, running: false, disabledReason: null } });
+    expect(pill().textContent).toBe('Compile error');
+
+    // Not linked to a problem: the same rows.
+    post({ ...loggedIn, problem: null, notLinked: true, runTests: { summary: { kind: 'not-run' }, running: false, disabledReason: null } });
+    expect(find('Run tests')!.disabled).toBe(false);
+    expect(find('Open tests')).toBeDefined();
+    expect(pill().textContent).toBe('Not run');
+    // No file: none.
+    post({ ...loggedIn, file: null, problem: null, runTests: null });
+    expect(find('Run tests')).toBeUndefined();
   });
 
   it('accessibility: every icon-only button has a tooltip and the same aria-label; disabled buttons say why', () => {
@@ -426,8 +437,8 @@ describe.runIf(existsSync(resolve(__dirname, '../esbuild.mjs')))('sidebar webvie
       { ...loggedIn, testcases: { busy: true } },
       // Attachment + folder mode: download icon (also busy), folder toggle (also disabled), submit-file select.
       withAttachment({ folderMode: { on: false, disabledReason: 'This file is at the top of the workspace folder.' }, attachment: { busy: 1360 } }),
-      withAttachment({ folder: { path: 'pkg/', matched: false, submitFile: 'student.h', submitWhy: 'the included file named student.*', submitChosen: false, runFile: 'main.cpp', runWhy: 'the only file with main()', runChosen: false, candidates: ['main.cpp', 'student.h', 'vector.h'], runCandidates: ['main.cpp'] }, folderMode: { on: true, disabledReason: null }, runTests: { disabledReason: 'load the test cases first' } }),
-      withAttachment({ folder: { ...({ path: 'pkg/', matched: false, submitFile: 'student.h', submitWhy: 'the included file named student.*', submitChosen: false, runFile: 'main.cpp', runWhy: 'the only file with main()', runChosen: false, candidates: ['main.cpp', 'student.h', 'vector.h'], runCandidates: ['main.cpp'] }), submitFile: null, submitWhy: null, runFile: null, runWhy: null }, folderMode: { on: true, disabledReason: null }, runTests: { disabledReason: null } }),
+      withAttachment({ folder: { path: 'pkg/', matched: false, submitFile: 'student.h', submitWhy: 'the included file named student.*', submitChosen: false, runFile: 'main.cpp', runWhy: 'the only file with main()', runChosen: false, candidates: ['main.cpp', 'student.h', 'vector.h'], runCandidates: ['main.cpp'] }, folderMode: { on: true, disabledReason: null }, runTests: { summary: { kind: 'no-cases' }, running: false, disabledReason: 'add or load test cases first' } }),
+      withAttachment({ folder: { ...({ path: 'pkg/', matched: false, submitFile: 'student.h', submitWhy: 'the included file named student.*', submitChosen: false, runFile: 'main.cpp', runWhy: 'the only file with main()', runChosen: false, candidates: ['main.cpp', 'student.h', 'vector.h'], runCandidates: ['main.cpp'] }), submitFile: null, submitWhy: null, runFile: null, runWhy: null }, folderMode: { on: true, disabledReason: null }, runTests: { summary: { kind: 'not-run' }, running: false, disabledReason: null } }),
       {
         ...loggedIn,
         history: {
@@ -498,7 +509,7 @@ describe.runIf(existsSync(resolve(__dirname, '../esbuild.mjs')))('sidebar webvie
     expect(off.disabled).toBe(true);
     expect(off.dataset.tip).toContain('top of the workspace folder');
     // In folder mode.
-    post(withAttachment({ folder: { path: 'pkg/', matched: false, submitFile: 'student.h', submitWhy: 'the included file named student.*', submitChosen: false, runFile: 'main.cpp', runWhy: 'the only file with main()', runChosen: false, candidates: ['main.cpp', 'student.h', 'vector.h'], runCandidates: ['main.cpp'] }, folderMode: { on: true, disabledReason: null }, runTests: { disabledReason: null } }));
+    post(withAttachment({ folder: { path: 'pkg/', matched: false, submitFile: 'student.h', submitWhy: 'the included file named student.*', submitChosen: false, runFile: 'main.cpp', runWhy: 'the only file with main()', runChosen: false, candidates: ['main.cpp', 'student.h', 'vector.h'], runCandidates: ['main.cpp'] }, folderMode: { on: true, disabledReason: null }, runTests: { summary: { kind: 'not-run' }, running: false, disabledReason: null } }));
     const cur = doc.querySelector('#sec-current')!;
     expect(cur.querySelector('.source-line.source-folder')!.textContent).toBe('Folder linked by you: pkg/');
     expect(header(doc).querySelector('[aria-label="Link only this file"]')).not.toBeNull();
@@ -520,16 +531,15 @@ describe.runIf(existsSync(resolve(__dirname, '../esbuild.mjs')))('sidebar webvie
     pick.value = '';
     pick.dispatchEvent(new W.Event('change'));
     expect(sent.at(-1)).toEqual({ type: 'setFolderRole', role: 'submit', file: '' }); // back to automatic
-    // Run tests (CPH installed): runs the driver; disabled until test cases are loaded.
+    // Run tests: disabled until there are test cases.
     [...cur.querySelectorAll<HTMLButtonElement>('button')].find((b) => b.textContent?.includes('Run tests'))!.click();
     expect(sent.at(-1)).toEqual({ type: 'runTests' });
-    post(withAttachment({ folder: { path: 'pkg/', matched: false, submitFile: 'student.h', submitWhy: 'the included file named student.*', submitChosen: false, runFile: 'main.cpp', runWhy: 'the only file with main()', runChosen: false, candidates: ['main.cpp', 'student.h', 'vector.h'], runCandidates: ['main.cpp'] }, folderMode: { on: true, disabledReason: null }, runTests: { disabledReason: 'load the test cases first' } }));
+    post(withAttachment({ folder: { path: 'pkg/', matched: false, submitFile: 'student.h', submitWhy: 'the included file named student.*', submitChosen: false, runFile: 'main.cpp', runWhy: 'the only file with main()', runChosen: false, candidates: ['main.cpp', 'student.h', 'vector.h'], runCandidates: ['main.cpp'] }, folderMode: { on: true, disabledReason: null }, runTests: { summary: { kind: 'no-cases' }, running: false, disabledReason: 'add or load test cases first' } }));
     const run = [...cur.querySelectorAll<HTMLButtonElement>('button')].find((b) => b.textContent?.includes('Run tests'))!;
     expect(run.disabled).toBe(true);
-    expect(run.classList.contains('wide')).toBe(true); // full width like Submit, outside the test-case row
-    expect(run.dataset.tip).toContain('load the test cases first');
+    expect(run.dataset.tip).toContain('add or load test cases first');
     post({ ...withAttachment(), runTests: null });
-    expect([...cur.querySelectorAll('button')].some((b) => b.textContent?.includes('Run tests'))).toBe(false); // no CPH: no button
+    expect([...cur.querySelectorAll('button')].some((b) => b.textContent?.includes('Run tests'))).toBe(false); // no file: no button
     // Matched by the folder's name (no folder link): "Don't match this folder".
     post({ ...withAttachment(), problem: { ...withAttachment().problem!, source: 'folder', sourceLabel: 'Matched by folder name' } });
     expect(cur.querySelector('.source-line.source-folder')!.textContent).toBe('Matched by folder name');
