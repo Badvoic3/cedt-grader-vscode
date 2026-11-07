@@ -167,6 +167,17 @@ describe('Test view', () => {
     expect(doc.querySelector('.det')).not.toBeNull();
   });
 
+  it('Add case is always under the last case, and gone with no file', () => {
+    const { doc, post, button } = boot();
+    post({ fresh: true, head: head({ summary: { kind: 'no-cases' } }) });
+    expect(button('Add case')!.hidden).toBe(false);
+    post({ head: head(), order: ['a', 'b'], cases: [kase('a'), kase('b')] });
+    expect(button('Add case')!.previousElementSibling).toBe(doc.querySelector('.cards'));
+    expect(doc.querySelector('.tools')!.textContent).not.toContain('Add case');
+    post({ fresh: true, head: head({ title: null, problemId: null, load: null }), order: [] });
+    expect(button('Add case')!.hidden).toBe(true);
+  });
+
   it('Add case opens the new case and puts the cursor in it', () => {
     const { doc, sent, post, button } = boot();
     post({ fresh: true, head: head({ summary: { kind: 'no-cases' } }) });

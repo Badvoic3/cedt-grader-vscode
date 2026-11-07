@@ -91,7 +91,9 @@ const app = document.getElementById('app')!;
 const top = el('div', { class: 'tv-top' });
 // Kept out of `top`, which is rebuilt: moving the list would take the cursor out of the text being typed.
 const list = el('div', { class: 'cards' });
-app.append(el('div', { class: 'tv' }, top, list));
+// Always under the last case, so each new case pushes it down.
+const addCase = button([icon('add'), ` ${W.addCase}`], () => { addPending = true; send({ type: 'add' }); }, { cls: 'add-case', title: W.addCaseTip });
+app.append(el('div', { class: 'tv' }, top, list, addCase));
 
 /** Rebuild `root`, with the keyboard staying on the same button. */
 function keepingFocus(root: HTMLElement, rebuild: () => HTMLElement | void): void {
@@ -104,6 +106,8 @@ function keepingFocus(root: HTMLElement, rebuild: () => HTMLElement | void): voi
 function renderTop(h: TestsHead): void {
   top.replaceChildren();
   list.hidden = h.title === null || !order.length;
+  addCase.hidden = h.title === null;
+  addCase.disabled = h.running;
   const close = () => iconButton('close', W.closeTests, () => { flushEdits(); send({ type: 'close' }); });
   if (h.title === null) {
     top.append(el('div', { class: 'th' }, el('p', { class: 'muted small grow' }, W.testsNoFile), close()));
@@ -124,9 +128,8 @@ function renderTop(h: TestsHead): void {
   top.append(
     el('div', { class: 'tools' },
       h.running
-        ? button([icon('debug-stop'), ` ${W.stopTests}`], () => send({ type: 'stop' }), { title: W.stopTestsTip })
-        : button([icon('play'), ` ${W.runAll}`], () => run(), { kind: 'primary', disabled: empty, title: empty ? W.runAllNoCases : W.runAllTip }),
-      button([icon('add'), ` ${W.addCase}`], () => { addPending = true; send({ type: 'add' }); }, { cls: 'add-case', disabled: h.running, title: W.addCaseTip }),
+        ? button([icon('debug-stop'), ` ${W.stopTests}`], () => send({ type: 'stop' }), { cls: 'run-all', title: W.stopTestsTip })
+        : button([icon('play'), ` ${W.runAll}`], () => run(), { kind: 'primary', cls: 'run-all', disabled: empty, title: empty ? W.runAllNoCases : W.runAllTip }),
       load?.testcases
         ? button(load.testcases.busy ? [icon('loading', 'codicon-modifier-spin'), ` ${W.loadingTestCases}`] : [icon('beaker'), ` ${W.loadTestCases}`], () => send({ type: 'loadTestcases' }), { disabled: load.testcases.busy || h.running, title: load.testcases.busy ? W.downloadingTestCases : W.loadTestCasesTip })
         : null,

@@ -12,12 +12,19 @@ body { padding: 0; background: var(--vscode-sideBar-background, var(--vscode-edi
 .tools { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; }
 .tools .btn { flex: 1 1 calc(50% - 3px); min-width: 0; overflow: hidden; }
 .tools .limit { flex: 1 1 100%; }
-.add-case { border-color: var(--vscode-focusBorder); color: var(--vscode-foreground); }
-.add-case .codicon { color: var(--vscode-focusBorder); }
-body.vscode-high-contrast .add-case .codicon { color: inherit; }
+.tools .run-all { flex-basis: 100%; }
+.btn.add-case {
+  width: 100%; padding: 7px 10px; font-weight: 600; color: var(--vscode-foreground);
+  background: color-mix(in srgb, var(--vscode-focusBorder) 16%, transparent);
+  border: 1px dashed var(--vscode-focusBorder);
+}
+.btn.add-case:hover:not(:disabled) { background: color-mix(in srgb, var(--vscode-focusBorder) 28%, transparent); }
+.btn.add-case[hidden] { display: none; }
+body.vscode-high-contrast .btn.add-case { background: transparent; }
 .limit { font-size: 0.9em; color: var(--muted); }
 @media (min-width: 420px) {
   .tools .btn { flex: 0 0 auto; }
+  .tools .run-all { flex-basis: auto; }
   .tools .limit { flex: 0 1 auto; margin-left: auto; }
 }
 
