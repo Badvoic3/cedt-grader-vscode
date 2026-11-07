@@ -50,15 +50,10 @@ vi.mock('vscode', async () => {
       },
     },
     window: {
-      showInformationMessage: async (text: string) => {
-        env.notices.push(text);
-        return env.answers.shift();
-      },
       showWarningMessage: async (text: string) => {
         env.warnings.push(text);
         return env.warnAnswer;
       },
-      setStatusBarMessage: () => undefined,
     },
   };
 });
@@ -164,8 +159,16 @@ describe('migrateOldFiles', () => {
     nameMatch: (src) => names[basename(src)] ?? null,
     problemName: (id) => `p${id}`,
     changed: async () => void changed++,
+    ask: async (_text, buttons, detail) => {
+      if (buttons.length === 1) return undefined; // the "moved" message
+      env.notices.push(detail ?? '');
+      return env.answers.shift();
+    },
   });
-  const run = () => migrateOldFiles(deps());
+  const run = async () => {
+    const offer = await migrateOldFiles(deps());
+    await offer?.();
+  };
   const listOf = async (problemId: number) => (await cases.read({ problemId })).cases;
 
   beforeEach(() => {
@@ -195,7 +198,7 @@ describe('migrateOldFiles', () => {
     expect((await mapping.get({ fsPath: join(w, 'hw/a.cpp') } as never, BASE))).toEqual({ problemId: 11, name: 'p11', baseUrl: BASE });
     expect((await listOf(11)).map((c) => [c.source, c.input])).toEqual([['grader', 'g1\n'], ['custom', 'm1\n']]);
     expect(changed).toBe(1);
-    expect(env.notices).toEqual([S.migration.notice(1)]);
+    expect(env.notices).toEqual([S.migration.noticeDetail(1)]);
     expect(existsSync(join(w, 'hw/.cph'))).toBe(true); // nothing moved without an answer
   });
 
@@ -266,9 +269,9 @@ describe('migrateOldFiles', () => {
     const mine = prob('hw/a.cpp', URL_OF(11), [G(1)]);
     write(`hw/.cph/.a.cpp_${'a'.repeat(32)}.prob.bak`, '{}');
     const theirs = prob('hw/cf.cpp', 'https://codeforces.com/problemset/problem/1/A', [MINE(1)]);
-    env.answers = [S.migration.moveToTrash];
+    env.answers = ['trash'];
     await run();
-    expect(env.notices).toEqual([S.migration.notice(4)]);
+    expect(env.notices).toEqual([S.migration.noticeDetail(4)]);
     expect(env.trash.sort()).toEqual([join(w, '.cedt-grader.json'), join(w, 'hw/a.bin'), mine, `${mine}.bak`].sort());
     expect(existsSync(theirs)).toBe(true);
     expect(existsSync(join(w, 'hw/data.bin'))).toBe(true);
@@ -278,7 +281,7 @@ describe('migrateOldFiles', () => {
   it('with only our files, the empty .cph/ goes too', async () => {
     write('a.cpp');
     prob('a.cpp', URL_OF(11), [G(1)]);
-    env.answers = [S.migration.moveToTrash];
+    env.answers = ['trash'];
     await run();
     expect(existsSync(join(w, '.cph'))).toBe(false);
     expect(readdirSync(w)).toEqual(['a.cpp']);
@@ -287,7 +290,7 @@ describe('migrateOldFiles', () => {
   it('answered once, never asked again; a deleted case does not return', async () => {
     write('a.cpp');
     prob('a.cpp', URL_OF(11), [G(1), MINE(1)]);
-    env.answers = [S.migration.dontAskAgain];
+    env.answers = ['never'];
     await run();
     const [first] = await listOf(11);
     await cases.remove({ problemId: 11 }, first.id);
@@ -297,7 +300,7 @@ describe('migrateOldFiles', () => {
     expect(existsSync(join(w, '.cph'))).toBe(true); // Don't Ask Again keeps the files
   });
 
-  it('closing the notice is no answer: asked on the next start, nothing imported twice', async () => {
+  it('dismissing the question is no answer: asked on the next start, nothing imported twice', async () => {
     write('a.cpp');
     prob('a.cpp', URL_OF(11), [G(1)]);
     await run();
@@ -308,12 +311,13 @@ describe('migrateOldFiles', () => {
     expect(await listOf(11)).toEqual([]);
   });
 
-  it("What's New opens the changelog and is no answer", async () => {
+  it("What's New opens the changelog, and the question comes back", async () => {
     write('a.cpp');
     prob('a.cpp', URL_OF(11), [G(1)]);
-    env.answers = [S.migration.whatsNew];
+    env.answers = ['new'];
     await run();
     expect(env.opened[0]).toMatch(/CHANGELOG\.md$/);
+    expect(env.notices).toHaveLength(2);
     expect(ctx.workspaceState.get(KEYS.cleanupSettled)).toBeUndefined();
   });
 
@@ -321,12 +325,12 @@ describe('migrateOldFiles', () => {
     write('a.cpp');
     const p = prob('a.cpp', URL_OF(11), [G(1)]);
     env.noTrash = true;
-    env.answers = [S.migration.moveToTrash];
+    env.answers = ['trash'];
     await run();
     expect(env.warnings).toEqual([S.migration.noTrash(1)]);
     expect(existsSync(p)).toBe(true);
     expect(ctx.workspaceState.get(KEYS.cleanupSettled)).toBeUndefined();
-    env.answers = [S.migration.moveToTrash];
+    env.answers = ['trash'];
     env.warnAnswer = S.migration.deleteForever;
     await run();
     expect(existsSync(p)).toBe(false);
@@ -339,7 +343,7 @@ describe('migrateOldFiles', () => {
     env.saveLocation = save;
     writeFileSync(join(save, '.a.cpp_1.prob'), JSON.stringify({ name: 'x', url: URL_OF(11), tests: [G(1)], srcPath: join(w, 'a.cpp') }));
     writeFileSync(join(save, '.b.cpp_2.prob'), JSON.stringify({ name: 'x', url: URL_OF(12), tests: [G(2)], srcPath: '/elsewhere/b.cpp' }));
-    env.answers = [S.migration.moveToTrash];
+    env.answers = ['trash'];
     await run();
     expect(await listOf(11)).toHaveLength(1);
     expect(await listOf(12)).toEqual([]);
@@ -350,7 +354,7 @@ describe('migrateOldFiles', () => {
     const bak = write('old/.cph/.x.cpp_1.prob.bak', '{}');
     await ctx.globalState.update(KEYS.backups, [{ path: bak, at: '' }, { path: '/elsewhere/.cph/.y.prob.bak', at: '' }, { path: join(w, 'main.cpp'), at: '' }]);
     write('main.cpp', 'mine');
-    env.answers = [S.migration.moveToTrash];
+    env.answers = ['trash'];
     await run();
     expect(env.trash).toContain(bak);
     expect(env.trash).not.toContain(join(w, 'main.cpp'));

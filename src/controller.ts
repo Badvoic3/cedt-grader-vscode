@@ -112,8 +112,10 @@ export class GraderController implements vscode.Disposable {
   /** The active file was explicitly unlinked (auto-detection is off for it). */
   private notLinked = false;
   private fileEventTimer: ReturnType<typeof setTimeout> | undefined;
-  /** Old `.prob` files and the cleanup notice were looked at in this window. */
+  /** Old `.prob` files were looked at in this window. */
   private oldFilesChecked = false;
+  /** The cleanup question, waiting for the panel to be free. */
+  private cleanupOffer: (() => Promise<void>) | null = null;
   /** The problem the statement tab last followed (undefined: not yet). */
   private followedProblemId: number | null | undefined = undefined;
   /** Statement PDFs / descriptions on disk (shared by the statement tabs and "Load sample cases"). */
@@ -352,12 +354,12 @@ export class GraderController implements vscode.Disposable {
     }
   }
 
-  /** `.prob` import and the cleanup notice: once per window, with a problem list to match against. */
+  /** `.prob` import and the cleanup question: once per window, with a problem list to match against. */
   private async migrateOldFiles(): Promise<void> {
     if (this.oldFilesChecked) return;
     this.oldFilesChecked = true;
     try {
-      await migrateOldFiles({
+      this.cleanupOffer = await migrateOldFiles({
         ctx: this.ctx,
         mapping: this.mapping,
         cases: this.cases,
@@ -369,10 +371,20 @@ export class GraderController implements vscode.Disposable {
           if (this.fileUri) await this.setActiveFile(this.fileUri);
           await this.runner.refresh();
         },
+        ask: (text, buttons, detail) => this.askInline(text, buttons, { detail, stays: true }),
       });
+      this.maybeOfferCleanup();
     } catch (err) {
       this.log(`old files not imported: ${err instanceof Error ? err.message : err}`);
     }
+  }
+
+  /** Asked in the panel only while it shows and nothing else is being asked. Dismissed or replaced, it comes back on the next start. */
+  private maybeOfferCleanup(): void {
+    const offer = this.cleanupOffer;
+    if (!offer || this.prompts.current || !this.data.isVisible()) return;
+    this.cleanupOffer = null;
+    void offer().catch((err) => this.log(`old files not cleaned up: ${err instanceof Error ? err.message : err}`));
   }
 
   /** Restores a stored API token (no network). Never logs in on its own. */
@@ -444,6 +456,7 @@ export class GraderController implements vscode.Disposable {
       void this.ensureLanguages();
       void this.ensureMe();
       void this.links.refreshLinkedFiles(); // the name search runs only while the panel shows the problem
+      this.maybeOfferCleanup();
     }
   }
 
@@ -1184,6 +1197,7 @@ export class GraderController implements vscode.Disposable {
     // One problem only (the top suggestion at most, never several candidates).
     this.data.focusProblem(problem ? problem.id : null);
     if (!entry) this.links.maybeOfferReconnect(uri);
+    this.maybeOfferCleanup();
   }
 
   /**

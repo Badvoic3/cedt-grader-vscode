@@ -318,8 +318,8 @@ const EN_S = {
   compareTab: (n: number) => `Case ${n}: Expected ↔ Actual`,
 
   migration: {
-    notice: (n: number) =>
-      `Grader Submit now has its own test runner. Your links and test cases are already copied over, so ${n === 1 ? "1 old file in this folder isn't needed any more. Move it to the Trash?" : `${n} old files in this folder aren't needed any more. Move them to the Trash?`}`,
+    notice: 'Grader Submit now has its own test runner. Your links and test cases are already copied over.',
+    noticeDetail: (n: number) => (n === 1 ? "1 old file in this folder isn't needed any more. Move it to the Trash?" : `${n} old files in this folder aren't needed any more. Move them to the Trash?`),
     moveToTrash: 'Move to Trash',
     whatsNew: "What's New",
     dontAskAgain: "Don't Ask Again",

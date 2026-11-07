@@ -317,7 +317,8 @@ export const TH: Strings = {
     compareTab: (n) => `เคส ${n}: ที่ควรได้ ↔ ที่ได้จริง`,
 
     migration: {
-      notice: (n) => `Grader Submit มีตัวรัน test case ของตัวเองแล้ว การเชื่อมและ test case ของคุณถูกคัดลอกมาแล้ว ไฟล์เก่า ${n} ไฟล์ในโฟลเดอร์นี้จึงไม่จำเป็นอีกต่อไป ย้ายไปถังขยะไหม?`,
+      notice: 'Grader Submit มีตัวรัน test case ของตัวเองแล้ว การเชื่อมและ test case ของคุณถูกคัดลอกมาแล้ว',
+      noticeDetail: (n) => `ไฟล์เก่า ${n} ไฟล์ในโฟลเดอร์นี้ไม่จำเป็นอีกต่อไป ย้ายไปถังขยะไหม?`,
       moveToTrash: 'ย้ายไปถังขยะ',
       whatsNew: 'มีอะไรใหม่',
       dontAskAgain: 'ไม่ต้องถามอีก',
