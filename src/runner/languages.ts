@@ -166,6 +166,10 @@ export class Toolchains {
     if (!r) {
       r = this.probe(language);
       this.found.set(language, r);
+      // Not found stays open: the message asks the user to install it, then Run again.
+      void r.then((got) => {
+        if (!got.ok) this.found.delete(language);
+      });
     }
     return r;
   }

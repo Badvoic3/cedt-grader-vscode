@@ -164,6 +164,8 @@ export function execCase(proc: ProcessApi, r: ExecRequest): Promise<ExecResult> 
       clearTimeout(timer);
       clearTimeout(deadline);
       r.signal?.removeEventListener('abort', onAbort);
+      // Children the program left behind go with it. (Windows has no group to signal, and has the deadline.)
+      if (ended !== null && process.platform !== 'win32') kill();
       child?.stdout.destroy();
       child?.stderr.destroy();
       void meter.end().catch(() => null).then((memoryKB) => {
@@ -217,11 +219,15 @@ export function execCase(proc: ProcessApi, r: ExecRequest): Promise<ExecResult> 
       finish();
     });
     child.on('exit', (code, sig) => {
+      if (ended !== null) return;
       ended = now();
       exit = { code, signal: sig };
       clearTimeout(timer); // it ended in time, whatever the pipes do next
       // A child the program left behind can hold the pipes open.
-      deadline = setTimeout(finish, RUNNER.closeDeadlineMs);
+      deadline = setTimeout(() => {
+        kill();
+        finish();
+      }, RUNNER.closeDeadlineMs);
     });
     child.on('close', finish);
 
@@ -292,6 +298,8 @@ export async function runCases(o: RunCasesInput): Promise<{ noexec: boolean }> {
       };
       let r = await once();
       if (r.spawnError && (r.spawnError.code === 'EACCES' || r.spawnError.code === 'EPERM')) return { noexec: true };
+      // Started through `sh` or `time`, a program that can't be executed is their exit code 126, not a spawn error.
+      if (o.platform !== 'win32' && r.exitCode === 126 && !r.fullStdout) return { noexec: true };
       // The system checks a new program on its first run (about 300 ms on macOS, antivirus on Windows), and
       // that lands in the case's time. So the first case runs again, unless it is too slow for that to matter.
       if (first && (r.timeMs < RUNNER.freshRerunMs || verdictOf(r, o.limits, c.expected) === 'TLE')) r = await once();

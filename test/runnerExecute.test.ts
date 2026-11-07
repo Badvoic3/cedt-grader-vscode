@@ -127,13 +127,13 @@ describe('execCase', () => {
     expect(verdictOf(r, limits, big)).toBe('AC');
   });
 
-  it('a flood on stderr is dropped and never kills', async () => {
+  it('a flood on stderr is dropped and doesn\'t stop the program', async () => {
     const p = new FakeProcessApi((c) => later(() => {
       for (let i = 0; i < 20; i++) c.child.stderr.write(Buffer.alloc(64 * 1024, 101));
       later(() => c.child.finish(0));
     }));
     const r = await execCase(p, req());
-    expect(p.kills).toHaveLength(0);
+    expect(r.exitCode).toBe(0);
     expect(r.stderr.truncated).toBe(true);
     expect(r.stderr.text.length).toBe(RUNNER.displayBytes);
   });
@@ -296,6 +296,12 @@ describe('runCases', () => {
   it('reports a build folder that can not run programs', async () => {
     const p = new FakeProcessApi((c) => later(() => c.child.emit('error', Object.assign(new Error('no'), { code: 'EACCES' }))));
     expect((await run(p)).r.noexec).toBe(true);
+  });
+
+  it('exit 126 with no output from a wrapper means the folder can\'t run programs', async () => {
+    const p = new FakeProcessApi((c) => setImmediate(() => c.child.finish(126)));
+    const noexec = await runCases({ proc: p, cases: [{ id: 'a', source: 'custom', input: '', expected: '' }], program: { command: '/bin/sh', args: [], fresh: false }, limits, scratchRoot: root, env: {}, platform: 'linux', signal: new AbortController().signal, onUpdate: () => {} });
+    expect(noexec).toEqual({ noexec: true });
   });
 
   it('a fresh program runs its first case twice and keeps the second time, since the first has the system\'s check in it', async () => {

@@ -93,6 +93,14 @@ const top = el('div', { class: 'tv-top' });
 const list = el('div', { class: 'cards' });
 app.append(el('div', { class: 'tv' }, top, list));
 
+/** Rebuild `root`, with the keyboard staying on the same button. */
+function keepingFocus(root: HTMLElement, rebuild: () => HTMLElement | void): void {
+  const buttons = (r: ParentNode) => [...r.querySelectorAll('button')];
+  const at = buttons(root).indexOf(document.activeElement as HTMLButtonElement);
+  const after = rebuild() ?? root;
+  if (at >= 0) buttons(after)[at]?.focus();
+}
+
 function renderTop(h: TestsHead): void {
   top.replaceChildren();
   list.hidden = h.title === null || !order.length;
@@ -379,10 +387,14 @@ function renderCards(): void {
     const open = isOpen(id);
     const key = JSON.stringify([i, c, r, open, !!head?.running, inputOpen.get(id), stderrOpen.has(id), editingExpected.has(id), confirming === id]);
     if (key === card.key) continue;
-    const next = header(c, r, i + 1);
-    const old = card.dom.querySelector(':scope > .tc');
-    if (old) old.replaceWith(next);
-    else card.dom.prepend(next);
+    const old = card.dom.querySelector<HTMLElement>(':scope > .tc');
+    if (old) {
+      keepingFocus(old, () => {
+        const next = header(c, r, i + 1);
+        old.replaceWith(next);
+        return next;
+      });
+    } else card.dom.prepend(header(c, r, i + 1));
     // The text being typed stays as it is, and the card catches up on blur. A new result can't wait
     // for that: the cursor stays in the box when the run was started from the main panel.
     if (typing && (!r || r === card.run)) continue;
@@ -393,9 +405,26 @@ function renderCards(): void {
   }
 }
 
+// A button rebuilt between mouse down and up gets no click, so nothing is rebuilt while the mouse is down.
+let pressed = false;
+let renderLater = false;
+const released = () => {
+  pressed = false;
+  if (renderLater) setTimeout(render); // after the click
+  renderLater = false;
+};
+window.addEventListener('mousedown', () => { pressed = true; }, true);
+window.addEventListener('mouseup', released, true);
+window.addEventListener('dragend', released, true);
+
 function render(): void {
   if (!head) return;
-  renderTop(head);
+  if (pressed) {
+    renderLater = true;
+    return;
+  }
+  const h = head;
+  keepingFocus(top, () => renderTop(h));
   renderCards();
   tooltips.refresh();
 }
@@ -440,7 +469,10 @@ function onState(m: ToTests): void {
 }
 
 const tooltips = installTooltips();
-window.addEventListener('blur', flushEdits);
+window.addEventListener('blur', () => {
+  flushEdits();
+  released();
+});
 window.addEventListener('pagehide', flushEdits);
 window.addEventListener('message', (e: MessageEvent<ToTests>) => {
   if (e.data?.type === 'state') onState(e.data);

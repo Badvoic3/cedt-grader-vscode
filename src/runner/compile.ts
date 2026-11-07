@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from 'node:crypto';
-import { copyFile, mkdir, readdir, readFile, rename, rm, stat } from 'node:fs/promises';
+import { chmod, copyFile, mkdir, readdir, readFile, rename, rm, stat } from 'node:fs/promises';
 import { basename, dirname, join, relative, sep } from 'node:path';
 import { RUNNER } from '../shared/constants';
 import { S } from '../shared/strings';
@@ -96,11 +96,21 @@ export const compileLimitMs = (language: RunnerLanguage): number => (language ==
 
 /** The class to start: the one holding `main`, with its package. */
 export function javaMainClass(text: string, fileStem: string): string {
-  const code = text.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/\/\/[^\n]*/g, ' ');
+  const code = text.replace(/\/\*[\s\S]*?\*\/|\/\/[^\n]*|"(?:\\.|[^"\\\n])*"|'(?:\\.|[^'\\\n])*'/g, ' ');
   const pkg = /^\s*package\s+([\w.]+)\s*;/m.exec(code)?.[1];
   const at = code.search(/\bstatic\s+void\s+main\s*\(|\bvoid\s+static\s+main\s*\(/);
-  const owners = at < 0 ? [] : [...code.slice(0, at).matchAll(/\bclass\s+(\w+)/g)];
-  const cls = owners.at(-1)?.[1] ?? fileStem;
+  // The top-level type around `main`: a nested Node or FastReader before it is not what `java` starts.
+  let depth = 0;
+  let named: string | undefined;
+  let top: string | undefined;
+  for (const m of at < 0 ? [] : code.slice(0, at).matchAll(/\b(?:class|interface|enum|record)\s+(\w+)|[{}]/g)) {
+    if (m[1]) named ??= m[1];
+    else if (m[0] === '{') {
+      if (depth++ === 0) top = named;
+      named = undefined;
+    } else if (--depth === 0) top = undefined;
+  }
+  const cls = top ?? fileStem;
   return pkg ? `${pkg}.${cls}` : cls;
 }
 
@@ -165,9 +175,27 @@ export function needsStaging(paths: readonly string[], platform: NodeJS.Platform
 }
 
 /** Where builds go. A Windows temp folder under a Thai user name can't be used by the toolchains, so an ASCII one replaces it. */
-export function buildRoot(platform: NodeJS.Platform, tmp: string, env: NodeJS.ProcessEnv): string {
+export function buildRoot(platform: NodeJS.Platform, tmp: string, env: NodeJS.ProcessEnv, user: string | number = process.getuid?.() ?? env.USERNAME ?? ''): string {
   const base = needsStaging([tmp], platform) ? (env.ProgramData ?? 'C:\\ProgramData') : tmp;
-  return join(base, 'cedt-grader-bin');
+  // One folder per user: a temp folder is shared, and a build found here gets run.
+  return join(base, `cedt-grader-bin-${createHash('sha256').update(String(user)).digest('hex').slice(0, 12)}`);
+}
+
+/** Source files a compiler finds by itself, without `#include`, so a change in one must count. */
+const SIBLINGS: Partial<Record<RunnerLanguage, string>> = { java: '.java', rust: '.rs', go: '.go', haskell: '.hs' };
+
+/** The folder's files with this extension, at any depth, for the build's hash. */
+export async function siblingFiles(folder: string, ext: string, list: (dir: string) => Promise<{ name: string; dir: boolean }[]>): Promise<string[]> {
+  const found: string[] = [];
+  const queue = [folder];
+  for (let i = 0; i < queue.length && found.length < RUNNER.maxHashedFiles; i++) {
+    for (const e of await list(queue[i]).catch(() => [])) {
+      if (e.dir) {
+        if (!e.name.startsWith('.') && e.name !== 'node_modules' && e.name !== 'target') queue.push(join(queue[i], e.name));
+      } else if (e.name.endsWith(ext)) found.push(join(queue[i], e.name));
+    }
+  }
+  return found;
 }
 
 export class Builder {
@@ -203,21 +231,39 @@ export class Builder {
     return env;
   }
 
+  /** The build folder, only ours: a build found in it gets run, so nobody else may write there. */
+  private async ensureRoot(): Promise<void> {
+    await mkdir(this.root, { recursive: true, mode: 0o700 });
+    const uid = process.getuid?.();
+    if (this.o.platform === 'win32' || uid === undefined) return;
+    const s = await stat(this.root);
+    if (s.uid !== uid) this.fallback = true;
+    else if (s.mode & 0o077) await chmod(this.root, 0o700);
+    if (this.fallback) await mkdir(this.root, { recursive: true, mode: 0o700 });
+  }
+
   async build(i: BuildInput): Promise<BuildResult> {
     const platform = this.o.platform;
     const base = { language: i.language, folder: i.folder, sources: i.sources, tools: i.tools, platform };
     const files = await localFiles(i.sources, i.folder, (p) => readFile(p, 'utf8').catch(() => null));
     if (INTERPRETED.has(i.language)) return { ok: true, program: { ...runCommand({ ...base, outDir: '' }), fresh: false, warnings: '' } };
 
+    await this.ensureRoot();
     const hash = createHash('sha256');
     for (const part of [i.language, platform, i.tools.compiler?.path ?? '', i.tools.compiler?.version ?? '', ...(i.extraArgs ?? [])]) hash.update(`${part}\0`);
-    for (const [p, text] of [...files].sort(([a], [b]) => a.localeCompare(b))) hash.update(`${relative(i.folder, p)}\0${text}\0`);
+    const ext = SIBLINGS[i.language];
+    const siblings = ext ? await siblingFiles(i.folder, ext, async (d) => (await readdir(d, { withFileTypes: true })).map((e) => ({ name: e.name, dir: e.isDirectory() }))) : [];
+    // The bytes: as UTF-8, two TIS-620 files differing only in Thai would look the same.
+    for (const p of [...new Set([...files.keys(), ...siblings])].sort((a, b) => a.localeCompare(b))) {
+      hash.update(`${relative(i.folder, p)}\0`);
+      hash.update(await readFile(p).catch(() => Buffer.alloc(0)));
+      hash.update('\0');
+    }
     const outDir = join(this.root, hash.digest('hex').slice(0, 32));
     const text = files.get(i.sources[0]) ?? '';
     const ready = () => ({ ...runCommand({ ...base, outDir }, text) });
     if (await stat(outDir).then((s) => s.isDirectory(), () => false)) return { ok: true, program: { ...ready(), fresh: false, warnings: '' } };
 
-    await mkdir(this.root, { recursive: true });
     const work = `${outDir}.${randomBytes(4).toString('hex')}.tmp`;
     await mkdir(work, { recursive: true });
     try {
@@ -230,7 +276,9 @@ export class Builder {
       const said = `${r.stderr}\n${r.stdout}`.trim();
       if (r.code !== 0) return { ok: false, failure: failureFrom(said) };
       if (staged) await rm(staged.folder, { recursive: true, force: true });
-      await rename(work, outDir).catch(() => {}); // lost a race to an identical build: that one is used
+      const moved = await rename(work, outDir).then(() => null, (err: Error) => err);
+      // Only a lost race to an identical build is fine: then that one is used.
+      if (moved && !(await stat(outDir).then((s) => s.isDirectory(), () => false))) return { ok: false, failure: { message: S.runner.compilerFailed(moved.message), file: null, line: null } };
       await this.prune();
       return { ok: true, program: { ...ready(), fresh: true, warnings: said.slice(0, RUNNER.compileMessageChars) } };
     } finally {

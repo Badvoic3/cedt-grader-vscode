@@ -118,6 +118,8 @@ export const RUNNER = {
   closeDeadlineMs: 2_000,
   /** A fresh program's first case under this is run again: the first run's time isn't the program's. */
   freshRerunMs: 2_000,
+  /** Source files read for a build's hash, for languages whose compiler finds its own files. */
+  maxHashedFiles: 2_000,
   /** Peak memory sampling on Linux, and the safety check on macOS. */
   memoryPollLinuxMs: 100,
   memoryPollMacMs: 500,

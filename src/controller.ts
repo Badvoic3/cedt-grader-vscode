@@ -487,6 +487,7 @@ export class GraderController implements vscode.Disposable {
     const prev = this.cfg;
     this.cfg = readConfig();
     if (prev.displayLanguage !== this.cfg.displayLanguage) this.applyLanguage();
+    if (JSON.stringify(prev.runnerCompilerPaths) !== JSON.stringify(this.cfg.runnerCompilerPaths)) this.runner.toolsChanged();
     if (prev.fileNamePattern.pattern !== this.cfg.fileNamePattern.pattern || prev.fileNamePattern.problem !== this.cfg.fileNamePattern.problem) {
       // The matcher uses the pattern: rebuild the index and re-match the open file.
       this.links.invalidateIndex();

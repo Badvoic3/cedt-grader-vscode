@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { DataService } from '../src/data/dataService';
 import { GraderClient } from '../src/grader';
+import { NetworkError } from '../src/grader/errors';
 import { parseProblemLimits } from '../src/grader/providers/cafeGrader/parsers';
 import { FakeGrader } from './fakeServer';
 
@@ -67,9 +68,18 @@ describe('DataService.limits', () => {
     expect(server.problemPageHits).toBe(2);
   });
 
-  it('a failure is no limits and no second request: no banner, no retry loop', async () => {
+  it('offline: no limits now, and the next run may ask again', async () => {
     const { client } = await setup();
-    const spy = vi.spyOn(client, 'problemLimits').mockRejectedValue(new Error('offline'));
+    const spy = vi.spyOn(client, 'problemLimits').mockRejectedValue(new NetworkError('offline', 'offline'));
+    const { data } = make(client);
+    expect(await data.limits(201)).toBeNull();
+    expect(await data.limits(201)).toBeNull();
+    expect(spy).toHaveBeenCalledTimes(2);
+  });
+
+  it('a page without limits is no limits and no second request: no banner, no retry loop', async () => {
+    const { client } = await setup();
+    const spy = vi.spyOn(client, 'problemLimits').mockRejectedValue(new Error('changed page'));
     const { data } = make(client);
     expect(await data.limits(201)).toBeNull();
     expect(await data.limits(201)).toBeNull();

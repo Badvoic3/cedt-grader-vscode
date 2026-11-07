@@ -23,8 +23,6 @@ interface RunTarget {
   /** The program first. */
   sources: string[];
   leftOut: string[];
-  /** The folder (folder mode) or the file whose unsaved edits are saved first. */
-  saveScope: { folder: string } | { file: string };
 }
 
 const NO_CASES: readonly RunnerCase[] = [];
@@ -46,6 +44,8 @@ export class Runner {
   private list: CaseList | null = null;
   /** Whose list `list` is: right after a file switch it can still be the last file's. */
   private listKey: string | null = null;
+  /** Moves on with `reset`: work started before it is out of date. */
+  private session = 0;
   /** Case changes, one at a time: a run starts after the last one. */
   private edits: Promise<unknown> = Promise.resolve();
 
@@ -226,9 +226,25 @@ export class Runner {
     // Only the newest file's list: reads of two quick switches can end in either order.
     const now = this.owner();
     if ((now && ownerKey(now)) !== (owner && ownerKey(owner))) return;
+    if (owner && list && this.list && this.listKey === ownerKey(owner)) this.dropStale(owner, this.list, list);
     this.list = list;
     this.listKey = owner ? ownerKey(owner) : null;
     this.host.emit();
+  }
+
+  /** A re-download can change a case's text: its result no longer says anything about it. */
+  private dropStale(owner: CaseOwner, before: CaseList, now: CaseList): void {
+    const old = new Map(before.cases.map((c) => [c.id, c]));
+    const { runs } = this.state(owner);
+    for (const c of now.cases) {
+      const was = old.get(c.id);
+      if (was && (was.input !== c.input || was.expected !== c.expected)) runs.delete(c.id);
+    }
+  }
+
+  /** The compiler settings changed. */
+  toolsChanged(): void {
+    this.tools.reset();
   }
 
   /** The case files changed from outside this flow (Clear Cached Data). */
@@ -244,6 +260,7 @@ export class Runner {
 
   /** Forget the results and stop what is running: another account or server starts clean. */
   reset(): void {
+    this.session++;
     this.stop();
     this.states.clear();
     this.list = null;
@@ -271,8 +288,8 @@ export class Runner {
       await this.edits;
       const target = await this.target();
       if (!target) return null;
-      await this.saveDirty(target);
       const list = await h.cases.read(target.owner);
+      if (this.listKey === ownerKey(target.owner)) this.list = list;
       const cases = only ? list.cases.filter((c) => only.includes(c.id)) : list.cases;
       if (!cases.length) return null;
 
@@ -349,7 +366,10 @@ export class Runner {
       return;
     }
     const again = await this.compile(t, st, signal);
-    if (again) await start(again);
+    if (again && (await start(again)).noexec) {
+      for (const c of cases) st.runs.delete(c.id);
+      st.failure = { message: S.runner.compilerFailed('EACCES'), file: null, line: null };
+    }
   }
 
   private defaultLimits(): RunLimits {
@@ -365,12 +385,18 @@ export class Runner {
   /** Ask the grader once per session (`DataService.limits`), and keep what it says for offline use. */
   private async readLimits(problemId: number): Promise<RunLimits | null> {
     const h = this.host;
+    const session = this.session;
     const got = await h.data.limits(problemId);
-    if (!got) return null;
-    const saved = (await h.cases.read({ problemId })).limits;
-    if (saved?.timeMs !== got.timeMs || saved?.memoryMB !== got.memoryMB) {
-      await h.cases.setMeta(problemId, { limits: { ...got, fetchedAt: new Date().toISOString() } });
-      await this.reload();
+    // Lists are per server: what the last server said must not land in the next one's.
+    if (!got || session !== this.session) return null;
+    try {
+      const saved = (await h.cases.read({ problemId })).limits;
+      if (saved?.timeMs !== got.timeMs || saved?.memoryMB !== got.memoryMB) {
+        await h.cases.setMeta(problemId, { limits: { ...got, fetchedAt: new Date().toISOString() } });
+        await this.reload();
+      }
+    } catch {
+      /* not kept for offline use, then; this run still has them */
     }
     return { ...got, source: 'grader' };
   }
@@ -407,6 +433,8 @@ export class Runner {
     }
     const path = run.fsPath;
     const link = h.folder.link;
+    // First: the language and the folder's `main()`s are read from the disk.
+    await this.saveDirty(link ? { folder: link.fsPath } : { file: path });
     const folder = link?.fsPath ?? dirname(path);
     const text = await readFile(path, 'utf8').catch(() => '');
     const language = detectRunnerLanguage({
@@ -429,12 +457,10 @@ export class Runner {
       folder,
       sources: set ? set.sources.map(abs) : [path],
       leftOut: set?.leftOut ?? [],
-      saveScope: link ? { folder: link.fsPath } : { file: path },
     };
   }
 
-  private async saveDirty(t: RunTarget): Promise<void> {
-    const scope = t.saveScope;
+  private async saveDirty(scope: { folder: string } | { file: string }): Promise<void> {
     for (const d of vscode.workspace.textDocuments) {
       if (d.isDirty && !d.isUntitled && ('folder' in scope ? isAtOrInside(d.uri.fsPath, scope.folder) : d.uri.fsPath === scope.file)) await d.save();
     }

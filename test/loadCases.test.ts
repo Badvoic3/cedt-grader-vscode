@@ -79,7 +79,7 @@ describe('Load goes to the runner', () => {
   });
 
   it('folder mode: the list belongs to the problem, so Load asks no Runs question', async () => {
-    await make({ folder: { link: { fsPath: '/w' }, runUri: () => null, askRole: async () => (roleAsked++, 'x') } }).loadTestcases();
+    await make({ folder: { link: { fsPath: '/w' }, runUri: () => null, askRole: async () => (roleAsked++, 'x'), sources: async () => [] } }).loadTestcases();
     expect(roleAsked).toBe(0);
     expect(merged).toHaveLength(1);
   });

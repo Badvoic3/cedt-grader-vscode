@@ -1,8 +1,8 @@
-import { mkdir, mkdtemp, readdir, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readdir, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { Builder, compileCommand, compileLimitMs, javaMainClass, localFiles, needsStaging, parseCompileError, runCommand } from '../src/runner/compile';
+import { Builder, buildRoot, compileCommand, compileLimitMs, javaMainClass, localFiles, needsStaging, parseCompileError, runCommand } from '../src/runner/compile';
 import type { Toolset } from '../src/runner/languages';
 import { S } from '../src/shared/strings';
 import { type FakeCall, FakeProcessApi } from './fakeProcess';
@@ -76,6 +76,13 @@ describe('javaMainClass', () => {
   it('the class before main, with its package', () => {
     expect(javaMainClass('package a.b;\nclass X { static void main(String[] v) {} }', 'F')).toBe('a.b.X');
   });
+  it('a nested class before main is not the class to start', () => {
+    const text = 'import java.util.*;\npublic class Main {\n  static class Node { int v; }\n  static class FastReader { }\n  public static void main(String[] a) { }\n}\n';
+    expect(javaMainClass(text, 'F')).toBe('Main');
+  });
+  it('another top-level class before it is passed over, braces in text don\'t count', () => {
+    expect(javaMainClass('class A { String s = "}{"; char c = \'{\'; }\ninterface B { }\npublic class C { public static void main(String[] a) {} }', 'F')).toBe('C');
+  });
   it('the file name when there is no main', () => expect(javaMainClass('class X {}', 'Main')).toBe('Main'));
   it('ignores comments', () => expect(javaMainClass('// class Y\nclass X { public static void main(String[] a){} } ', 'F')).toBe('X'));
 });
@@ -95,6 +102,16 @@ describe('parseCompileError', () => {
   it('a linker error has no place', () => expect(parseCompileError('ld: symbol(s) not found')).toEqual({ file: null, line: null }));
   it('a warning is not the error', () => {
     expect(parseCompileError('a.cpp:1:1: warning: w\na.cpp:9:1: error: e')).toEqual({ file: 'a.cpp', line: 9 });
+  });
+});
+
+describe('buildRoot', () => {
+  it('is per user, so one user\'s builds are never another\'s', () => {
+    expect(buildRoot('linux', '/tmp', {}, 1000)).not.toBe(buildRoot('linux', '/tmp', {}, 1001));
+    expect(buildRoot('linux', '/tmp', {}, 1000)).toBe(buildRoot('linux', '/tmp', {}, 1000));
+  });
+  it('leaves a Thai temp folder for an ASCII one on Windows', () => {
+    expect(buildRoot('win32', 'C:\\Users\\สมชาย\\Temp', { ProgramData: 'D:\\PD' }, 'x')).toContain('PD');
   });
 });
 
@@ -135,11 +152,31 @@ describe('Builder', () => {
 
   /** A compiler that writes the file `-o` names. */
   const compiler = (reply: (c: FakeCall) => void = (c) => setImmediate(() => c.child.finish(0))) => new FakeProcessApi((c) => {
-    const out = c.args[c.args.indexOf('-o') + 1];
+    // `javac` names a folder, not a file.
+    const out = c.args.includes('-d') ? join(c.args[c.args.indexOf('-d') + 1], 'Main.class') : c.args[c.args.indexOf('-o') + 1];
     void writeFile(out, 'binary').then(() => reply(c));
   });
   const make = (p: FakeProcessApi, platform: NodeJS.Platform = 'linux') => new Builder(p, { platform, root: join(dir, 'bin'), fallbackRoot: join(dir, 'store', 'bin'), env: {} });
   const job = (o = {}) => ({ language: 'cpp' as const, folder: join(dir, 'pkg'), sources: [main], tools: cc, ...o });
+
+  it('Java: a change in a file javac finds by itself makes a new build, and only bytes differ is still a change', async () => {
+    const p = compiler();
+    const b = make(p);
+    const a = join(dir, 'pkg', 'Main.java');
+    const helper = join(dir, 'pkg', 'Helper.java');
+    await writeFile(a, 'class Main { public static void main(String[] x) {} }');
+    await writeFile(helper, Buffer.from([0xa1]));
+    const java = { language: 'java' as const, sources: [a], tools: { compiler: tool('/usr/bin/javac'), runtime: tool('/usr/bin/java') } };
+    expect(await b.build(job(java))).toMatchObject({ program: { fresh: true } });
+    expect(await b.build(job(java))).toMatchObject({ program: { fresh: false } });
+    await writeFile(helper, Buffer.from([0xa2]));
+    expect(await b.build(job(java))).toMatchObject({ program: { fresh: true } });
+  });
+
+  it('the build folder is private to this user', async () => {
+    await make(compiler()).build(job());
+    if (process.platform !== 'win32') expect((await stat(join(dir, 'bin'))).mode & 0o077).toBe(0);
+  });
 
   it('compiles once; the same sources reuse the build', async () => {
     const p = compiler();

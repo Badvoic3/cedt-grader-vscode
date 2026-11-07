@@ -321,6 +321,37 @@ describe('Test view', () => {
     expect(doc.querySelector('.dt .dl .n')!.textContent).toBe('1998');
   });
 
+  it('a button pressed right after typing still gets its click: nothing is rebuilt while the mouse is down', () => {
+    vi.useFakeTimers();
+    try {
+      const { dom, doc, post, button, label } = boot();
+      post({ fresh: true, head: head(), order: ['a'], cases: [kase('a')] });
+      label('Show this case').click();
+      const box = doc.querySelector('textarea')!;
+      box.focus();
+      const run = button('Run all')!;
+      const mouse = (type: string) => run.dispatchEvent(new dom.window.MouseEvent(type, { bubbles: true }));
+      mouse('mousedown');
+      box.blur();
+      post({ head: head({ summary: { kind: 'not-run' } }) });
+      expect(button('Run all')).toBe(run);
+      mouse('mouseup');
+      vi.runAllTimers();
+      expect(button('Run all')).not.toBe(run); // caught up after the click
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('the keyboard stays on Stop while a run updates the view', () => {
+    const { doc, post, button } = boot();
+    const running = (done: number) => head({ running: true, summary: { kind: 'running', done, total: 2 } });
+    post({ fresh: true, head: running(0), order: ['a'], cases: [kase('a')] });
+    button('Stop')!.focus();
+    post({ head: running(1) });
+    expect(doc.activeElement).toBe(button('Stop'));
+  });
+
   it('Close saves what was typed, then closes the tab; it is there with no file too', () => {
     const { dom, doc, sent, post, label } = boot();
     post({ fresh: true, head: head(), order: ['a'], cases: [kase('a')] });

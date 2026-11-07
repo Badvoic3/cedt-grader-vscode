@@ -461,6 +461,52 @@ describe('Runner', () => {
     });
   });
 
+  describe('review fixes', () => {
+    it('saves before reading the file, so the language and main() checks see the new text', async () => {
+      const order: string[] = [];
+      v.textDocuments = [{ uri: uri(file), isDirty: true, isUntitled: false, languageId: 'cpp', save: async () => (order.push('save'), true) }];
+      await store.add(P, { input: 'a\n', expected: 'a\n' });
+      h.folder = { ...h.folder, link: { fsPath: dir }, compileFiles: async () => (order.push('read'), null) };
+      await make(programs()).run();
+      expect(order).toEqual(['save', 'read']);
+    });
+
+    it('limits that arrive after an account change are dropped', async () => {
+      await store.add(P, { input: 'a\n', expected: 'a\n' });
+      let answer = (_: unknown) => {};
+      limitsFromGrader.mockImplementation(() => new Promise((done) => (answer = done)));
+      const r = make(programs());
+      await r.onActiveFile();
+      r.fetchLimits();
+      r.reset();
+      answer({ timeMs: 1000, memoryMB: 64 });
+      await new Promise((done) => setTimeout(done, 10));
+      expect((await store.read(P)).limits).toBeUndefined();
+    });
+
+    it('a re-download that changes a case drops its old result, and only its', async () => {
+      await store.merge(7, [{ input: 'a\n', expected: 'a\n', testcaseId: 1 }, { input: 'b\n', expected: 'b\n', testcaseId: 2 }], 'grader');
+      h.tests = { busy: false, samplesBusy: false, statementNoPdf: false };
+      const r = make(programs());
+      await r.onActiveFile();
+      await r.run();
+      await store.merge(7, [{ input: 'a\n', expected: 'new\n', testcaseId: 1 }], 'grader');
+      await r.onActiveFile();
+      const [first, second] = r.testsView().cases.map((c) => c.id);
+      expect(r.testsView().runs.has(first)).toBe(false);
+      expect(r.testsView().runs.has(second)).toBe(true);
+    });
+
+    it('a storage folder that can\'t run programs either ends in a message, with no case left running', async () => {
+      await store.add(P, { input: 'a\n', expected: 'a\n' });
+      const p = programs({ run: (c) => setImmediate(() => c.child.finish(126)) });
+      const r = make(p);
+      await r.onActiveFile();
+      expect(await r.run()).toEqual({ kind: 'compile-error' });
+      expect(r.failureText()).toBe(S.runner.compilerFailed('EACCES'));
+    });
+  });
+
   describe('sample tip', () => {
     beforeEach(() => {
       h.tests = { busy: false, samplesBusy: false, statementNoPdf: false };

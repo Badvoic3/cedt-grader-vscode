@@ -123,6 +123,15 @@ describe('Toolchains', () => {
     expect(await new Toolchains(replying(() => ({})), lookup([])).get('cpp')).toEqual({ ok: false, missing: 'g++ / clang++' });
   });
 
+  it('not found is asked again on the next run: the message tells the user to install it', async () => {
+    const paths: string[] = [];
+    const t = new Toolchains(replying(() => ({ stdout: 'g++ 13' })), () => lookup(paths)());
+    expect((await t.get('cpp')).ok).toBe(false);
+    await Promise.resolve();
+    paths.push('/usr/bin/g++');
+    expect((await t.get('cpp')).ok).toBe(true);
+  });
+
   it('a stub that exits with an error is not a tool (macOS java without a JDK)', async () => {
     const p = replying((cmd) => (cmd.endsWith('javac') ? { stdout: 'javac 21' } : { code: 1, stderr: 'Unable to locate a Java Runtime.' }));
     expect(await new Toolchains(p, lookup(['/usr/bin/java', '/usr/bin/javac'])).get('java')).toEqual({ ok: false, missing: 'java' });

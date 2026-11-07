@@ -1,5 +1,6 @@
 import { type GraderProvider, isFinalStatus, type ProblemList } from '../grader/provider';
 import { classifyConnectionError } from '../grader/connection';
+import { NetworkError, RedirectRefusedError, ServerBusyError } from '../grader/errors';
 import { normalizeProblem } from '../grader/types';
 import type { Language, Problem, ProblemLimits, SubmissionBrief, SubmissionDetail } from '../grader/types';
 import { type Freshness, RequestCache } from './cache';
@@ -289,7 +290,8 @@ export class DataService {
   /**
    * A problem's limits: one request per problem per session, only when the
    * runner asks, shared while in flight. Any failure means no limits (the
-   * runner has defaults), with no banner: a run works offline.
+   * runner has defaults), with no banner: a run works offline. Only a
+   * connection failure is asked again, by the next run: never by a timer.
    */
   limits(problemId: number): Promise<ProblemLimits | null> {
     const key = `limits:${problemId}`;
@@ -302,6 +304,8 @@ export class DataService {
     this.log(`cache miss ${key}`);
     const p = this.opts.client().problemLimits(problemId).catch((err) => {
       this.log(`limits not read for ${problemId}: ${err instanceof Error ? err.message : String(err)}`);
+      // Offline for now: the next run may ask again. A page that didn't have them won't change.
+      if (err instanceof NetworkError && !(err instanceof RedirectRefusedError) && !(err instanceof ServerBusyError)) this.limitsCache.delete(problemId);
       return null;
     }).finally(() => this.limitsDone.add(problemId));
     this.limitsCache.set(problemId, p);

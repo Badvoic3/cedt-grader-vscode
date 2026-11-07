@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { readFile as fsReadFile } from 'node:fs/promises';
+import { join } from 'node:path';
 import { type Pdfjs, readSampleTables, SampleReadLimitError } from '../data/pdfSamples';
 import type { SampleTable } from '../data/sampleTables';
 import { stripGraderKey, TestcaseStore } from '../data/testcaseStore';
@@ -100,7 +101,7 @@ export class TestCases {
       const { set } = res;
       const total = set.cases.length + set.truncated.length;
       const tooLarge = set.truncated.length ? S.testcases.tooLarge(set.truncated.length) : '';
-      const programText = await fsReadFile(file.fsPath, 'utf8').catch(() => '');
+      const programText = await this.programText(file);
       const { cases, key } = stripGraderKey(set.cases, programText);
       const keyNote = key ? S.testcases.keyRemoved : '';
       const refetch = S.testcases.downloadAgain;
@@ -174,6 +175,14 @@ export class TestCases {
     } catch (err) {
       void vscode.window.showErrorMessage(S.samples.failed(h.describe(err)));
     }
+  }
+
+  /** What the key line is checked against: the program, or with no Runs file yet, every file of the folder. */
+  private async programText(file: vscode.Uri): Promise<string> {
+    const h = this.host;
+    const link = h.folder.link;
+    const paths = link && !h.folder.runUri() ? (await h.folder.sources(link.fsPath)).map((f) => join(link.fsPath, ...f.split('/'))) : [file.fsPath];
+    return (await Promise.all(paths.map((p) => fsReadFile(p, 'utf8').catch(() => '')))).join('\n');
   }
 
   /** Merge into the problem's list, carrying over cases written before the file was linked. */
