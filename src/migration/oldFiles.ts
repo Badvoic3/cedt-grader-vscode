@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { existsSync } from 'node:fs';
-import { readdir, readFile } from 'node:fs/promises';
+import { readdir, readFile, stat } from 'node:fs/promises';
 import { basename, dirname, join } from 'node:path';
 import { stripGraderKey } from '../data/testcaseStore';
 import { EXCLUDED_DIRS } from '../mapping/findByName';
@@ -18,8 +18,9 @@ import { MAPPING_FILE_NAME } from './oldLinks';
 /**
  * `.prob` files, and the offer to clear old files out of the workspace.
  *
- * Importing asks nothing: it changes nothing in the folder. Each folder is
- * imported once, so a case the user deleted doesn't return. The question in
+ * Importing asks nothing: it changes nothing in the folder. Each `.prob` is
+ * imported once while it stays the same, so a case the user deleted doesn't
+ * return, and nothing is offered before its cases are copied. The question in
  * the panel only offers the cleanup, and it covers only what is ours
  * (`planProb`): CPH keeps its tests for other judges. An answer is remembered;
  * dismissing the question isn't an answer. Runs with a problem list at hand,
@@ -30,7 +31,9 @@ export interface OldFilesDeps {
   mapping: MappingStore;
   cases: CaseStore;
   baseUrl: string;
-  /** The problem a source's file or folder name matches. */
+  /** False once the account changed: what is left of this run must not reach the next server. */
+  live(): boolean;
+  /** The problem a source's file or folder name matches for sure. */
   nameMatch(src: string): number | null;
   problemName(id: number): string | undefined;
   /** Links or cases were added: refresh what is shown. */
@@ -43,8 +46,16 @@ interface BackupRecord {
   path: string;
 }
 
+interface FoundProb {
+  path: string;
+  prob: CphProblem;
+  /** A file that exists inside the folder the `.prob` is for; '' when there is none. */
+  src: string;
+  mtime: number;
+}
+
 /** Every `.prob` for these folders: in their `.cph/` folders, and in CPH's save location for sources inside them. */
-async function findProbs(folders: readonly string[], saveLocation: string): Promise<{ path: string; prob: CphProblem; src: string; folder: string }[]> {
+async function findProbs(folders: readonly string[], saveLocation: string): Promise<FoundProb[]> {
   const paths: { path: string; folder?: string }[] = [];
   for (const folder of folders) {
     const rels = await listFolderFiles(folder, LIMITS.indexMaxFiles, (name) => name === '.cph' || !EXCLUDED_DIRS.includes(name));
@@ -53,13 +64,15 @@ async function findProbs(folders: readonly string[], saveLocation: string): Prom
   if (saveLocation) {
     for (const name of await readdir(saveLocation).catch(() => [] as string[])) if (name.endsWith('.prob')) paths.push({ path: join(saveLocation, name) });
   }
-  const out: { path: string; prob: CphProblem; src: string; folder: string }[] = [];
+  const out: FoundProb[] = [];
   for (const { path, folder } of paths) {
     const prob = await readProb(path);
     if (!prob) continue;
     const src = sourceOf(path, prob.srcPath, existsSync);
     const home = folder ?? folders.find((f) => src && isAtOrInside(src, f));
-    if (home) out.push({ path, prob, src, folder: home });
+    if (!home) continue;
+    const mtime = (await stat(path)).mtimeMs;
+    out.push({ path, prob, src: src && isAtOrInside(src, home) && existsSync(src) ? src : '', mtime });
   }
   return out;
 }
@@ -110,40 +123,45 @@ async function removeEmptyCphFolders(paths: readonly string[]): Promise<void> {
  * Null when there is nothing to offer here.
  */
 export async function migrateOldFiles(d: OldFilesDeps): Promise<(() => Promise<void>) | null> {
-  const ws = d.ctx.workspaceState;
-  const settled = ws.get<string[]>(KEYS.cleanupSettled, []);
-  const folders = (vscode.workspace.workspaceFolders ?? []).map((f) => f.uri.fsPath).filter((f) => !settled.includes(pathKey(f)));
+  const state = d.ctx.globalState;
+  const settledNow = () => state.get<string[]>(KEYS.cleanupSettled, []);
+  const folders = (vscode.workspace.workspaceFolders ?? []).map((f) => f.uri.fsPath).filter((f) => !settledNow().includes(pathKey(f)));
   if (!folders.length) return null;
-  const imported = ws.get<string[]>(KEYS.probsImported, []);
+  const imported = state.get<Record<string, number>>(KEYS.probsImported, {});
   const saveLocation = vscode.workspace.getConfiguration('cph').get<string>('general.saveLocation') ?? '';
 
+  const probs = await findProbs(folders, saveLocation);
   const targets: string[] = [];
+  const done: Record<string, number> = {};
   let added = 0;
-  for (const { path, prob, src, folder } of await findProbs(folders, saveLocation)) {
-    const uri = vscode.Uri.file(src || path);
-    const link = src ? await d.mapping.activeLink(uri, d.baseUrl) : undefined;
-    const plan = planProb(prob, d.baseUrl, link?.entry.problemId ?? null, src ? d.nameMatch(src) : null);
+  for (const { path, prob, src, mtime } of probs) {
+    if (!d.live()) return null;
+    const uri = src ? vscode.Uri.file(src) : null;
+    const link = uri ? await d.mapping.activeLink(uri, d.baseUrl) : undefined;
+    const plan = planProb(prob, d.baseUrl, link?.entry.problemId ?? null, src ? d.nameMatch(src) : null, (id) => d.problemName(id) !== undefined);
     if (!plan.ours) continue;
+    if (plan.problemId === null && !src) continue; // its cases have nowhere to go, so the file stays
     targets.push(path, ...[`${path}.bak`, ...(src ? [binaryOf(src)] : [])].filter(existsSync));
-    if (imported.includes(pathKey(folder))) continue;
-    if (plan.linkTo !== null && src && existsSync(src) && !d.mapping.isUnlinkedHere(uri)) {
+    if (imported[pathKey(path)] === mtime) continue;
+    if (plan.linkTo !== null && uri && !d.mapping.isUnlinkedHere(uri)) {
       await d.mapping.set(uri, { problemId: plan.linkTo, name: d.problemName(plan.linkTo) ?? prob.name, baseUrl: d.baseUrl });
       added++;
     }
-    if (plan.problemId !== null) added += await importCases(d, { problemId: plan.problemId }, prob, src);
-    else if (src) added += await importCases(d, { file: src }, prob, src);
+    added += await importCases(d, plan.problemId !== null ? { problemId: plan.problemId } : { file: src }, prob, src);
+    done[pathKey(path)] = mtime;
   }
-  await ws.update(KEYS.probsImported, [...new Set([...imported, ...folders.map((f) => pathKey(f))])]);
+  await state.update(KEYS.probsImported, { ...state.get<Record<string, number>>(KEYS.probsImported, {}), ...done });
   if (added) await d.changed();
+  if (!d.live()) return null;
 
   targets.push(...folders.map((f) => join(f, MAPPING_FILE_NAME)).filter(existsSync));
   const backups = d.ctx.globalState.get<BackupRecord[]>(KEYS.backups, []);
   const inScope = (p: string) => /\.prob\.bak$/.test(p) && existsSync(p) && [...folders, ...(saveLocation ? [saveLocation] : [])].some((f) => isAtOrInside(p, f));
   for (const b of backups) if (inScope(b.path) && !targets.includes(b.path)) targets.push(b.path);
 
-  const settle = () => ws.update(KEYS.cleanupSettled, [...settled, ...folders.map((f) => pathKey(f))]);
+  const settle = () => state.update(KEYS.cleanupSettled, [...new Set([...settledNow(), ...folders.map((f) => pathKey(f))])]);
   if (!targets.length) {
-    await settle();
+    if (!probs.length) await settle(); // another judge's `.prob` can still become ours
     return null;
   }
   return async () => {

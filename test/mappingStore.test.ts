@@ -238,7 +238,7 @@ describe('MappingStore', () => {
       writeFileSync(join(storage, 'links'), 'a file where the folder goes');
       await expect(run()).rejects.toThrow();
       expect(ctx.workspaceState.get(KEYS.mappings)).toBeDefined();
-      expect(ctx.workspaceState.get(KEYS.linksImported)).toBeUndefined();
+      expect(ctx.globalState.get(KEYS.linksImported)).toBeUndefined();
     });
   });
 });

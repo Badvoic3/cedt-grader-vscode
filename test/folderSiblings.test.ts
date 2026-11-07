@@ -12,6 +12,7 @@ import type { Host } from '../src/flows/host';
 import { FolderMode } from '../src/flows/folderMode';
 import { Links } from '../src/flows/links';
 import { pathState } from '../src/mapping/mappingOps';
+import { matchFile } from '../src/mapping/matchIndex';
 import { MappingStore } from '../src/mapping/store';
 import { importOldLinks } from '../src/migration/importLinks';
 
@@ -591,6 +592,16 @@ describe('a package opened as the workspace folder', () => {
   it('without a driver there is no package', async () => {
     env.folders = [{ uri: { fsPath: pkg }, name: 'xyz_folder', index: 0 }];
     expect(await session().folder.atRootPackage(uri(join(pkg, 'foo.cpp')), 'filename')).toBe(false);
+  });
+});
+
+describe('the name match the old-file import uses', () => {
+  it('counts a sure match, never a suggestion', () => {
+    const s = session();
+    const near = join(root, 'alphaa.cpp');
+    expect(matchFile(s.links.sourceFile(near), s.problems as never, BASE, '{name}.{ext}')?.how).toBe('suggested');
+    expect(s.links.nameMatch(near)).toBeNull();
+    expect(s.links.nameMatch(join(root, 'alpha.cpp'))).toBe(1);
   });
 });
 

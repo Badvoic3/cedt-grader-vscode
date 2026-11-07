@@ -376,7 +376,8 @@ export class Links {
   /** The problem a file's name or folder matches, ignoring links. */
   nameMatch(fsPath: string): number | null {
     const h = this.host;
-    return matchFile(this.sourceFile(fsPath), h.problems, h.cfg.baseUrl, h.cfg.fileNamePattern.pattern)?.problemId ?? null;
+    const match = matchFile(this.sourceFile(fsPath), h.problems, h.cfg.baseUrl, h.cfg.fileNamePattern.pattern);
+    return match && match.how !== 'suggested' ? match.problemId : null;
   }
 
   /** Re-run matching for the active file, ignoring the saved link; ask before replacing a manual link. */
@@ -434,7 +435,7 @@ export class Links {
   }
 
   /**
-   * Unlink one other file from the notice: a chosen link is removed; a name /
+   * Unlink one other file from the notice: a chosen link is removed; a
    * name match gets the explicit "not linked" state ("Don't match this file").
    * Either way auto-detection leaves that file alone afterwards.
    */

@@ -61,8 +61,8 @@ describe('Clear Cached Data: what each checkbox removes', () => {
 
   it('never clears settings-like state (filter, remember, cleanup time, what was imported)', () => {
     const all = plan(...CLEAR_ORDER);
-    for (const k of [KEYS.problemFilter, KEYS.linksImported]) expect(all.workspaceKeys).not.toContain(k);
-    for (const k of [KEYS.rememberPassword, KEYS.lastCleanup, KEYS.backups]) expect(all.globalKeys).not.toContain(k);
+    expect(all.workspaceKeys).not.toContain(KEYS.problemFilter);
+    for (const k of [KEYS.rememberPassword, KEYS.lastCleanup, KEYS.backups, KEYS.linksImported, KEYS.probsImported, KEYS.cleanupSettled]) expect(all.globalKeys).not.toContain(k);
   });
 
   it('only keys that exist are listed', () => {

@@ -216,6 +216,46 @@ function editSetting(key: string, value: string): void {
 const offline = () => new TypeError('fetch failed', { cause: { code: 'ECONNREFUSED' } });
 
 describe('changing account while something is still going on', () => {
+  it('the cleanup worked out for the old address goes with it, and the new one is looked at', async () => {
+    const { c } = start();
+    const inner = c as unknown as { cleanupOffer: unknown; oldFilesChecked: boolean; cleanupPrompt: number | null; migrationRun: number };
+    inner.cleanupOffer = async () => {};
+    inner.oldFilesChecked = true;
+    const asked = c.askInline('move?', [{ id: 'trash', label: 'Move' }], { stays: true });
+    inner.cleanupPrompt = c.state().prompt?.id ?? null;
+    const run = inner.migrationRun;
+
+    editSetting('baseUrl', OTHER);
+
+    expect(await asked).toBeUndefined();
+    expect(c.state().prompt).toBeNull();
+    expect(inner.cleanupOffer).toBeNull();
+    expect(inner.oldFilesChecked).toBe(false);
+    expect(inner.migrationRun).not.toBe(run);
+  });
+
+  it('another question stays when the address changes', async () => {
+    const { c } = start();
+    void c.askInline('other?', [{ id: 'ok', label: 'OK' }], { stays: true });
+    editSetting('baseUrl', OTHER);
+    expect(c.state().prompt?.text).toBe('other?');
+  });
+
+  it('migration steps run one at a time, and a failed one does not stop the next', async () => {
+    const { c } = start();
+    const inner = c as unknown as { inMigrationQueue(job: () => Promise<void>): void; migration: Promise<void> };
+    const order: string[] = [];
+    let finish!: () => void;
+    inner.inMigrationQueue(() => new Promise((r) => (finish = () => { order.push('first'); r(); })));
+    inner.inMigrationQueue(async () => { order.push('second'); throw new Error('no'); });
+    inner.inMigrationQueue(async () => void order.push('third'));
+    await vi.waitFor(() => expect(finish).toBeDefined());
+    expect(order).toEqual([]);
+    finish();
+    await inner.migration;
+    expect(order).toEqual(['first', 'second', 'third']);
+  });
+
   it('Retry after a failed login sends nothing to an address changed since', async () => {
     const server = new FakeGrader();
     vi.stubGlobal('fetch', async (input: string, init: RequestInit = {}) => {

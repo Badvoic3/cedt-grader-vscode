@@ -116,6 +116,12 @@ export class GraderController implements vscode.Disposable {
   private oldFilesChecked = false;
   /** The cleanup question, waiting for the panel to be free. */
   private cleanupOffer: (() => Promise<void>) | null = null;
+  /** The cleanup question on screen, so a change of account can take it away. */
+  private cleanupPrompt: number | null = null;
+  /** One migration step at a time: each reads what the one before it wrote. */
+  private migration: Promise<void> = Promise.resolve();
+  /** Changes with the account: a run started for the previous one stops. */
+  private migrationRun = 0;
   /** The problem the statement tab last followed (undefined: not yet). */
   private followedProblemId: number | null | undefined = undefined;
   /** Statement PDFs / descriptions on disk (shared by the statement tabs and "Load sample cases"). */
@@ -246,7 +252,7 @@ export class GraderController implements vscode.Disposable {
       for (const id of [...this.unavailableIds]) if (ids.has(id)) this.unavailableIds.delete(id);
       this.links.invalidateIndex(); // the index depends on the problem list
       if (this.fileUri) void this.setActiveFile(this.fileUri);
-      void this.migrateOldFiles();
+      this.inMigrationQueue(() => this.runMigration());
     };
     this.disposables.push(
       this.output,
@@ -281,8 +287,12 @@ export class GraderController implements vscode.Disposable {
       }),
       vscode.workspace.onDidChangeWorkspaceFolders(() => {
         this.oldFilesChecked = false;
-        void this.importOldLinks().then(() => this.links.refreshMappedIds()).then(() => this.emit());
-        if (this.data.problemList()) void this.migrateOldFiles();
+        this.inMigrationQueue(async () => {
+          await this.importOldLinks();
+          await this.links.refreshMappedIds();
+          this.emit();
+          if (this.data.problemList()) await this.runMigration();
+        });
       }),
     );
   }
@@ -354,16 +364,23 @@ export class GraderController implements vscode.Disposable {
     }
   }
 
+  private inMigrationQueue(job: () => Promise<void>): void {
+    this.migration = this.migration.then(job).catch((err) => this.log(`old files not imported: ${err instanceof Error ? err.message : err}`));
+  }
+
   /** `.prob` import and the cleanup question: once per window, with a problem list to match against. */
-  private async migrateOldFiles(): Promise<void> {
+  private async runMigration(): Promise<void> {
     if (this.oldFilesChecked) return;
     this.oldFilesChecked = true;
+    const run = this.migrationRun;
+    const live = () => run === this.migrationRun;
     try {
-      this.cleanupOffer = await migrateOldFiles({
+      const offer = await migrateOldFiles({
         ctx: this.ctx,
         mapping: this.mapping,
         cases: this.cases,
         baseUrl: this.cfg.baseUrl,
+        live,
         nameMatch: (src) => this.links.nameMatch(src),
         problemName: (id) => this.problems.find((p) => p.id === id)?.name,
         changed: async () => {
@@ -371,8 +388,14 @@ export class GraderController implements vscode.Disposable {
           if (this.fileUri) await this.setActiveFile(this.fileUri);
           await this.runner.refresh();
         },
-        ask: (text, buttons, detail) => this.askInline(text, buttons, { detail, stays: true }),
+        ask: (text, buttons, detail) => {
+          const answer = this.askInline(text, buttons, { detail, stays: true });
+          this.cleanupPrompt = this.prompts.current?.id ?? null;
+          return answer;
+        },
       });
+      if (!live()) return;
+      this.cleanupOffer = offer;
       this.maybeOfferCleanup();
     } catch (err) {
       this.log(`old files not imported: ${err instanceof Error ? err.message : err}`);
@@ -558,6 +581,11 @@ export class GraderController implements vscode.Disposable {
     this.runner.reset();
     this.expandedSubmission = null;
     this.data.clear();
+    // The cleanup was worked out for the previous grader; the next problem list starts it again.
+    this.migrationRun++;
+    this.oldFilesChecked = false;
+    this.cleanupOffer = null;
+    if (this.cleanupPrompt !== null) this.prompts.answer(this.cleanupPrompt, null);
   }
 
   private problemsKey(): string {

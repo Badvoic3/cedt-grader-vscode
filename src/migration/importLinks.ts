@@ -10,11 +10,12 @@ import { collectOldLinks, MAPPING_FILE_NAME } from './oldLinks';
  * replaced, so what the user has done since stays.
  *
  * The state keys go once they are copied. `.cedt-grader.json` stays until the
- * user cleans up, so each folder is remembered here. A moved folder is a new
- * workspace: its file brings the links back at the new path.
+ * user cleans up, so each folder is remembered by path, in every workspace it
+ * is opened in. A moved folder is a new path: its file brings the links back
+ * there.
  */
 export async function importOldLinks(ctx: vscode.ExtensionContext, store: MappingStore): Promise<number> {
-  const done = ctx.workspaceState.get<string[]>(KEYS.linksImported, []);
+  const done = ctx.globalState.get<string[]>(KEYS.linksImported, []);
   const fresh = (vscode.workspace.workspaceFolders ?? []).filter((f) => !done.includes(pathKey(f.uri.fsPath)));
   const files: { folder: string; text: string }[] = [];
   for (const folder of fresh) {
@@ -37,6 +38,6 @@ export async function importOldLinks(ctx: vscode.ExtensionContext, store: Mappin
   for (const memento of [ctx.workspaceState, ctx.globalState]) {
     for (const k of [KEYS.mappings, KEYS.legacyMapping]) if (memento.get(k) !== undefined) await memento.update(k, undefined);
   }
-  if (fresh.length) await ctx.workspaceState.update(KEYS.linksImported, [...done, ...fresh.map((f) => pathKey(f.uri.fsPath))]);
+  if (fresh.length) await ctx.globalState.update(KEYS.linksImported, [...ctx.globalState.get<string[]>(KEYS.linksImported, []), ...fresh.map((f) => pathKey(f.uri.fsPath))]);
   return added;
 }

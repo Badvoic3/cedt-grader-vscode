@@ -3,7 +3,7 @@
  * flow on real folders with the real stores and a fake VS Code. Only the Trash
  * and the notice are fake.
  */
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, join } from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -82,17 +82,33 @@ describe('rules', () => {
     expect(problemIdInUrl('/w/a.cpp', BASE)).toBeNull();
   });
 
-  it('ours: a marker, a URL here, a link, or a name match. Anything else is CPH\'s', () => {
+  const known = () => true;
+
+  it('ours: a marker, a URL here, a link, or a name match', () => {
+    const local = { url: '/w/a.cpp', tests: [MINE(1)] };
+    expect(planProb(local, BASE, null, null, known)).toEqual({ ours: false, problemId: null, linkTo: null });
+    expect(planProb({ ...local, tests: [G(1)] }, BASE, null, null, known)).toEqual({ ours: true, problemId: null, linkTo: null });
+    expect(planProb({ url: URL_OF(5), tests: [] }, BASE, null, null, known)).toEqual({ ours: true, problemId: 5, linkTo: 5 });
+    expect(planProb(local, BASE, 8, null, known)).toEqual({ ours: true, problemId: 8, linkTo: null });
+    expect(planProb(local, BASE, null, 9, known)).toEqual({ ours: true, problemId: 9, linkTo: null });
+  });
+
+  it("another judge's URL stays CPH's, whatever the file is called or linked to, unless it holds our cases", () => {
     const cf = { url: 'https://codeforces.com/problemset/problem/1/A', tests: [MINE(1)] };
-    expect(planProb(cf, BASE, null, null)).toEqual({ ours: false, problemId: null, linkTo: null });
-    expect(planProb({ ...cf, tests: [G(1)] }, BASE, null, null)).toEqual({ ours: true, problemId: null, linkTo: null });
-    expect(planProb({ url: URL_OF(5), tests: [] }, BASE, null, null)).toEqual({ ours: true, problemId: 5, linkTo: 5 });
-    expect(planProb(cf, BASE, 8, null)).toEqual({ ours: true, problemId: 8, linkTo: null });
-    expect(planProb(cf, BASE, null, 9)).toEqual({ ours: true, problemId: 9, linkTo: null });
+    expect(planProb(cf, BASE, null, null, known).ours).toBe(false);
+    expect(planProb(cf, BASE, null, 9, known).ours).toBe(false);
+    expect(planProb(cf, BASE, 8, null, known).ours).toBe(false);
+    expect(planProb({ ...cf, tests: [G(1)] }, BASE, null, 9, known)).toEqual({ ours: true, problemId: 9, linkTo: null });
+  });
+
+  it('a URL for a problem no longer in the list saves no link, and the name decides', () => {
+    const gone = { url: URL_OF(5), tests: [MINE(1)] };
+    expect(planProb(gone, BASE, null, null, () => false)).toEqual({ ours: true, problemId: null, linkTo: null });
+    expect(planProb(gone, BASE, null, 9, () => false)).toEqual({ ours: true, problemId: 9, linkTo: null });
   });
 
   it('a file already linked keeps its link; the URL still says whose cases these are', () => {
-    expect(planProb({ url: URL_OF(5), tests: [] }, BASE, 8, null)).toEqual({ ours: true, problemId: 5, linkTo: null });
+    expect(planProb({ url: URL_OF(5), tests: [] }, BASE, 8, null, known)).toEqual({ ours: true, problemId: 5, linkTo: null });
   });
 
   it('ids give the badge', () => {
@@ -108,6 +124,11 @@ describe('rules', () => {
     expect(sourceOf(prob, '/old/hw/a.cpp', (p) => p === moved)).toBe(moved);
     expect(sourceOf(prob, '/old/hw/a.cpp', (p) => p === '/old/hw/a.cpp')).toBe('/old/hw/a.cpp');
     expect(sourceOf(prob, '/old/hw/a.cpp', () => false)).toBe('/old/hw/a.cpp');
+  });
+
+  it('a copied folder: the file beside .cph/ wins over the original srcPath still names', () => {
+    const prob = join('/new/hw/.cph', `.a.cpp_${'0'.repeat(32)}.prob`);
+    expect(sourceOf(prob, '/old/hw/a.cpp', () => true)).toBe(join('/new/hw', 'a.cpp'));
   });
 
   it('paths', () => {
@@ -143,6 +164,8 @@ describe('migrateOldFiles', () => {
   let cases: CaseStore;
   let changed: number;
   const names: Record<string, number> = {};
+  const gone = new Set<number>();
+  let live = true;
 
   const write = (rel: string, text = '') => {
     mkdirSync(join(w, rel, '..'), { recursive: true });
@@ -156,8 +179,9 @@ describe('migrateOldFiles', () => {
     mapping,
     cases,
     baseUrl: BASE,
+    live: () => live,
     nameMatch: (src) => names[basename(src)] ?? null,
-    problemName: (id) => `p${id}`,
+    problemName: (id) => (gone.has(id) ? undefined : `p${id}`),
     changed: async () => void changed++,
     ask: async (_text, buttons, detail) => {
       if (buttons.length === 1) return undefined; // the "moved" message
@@ -177,6 +201,8 @@ describe('migrateOldFiles', () => {
     env.folders = [{ uri: { fsPath: w }, name: 'w', index: 0 }];
     Object.assign(env, { answers: [], notices: [], warnings: [], warnAnswer: undefined, trash: [], noTrash: false, opened: [], saveLocation: '' });
     for (const k of Object.keys(names)) delete names[k];
+    gone.clear();
+    live = true;
     ctx = { workspaceState: new Memo(), globalState: new Memo(), globalStorageUri: { fsPath: storage } };
     mapping = new MappingStore(ctx as never);
     cases = new CaseStore(storage, () => BASE);
@@ -187,7 +213,7 @@ describe('migrateOldFiles', () => {
     write('hw/a.cpp');
     await run();
     expect(env.notices).toEqual([]);
-    expect(ctx.workspaceState.get(KEYS.cleanupSettled)).toHaveLength(1);
+    expect(ctx.globalState.get(KEYS.cleanupSettled)).toHaveLength(1);
     expect(readdirSync(storage)).toEqual([]);
   });
 
@@ -249,6 +275,120 @@ describe('migrateOldFiles', () => {
     prob('z.cpp', 'https://other.example/problems/1', [G(1)]);
     await run();
     expect((await cases.read({ file: src })).cases).toHaveLength(1);
+  });
+
+  it('a .prob that becomes ours later is imported before it is offered', async () => {
+    write('a.cpp');
+    write('b.cpp');
+    prob('a.cpp', URL_OF(11), [G(1)]);
+    const b = prob('b.cpp', 'Local', [MINE(1)]);
+    await run();
+    expect(env.notices).toEqual([S.migration.noticeDetail(1)]);
+    names['b.cpp'] = 20; // the grader published a problem with its name
+    env.answers = ['trash'];
+    await run();
+    expect(await listOf(20)).toHaveLength(1);
+    expect(existsSync(b)).toBe(false);
+  });
+
+  it('new tests in a .prob since the import are copied before the file can go', async () => {
+    write('a.cpp');
+    const p = prob('a.cpp', URL_OF(11), [G(1)]);
+    await run();
+    prob('a.cpp', URL_OF(11), [G(1), MINE(1)]);
+    const later = new Date(Date.now() + 5000);
+    utimesSync(p, later, later);
+    await run();
+    expect((await listOf(11)).map((c) => c.input).sort()).toEqual(['g1\n', 'm1\n']);
+  });
+
+  it("a folder with only another judge's files is looked at again, in case one becomes ours", async () => {
+    write('b.cpp');
+    prob('b.cpp', 'Local', [MINE(1)]);
+    await run();
+    expect(env.notices).toEqual([]);
+    expect(ctx.globalState.get(KEYS.cleanupSettled)).toBeUndefined();
+    names['b.cpp'] = 20;
+    await run();
+    expect(await listOf(20)).toHaveLength(1);
+    expect(env.notices).toHaveLength(1);
+  });
+
+  it('the same folder opened as another workspace is not imported again', async () => {
+    write('a.cpp');
+    prob('a.cpp', URL_OF(11), [G(1)]);
+    await run();
+    const [first] = await listOf(11);
+    await cases.remove({ problemId: 11 }, first.id);
+    await mapping.set({ fsPath: join(w, 'a.cpp') } as never, undefined);
+    ctx.workspaceState = new Memo();
+    await run();
+    expect(await listOf(11)).toEqual([]);
+    expect(await mapping.get({ fsPath: join(w, 'a.cpp') } as never, BASE)).toBeUndefined();
+  });
+
+  it('a copied folder belongs to the copy: the original gets no link and loses nothing', async () => {
+    const original = mkdtempSync(join(tmpdir(), 'cedt-orig-'));
+    writeFileSync(join(original, 'a.cpp'), '');
+    writeFileSync(join(original, 'a.bin'), '');
+    write('a.cpp');
+    write(`.cph/.a.cpp_${'a'.repeat(32)}.prob`, JSON.stringify({ name: 'x', url: URL_OF(11), tests: [G(1)], srcPath: join(original, 'a.cpp') }));
+    env.answers = ['trash'];
+    await run();
+    expect((await mapping.get({ fsPath: join(w, 'a.cpp') } as never, BASE))?.problemId).toBe(11);
+    expect(await mapping.get({ fsPath: join(original, 'a.cpp') } as never, BASE)).toBeUndefined();
+    expect(existsSync(join(original, 'a.bin'))).toBe(true);
+  });
+
+  it('a source outside the folder is never a target', async () => {
+    const away = mkdtempSync(join(tmpdir(), 'cedt-away-'));
+    writeFileSync(join(away, 'thesis.cpp'), '');
+    writeFileSync(join(away, 'thesis.bin'), 'data');
+    write(`.cph/.other.cpp_${'a'.repeat(32)}.prob`, JSON.stringify({ name: 'x', url: URL_OF(11), tests: [G(1)], srcPath: join(away, 'thesis.cpp') }));
+    env.answers = ['trash'];
+    await run();
+    expect(env.trash).not.toContain(join(away, 'thesis.bin'));
+    expect(existsSync(join(away, 'thesis.bin'))).toBe(true);
+  });
+
+  it('cases with nowhere to go stay in their .prob, and it is not offered', async () => {
+    const noSource = write(`.cph/.x.cpp_${'a'.repeat(32)}.prob`, JSON.stringify({ name: 'x', url: 'Local', tests: [G(1)], srcPath: '' }));
+    const deadSource = prob('dead.cpp', 'Local', [G(2)]);
+    await run();
+    expect(env.notices).toEqual([]);
+    expect(existsSync(noSource)).toBe(true);
+    expect(existsSync(deadSource)).toBe(true);
+    expect(readdirSync(storage)).toEqual([]);
+  });
+
+  it('a URL for a problem no longer in the list saves no link', async () => {
+    write('a.cpp');
+    gone.add(11);
+    prob('a.cpp', URL_OF(11), [MINE(1)]);
+    await run();
+    expect(await mapping.get({ fsPath: join(w, 'a.cpp') } as never, BASE)).toBeUndefined();
+    expect((await cases.read({ file: join(w, 'a.cpp') })).cases).toHaveLength(1);
+  });
+
+  it('the account changed: the run stops, offers nothing and marks nothing as imported', async () => {
+    write('a.cpp');
+    prob('a.cpp', URL_OF(11), [G(1)]);
+    live = false;
+    expect(await migrateOldFiles(deps())).toBeNull();
+    expect(await listOf(11)).toEqual([]);
+    expect(ctx.globalState.get(KEYS.probsImported)).toBeUndefined();
+    expect(ctx.globalState.get(KEYS.cleanupSettled)).toBeUndefined();
+  });
+
+  it('an answer given late keeps what another run settled since', async () => {
+    write('a.cpp');
+    prob('a.cpp', URL_OF(11), [G(1)]);
+    const offer = await migrateOldFiles(deps());
+    await ctx.globalState.update(KEYS.cleanupSettled, ['other']);
+    env.answers = ['never'];
+    await offer?.();
+    expect(ctx.globalState.get<string[]>(KEYS.cleanupSettled)).toContain('other');
+    expect(ctx.globalState.get(KEYS.cleanupSettled)).toHaveLength(2);
   });
 
   it("another judge's .prob is not imported, not counted and not touched", async () => {
@@ -318,7 +458,7 @@ describe('migrateOldFiles', () => {
     await run();
     expect(env.opened[0]).toMatch(/CHANGELOG\.md$/);
     expect(env.notices).toHaveLength(2);
-    expect(ctx.workspaceState.get(KEYS.cleanupSettled)).toBeUndefined();
+    expect(ctx.globalState.get(KEYS.cleanupSettled)).toBeUndefined();
   });
 
   it('no Trash: asks, then deletes; declined, the files stay and it asks next time', async () => {
@@ -329,12 +469,12 @@ describe('migrateOldFiles', () => {
     await run();
     expect(env.warnings).toEqual([S.migration.noTrash(1)]);
     expect(existsSync(p)).toBe(true);
-    expect(ctx.workspaceState.get(KEYS.cleanupSettled)).toBeUndefined();
+    expect(ctx.globalState.get(KEYS.cleanupSettled)).toBeUndefined();
     env.answers = ['trash'];
     env.warnAnswer = S.migration.deleteForever;
     await run();
     expect(existsSync(p)).toBe(false);
-    expect(ctx.workspaceState.get(KEYS.cleanupSettled)).toHaveLength(1);
+    expect(ctx.globalState.get(KEYS.cleanupSettled)).toHaveLength(1);
   });
 
   it("CPH's save location: found by srcPath, only for sources in the open folder", async () => {

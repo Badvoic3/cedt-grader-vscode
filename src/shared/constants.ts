@@ -214,6 +214,10 @@ export const MATCH = {
 // ------------------------------------------------------------------ limits
 
 export const LIMITS = {
+  /** A link write takes milliseconds: a lock this old was left by a crash. */
+  linkLockStaleMs: 5_000,
+  /** How long a link write waits for another window before it fails. */
+  linkLockWaitMs: 10_000,
   /** Accepted grader addresses remembered; an older one is just checked again. */
   verifiedServers: 20,
   /** Remembered auto-matches (oldest dropped). */

@@ -1,5 +1,5 @@
 /** The link table: one file by full path, safe with two windows, never loses a file it can't read. */
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { beforeEach, describe, expect, it } from 'vitest';
@@ -98,5 +98,60 @@ describe('LinkTable', () => {
     await t.change((l) => put(l, L('/w/a.cpp')));
     expect(readFileSync(`${path()}.bad`, 'utf8')).toBe('{broken');
     expect(Object.keys(await t.read())).toHaveLength(1);
+  });
+});
+
+describe('reading and writing safely', () => {
+  let root: string;
+  let file: string;
+  const lock = () => join(root, 'links.lock');
+  const add = (t: LinkTable, n: number) => t.change((links) => put(links, L(`/w/${n}.cpp`, n)));
+
+  beforeEach(() => {
+    root = mkdtempSync(join(tmpdir(), 'cedt-table-'));
+    file = join(root, LINKS_DIR, LINKS_FILE);
+  });
+
+  it('a read that fails is not a bad file: nothing is moved, replaced or forgotten', async () => {
+    const t = new LinkTable(root);
+    await add(t, 1);
+    expect(Object.keys(await t.read())).toHaveLength(1);
+    const good = readFileSync(file, 'utf8');
+    rmSync(file);
+    mkdirSync(file); // stat works, reading fails
+    expect(Object.keys(await t.read())).toHaveLength(1);
+    await expect(add(t, 2)).rejects.toThrow();
+    expect(existsSync(`${file}.bad`)).toBe(false);
+    rmSync(file, { recursive: true });
+    writeFileSync(file, good);
+    await add(t, 2);
+    expect(Object.keys(await t.read())).toHaveLength(2);
+  });
+
+  it('two windows writing at once keep each other\'s links', async () => {
+    const [a, b] = [new LinkTable(root), new LinkTable(root)];
+    await Promise.all(Array.from({ length: 30 }, (_, n) => add(n % 2 ? a : b, n + 1)));
+    expect(Object.keys(await new LinkTable(root).read())).toHaveLength(30);
+    expect(existsSync(lock())).toBe(false);
+  });
+
+  it('waits for the other window, and takes over a lock left by a crash', async () => {
+    const t = new LinkTable(root);
+    writeFileSync(lock(), '');
+    setTimeout(() => rmSync(lock()), 60);
+    await add(t, 1);
+    expect(Object.keys(await t.read())).toHaveLength(1);
+    writeFileSync(lock(), '');
+    const old = new Date(Date.now() - 60_000);
+    utimesSync(lock(), old, old);
+    await add(t, 2);
+    expect(Object.keys(await t.read())).toHaveLength(2);
+    expect(existsSync(lock())).toBe(false);
+  });
+
+  it('a change that changes nothing leaves nothing behind', async () => {
+    await new LinkTable(root).change(() => false);
+    expect(existsSync(join(root, LINKS_DIR))).toBe(false);
+    expect(existsSync(lock())).toBe(false);
   });
 });

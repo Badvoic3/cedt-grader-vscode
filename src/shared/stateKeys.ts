@@ -14,11 +14,11 @@ export const KEYS = {
   mappings: 'cedtGrader.mappings',
   /** Links saved by the first versions (absolute-path keys): as `mappings`. */
   legacyMapping: 'cedtGrader.mapping',
-  /** Workspace folders whose `.cedt-grader.json` was copied into the link table. "Clear Cached Data" leaves it, or cleared links would return. */
+  /** Folders, by path, whose `.cedt-grader.json` was copied into the link table (globalState: a folder is the same in any workspace). "Clear Cached Data" leaves it, or cleared links would return. */
   linksImported: 'cedtGrader.linksImported',
-  /** Workspace folders whose `.prob` files were imported (a case the user deleted must not return). */
+  /** `.prob` files imported, by path, with their mtime (globalState): a case the user deleted must not return, and new tests in the file must get copied. */
   probsImported: 'cedtGrader.probsImported',
-  /** Workspace folders with nothing old left, or where the user answered the cleanup notice. */
+  /** Folders, by path, with nothing old left, or where the user answered the cleanup question (globalState). */
   cleanupSettled: 'cedtGrader.cleanupSettled',
   /** Files explicitly marked "not linked" (also globalState for files outside any folder). */
   unlinked: 'cedtGrader.unlinked',

@@ -55,12 +55,21 @@ export async function readProb(path: string): Promise<CphProblem | null> {
   }
 }
 
-/** The file a `.prob` belongs to: `srcPath`, or after a folder moved, the file its name gives next to `.cph/`. */
+/** The file a `.prob` belongs to: the one its name gives next to `.cph/` (in a moved or copied folder `srcPath` is out of date), else `srcPath`. */
 export function sourceOf(probPath: string, srcPath: string, exists: (path: string) => boolean): string {
-  if (srcPath && exists(srcPath)) return srcPath;
   const m = /^\.(.+)_[0-9a-f]{32}\.prob$/.exec(basename(probPath));
   const beside = m && basename(dirname(probPath)) === '.cph' ? join(dirname(dirname(probPath)), m[1]) : null;
   return beside && exists(beside) ? beside : srcPath;
+}
+
+/** A web address on another host: a problem from another judge. CPH's local problems store a file path, which isn't one. */
+function onOtherJudge(url: string, baseUrl: string): boolean {
+  try {
+    const u = new URL(url);
+    return /^https?:$/.test(u.protocol) && u.host !== new URL(baseUrl).host;
+  } catch {
+    return false;
+  }
 }
 
 /** The problem a URL on this server points at. */
@@ -87,11 +96,18 @@ export interface ProbPlan {
   linkTo: number | null;
 }
 
-/** What to do with one `.prob`. `linked`: the problem the source is linked to; `nameMatch`: what its name or folder matches. */
-export function planProb(p: Pick<CphProblem, 'url' | 'tests'>, baseUrl: string, linked: number | null, nameMatch: number | null): ProbPlan {
-  const byUrl = problemIdInUrl(p.url, baseUrl);
+/**
+ * What to do with one `.prob`. `linked`: the problem the source is linked to;
+ * `nameMatch`: what its name or folder matches for sure; `known`: is this
+ * problem in the list? A link to one that isn't would only show "unavailable".
+ */
+export function planProb(p: Pick<CphProblem, 'url' | 'tests'>, baseUrl: string, linked: number | null, nameMatch: number | null, known: (id: number) => boolean): ProbPlan {
+  const marked = p.tests.some((t) => t.id >= GRADER_ID_BASE);
+  if (!marked && onOtherJudge(p.url, baseUrl)) return { ours: false, problemId: null, linkTo: null };
+  const inUrl = problemIdInUrl(p.url, baseUrl);
+  const byUrl = inUrl !== null && known(inUrl) ? inUrl : null;
   const problemId = byUrl ?? linked ?? nameMatch;
-  return { ours: problemId !== null || p.tests.some((t) => t.id >= GRADER_ID_BASE), problemId, linkTo: linked === null ? byUrl : null };
+  return { ours: marked || inUrl !== null || problemId !== null, problemId, linkTo: linked === null ? byUrl : null };
 }
 
 export interface OldCase {
