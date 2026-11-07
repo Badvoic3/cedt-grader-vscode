@@ -59,7 +59,8 @@ describe('real programs', { timeout: 120_000 }, () => {
     const [name, text] = CAT[language];
     const b = await build(language, name, text);
     if (!b) return;
-    expect(b.out).toMatchObject({ ok: true });
+    // The compiler's own words, when it fails on a CI image.
+    expect(b.out.ok ? '' : b.out.failure?.message).toBe('');
     if (!b.out.ok) return;
     const [ok, wrong] = await run(b.out.program, [onCase('สวัสดี\n', 'สวัสดี'), { ...onCase('a\n', 'b'), id: 'd' }]);
     expect([ok.verdict, wrong.verdict]).toEqual(['AC', 'WA']);

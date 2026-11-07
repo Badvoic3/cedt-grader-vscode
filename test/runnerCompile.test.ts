@@ -7,6 +7,8 @@ import type { Toolset } from '../src/runner/languages';
 import { S } from '../src/shared/strings';
 import { type FakeCall, FakeProcessApi } from './fakeProcess';
 
+/** Built with the system's separator, as the code builds it. */
+const PROG = join('/out', 'prog');
 const tool = (path: string) => ({ path, args: [], version: 'v1' });
 const cc: Toolset = { compiler: tool('/usr/bin/g++') };
 const input = (o = {}) => ({ language: 'cpp' as const, folder: '/pkg', sources: ['/pkg/main.cpp', '/pkg/a.cpp'], tools: cc, outDir: '/out', platform: 'linux' as const, ...o });
@@ -15,7 +17,7 @@ describe('compileCommand', () => {
   it('C++ matches the grader, and every source is an argument', () => {
     const c = compileCommand(input())!;
     expect(c.command).toBe('/usr/bin/g++');
-    expect(c.args).toEqual(['-o', '/out/prog', '-iquote', '/pkg', '-DEVAL', '-std=gnu++17', '-O2', '-pipe', '-Wall', '-Wextra', '-fdiagnostics-color=never', '/pkg/main.cpp', '/pkg/a.cpp']);
+    expect(c.args).toEqual(['-o', PROG, '-iquote', '/pkg', '-DEVAL', '-std=gnu++17', '-O2', '-pipe', '-Wall', '-Wextra', '-fdiagnostics-color=never', '/pkg/main.cpp', '/pkg/a.cpp']);
   });
   it('never defines ONLINE_JUDGE', () => expect(compileCommand(input())!.args.join(' ')).not.toContain('ONLINE_JUDGE'));
   it('C uses gnu17', () => expect(compileCommand(input({ language: 'c' }))!.args).toContain('-std=gnu17'));
@@ -38,9 +40,9 @@ describe('compileCommand', () => {
   });
   it('the other compiled languages', () => {
     expect(compileCommand(input({ language: 'java', sources: ['/p/A.java'], tools: { compiler: tool('javac'), runtime: tool('java') } }))!.args).toEqual(['-encoding', 'UTF-8', '-d', '/out', '/p/A.java']);
-    expect(compileCommand(input({ language: 'rust', sources: ['/p/a.rs'], tools: { compiler: tool('rustc') } }))!.args).toEqual(['-O', '-o', '/out/prog', '/p/a.rs']);
-    expect(compileCommand(input({ language: 'go', sources: ['/p/a.go'], tools: { compiler: tool('go') } }))!.args).toEqual(['build', '-o', '/out/prog', '/p/a.go']);
-    expect(compileCommand(input({ language: 'haskell', sources: ['/p/a.hs'], tools: { compiler: tool('ghc') } }))!.args).toEqual(['-O2', '-outputdir', '/out', '-o', '/out/prog', '/p/a.hs']);
+    expect(compileCommand(input({ language: 'rust', sources: ['/p/a.rs'], tools: { compiler: tool('rustc') } }))!.args).toEqual(['-O', '-o', PROG, '/p/a.rs']);
+    expect(compileCommand(input({ language: 'go', sources: ['/p/a.go'], tools: { compiler: tool('go') } }))!.args).toEqual(['build', '-o', PROG, '/p/a.go']);
+    expect(compileCommand(input({ language: 'haskell', sources: ['/p/a.hs'], tools: { compiler: tool('ghc') } }))!.args).toEqual(['-O2', '-outputdir', '/out', '-o', PROG, '/p/a.hs']);
   });
   it('no compile step for an interpreted language', () => {
     expect(compileCommand(input({ language: 'python', tools: { runtime: tool('python3') } }))).toBeNull();
@@ -49,9 +51,9 @@ describe('compileCommand', () => {
 
 describe('runCommand', () => {
   it('Linux raises the stack, with the path passed as an argument and never as shell text', () => {
-    expect(runCommand(input({ outDir: "/o'; rm -rf x" }))).toEqual({ command: '/bin/sh', args: ['-c', 'ulimit -s unlimited 2>/dev/null; exec "$0"', "/o'; rm -rf x/prog"] });
+    expect(runCommand(input({ outDir: "/o'; rm -rf x" }))).toEqual({ command: '/bin/sh', args: ['-c', 'ulimit -s unlimited 2>/dev/null; exec "$0"', join("/o'; rm -rf x", 'prog')] });
   });
-  it('macOS runs the binary', () => expect(runCommand(input({ platform: 'darwin' }))).toEqual({ command: '/out/prog', args: [] }));
+  it('macOS runs the binary', () => expect(runCommand(input({ platform: 'darwin' }))).toEqual({ command: PROG, args: [] }));
   it('interpreted: the runtime and the source, with its fixed arguments', () => {
     expect(runCommand(input({ language: 'python', sources: ['/p/a.py'], tools: { runtime: { ...tool('py'), args: ['-3'] } } }))).toEqual({ command: 'py', args: ['-3', '/p/a.py'] });
   });
@@ -88,7 +90,9 @@ describe('parseCompileError', () => {
 });
 
 describe('localFiles', () => {
-  const read = (o: Record<string, string>) => async (p: string) => o[p] ?? null;
+  /** Windows spells these `C:\\p\\main.cpp`. */
+  const posix = (p: string) => p.replace(/^[A-Za-z]:/, '').replace(/\\/g, '/');
+  const read = (o: Record<string, string>) => async (p: string) => o[posix(p)] ?? null;
   it('follows includes, relative to the includer then the folder, and survives a cycle', async () => {
     const m = await localFiles(['/p/main.cpp'], '/p', read({
       '/p/main.cpp': '#include "lib/a.h"\n#include <vector>',
@@ -96,7 +100,7 @@ describe('localFiles', () => {
       '/p/lib/b.h': '#include "a.h"',
       '/p/root.h': '',
     }));
-    expect([...m.keys()].sort()).toEqual(['/p/lib/a.h', '/p/lib/b.h', '/p/main.cpp', '/p/root.h']);
+    expect([...m.keys()].map(posix).sort()).toEqual(['/p/lib/a.h', '/p/lib/b.h', '/p/main.cpp', '/p/root.h']);
   });
 });
 

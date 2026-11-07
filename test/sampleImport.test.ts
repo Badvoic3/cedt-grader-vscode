@@ -31,7 +31,7 @@ describe('host extraction (pdf.js legacy build)', () => {
     expect(await readSampleTables(sampleStatementPdf(), await load())).toEqual([
       { page: 1, cases: [{ input: '3\n1 2 3', output: '6', annotated: false }, { input: '1\n5', output: '5', annotated: false }] },
     ]);
-  });
+  }, 30_000); // the first pdf.js load can take over 5 s on a shared Windows runner
 
   it('no table → nothing; the bytes it is given are left intact', async () => {
     const bytes = buildPdf([{ texts: [{ str: 'Just text, no table.', x: 50, y: 700, font: 'F1' }] }]);
