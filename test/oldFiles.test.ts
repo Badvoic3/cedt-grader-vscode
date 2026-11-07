@@ -296,6 +296,20 @@ describe('migrateOldFiles', () => {
     expect(await listOf(11)).toHaveLength(1);
   });
 
+  it('asked for by command, a folder already answered is offered again, without importing twice', async () => {
+    write('a.cpp');
+    const p = prob('a.cpp', URL_OF(11), [G(1)]);
+    env.answers = ['never'];
+    await run();
+    const [first] = await listOf(11);
+    await cases.remove({ problemId: 11 }, first.id);
+    expect(await migrateOldFiles(deps())).toBeNull();
+    env.answers = ['trash'];
+    await (await migrateOldFiles(deps(), true))?.();
+    expect(existsSync(p)).toBe(false);
+    expect(await listOf(11)).toEqual([]);
+  });
+
   it('a .prob that becomes ours later is imported before it is offered', async () => {
     write('a.cpp');
     write('b.cpp');

@@ -3,13 +3,16 @@
  * when a login names another server. The rule is that a blocked address
  * changes nothing, and a password never goes to an address that wasn't checked.
  */
+import { mkdtempSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const v = vi.hoisted(() => {
   const settings = new Map<string, unknown>();
   const listeners: ((e: { affectsConfiguration: (s: string) => boolean }) => void)[] = [];
   const event = () => ({ dispose() {} });
-  return { settings, listeners, event, failUpdate: null as string | null, showWarningMessage: vi.fn(async (..._: unknown[]): Promise<string | undefined> => undefined), openExternal: vi.fn(async () => true) };
+  return { settings, listeners, event, folders: undefined as { uri: { fsPath: string } }[] | undefined, failUpdate: null as string | null, showWarningMessage: vi.fn(async (..._: unknown[]): Promise<string | undefined> => undefined), openExternal: vi.fn(async () => true) };
 });
 
 vi.mock('vscode', () => {
@@ -43,7 +46,9 @@ vi.mock('vscode', () => {
       tabGroups: { all: [], onDidChangeTabs: v.event },
     },
     workspace: {
-      workspaceFolders: undefined,
+      get workspaceFolders() {
+        return v.folders;
+      },
       textDocuments: [],
       getConfiguration: configuration,
       onDidChangeConfiguration: (l: (typeof v.listeners)[number]) => (v.listeners.push(l), { dispose() {} }),
@@ -62,7 +67,9 @@ import type * as vscode from 'vscode';
 import { GraderController } from '../src/controller';
 import type { CrashReporter } from '../src/crashReporter';
 import { DEFAULT_BASE_URL } from '../src/shared/constants';
+import { pathKey } from '../src/mapping/paths';
 import { KEYS } from '../src/shared/stateKeys';
+import { S } from '../src/shared/strings';
 import { FakeGrader } from './fakeServer';
 
 const OTHER = 'https://other.example';
@@ -102,6 +109,7 @@ beforeEach(() => {
   v.settings.clear();
   v.listeners.length = 0;
   v.failUpdate = null;
+  v.folders = undefined;
   v.showWarningMessage.mockReset();
   sent = [];
 });
@@ -214,6 +222,51 @@ function editSetting(key: string, value: string): void {
   for (const l of v.listeners) l({ affectsConfiguration: () => true });
 }
 const offline = () => new TypeError('fetch failed', { cause: { code: 'ECONNREFUSED' } });
+
+describe('Clean Up Old Files', () => {
+  const asked = () => start().c;
+  const ready = (c: GraderController, list: object | null) => {
+    Object.assign((c as unknown as { data: object }).data, { isVisible: () => true, problemList: () => list });
+    return c;
+  };
+  const folder = (...files: string[]) => {
+    const fsPath = mkdtempSync(join(tmpdir(), 'cedt-cleanup-'));
+    for (const f of files) writeFileSync(join(fsPath, f), '{}');
+    v.folders = [{ uri: { fsPath } }];
+    return fsPath;
+  };
+
+  it('needs a problem list, and says so', async () => {
+    const c = ready(asked(), null);
+    await c.cleanUpOldFiles();
+    expect(c.state().prompt?.text).toBe(S.migration.needsList);
+  });
+
+  it('asks again in a folder already answered', async () => {
+    const s = start();
+    const c = ready(s.c, { problems: [] });
+    await s.globalState.update(KEYS.cleanupSettled, [pathKey(folder('.cedt-grader.json'))]);
+    await c.cleanUpOldFiles();
+    await vi.waitFor(() => expect(c.state().prompt?.text).toBe(S.migration.notice));
+    expect(c.state().prompt?.detail).toBe(S.migration.noticeDetail(1));
+  });
+
+  it('with nothing old in the folder, says so', async () => {
+    folder();
+    const c = ready(asked(), { problems: [] });
+    await c.cleanUpOldFiles();
+    await vi.waitFor(() => expect(c.state().prompt?.text).toBe(S.migration.nothingLeft));
+  });
+
+  it('a change of account while it runs asks nothing', async () => {
+    folder('.cedt-grader.json');
+    const c = ready(asked(), { problems: [] });
+    const run = c.cleanUpOldFiles();
+    editSetting('baseUrl', OTHER);
+    await run;
+    expect(c.state().prompt).toBeNull();
+  });
+});
 
 describe('changing account while something is still going on', () => {
   it('the cleanup worked out for the old address goes with it, and the new one is looked at', async () => {

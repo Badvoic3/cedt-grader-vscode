@@ -120,12 +120,13 @@ async function removeEmptyCphFolders(paths: readonly string[]): Promise<void> {
 
 /**
  * Import, then what is left to ask: call the result when the panel is free.
- * Null when there is nothing to offer here.
+ * Null when there is nothing to offer here. `again`: the user asked, so folders
+ * already answered are looked at too.
  */
-export async function migrateOldFiles(d: OldFilesDeps): Promise<(() => Promise<void>) | null> {
+export async function migrateOldFiles(d: OldFilesDeps, again = false): Promise<(() => Promise<void>) | null> {
   const state = d.ctx.globalState;
   const settledNow = () => state.get<string[]>(KEYS.cleanupSettled, []);
-  const folders = (vscode.workspace.workspaceFolders ?? []).map((f) => f.uri.fsPath).filter((f) => !settledNow().includes(pathKey(f)));
+  const folders = (vscode.workspace.workspaceFolders ?? []).map((f) => f.uri.fsPath).filter((f) => again || !settledNow().includes(pathKey(f)));
   if (!folders.length) return null;
   const imported = state.get<Record<string, number>>(KEYS.probsImported, {});
   const saveLocation = vscode.workspace.getConfiguration('cph').get<string>('general.saveLocation') ?? '';

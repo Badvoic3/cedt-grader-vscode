@@ -105,6 +105,7 @@ function start(ctx: vscode.ExtensionContext, crash: CrashReporter): void {
     command('cedtGrader.loadSampleCases', () => controller.loadSampleCases()),
     command('cedtGrader.showRequestLog', () => controller.showRequestLog()),
     command('cedtGrader.clearCache', () => controller.clearCachedData()),
+    command('cedtGrader.cleanUpOldFiles', () => controller.cleanUpOldFiles()),
     command('cedtGrader.openTroubleshooting', () => controller.openTroubleshooting()),
     // Read-only documents with the source of past submissions (for "Compare with current file").
     // Statement tabs reopen after a restart, from the disk cache (no request).

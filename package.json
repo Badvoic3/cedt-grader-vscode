@@ -233,6 +233,12 @@
         "icon": "$(trash)"
       },
       {
+        "command": "cedtGrader.cleanUpOldFiles",
+        "title": "%command.cleanUpOldFiles.title%",
+        "category": "%command.category%",
+        "icon": "$(trash)"
+      },
+      {
         "command": "cedtGrader.openWalkthrough",
         "title": "%command.openWalkthrough.title%",
         "category": "%command.category%",

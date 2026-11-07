@@ -326,6 +326,8 @@ const EN_S = {
     noTrash: (n: number) => `${plural(n, 'old file')} couldn't be moved to the Trash. Delete permanently? This can't be undone.`,
     deleteForever: 'Delete Permanently',
     moved: (n: number) => `Moved ${plural(n, 'old file')} to the Trash.`,
+    needsList: 'Log in first, so old files can be matched to this grader.',
+    nothingLeft: 'No old files to clean up in this folder.',
   },
   errors: {
     checkConnection: (msg: string) => `${msg} Check your internet connection.`,

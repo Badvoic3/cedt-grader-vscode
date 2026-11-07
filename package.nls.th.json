@@ -25,6 +25,7 @@
   "command.loadTestcases.title": "โหลด test case จาก Grader",
   "command.loadSampleCases.title": "โหลดตัวอย่างจากโจทย์",
   "command.clearCache.title": "ล้างข้อมูลแคช…",
+  "command.cleanUpOldFiles.title": "ล้างไฟล์เก่า",
   "command.openWalkthrough.title": "เริ่มต้นใช้งาน",
   "command.openTroubleshooting.title": "การแก้ปัญหาเบื้องต้น",
   "config.title": "Grader Submit",

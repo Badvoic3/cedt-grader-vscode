@@ -37,7 +37,7 @@ import { BINARY_EXTS } from './mapping/findByName';
 import { EXTENSION_LANGUAGE } from './grader/languages';
 import { remapPath } from './mapping/mappingOps';
 import { importOldLinks } from './migration/importLinks';
-import { migrateOldFiles } from './migration/oldFiles';
+import { migrateOldFiles, type OldFilesDeps } from './migration/oldFiles';
 import { cleanName, placeholder, resolveProblem } from './mapping/match';
 import { MappingStore } from './mapping/store';
 import { matchNote, type MatchInfo, NO_MATCH_INFO } from './mapping/linkActions';
@@ -375,31 +375,50 @@ export class GraderController implements vscode.Disposable {
     const run = this.migrationRun;
     const live = () => run === this.migrationRun;
     try {
-      const offer = await migrateOldFiles({
-        ctx: this.ctx,
-        mapping: this.mapping,
-        cases: this.cases,
-        baseUrl: this.cfg.baseUrl,
-        live,
-        nameMatch: (src) => this.links.nameMatch(src),
-        problemName: (id) => this.problems.find((p) => p.id === id)?.name,
-        changed: async () => {
-          await this.links.refreshMappedIds();
-          if (this.fileUri) await this.setActiveFile(this.fileUri);
-          await this.runner.refresh();
-        },
-        ask: (text, buttons, detail) => {
-          const answer = this.askInline(text, buttons, { detail, stays: true });
-          this.cleanupPrompt = this.prompts.current?.id ?? null;
-          return answer;
-        },
-      });
+      const offer = await migrateOldFiles(this.migrationDeps(live));
       if (!live()) return;
       this.cleanupOffer = offer;
       this.maybeOfferCleanup();
     } catch (err) {
       this.log(`old files not imported: ${err instanceof Error ? err.message : err}`);
     }
+  }
+
+  /** "Clean Up Old Files": the same import and question on request, also where it was answered before. */
+  async cleanUpOldFiles(): Promise<void> {
+    if (!this.data.problemList()) return this.tellInline(null, S.migration.needsList);
+    const run = this.migrationRun;
+    const live = () => run === this.migrationRun;
+    this.inMigrationQueue(async () => {
+      const offer = await migrateOldFiles(this.migrationDeps(live), true);
+      if (!live()) return;
+      this.cleanupOffer = null;
+      if (!offer) return this.tellInline(null, S.migration.nothingLeft);
+      void offer().catch((err) => this.log(`old files not cleaned up: ${err instanceof Error ? err.message : err}`));
+    });
+    await this.migration;
+  }
+
+  private migrationDeps(live: () => boolean): OldFilesDeps {
+    return {
+      ctx: this.ctx,
+      mapping: this.mapping,
+      cases: this.cases,
+      baseUrl: this.cfg.baseUrl,
+      live,
+      nameMatch: (src) => this.links.nameMatch(src),
+      problemName: (id) => this.problems.find((p) => p.id === id)?.name,
+      changed: async () => {
+        await this.links.refreshMappedIds();
+        if (this.fileUri) await this.setActiveFile(this.fileUri);
+        await this.runner.refresh();
+      },
+      ask: (text, buttons, detail) => {
+        const answer = this.askInline(text, buttons, { detail, stays: true });
+        this.cleanupPrompt = this.prompts.current?.id ?? null;
+        return answer;
+      },
+    };
   }
 
   /** Asked in the panel only while it shows and nothing else is being asked. Dismissed or replaced, it comes back on the next start. */

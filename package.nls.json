@@ -25,6 +25,7 @@
   "command.loadTestcases.title": "Load Test Cases from the Grader",
   "command.loadSampleCases.title": "Load Sample Cases from the Statement",
   "command.clearCache.title": "Clear Cached Data…",
+  "command.cleanUpOldFiles.title": "Clean Up Old Files",
   "command.openWalkthrough.title": "Get Started",
   "command.openTroubleshooting.title": "Troubleshooting",
   "config.title": "Grader Submit",
