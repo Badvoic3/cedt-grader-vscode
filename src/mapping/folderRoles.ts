@@ -152,6 +152,21 @@ export function runSources(files: string[]): string[] {
   return files.filter((x) => SOURCE.test(x));
 }
 
+/**
+ * What the runner compiles in folder mode, like the grader: the run file plus
+ * every other `.cpp` of the folder (`.c` when the run file is C; the grader's
+ * C compiler also looks for `.cpp`, but a local C package needs its `.c` files).
+ * `leftOut`: other files with their own `main()`, such as a generator, which
+ * would stop the link. The grader never sees those, since they aren't in the
+ * package it holds.
+ */
+export function compileSet(files: readonly string[], texts: ReadonlyMap<string, string>, runFile: string): { sources: string[]; leftOut: string[] } {
+  const kind = /\.c$/i.test(runFile) ? /\.c$/i : /\.cpp$/i;
+  const others = files.filter((f) => kind.test(f) && pathKey(f) !== pathKey(runFile)).sort();
+  const leftOut = others.filter((f) => hasMain(texts.get(f) ?? ''));
+  return { sources: [runFile, ...others.filter((f) => !leftOut.includes(f))], leftOut };
+}
+
 /** The file that stands for a folder (row click, notice, newer-file check): chosen submit file, else detected submit, else run, else the first source file. */
 export function standInFile(files: string[], chosenSubmit: string | undefined, roles: FolderRoles | null): string | null {
   if (!files.length) return null;
