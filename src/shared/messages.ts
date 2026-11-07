@@ -345,6 +345,8 @@ export interface TestsHead {
   leftOut: string[];
   /** The Load row (null: not linked to a problem); a button is null when it doesn't apply. */
   load: { testcases: { busy: boolean } | null; samples: { busy: boolean } | null } | null;
+  /** "PDF samples can be misread". */
+  sampleTip: boolean;
 }
 
 /**
@@ -373,6 +375,9 @@ export type FromTests =
   | { type: 'setExpected'; caseId: string }
   | { type: 'copy'; caseId: string; what: 'input' | 'expected' | 'actual' | 'stderr' }
   | { type: 'copyFailure' }
+  | { type: 'compare'; caseId: string }
+  | { type: 'openStatement' }
+  | { type: 'dismissTip' }
   | { type: 'loadTestcases' }
   | { type: 'loadSamples' }
   | { type: 'webviewError'; message: string; stack: string };

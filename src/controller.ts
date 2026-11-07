@@ -4,6 +4,7 @@ import type { CrashReporter } from './crashReporter';
 import { DataService } from './data/dataService';
 import { StatementStore } from './data/statementStore';
 import { StatementPanels } from './ui/statementPanel';
+import { CompareDocs } from './ui/compareDocs';
 import { TestPanel } from './ui/testPanel';
 import {
   AuthError,
@@ -129,6 +130,7 @@ export class GraderController implements vscode.Disposable {
   private retryAction: (() => Promise<unknown>) | null = null;
   readonly statements: StatementPanels;
   readonly testPanel: TestPanel;
+  readonly compareDocs = new CompareDocs();
 
   /** What the flows see of the controller (see src/flows/host.ts). */
   private readonly host: Host;
@@ -214,6 +216,10 @@ export class GraderController implements vscode.Disposable {
       {
         memento: ctx.globalState,
         beside: () => this.cfg.statementBeside,
+        besideColumn: () => {
+          const column = this.testPanel.column();
+          return column === this.codeColumn() ? undefined : column;
+        },
         openInBrowser: (id) => void this.openStatementInBrowser(id),
         onError: (e) => {
           this.reportError(e, null);
@@ -226,8 +232,13 @@ export class GraderController implements vscode.Disposable {
       tests: () => this.tests,
       sharedColumn: () => {
         const column = this.statements.column();
-        return column === vscode.window.activeTextEditor?.viewColumn ? undefined : column;
+        return column === this.codeColumn() ? undefined : column;
       },
+      compare: async (id) => {
+        const t = this.runner.compareTexts(id);
+        if (t) await this.compareDocs.open(S.compareTab(t.n), t.expected, t.actual, this.codeColumn() ?? vscode.ViewColumn.One);
+      },
+      openStatement: () => this.openStatement(),
       started: this.started,
       webviewError: (message, stack) => this.crash.panelError(message, stack),
       log: (msg) => this.log(msg),
@@ -1402,6 +1413,12 @@ export class GraderController implements vscode.Disposable {
   downloadAttachment = (problemId?: number) => this.attachments.download(problemId);
   loadTestcases = (refresh = false, asFiles = false) => this.tests.loadTestcases(refresh, asFiles);
   loadSampleCases = () => this.tests.loadSampleCases();
+  /** Where the active file is shown; the focus can be in a webview, so not only the active editor. */
+  private codeColumn(): vscode.ViewColumn | undefined {
+    const file = this.fileUri?.toString();
+    return vscode.window.visibleTextEditors.find((e) => e.document.uri.toString() === file)?.viewColumn;
+  }
+
   /** The main panel's Run tests: the split opens unless every case passed. */
   async runTests(): Promise<void> {
     const summary = await this.runner.run();

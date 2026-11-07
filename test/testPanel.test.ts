@@ -62,11 +62,14 @@ describe('TestPanel', () => {
     setExpected: vi.fn(async () => {}),
     textOf: vi.fn(() => 'whole text'),
     failureText: vi.fn(() => null),
+    dismissSampleTip: vi.fn(async () => {}),
   };
   const tests = { loadTestcases: vi.fn(async () => {}), loadSampleCases: vi.fn(async () => {}) };
   let shared: number | undefined;
+  const compare = vi.fn(async () => {});
+  const openStatement = vi.fn(async () => {});
   const make = () =>
-    new TestPanel('ext' as never, { runner: () => runner as never, tests: () => tests as never, sharedColumn: () => shared, started: Promise.resolve(), webviewError: vi.fn(), log: () => {} });
+    new TestPanel('ext' as never, { runner: () => runner as never, tests: () => tests as never, sharedColumn: () => shared, started: Promise.resolve(), compare, openStatement, webviewError: vi.fn(), log: () => {} });
   const send = async (m: unknown) => {
     v.onMessage(m);
     await new Promise((done) => setImmediate(done));
@@ -168,6 +171,12 @@ describe('TestPanel', () => {
     expect(runner.setExpected).toHaveBeenCalledWith('a');
     await send({ type: 'copy', caseId: 'a', what: 'input' });
     expect(v.clipboard).toEqual(['whole text']);
+    await send({ type: 'compare', caseId: 'a' });
+    expect(compare).toHaveBeenCalledWith('a');
+    await send({ type: 'openStatement' });
+    expect(openStatement).toHaveBeenCalled();
+    await send({ type: 'dismissTip' });
+    expect(runner.dismissSampleTip).toHaveBeenCalled();
     await send({ type: 'loadTestcases' });
     expect(tests.loadTestcases).toHaveBeenCalledWith(false);
     await send({ type: 'loadSamples' });

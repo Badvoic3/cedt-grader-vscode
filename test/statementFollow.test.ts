@@ -47,7 +47,7 @@ function setup() {
   const store = { get: async (id: number): Promise<Statement> => (gets.push(id), { kind: 'pdf', bytes: new Uint8Array([id]) }) } as unknown as StatementStore;
   const saved: Record<string, unknown> = {};
   const memento = { get: <T>(k: string, f: T) => (saved[k] as T) ?? f, update: (k: string, v: unknown) => ((saved[k] = v), Promise.resolve()) };
-  const panels = new StatementPanels({ path: 'ext' } as never, store, { memento, beside: () => true, openInBrowser: () => {}, onError: () => 'x' });
+  const panels = new StatementPanels({ path: 'ext' } as never, store, { memento, besideColumn: () => undefined, beside: () => true, openInBrowser: () => {}, onError: () => 'x' });
   const revive = (id: number) => {
     const p = fakePanel();
     panels.revive(p as never, { problemId: id, name: `P${id}` });

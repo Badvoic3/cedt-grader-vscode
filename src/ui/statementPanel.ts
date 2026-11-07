@@ -60,6 +60,8 @@ export class StatementPanels implements vscode.Disposable {
       /** globalState, for page/zoom/scroll when a tab is closed and reopened. */
       memento: { get<T>(key: string, fallback: T): T; update(key: string, value: unknown): Thenable<void> };
       beside: () => boolean;
+      /** The open Test split: "beside" means there, not in a third group. */
+      besideColumn: () => vscode.ViewColumn | undefined;
       openInBrowser: (problemId: number) => void;
       onError: (err: unknown) => string;
     },
@@ -119,7 +121,7 @@ export class StatementPanels implements vscode.Disposable {
     const panel = vscode.window.createWebviewPanel(
       StatementPanels.viewType,
       S.statementTab(name),
-      { viewColumn: this.opts.beside() ? vscode.ViewColumn.Beside : vscode.ViewColumn.Active, preserveFocus: this.opts.beside() },
+      { viewColumn: this.opts.beside() ? (this.opts.besideColumn() ?? vscode.ViewColumn.Beside) : vscode.ViewColumn.Active, preserveFocus: this.opts.beside() },
       this.webviewOptions(),
     );
     this.attach(panel, problemId, name);

@@ -8,7 +8,7 @@ import { Builder, buildRoot, type Program } from '../runner/compile';
 import { runCases } from '../runner/execute';
 import { detectRunnerLanguage, type RunnerLanguage, Toolchains } from '../runner/languages';
 import { nodeProcessApi } from '../runner/process';
-import { allPassed, emptyState, type RunState, summarize } from '../runner/state';
+import { allPassed, emptyState, nextSampleTip, type RunState, sampleTipShown, summarize } from '../runner/state';
 import type { CaseList, CaseOwner, CaseRun, ProcessApi, RunLimits, RunnerCase, RunSummary } from '../runner/types';
 import { RUNNER } from '../shared/constants';
 import type { TestsHead, ViewState } from '../shared/messages';
@@ -128,6 +128,7 @@ export class Runner {
               samples: !h.tests.statementNoPdf || h.tests.samplesBusy ? { busy: h.tests.samplesBusy } : null,
             }
           : null,
+        sampleTip: !!list && sampleTipShown(list.sampleTip, list.cases, st.runs),
       },
     };
   }
@@ -186,6 +187,24 @@ export class Runner {
     if (!owner) return null;
     if (what === 'input' || what === 'expected') return this.shown(owner)?.cases.find((c) => c.id === id)?.[what] ?? null;
     return this.state(owner).runs.get(id)?.[what === 'actual' ? 'actual' : 'stderr']?.text ?? null;
+  }
+
+  /** What Compare in VS Code opens; null without an output to compare. */
+  compareTexts(id: string): { n: number; expected: string; actual: string } | null {
+    const owner = this.owner();
+    const cases = this.shown(owner)?.cases ?? [];
+    const at = cases.findIndex((c) => c.id === id);
+    const actual = owner ? this.state(owner).runs.get(id)?.actual?.text : undefined;
+    return at >= 0 && actual !== undefined ? { n: at + 1, expected: cases[at].expected, actual } : null;
+  }
+
+  /** The tip stays away for this problem. */
+  dismissSampleTip(): Promise<void> {
+    return this.change(async (o) => {
+      if ('file' in o) return this.host.cases.read(o);
+      const failedRuns = (await this.host.cases.read(o)).sampleTip?.failedRuns ?? 0;
+      return this.host.cases.setMeta(o.problemId, { sampleTip: { failedRuns, dismissed: true } });
+    });
   }
 
   failureText(): string | null {
@@ -272,6 +291,11 @@ export class Runner {
         st.failure = { message: h.describe(err), file: null, line: null };
       } finally {
         st.phase = 'idle';
+      }
+      // A run that was stopped or didn't compile says nothing about the samples.
+      if (!abort.signal.aborted && !st.failure && 'problemId' in target.owner) {
+        const tip = nextSampleTip(list.sampleTip, list.cases, st.runs);
+        if (tip.failedRuns !== (list.sampleTip?.failedRuns ?? 0)) await h.cases.setMeta(target.owner.problemId, { sampleTip: tip });
       }
       return summarize(list.cases, st);
     } finally {

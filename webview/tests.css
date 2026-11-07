@@ -68,6 +68,14 @@ body.vscode-high-contrast .act-run, body.vscode-high-contrast .act-del { backgro
 .dt { max-height: 260px; overflow: auto; font: 12px/1.4 var(--vscode-editor-font-family, monospace); background: var(--vscode-editor-background); border: 1px solid var(--rim); border-radius: var(--radius); }
 .dl { display: flex; min-height: 17px; white-space: pre; }
 .dl .n { position: sticky; left: 0; flex: none; width: 30px; margin-right: 6px; padding-right: 5px; border-right: 1px solid var(--rim); text-align: right; color: var(--muted); background: var(--vscode-editor-background); user-select: none; }
+.dl.del { background: var(--vscode-diffEditor-removedLineBackground, rgba(255, 0, 0, 0.12)); }
+.dl.add { background: var(--vscode-diffEditor-insertedLineBackground, rgba(155, 185, 85, 0.12)); }
+del, ins { text-decoration: none; border-radius: 2px; }
+del { background: var(--vscode-diffEditor-removedTextBackground, rgba(255, 0, 0, 0.3)); border: 1px solid var(--vscode-diffEditor-removedTextBorder, transparent); }
+ins { background: var(--vscode-diffEditor-insertedTextBackground, rgba(155, 185, 85, 0.35)); border: 1px solid var(--vscode-diffEditor-insertedTextBorder, transparent); }
+body.vscode-high-contrast .dl.del { outline: 1px dashed var(--vscode-diffEditor-removedTextBorder, currentColor); outline-offset: -1px; }
+body.vscode-high-contrast .dl.add { outline: 1px dashed var(--vscode-diffEditor-insertedTextBorder, currentColor); outline-offset: -1px; }
+.ws { color: var(--muted); opacity: 0.8; }
 .case-text { width: 100%; min-height: 40px; max-height: 260px; padding: 3px 5px; resize: vertical; font: 12px/1.4 var(--vscode-editor-font-family, monospace); color: var(--vscode-input-foreground); background: var(--vscode-input-background); border: 1px solid var(--vscode-input-border, var(--rim)); border-radius: var(--radius); white-space: pre; overflow: auto; }
 .case-text:focus { outline: 1px solid var(--vscode-focusBorder); outline-offset: -1px; }
 .case-text[readonly] { opacity: 0.8; }

@@ -349,6 +349,7 @@ const EN_S = {
 
   statementTab: (name: string) => `Statement: ${name}`,
   testsTab: (name: string) => (name ? `Tests: ${name}` : 'Tests'),
+  compareTab: (n: number) => `Case ${n}: Expected ↔ Actual`,
 
   errors: {
     checkConnection: (msg: string) => `${msg} Check your internet connection.`,
@@ -651,6 +652,10 @@ const EN_W = {
   copyStderr: 'Copy stderr',
   copyError: 'Copy the error',
   setExpected: 'Set Actual as Expected',
+  compareInCode: 'Compare in VS Code',
+  compareInCodeTip: 'Open Expected and Actual side by side in the diff editor',
+  spacesDontCount: "Spaces at line ends don't count.",
+  sampleTip: 'PDF samples can be misread. Compare this one with the statement.',
   setExpectedCut: 'The output was cut, so it can\'t be used as the expected output',
   textCut: "Too long to show whole, so it can't be edited here.",
   outputCut: 'Output was cut for showing.',

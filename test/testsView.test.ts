@@ -33,7 +33,7 @@ function boot(lang: 'en' | 'th' = 'en') {
 }
 
 const head = (extra: Partial<TestsHead> = {}): TestsHead => ({
-  title: '01_Expr_11', problemId: 2, limits: { timeMs: 1000, memoryMB: 256, source: 'grader' }, summary: { kind: 'not-run' }, running: false, failure: null, leftOut: [], load: { testcases: { busy: false }, samples: { busy: false } }, ...extra,
+  title: '01_Expr_11', problemId: 2, limits: { timeMs: 1000, memoryMB: 256, source: 'grader' }, summary: { kind: 'not-run' }, running: false, failure: null, leftOut: [], load: { testcases: { busy: false }, samples: { busy: false } }, sampleTip: false, ...extra,
 });
 const text = (t: string) => ({ text: t, truncated: false });
 const kase = (id: string, extra: Partial<TestCaseView> = {}): TestCaseView => ({ id, source: 'grader', input: text('1 2\n'), expected: text('3\n'), ...extra });
@@ -199,6 +199,27 @@ describe('Test view', () => {
     }
   });
 
+  it('a result still shows when the cursor stayed in a text box, as after Run tests in the main panel', () => {
+    const { doc, post, label } = boot();
+    post({ fresh: true, head: head(), order: ['a'], cases: [kase('a')] });
+    label('Show this case').click();
+    doc.querySelector('textarea')!.focus();
+    post({ head: head({ running: true }), runs: { a: { caseId: 'a', state: 'running' } } });
+    post({ head: head(), runs: { a: done('a', 'WA') } });
+    expect(doc.querySelector('.det')!.textContent).toContain('Actual');
+  });
+
+  it('an edit clearing the result doesn\'t take the cursor out of the box', () => {
+    const { doc, post, label } = boot();
+    post({ fresh: true, head: head(), order: ['a'], cases: [kase('a')], runs: { a: done('a', 'AC') } });
+    label('Show this case').click();
+    doc.querySelector('.fold')!.dispatchEvent(new doc.defaultView!.MouseEvent('click', { bubbles: true }));
+    const box = doc.querySelector('textarea')!;
+    box.focus();
+    post({ head: head(), cases: [kase('a', { source: 'custom', input: text('9\n') })], runs: { a: null } });
+    expect(doc.activeElement).toBe(box);
+  });
+
   it('a Grader case deletes at once; a Custom one with text asks inline first; an empty one does not', () => {
     const { doc, sent, post, button, label } = boot();
     post({ fresh: true, head: head(), order: ['g', 'c', 'e'], cases: [kase('g'), kase('c', { source: 'custom' }), kase('e', { source: 'custom', input: text(''), expected: text('') })] });
@@ -269,6 +290,54 @@ describe('Test view', () => {
       expect(b.getAttribute('aria-label')).toBe(b.dataset.tip);
       expect(b.hasAttribute('title')).toBe(false);
     }
+  });
+
+  it('marks what differs: the word on a changed line, a whole extra line, spaces at the end as marks', () => {
+    const { doc, post } = boot();
+    post({ fresh: true, head: head(), order: ['a'], cases: [kase('a', { expected: text('1 2 3\n7 8 9\n') })], runs: { a: done('a', 'WA', { actual: text('1 2 3 \n7 6 9\nextra\n') }) } });
+    const [expected, actual] = [...doc.querySelectorAll('.dt')];
+    expect(expected.querySelector('.dl.del del')!.textContent).toBe('8');
+    expect([...actual.querySelectorAll('ins')].map((i) => i.textContent)).toEqual(['6', 'extra']);
+    expect(actual.querySelectorAll('.dl.add')).toHaveLength(2);
+    expect(actual.querySelector('.ws')!.textContent).toBe('·');
+    expect(doc.body.textContent).toContain("Spaces at line ends don't count.");
+  });
+
+  it('no end spaces: no hint; a cut output marks nothing, since the cut would look like a difference', () => {
+    const { doc, post } = boot();
+    post({ fresh: true, head: head(), order: ['a'], cases: [kase('a', { expected: text('1\n2\n') })], runs: { a: done('a', 'WA', { actual: { text: '1\n', truncated: true } }) } });
+    expect(doc.querySelector('.dl.del, .dl.add')).toBeNull();
+    expect(doc.body.textContent).not.toContain("Spaces at line ends don't count.");
+    expect(doc.body.textContent).toContain('Output was cut for showing.');
+  });
+
+  it('a difference past the drawn lines is still in view', () => {
+    const { doc, post } = boot();
+    const lines = Array.from({ length: 3000 }, (_, i) => `${i}\n`);
+    const changed = [...lines];
+    changed[2000] = 'x\n';
+    post({ fresh: true, head: head(), order: ['a'], cases: [kase('a', { expected: text(lines.join('')) })], runs: { a: done('a', 'WA', { actual: text(changed.join('')) }) } });
+    expect(doc.querySelector('.dl.add ins')!.textContent).toBe('x');
+    expect(doc.querySelector('.dt .dl .n')!.textContent).toBe('1998');
+  });
+
+  it('Compare in VS Code asks the host, with the case', () => {
+    const { sent, post, button } = boot();
+    post({ fresh: true, head: head(), order: ['a'], cases: [kase('a')], runs: { a: done('a', 'WA') } });
+    button('Compare in VS Code')!.click();
+    expect(sent.at(-1)).toEqual({ type: 'compare', caseId: 'a' });
+  });
+
+  it('the sample tip offers the statement and can be dismissed', () => {
+    const { doc, sent, post, button } = boot();
+    post({ fresh: true, head: head({ sampleTip: true }), order: ['a'], cases: [kase('a', { source: 'sample' })] });
+    expect(doc.querySelector('.notice')!.textContent).toContain('PDF samples can be misread.');
+    button('Open statement')!.click();
+    expect(sent.at(-1)).toEqual({ type: 'openStatement' });
+    button('Dismiss')!.click();
+    expect(sent.at(-1)).toEqual({ type: 'dismissTip' });
+    post({ head: head() });
+    expect(doc.querySelector('.notice')).toBeNull();
   });
 
   it('Thai: the page reads the language from <html lang>', () => {

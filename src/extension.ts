@@ -3,6 +3,7 @@ import * as vscode from 'vscode';
 import { GraderController, SUBMISSION_SCHEME } from './controller';
 import { SidebarProvider } from './ui/sidebarProvider';
 import { StatementPanels } from './ui/statementPanel';
+import { CompareDocs } from './ui/compareDocs';
 import { TestPanel } from './ui/testPanel';
 import { GraderStatusBar } from './ui/statusBar';
 import { readConfig } from './config';
@@ -114,6 +115,7 @@ function start(ctx: vscode.ExtensionContext, crash: CrashReporter): void {
     vscode.window.registerWebviewPanelSerializer(TestPanel.viewType, {
       deserializeWebviewPanel: async (panel) => controller.testPanel.revive(panel),
     }),
+    vscode.workspace.registerTextDocumentContentProvider(CompareDocs.scheme, controller.compareDocs),
     vscode.workspace.registerTextDocumentContentProvider(SUBMISSION_SCHEME, {
       provideTextDocumentContent: async (uri) => {
         await controller.started;

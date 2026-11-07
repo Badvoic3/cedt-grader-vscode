@@ -1,4 +1,5 @@
 import { normalizeEol } from '../mapping/testCases';
+import { normalizeLine } from './lines';
 import type { RunnerCase } from './types';
 
 /**
@@ -15,7 +16,7 @@ import type { RunnerCase } from './types';
 export function normalizeOutput(text: string): string {
   const lines: string[] = [];
   for (const raw of normalizeEol(text).split('\n')) {
-    const line = raw.replace(/[ \t\f\v]+$/, '').replace(/[ \t\f\v]+/g, ' ');
+    const line = normalizeLine(raw);
     if (line) lines.push(line);
   }
   return lines.join('\n');

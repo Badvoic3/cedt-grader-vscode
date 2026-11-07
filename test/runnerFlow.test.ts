@@ -461,6 +461,62 @@ describe('Runner', () => {
     });
   });
 
+  describe('sample tip', () => {
+    beforeEach(() => {
+      h.tests = { busy: false, samplesBusy: false, statementNoPdf: false };
+      h.problem = { id: 7, name: 'P', hasTestcase: true } as never;
+    });
+    const wrongSample = () => store.merge(7, [{ input: 'a\n', expected: 'nope\n' }], 'sample');
+
+    it('shows after 2 runs where only PDF samples fail, and stays away once dismissed', async () => {
+      await wrongSample();
+      const r = make(programs());
+      await r.onActiveFile();
+      await r.run();
+      expect(r.testsView().head.sampleTip).toBe(false);
+      await r.run();
+      expect(r.testsView().head.sampleTip).toBe(true);
+      await r.dismissSampleTip();
+      expect(r.testsView().head.sampleTip).toBe(false);
+      await r.run();
+      expect(r.testsView().head.sampleTip).toBe(false);
+      expect((await store.read(P)).sampleTip?.dismissed).toBe(true);
+    });
+
+    it('never beside a failing Grader case', async () => {
+      await wrongSample();
+      await store.merge(7, [{ input: 'b\n', expected: 'nope\n', testcaseId: 1 }], 'grader');
+      const r = make(programs());
+      await r.onActiveFile();
+      await r.run();
+      await r.run();
+      await r.run();
+      expect(r.testsView().head.sampleTip).toBe(false);
+      expect((await store.read(P)).sampleTip?.failedRuns ?? 0).toBe(0);
+    });
+
+    it('a run that didn\'t compile doesn\'t count', async () => {
+      await wrongSample();
+      const r = make(programs({ compile: (c) => setImmediate(() => c.child.finish(1)) }));
+      await r.onActiveFile();
+      await r.run();
+      await r.run();
+      expect((await store.read(P)).sampleTip).toBeUndefined();
+    });
+  });
+
+  it('compareTexts gives the whole expected text and the output, numbered by position', async () => {
+    await store.add(P, { input: 'a\n', expected: 'x\n' });
+    await store.add(P, { input: 'b\n', expected: 'y\n' });
+    const r = make(programs());
+    await r.onActiveFile();
+    const id = (await store.read(P)).cases[1].id;
+    expect(r.compareTexts(id)).toBeNull();
+    await r.run();
+    expect(r.compareTexts(id)).toEqual({ n: 2, expected: 'y\n', actual: 'b\n' });
+    expect(r.compareTexts('nope')).toBeNull();
+  });
+
   describe('views', () => {
     beforeEach(() => {
       h.tests = { busy: false, samplesBusy: true, statementNoPdf: false };

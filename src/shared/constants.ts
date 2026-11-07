@@ -47,6 +47,8 @@ export const CRASH = {
 
 /** URI scheme of the read-only documents serving a past submission's source (diff view; also the CPH reload placeholder). */
 export const SUBMISSION_SCHEME = 'cedt-grader-submission';
+/** Read-only Expected and Actual texts for Compare in VS Code. */
+export const COMPARE_SCHEME = 'cedt-grader-compare';
 
 /** Website paths (opened in the browser; never fetched). */
 export const WEB_PATHS = {
@@ -99,6 +101,8 @@ export const RUNNER = {
   displayBytes: 64 * 1024,
   /** A case's input or expected text sent to the Test view: longer text shows cut and can't be edited there. */
   viewTextChars: 64 * 1024,
+  /** Runs in a row where only PDF samples fail before the tip shows. */
+  sampleTipRuns: 2,
   defaultTimeSeconds: 10,
   defaultMemoryMB: 1024,
   /** Kill at the limit plus this, so the real time can be shown (the grader does the same). */

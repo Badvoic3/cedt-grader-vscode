@@ -31,10 +31,17 @@ export class TestPanel implements vscode.Disposable {
       sharedColumn: () => vscode.ViewColumn | undefined;
       /** Messages wait until the session is read. */
       started: Promise<unknown>;
+      compare: (caseId: string) => Promise<void>;
+      openStatement: () => Promise<void>;
       webviewError: (message: string, stack: string) => void;
       log: (msg: string) => void;
     },
   ) {}
+
+  /** Where the tab is, when it is open. */
+  column(): vscode.ViewColumn | undefined {
+    return this.panel?.viewColumn;
+  }
 
   /** Open the split, or show the tab. The keyboard stays in the editor. */
   async open(): Promise<void> {
@@ -152,6 +159,15 @@ export class TestPanel implements vscode.Disposable {
         if (text !== null) await vscode.env.clipboard.writeText(text);
         return;
       }
+      case 'compare':
+        await this.opts.compare(m.caseId);
+        return;
+      case 'openStatement':
+        await this.opts.openStatement();
+        return;
+      case 'dismissTip':
+        await r.dismissSampleTip();
+        return;
       case 'loadTestcases':
         await this.opts.tests().loadTestcases(false);
         return;

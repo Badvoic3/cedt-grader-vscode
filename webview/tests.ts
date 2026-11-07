@@ -8,6 +8,7 @@ import './lang'; // first: sets the display language before anything below build
 import { type Child, el, icon } from './dom';
 import { summaryPill } from './runSummary';
 import { installTooltips } from './tooltip';
+import { diffOutputs, type DiffLine, plainLines } from '../src/runner/diff';
 import type { CaseRun, Captured } from '../src/runner/types';
 import type { FromTests, TestCaseView, TestsHead, ToTests } from '../src/shared/messages';
 import { S, W } from '../src/shared/strings';
@@ -31,6 +32,7 @@ const EDIT_DELAY_MS = 300;
 /** Lines drawn in one block; more only slows the page. Copy gives the whole text. */
 const MAX_LINES = 1000;
 const MAX_ROWS = 12;
+const CONTEXT_LINES = 3;
 
 type Field = 'input' | 'expected';
 
@@ -138,6 +140,17 @@ function renderTop(h: TestsHead): void {
       el('p', { class: 'muted small' }, W.nothingRun),
     );
   }
+  if (h.sampleTip) {
+    top.append(
+      el('div', { class: 'notice', role: 'note' },
+        el('div', { class: 'row' }, icon('lightbulb'), el('span', { class: 'grow small' }, W.sampleTip)),
+        el('div', { class: 'row gap' },
+          button(W.openStatement, () => send({ type: 'openStatement' }), { kind: 'primary' }),
+          el('button', { class: 'link small', type: 'button', onclick: () => send({ type: 'dismissTip' }) }, W.dismiss),
+        ),
+      ),
+    );
+  }
   if (empty) top.append(el('p', { class: 'muted small' }, load ? W.noCasesLoad : W.noCasesAdd));
 }
 
@@ -151,11 +164,19 @@ function verdictPill(r: CaseRun | undefined): Child {
   return el('span', { class: `vp ${r.verdict}` }, r.verdict ?? '');
 }
 
-/** Line-numbered text. */
-function block(text: string): HTMLElement {
-  const lines = text.replace(/\r\n/g, '\n').replace(/\n$/, '').split('\n');
+/** Line-numbered text, marks and all. A long block starts near its first difference. */
+function block(lines: readonly DiffLine[], side: 'del' | 'add' = 'del'): HTMLElement {
+  const first = lines.findIndex((l) => l.changed);
+  const from = first >= MAX_LINES ? first - CONTEXT_LINES : 0;
   const d = el('div', { class: 'dt', tabindex: 0 });
-  for (const [i, line] of lines.slice(0, MAX_LINES).entries()) d.append(el('div', { class: 'dl' }, el('span', { class: 'n' }, String(i + 1)), el('span', {}, line)));
+  for (const l of lines.slice(from, from + MAX_LINES)) {
+    d.append(
+      el('div', { class: `dl ${l.changed ? side : ''}`.trim() },
+        el('span', { class: 'n' }, String(l.n)),
+        el('span', {}, l.parts.map((p) => (p.changed ? el(side === 'del' ? 'del' : 'ins', {}, p.text) : p.text)), l.trail ? el('span', { class: 'ws' }, l.trail) : null),
+      ),
+    );
+  }
   return d;
 }
 
@@ -192,6 +213,10 @@ function body(c: TestCaseView, r: CaseRun | undefined): HTMLElement {
   const actual: Captured | undefined = r?.actual;
   const copy = (what: 'input' | 'expected' | 'actual' | 'stderr', label: string) => iconButton('copy', label, () => send({ type: 'copy', caseId: c.id, what }));
   const code = r?.signal ? W.exitSignal(r.signal) : r?.exitCode ? W.exitCode(r.exitCode) : null;
+  // Cut text would differ at the cut: it shows as it is, with nothing marked.
+  const whole = actual && !actual.truncated && !c.expected.truncated;
+  const diff = actual && whole ? diffOutputs(c.expected.text, actual.text) : { expected: plainLines(c.expected.text), actual: plainLines(actual?.text ?? '') };
+  const spaces = !!actual && [...diff.expected, ...diff.actual].some((l) => l.trail);
   return el('div', { class: 'det' },
     confirming === c.id
       ? el('div', { class: 'notice', role: 'alert' },
@@ -214,13 +239,15 @@ function body(c: TestCaseView, r: CaseRun | undefined): HTMLElement {
             : null,
           copy('expected', W.copyExpected),
         ),
-        editExpected ? editor(c, 'expected', W.caseExpected) : block(c.expected.text),
+        editExpected ? editor(c, 'expected', W.caseExpected) : block(diff.expected, 'del'),
       ),
-      actual ? el('div', {}, el('div', { class: 'blk-h' }, W.caseActual), block(actual.text)) : null,
+      actual ? el('div', {}, el('div', { class: 'blk-h' }, W.caseActual), block(diff.actual, 'add')) : null,
     ),
+    spaces ? el('div', { class: 'hint' }, icon('info'), ' ', W.spacesDontCount) : null,
     actual?.truncated ? el('div', { class: 'hint' }, icon('info'), ' ', W.outputCut) : null,
     actual
       ? el('div', { class: 'acts' },
+          button([icon('diff'), ` ${W.compareInCode}`], () => send({ type: 'compare', caseId: c.id }), { title: W.compareInCodeTip }),
           copy('actual', W.copyActual),
           iconButton('check-all', W.setExpected, () => send({ type: 'setExpected', caseId: c.id }), { disabledReason: actual.truncated ? W.setExpectedCut : null, disabled: !!head?.running }),
         )
@@ -231,7 +258,7 @@ function body(c: TestCaseView, r: CaseRun | undefined): HTMLElement {
             if (!stderrOpen.delete(c.id)) stderrOpen.add(c.id);
             render();
           }, copy('stderr', W.copyStderr)),
-          stderrOpen.has(c.id) ? block(r.stderr.text) : null,
+          stderrOpen.has(c.id) ? block(plainLines(r.stderr.text)) : null,
         ]
       : null,
   );
@@ -295,7 +322,7 @@ function header(c: TestCaseView, r: CaseRun | undefined, n: number): HTMLElement
 
 // ------------------------------------------------------------------ the list
 
-const cards = new Map<string, { dom: HTMLElement; key: string }>();
+const cards = new Map<string, { dom: HTMLElement; key: string; run?: CaseRun }>();
 
 function clearDrop(): void {
   for (const { dom } of cards.values()) dom.classList.remove('drop-before', 'drop-after');
@@ -353,9 +380,11 @@ function renderCards(): void {
     const old = card.dom.querySelector(':scope > .tc');
     if (old) old.replaceWith(next);
     else card.dom.prepend(next);
-    // The text being typed stays as it is; the rest of the card catches up on blur.
-    if (typing) continue;
+    // The text being typed stays as it is, and the card catches up on blur. A new result can't wait
+    // for that: the cursor stays in the box when the run was started from the main panel.
+    if (typing && (!r || r === card.run)) continue;
     card.key = key;
+    card.run = r;
     card.dom.querySelector(':scope > .det')?.remove();
     if (open) card.dom.append(body(c, r));
   }
