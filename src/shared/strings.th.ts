@@ -17,7 +17,7 @@ import type { Strings } from './strings';
  * Everything else was reviewed at checkpoint B (2026-11-03). Add keys here
  * when a new text is translated without review.
  */
-export const TH_REVIEW: readonly string[] = ['S.common.dismiss', 'S.crash.notice', 'S.crash.report', 'S.crash.review', 'S.crash.reviewTitle', 'S.files.saveHere', 'S.folder.cancelRestores', 'S.folder.cancelStopsMatch', 'S.folder.cancelUnlinksFile', 'S.folder.replaceFilesQ', 'W.websiteTip', 'S.requestLogOff', 'W.crashTitle', 'G.statusGradingTip', 'G.statusChooseTip', 'G.statusOpenTip', 'G.logInFirst', 'W.server', 'W.serverLine', 'W.changeServer', 'W.checkingServer', 'W.serverWorks', 'W.useDefaultServer', 'S.account.serverInvalid', 'S.account.settingsNotSaved', 'S.account.serverIncompatible', 'S.account.serverUnreachable', 'S.account.insecureTitle', 'S.account.insecureDetail', 'S.account.insecureSend', 'W.crashNote', 'W.crashReport', 'W.crashReportLabel', 'W.crashTitle', 'W.defaultOrderReversed', 'W.sortedBy'];
+export const TH_REVIEW: readonly string[] = ['S.common.dismiss', 'S.crash.notice', 'S.crash.report', 'S.crash.review', 'S.crash.reviewTitle', 'S.files.saveHere', 'S.folder.cancelRestores', 'S.folder.cancelStopsMatch', 'S.folder.cancelUnlinksFile', 'S.folder.replaceFilesQ', 'W.websiteTip', 'S.requestLogOff', 'W.crashTitle', 'G.statusGradingTip', 'G.statusChooseTip', 'G.statusOpenTip', 'G.logInFirst', 'W.server', 'W.serverLine', 'W.changeServer', 'W.checkingServer', 'W.serverWorks', 'W.useDefaultServer', 'S.account.serverInvalid', 'S.account.settingsNotSaved', 'S.account.serverIncompatible', 'S.account.serverUnreachable', 'S.account.insecureTitle', 'S.account.insecureDetail', 'S.account.insecureSend', 'W.crashNote', 'W.crashReport', 'W.crashReportLabel', 'W.crashTitle', 'W.defaultOrderReversed', 'W.sortedBy', 'S.cache.custom', 'S.cache.customDetail'];
 
 export const TH: Strings = {
   HOW_LINKED: {
@@ -180,6 +180,8 @@ export const TH: Strings = {
       placeholder: 'เลือกข้อมูลที่ต้องการล้าง แล้วกด Enter',
       files: 'ไฟล์ที่ดาวน์โหลดไว้',
       filesDetail: 'ไฟล์โจทย์, test case และรายละเอียดการส่ง จะดาวน์โหลดใหม่อัตโนมัติเมื่อต้องใช้',
+      custom: 'test case ของคุณเอง',
+      customDetail: 'เคสที่คุณเพิ่มหรือแก้ไขในหน้าทดสอบ ดาวน์โหลดกลับมาไม่ได้',
       lists: 'รายการโจทย์ ประวัติการส่ง และการจับคู่อัตโนมัติที่จำไว้',
       listsDetail:
         'รายการโจทย์ที่บันทึกไว้ ประวัติการส่ง โจทย์ที่จับคู่อัตโนมัติ ไฟล์ที่ตั้งค่าไม่ให้เชื่อม ข้อความแจ้งเตือนที่ปิดไป โจทย์ที่เปิดล่าสุด และการเชื่อมของไฟล์ที่ถูกลบไปแล้ว',

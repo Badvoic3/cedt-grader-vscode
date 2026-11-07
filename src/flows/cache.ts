@@ -3,6 +3,7 @@ import { existsSync } from 'node:fs';
 import { rm, stat as fsStat } from 'node:fs/promises';
 import { type BackupRecord, backupsToDelete, CLEAR_DEFAULTS, CLEAR_ORDER, type ClearCategory, keepIds, planClear, recordBackup } from '../data/cacheClear';
 import { cleanupCache, clearCacheFiles, enforceLimit, formatBytes, scanCache, statementIds, totalBytes } from '../data/cacheFiles';
+import type { CaseSource } from '../runner/types';
 import { CACHE, TIMING } from '../shared/constants';
 import { KEYS } from '../shared/stateKeys';
 import { S } from '../shared/strings';
@@ -99,8 +100,10 @@ export class CacheCare {
     const listBytes = listKeys.reduce((n, k) => n + Buffer.byteLength(JSON.stringify(ws.get(k)) ?? ''), 0);
     const backups = backupsToDelete(this.backups(), existsSync);
     const linkCount = (await h.mapping.allEntries()).length;
+    const customCount = await h.cases.customCount();
     const rows: Record<ClearCategory, { label: string; detail: string; description?: string; show: boolean }> = {
       files: { label: S.cache.files, detail: S.cache.filesDetail, description: formatBytes(fileBytes), show: true },
+      custom: { label: S.cache.custom, detail: S.cache.customDetail, description: String(customCount), show: customCount > 0 },
       lists: { label: S.cache.lists, detail: S.cache.listsDetail, description: formatBytes(listBytes), show: true },
       links: { label: S.cache.links, detail: S.cache.linksDetail, description: linkCount ? String(linkCount) : undefined, show: true },
       login: { label: S.cache.login, detail: S.cache.loginDetail, show: true },
@@ -132,6 +135,8 @@ export class CacheCare {
       h.data.forgetDetails();
       await h.tests.refreshStatementKind();
     }
+    const cleared: CaseSource[] = [...(plan.cacheFiles ? (['grader', 'sample'] as const) : []), ...(plan.customCases ? (['custom'] as const) : [])];
+    if (cleared.length) await h.cases.clear(cleared);
     if (plan.staleLinks) await h.mapping.removeStale();
     if (plan.allLinks) skippedDirty = (await h.mapping.emptyMappingFiles()).skippedDirty;
     for (const k of plan.workspaceKeys) await ws.update(k, undefined);

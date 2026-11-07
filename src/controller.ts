@@ -30,6 +30,7 @@ import {
 import { dirname } from 'node:path';
 import { CPH_AUTO_SHOW_KEY, CPH_AUTO_SHOW_SECTION, CPH_EXTENSION_ID, cphAutoShowScope, CphPresence } from './cphIntegration';
 import { TestcaseStore } from './data/testcaseStore';
+import { CaseStore } from './runner/store';
 import { pdfjsLoader } from './data/pdfSamples';
 import { cphProbPath as cphProbPathFor, readCphProblem } from './mapping/cph';
 import { pathExists as exists } from './mapping/newFile';
@@ -119,6 +120,7 @@ export class GraderController implements vscode.Disposable {
   private followedProblemId: number | null | undefined = undefined;
   /** Statement PDFs / descriptions on disk (shared by the statement tabs and "Load sample cases"). */
   private readonly statementStore: StatementStore;
+  private readonly cases: CaseStore;
   /** CPH is optional: only used when installed (re-checked when extensions change). */
   readonly cph: CphPresence;
   /** Connection banner (null = all good) and what its Retry button re-runs. */
@@ -186,6 +188,7 @@ export class GraderController implements vscode.Disposable {
       this.cache.written(p);
       void this.tests.refreshStatementKind();
     });
+    this.cases = new CaseStore(ctx.globalStorageUri.fsPath, () => this.client.baseUrl, (l) => this.log(l));
     this.tests = new TestCases(
       this.host,
       new TestcaseStore(ctx.globalStorageUri.fsPath, () => this.client, (l) => this.requestLog(l), (p) => this.cache.written(p)),
@@ -274,6 +277,7 @@ export class GraderController implements vscode.Disposable {
       mapping: c.mapping,
       cph: c.cph,
       get statementStore() { return c.statementStore; },
+      get cases() { return c.cases; },
       get prompts() { return c.prompts; },
       get folder() { return c.folder; },
       get links() { return c.links; },

@@ -6,6 +6,7 @@ import type { StatementStore } from '../data/statementStore';
 import type { GraderProvider, Language, Problem } from '../grader';
 import type { MatchSource } from '../mapping/match';
 import type { MappingStore } from '../mapping/store';
+import type { CaseStore } from '../runner/store';
 import type { Attachments } from './attachments';
 import type { FolderMode } from './folderMode';
 import type { Links } from './links';
@@ -29,6 +30,8 @@ export interface Host {
   readonly mapping: MappingStore;
   readonly cph: CphPresence;
   readonly statementStore: StatementStore;
+  /** The runner's case lists. */
+  readonly cases: CaseStore;
 
   readonly prompts: InlinePrompts;
   readonly folder: FolderMode;

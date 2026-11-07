@@ -178,6 +178,8 @@ const EN_S = {
     placeholder: 'Choose what to clear, then press Enter',
     files: 'Downloaded files',
     filesDetail: 'Problem statements, test cases and submission details. Downloaded again when needed.',
+    custom: 'Your own test cases',
+    customDetail: "Cases you added or edited in the test view. They can't be downloaded again.",
     lists: 'Problem list, history and remembered matches',
     listsDetail:
       'Saved problem list, submission history, remembered automatic matches, "not linked" files, dismissed notices, recently opened problems and links of deleted files.',

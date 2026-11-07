@@ -2,7 +2,7 @@ import type { ChildProcessWithoutNullStreams, SpawnOptionsWithoutStdio } from 'n
 
 /**
  * The built-in runner's shared data (no `vscode` import). These shapes serve
- * both the runner and the Test split view; `ProblemCases` is what is stored
+ * both the runner and the Test split view; `CaseList` is what is stored
  * on disk, everything else lives in memory.
  */
 
@@ -19,10 +19,19 @@ export interface RunnerCase {
   testcaseId?: number;
 }
 
-/** One problem's runner list, as stored in `runner-cases/<host>/<problemId>.json`. */
-export interface ProblemCases {
+/** Whose list it is: a problem, or a file with no problem linked. */
+export type CaseOwner = { problemId: number } | { file: string };
+
+/**
+ * One runner list, as stored on disk: `runner-cases/<host>/<problemId>.json`
+ * for a problem, `runner-cases/_unlinked/<hash>.json` for an unlinked file
+ * (only `Custom` cases, since there is nothing to load them from).
+ */
+export interface CaseList {
   version: 1;
-  problemId: number;
+  problemId?: number;
+  /** Unlinked file: its absolute path. */
+  file?: string;
   /** Array order is the display order. */
   cases: RunnerCase[];
   /** Last limits read from the grader, kept for offline use. */

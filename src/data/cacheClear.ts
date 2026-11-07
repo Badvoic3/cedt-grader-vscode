@@ -8,12 +8,13 @@ import { KEYS } from '../shared/stateKeys';
  * extension recorded creating, and only with "backups" selected.
  * `.cedt-grader.json` is emptied (never deleted) only with "links".
  */
-export type ClearCategory = 'files' | 'lists' | 'links' | 'login' | 'backups';
+export type ClearCategory = 'files' | 'custom' | 'lists' | 'links' | 'login' | 'backups';
 
-export const CLEAR_ORDER: readonly ClearCategory[] = ['files', 'lists', 'links', 'login', 'backups'];
+export const CLEAR_ORDER: readonly ClearCategory[] = ['files', 'custom', 'lists', 'links', 'login', 'backups'];
 
 export const CLEAR_DEFAULTS: Readonly<Record<ClearCategory, boolean>> = {
   files: true,
+  custom: false,
   lists: true,
   links: false,
   login: false,
@@ -21,8 +22,10 @@ export const CLEAR_DEFAULTS: Readonly<Record<ClearCategory, boolean>> = {
 };
 
 export interface ClearPlan {
-  /** Delete downloaded statements / test cases (globalStorage) and forget submission details in memory. */
+  /** Delete downloaded statements / test cases (globalStorage), the loaded cases in the runner's lists, and forget submission details in memory. */
   cacheFiles: boolean;
+  /** Delete the user's own test cases from the runner's lists. */
+  customCases: boolean;
   /** Forget the problem list and history in memory (and reload the list when logged in). */
   resetData: boolean;
   /** Remove stale links (file missing) even when the other links are kept. */
@@ -59,6 +62,7 @@ export function planClear(
   const has = (list: readonly string[]) => (k: string) => list.includes(k);
   return {
     cacheFiles: selected.has('files'),
+    customCases: selected.has('custom'),
     resetData: selected.has('lists'),
     staleLinks: selected.has('lists') && !selected.has('links'),
     allLinks: selected.has('links'),

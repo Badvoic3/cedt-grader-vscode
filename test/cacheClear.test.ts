@@ -27,9 +27,14 @@ describe('Clear Cached Data: what each checkbox removes', () => {
     expect(CLEAR_ORDER.filter((c) => CLEAR_DEFAULTS[c])).toEqual(['files', 'lists']);
   });
 
+  it('your own test cases: off by default, and only that', () => {
+    expect(CLEAR_DEFAULTS.custom).toBe(false);
+    expect(plan('custom')).toMatchObject({ cacheFiles: false, customCases: true, resetData: false, workspaceKeys: [], globalKeys: [] });
+  });
+
   it('downloaded files: cache files, statement view state, nothing else', () => {
     expect(plan('files')).toEqual({
-      cacheFiles: true, resetData: false, staleLinks: false, allLinks: false, logout: false, backups: false,
+      cacheFiles: true, customCases: false, resetData: false, staleLinks: false, allLinks: false, logout: false, backups: false,
       workspaceKeys: [], globalKeys: [KEYS.statementView],
     });
   });
