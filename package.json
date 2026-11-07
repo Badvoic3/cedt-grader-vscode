@@ -2,7 +2,7 @@
   "name": "cedt-grader-submit",
   "displayName": "Grader Submit",
   "description": "%extension.description%",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "publisher": "Badvoic3",
   "license": "MIT",
   "icon": "media/icon.png",
@@ -386,14 +386,21 @@
         "cedtGrader.runner.compilerPaths": {
           "type": "object",
           "default": {},
-          "additionalProperties": { "type": "string" },
+          "additionalProperties": {
+            "type": "string"
+          },
           "scope": "application",
           "markdownDescription": "%config.runner.compilerPaths.description%"
         },
         "cedtGrader.runner.extraCompileArgs": {
           "type": "object",
           "default": {},
-          "additionalProperties": { "type": "array", "items": { "type": "string" } },
+          "additionalProperties": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
           "scope": "application",
           "markdownDescription": "%config.runner.extraCompileArgs.description%"
         },
