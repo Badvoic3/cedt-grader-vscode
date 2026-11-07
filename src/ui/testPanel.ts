@@ -31,12 +31,25 @@ export class TestPanel implements vscode.Disposable {
       sharedColumn: () => vscode.ViewColumn | undefined;
       /** Messages wait until the session is read. */
       started: Promise<unknown>;
+      /** The tab opened, closed or came to the front: the main panel's button follows. */
+      changed: () => void;
       compare: (caseId: string) => Promise<void>;
       openStatement: () => Promise<void>;
       webviewError: (message: string, stack: string) => void;
       log: (msg: string) => void;
     },
   ) {}
+
+  /** On screen, not only open behind another tab. */
+  get showing(): boolean {
+    return !!this.panel?.visible;
+  }
+
+  /** The main panel's Open tests: a second press closes it. A tab behind another comes to the front. */
+  async toggle(): Promise<void> {
+    if (this.showing) this.panel?.dispose();
+    else await this.open();
+  }
 
   /** Where the tab is, when it is open. */
   column(): vscode.ViewColumn | undefined {
@@ -84,10 +97,13 @@ export class TestPanel implements vscode.Disposable {
     });
     panel.onDidChangeViewState(() => {
       if (panel.visible) this.opts.runner().fetchLimits();
+      this.opts.changed();
     });
     panel.onDidDispose(() => {
       if (this.panel === panel) this.panel = null;
+      this.opts.changed();
     });
+    this.opts.changed();
   }
 
   /** The display language changed. */

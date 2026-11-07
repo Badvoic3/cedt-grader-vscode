@@ -565,7 +565,7 @@ function runRows(r: NonNullable<ViewState['runTests']>): HTMLElement {
         : button([icon('play', 'run-icon'), ` ${W.runTests}`], () => send({ type: 'runTests' }), { disabled: !!reason, title: reason ? `${W.runTestsTip} (${reason})` : W.runTestsTip }),
       el('span', { class: `pill run-pill ${pill.tone}` }, pill.text),
     ),
-    button([icon('beaker'), ` ${W.openTests}`], () => send({ type: 'openTests' }), { title: W.openTestsTip }),
+    button([icon('beaker'), ` ${r.testsOpen ? W.closeTests : W.openTests}`], () => send({ type: 'openTests' }), { title: r.testsOpen ? W.closeTests : W.openTestsTip }),
   );
 }
 

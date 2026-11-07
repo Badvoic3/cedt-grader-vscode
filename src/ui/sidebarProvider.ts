@@ -180,7 +180,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider, vscode.Dispo
         c.stopTests();
         return;
       case 'openTests':
-        await c.openTests();
+        await c.toggleTests();
         return;
       case 'dismissLinkedNotice':
         await c.dismissLinkedNotice();

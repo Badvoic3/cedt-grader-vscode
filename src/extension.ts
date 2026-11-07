@@ -100,7 +100,7 @@ function start(ctx: vscode.ExtensionContext, crash: CrashReporter): void {
     command('cedtGrader.downloadAttachment', () => controller.downloadAttachment()),
     command('cedtGrader.toggleFolderMode', () => controller.toggleFolderMode()),
     command('cedtGrader.runTests', () => controller.runTests()),
-    command('cedtGrader.openTests', () => controller.openTests()),
+    command('cedtGrader.openTests', () => controller.toggleTests()),
     command('cedtGrader.loadTestcases', () => controller.loadTestcases(false)),
     command('cedtGrader.saveTestcasesAsFiles', () => controller.loadTestcases(false, true)),
     command('cedtGrader.loadSampleCases', () => controller.loadSampleCases()),

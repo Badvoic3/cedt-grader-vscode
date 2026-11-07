@@ -240,6 +240,7 @@ export class GraderController implements vscode.Disposable {
       },
       openStatement: () => this.openStatement(),
       started: this.started,
+      changed: () => this.emit(),
       webviewError: (message, stack) => this.crash.panelError(message, stack),
       log: (msg) => this.log(msg),
     });
@@ -753,7 +754,7 @@ export class GraderController implements vscode.Disposable {
       crash: this.crash.view,
       ...this.links.noticeView(problem, file),
       folder: this.folder.view(),
-      runTests: file ? this.runner.panelView() : null,
+      runTests: file ? { ...this.runner.panelView(), testsOpen: this.testPanel.showing } : null,
       folderMode: file ? { on: !!folderLink && !this.folder.matched, disabledReason: folderLink ? null : this.folder.modeTarget().reason } : null,
       attachment: { busy: problem && this.data.isDownloading(problem.id) ? problem.id : null },
       cphTip: false, // the built-in runner replaces it; the rest goes with CPH in v1.0.4
@@ -1426,7 +1427,7 @@ export class GraderController implements vscode.Disposable {
     if (Runner.shouldOpenTests(summary) || (!summary && !this.runner.running && this.runner.summary().kind === 'no-cases' && this.fileUri)) await this.testPanel.open();
   }
   stopTests = () => this.runner.stop();
-  openTests = () => this.testPanel.open();
+  toggleTests = () => this.testPanel.toggle();
   submit = () => this.submitFlow.submit();
   showLastResult = () => this.submitFlow.showLastResult();
   showCompilerMessage = () => this.submitFlow.showCompilerMessage();

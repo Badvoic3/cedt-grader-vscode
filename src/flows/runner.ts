@@ -97,7 +97,7 @@ export class Runner {
   }
 
   /** The main panel's Run tests row. */
-  panelView(): ViewState['runTests'] {
+  panelView(): Omit<NonNullable<ViewState['runTests']>, 'testsOpen'> {
     const summary = this.summary();
     return { summary, running: this.running, disabledReason: summary.kind === 'no-cases' ? S.runTests.noCases : null };
   }

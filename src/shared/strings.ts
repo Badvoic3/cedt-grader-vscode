@@ -638,8 +638,6 @@ const EN_W = {
   sourceCustom: 'Custom',
   runCase: 'Run this case',
   deleteCase: 'Delete this case',
-  deleteCustomQ: "Delete this case? You can't get it back.",
-  deleteConfirm: 'Delete',
   moveCaseTip: 'Drag to move, or press Alt+Up / Alt+Down',
   openCase: 'Show this case',
   closeCase: 'Hide this case',

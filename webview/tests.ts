@@ -11,7 +11,7 @@ import { installTooltips } from './tooltip';
 import { diffOutputs, type DiffLine, plainLines } from '../src/runner/diff';
 import type { CaseRun, Captured } from '../src/runner/types';
 import type { FromTests, TestCaseView, TestsHead, ToTests } from '../src/shared/messages';
-import { S, W } from '../src/shared/strings';
+import { W } from '../src/shared/strings';
 
 interface VsCodeApi {
   postMessage(m: FromTests): void;
@@ -46,7 +46,6 @@ const opened = new Map<string, boolean>();
 const inputOpen = new Map<string, boolean>();
 const stderrOpen = new Set<string>();
 const editingExpected = new Set<string>();
-let confirming: string | null = null;
 let addPending = false;
 let dragging: string | null = null;
 
@@ -232,15 +231,6 @@ function body(c: TestCaseView, r: CaseRun | undefined): HTMLElement {
   const diff = actual && whole ? diffOutputs(c.expected.text, actual.text) : { expected: plainLines(c.expected.text), actual: plainLines(actual?.text ?? '') };
   const spaces = !!actual && [...diff.expected, ...diff.actual].some((l) => l.trail);
   return el('div', { class: 'det' },
-    confirming === c.id
-      ? el('div', { class: 'notice', role: 'alert' },
-          el('div', { class: 'row' }, el('span', { class: 'grow small' }, W.deleteCustomQ)),
-          el('div', { class: 'row gap' },
-            button(W.deleteConfirm, () => { confirming = null; send({ type: 'remove', caseId: c.id }); }, { kind: 'primary' }),
-            button(S.common.cancel, () => { confirming = null; render(); }),
-          ),
-        )
-      : null,
     done ? el('div', { class: 'mem-line', title: W.memoryEstimate }, memoryOf(r.memoryKB)) : null,
     code ? el('div', { class: 'limit' }, code) : null,
     fold(W.caseInput, inOpen, () => { inputOpen.set(c.id, !inOpen); render(); }, copy('input', W.copyInput)),
@@ -282,17 +272,6 @@ const failed = (id: string) => runs.get(id)?.state === 'done' && runs.get(id)?.v
 /** The first failed case opens by itself: more would fill the small split. */
 const isOpen = (id: string) => opened.get(id) ?? (failed(id) && order.find(failed) === id);
 
-function askDelete(c: TestCaseView): void {
-  // Load brings back a grader or sample case, and an empty one has nothing to lose.
-  if (c.source !== 'custom' || (!c.input.text && !c.expected.text)) {
-    send({ type: 'remove', caseId: c.id });
-    return;
-  }
-  confirming = c.id;
-  opened.set(c.id, true);
-  render();
-}
-
 function move(id: string, to: number): void {
   const from = order.indexOf(id);
   if (from < 0 || to < 0 || to >= order.length || from === to) return;
@@ -307,14 +286,27 @@ function header(c: TestCaseView, r: CaseRun | undefined, n: number): HTMLElement
   const busy = !!head?.running;
   const open = isOpen(c.id);
   const done = r?.state === 'done';
+  const toggle = () => {
+    opened.set(c.id, !open);
+    render();
+  };
   return el('div', {
     class: 'tc',
     draggable: busy ? undefined : 'true',
     tabindex: 0,
     role: 'group',
     'aria-label': W.caseN(n),
+    'aria-expanded': String(open),
+    onclick: (e: Event) => {
+      if (!(e.target as Element).closest('button')) toggle();
+    },
     onkeydown: (e: Event) => {
       const k = e as KeyboardEvent;
+      if (e.target === e.currentTarget && (k.key === 'Enter' || k.key === ' ')) {
+        e.preventDefault();
+        toggle();
+        return;
+      }
       if (busy || !k.altKey || (k.key !== 'ArrowUp' && k.key !== 'ArrowDown')) return;
       e.preventDefault();
       move(c.id, order.indexOf(c.id) + (k.key === 'ArrowUp' ? -1 : 1));
@@ -329,8 +321,8 @@ function header(c: TestCaseView, r: CaseRun | undefined, n: number): HTMLElement
     done ? el('span', { class: 'tcm' }, el('span', {}, `${r.timeMs} ms`), el('span', { class: 'mem', title: W.memoryEstimate }, memoryOf(r.memoryKB))) : null,
     el('span', { class: 'sp' }),
     iconButton('play', W.runCase, () => run(c.id), { cls: 'act-run', disabled: busy }),
-    iconButton('trash', W.deleteCase, () => askDelete(c), { cls: 'act-del', disabled: busy }),
-    iconButton(open ? 'chevron-up' : 'chevron-down', open ? W.closeCase : W.openCase, () => { opened.set(c.id, !open); render(); }),
+    iconButton('trash', W.deleteCase, () => send({ type: 'remove', caseId: c.id }), { cls: 'act-del', disabled: busy }),
+    iconButton(open ? 'chevron-up' : 'chevron-down', open ? W.closeCase : W.openCase, toggle),
   );
 }
 
@@ -388,7 +380,7 @@ function renderCards(): void {
     card.dom.className = `card ${r?.state === 'done' ? r.verdict : r?.state === 'running' ? 'running' : ''}`.trim();
     const typing = card.dom.contains(document.activeElement) && document.activeElement?.tagName === 'TEXTAREA';
     const open = isOpen(id);
-    const key = JSON.stringify([i, c, r, open, !!head?.running, inputOpen.get(id), stderrOpen.has(id), editingExpected.has(id), confirming === id]);
+    const key = JSON.stringify([i, c, r, open, !!head?.running, inputOpen.get(id), stderrOpen.has(id), editingExpected.has(id)]);
     if (key === card.key) continue;
     const old = card.dom.querySelector<HTMLElement>(':scope > .tc');
     if (old) {
@@ -438,7 +430,6 @@ function onState(m: ToTests): void {
     stderrOpen.clear();
     editingExpected.clear();
     pending.clear();
-    confirming = null;
     addPending = false;
   }
   const known = new Set(cases.keys());

@@ -69,7 +69,7 @@ describe('TestPanel', () => {
   const compare = vi.fn(async () => {});
   const openStatement = vi.fn(async () => {});
   const make = () =>
-    new TestPanel('ext' as never, { runner: () => runner as never, tests: () => tests as never, sharedColumn: () => shared, started: Promise.resolve(), compare, openStatement, webviewError: vi.fn(), log: () => {} });
+    new TestPanel('ext' as never, { runner: () => runner as never, tests: () => tests as never, sharedColumn: () => shared, started: Promise.resolve(), changed: () => {}, compare, openStatement, webviewError: vi.fn(), log: () => {} });
   const send = async (m: unknown) => {
     v.onMessage(m);
     await new Promise((done) => setImmediate(done));
@@ -145,6 +145,19 @@ describe('TestPanel', () => {
   it('the page\'s Close button closes the tab', async () => {
     await make().open();
     await send({ type: 'close' });
+    expect((v.panel as { dispose: ReturnType<typeof vi.fn> }).dispose).toHaveBeenCalled();
+  });
+
+  it('Open tests: opens, a second press closes, and a tab hidden behind another comes to the front', async () => {
+    const p = make();
+    await p.toggle();
+    expect(v.created).toHaveLength(1);
+    expect(p.showing).toBe(true);
+    (v.panel as { visible: boolean }).visible = false;
+    await p.toggle();
+    expect((v.panel as { reveal: ReturnType<typeof vi.fn> }).reveal).toHaveBeenCalled();
+    (v.panel as { visible: boolean }).visible = true;
+    await p.toggle();
     expect((v.panel as { dispose: ReturnType<typeof vi.fn> }).dispose).toHaveBeenCalled();
   });
 

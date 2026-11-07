@@ -231,23 +231,27 @@ describe('Test view', () => {
     expect(doc.activeElement).toBe(box);
   });
 
-  it('a Grader case deletes at once; a Custom one with text asks inline first; an empty one does not', () => {
-    const { doc, sent, post, button, label } = boot();
-    post({ fresh: true, head: head(), order: ['g', 'c', 'e'], cases: [kase('g'), kase('c', { source: 'custom' }), kase('e', { source: 'custom', input: text(''), expected: text('') })] });
-    const card = (i: number) => doc.querySelectorAll('.card')[i];
-    label('Delete this case', card(0)).click();
-    expect(sent.at(-1)).toEqual({ type: 'remove', caseId: 'g' });
-    label('Delete this case', card(2)).click();
-    expect(sent.at(-1)).toEqual({ type: 'remove', caseId: 'e' });
-    sent.length = 0;
-    label('Delete this case', card(1)).click();
-    expect(sent).toEqual([]);
-    expect(card(1).textContent).toContain("Delete this case? You can't get it back.");
-    button('Cancel')!.click();
-    expect(card(1).textContent).not.toContain("You can't get it back");
-    label('Delete this case', card(1)).click();
-    [...card(1).querySelectorAll<HTMLButtonElement>('.notice button')].find((b) => b.textContent === 'Delete')!.click();
+  it('any case deletes at once, with no question', () => {
+    const { sent, post, label } = boot();
+    post({ fresh: true, head: head(), order: ['c'], cases: [kase('c', { source: 'custom' })] });
+    label('Delete this case').click();
     expect(sent.at(-1)).toEqual({ type: 'remove', caseId: 'c' });
+  });
+
+  it('clicking the card opens and closes it; its buttons do their own thing, and Enter works too', () => {
+    const { dom, doc, sent, post, label } = boot();
+    post({ fresh: true, head: head(), order: ['a'], cases: [kase('a')] });
+    const bar = () => doc.querySelector<HTMLElement>('.tc')!;
+    bar().querySelector('strong')!.click();
+    expect(doc.querySelector('.det')).not.toBeNull();
+    bar().click();
+    expect(doc.querySelector('.det')).toBeNull();
+    label('Run this case').click();
+    expect(sent.at(-1)).toEqual({ type: 'run', caseId: 'a' });
+    expect(doc.querySelector('.det')).toBeNull();
+    bar().dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    expect(doc.querySelector('.det')).not.toBeNull();
+    expect(bar().getAttribute('aria-expanded')).toBe('true');
   });
 
   it('Alt+Up and Alt+Down move a case and renumber', () => {

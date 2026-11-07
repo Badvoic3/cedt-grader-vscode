@@ -22,6 +22,7 @@ body { padding: 0; background: var(--vscode-sideBar-background, var(--vscode-edi
 .btn.add-case[hidden] { display: none; }
 body.vscode-high-contrast .btn.add-case { background: transparent; }
 .limit { font-size: 0.9em; color: var(--muted); }
+@media (max-width: 300px) { .tools .btn { flex-basis: 100%; } }
 @media (min-width: 420px) {
   .tools .btn { flex: 0 0 auto; }
   .tools .run-all { flex-basis: auto; }
@@ -45,15 +46,15 @@ body.vscode-high-contrast .btn.add-case { background: transparent; }
 .card.running { border-left-color: var(--vscode-charts-blue, var(--muted)); }
 .card.drop-before { box-shadow: 0 -2px 0 var(--vscode-focusBorder); }
 .card.drop-after { box-shadow: 0 2px 0 var(--vscode-focusBorder); }
-.tc { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; min-width: 0; padding: 2px 2px 2px 6px; }
+.tc { display: flex; align-items: center; gap: 6px; min-width: 0; padding: 2px 2px 2px 6px; cursor: pointer; }
 .tc:focus-visible { outline: 1px solid var(--vscode-focusBorder); outline-offset: -1px; }
-.tc[draggable='true'] { cursor: grab; }
-.tc strong { font-weight: 600; white-space: nowrap; }
-.tc .badge { text-transform: none; }
-.tc .icon-btn { margin-left: 1px; }
-.tcm { display: inline-flex; gap: 8px; font-size: 0.9em; color: var(--muted); white-space: nowrap; }
+.tc strong { flex: none; font-weight: 600; white-space: nowrap; }
+/* One row at any width: the source gives way first; the time and the buttons stay. */
+.tc .badge { display: block; flex: 0 100 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; text-transform: none; }
+.tc .icon-btn { flex: none; margin-left: 1px; }
+.tcm { display: inline-flex; flex: 0 1 auto; min-width: 0; overflow: hidden; gap: 8px; font-size: 0.9em; color: var(--muted); white-space: nowrap; }
 .tcm .mem { display: none; }
-.sp { flex: 1 1 auto; min-width: 0; }
+.sp { flex: 1 1 0; min-width: 0; }
 .act-run { color: var(--ok); background: color-mix(in srgb, var(--ok) 14%, transparent); }
 .act-del { color: var(--bad); background: color-mix(in srgb, var(--bad) 12%, transparent); }
 body.vscode-high-contrast .act-run, body.vscode-high-contrast .act-del { background: transparent; border-color: currentColor; }

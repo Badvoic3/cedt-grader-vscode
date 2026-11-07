@@ -197,7 +197,7 @@ export interface ViewState {
     runCandidates: string[];
   } | null;
   /** The Run tests row and Open tests (null: no file open); `disabledReason` while there is nothing to run. */
-  runTests: { summary: RunSummary; running: boolean; disabledReason: string | null } | null;
+  runTests: { summary: RunSummary; running: boolean; disabledReason: string | null; testsOpen: boolean } | null;
   /** "Link the whole folder" / "Link only this file" (null: no problem or file); `disabledReason` when it can't be switched on. */
   folderMode: { on: boolean; disabledReason: string | null } | null;
   /** Attachment download in progress (problem id). */

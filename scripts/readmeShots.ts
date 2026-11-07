@@ -132,7 +132,7 @@ function sample() {
       candidates: ['main.cpp', 'student.h'], runCandidates: ['main.cpp', 'student.h'],
     },
     folderMode: { on: true, disabledReason: null },
-    runTests: { summary: { kind: 'done', passed: 3, total: 6 }, running: false, disabledReason: null },
+    runTests: { summary: { kind: 'done', passed: 3, total: 6 }, running: false, disabledReason: null, testsOpen: false },
     result: null,
     history: { ...state.history, items: [] },
   };
