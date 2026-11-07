@@ -294,6 +294,16 @@
         }
       ]
     },
+    "configurationDefaults": {
+      "workbench.editor.autoLockGroups": {
+        "terminalEditor": true,
+        "mainThreadWebview-simpleBrowser.view": true,
+        "mainThreadWebview-browserPreview": true,
+        "workbench.editor.processExplorer": true,
+        "mainThreadWebview-cedtGrader.tests": true,
+        "mainThreadWebview-cedtGrader.statement": true
+      }
+    },
     "configuration": {
       "title": "%config.title%",
       "properties": {

@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const v = vi.hoisted(() => ({
@@ -45,6 +46,7 @@ vi.mock('vscode', () => {
   };
 });
 
+import { StatementPanels } from '../src/ui/statementPanel';
 import { TestPanel } from '../src/ui/testPanel';
 
 describe('TestPanel', () => {
@@ -200,5 +202,21 @@ describe('TestPanel', () => {
     expect(tests.loadTestcases).toHaveBeenCalledWith(false);
     await send({ type: 'loadSamples' });
     expect(tests.loadSampleCases).toHaveBeenCalled();
+  });
+});
+
+describe('the split stays ours', () => {
+  // VS Code locks a new group that opens with one of these tabs, so a file clicked in the Explorer goes to the code's group.
+  const pkg = JSON.parse(readFileSync('package.json', 'utf8'));
+  const locked = pkg.contributes.configurationDefaults['workbench.editor.autoLockGroups'];
+
+  it('both tabs lock the group they make, by their real view types', () => {
+    expect(locked[`mainThreadWebview-${TestPanel.viewType}`]).toBe(true);
+    expect(locked[`mainThreadWebview-${StatementPanels.viewType}`]).toBe(true);
+  });
+
+  // Our default replaces VS Code's whole list (seen in 1.145), so a terminal in the editor would lose its lock.
+  it("keeps VS Code's own entries", () => {
+    for (const id of ['terminalEditor', 'mainThreadWebview-simpleBrowser.view', 'mainThreadWebview-browserPreview', 'workbench.editor.processExplorer']) expect(locked[id]).toBe(true);
   });
 });
