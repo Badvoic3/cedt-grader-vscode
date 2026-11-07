@@ -1,23 +1,19 @@
-import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
-import { basename, dirname, join } from 'node:path';
-import type { Problem } from '../grader/types';
-
-/** 7e15: a safe integer, far above CPH ms-timestamp ids (~1.8e12). Grader cases: GRADER_ID_BASE + grader testcase id. */
-export const GRADER_ID_BASE = 7_000_000_000_000_000;
-/** Statement samples: STATEMENT_ID_BASE + their number (1, 2, …). Above every grader marker, below MAX_SAFE_INTEGER. */
-export const STATEMENT_ID_BASE = 7_500_000_000_000_000;
+import { basename, dirname, join, parse } from 'node:path';
+import type { CaseSource } from '../runner/types';
 
 /**
- * Read-only access to Competitive Programming Helper problem files, for the
- * one-time import only: nothing else may use this (`test/retiredCph.test.ts`).
+ * Reads old Competitive Programming Helper problem files, for the one-time
+ * import only: nothing else may use this, and it writes nothing
+ * (`test/retiredCph.test.ts`). No `vscode` import.
  *
- * Format confirmed from CPH 2026.10 (dist/extension.js `getProbSaveLocation`)
- * and real `.prob` files:
+ * Format confirmed from CPH 2026.10 and real `.prob` files:
  *   path = <dirname(src)>/.cph/.<basename(src)>_<md5(src)>.prob
  *          or <cph.general.saveLocation>/.<basename(src)>_<md5(src)>.prob
  *   JSON = { name, url, tests:[{id,input,output}], interactive, memoryLimit,
  *            timeLimit, srcPath, group, local }
+ * The md5 is of the path when the file was made, so a renamed or moved source
+ * is found by scanning, not by working out the name.
  */
 export interface CphTest {
   id: number;
@@ -29,29 +25,13 @@ export interface CphProblem {
   name: string;
   url: string;
   tests: CphTest[];
-  interactive: boolean;
-  memoryLimit: number;
-  timeLimit: number;
   srcPath: string;
-  group: string;
-  local: boolean;
-  [extra: string]: unknown;
 }
 
-export function cphProbPath(srcPath: string, saveLocation?: string): string {
-  const file = `.${basename(srcPath)}_${createHash('md5').update(srcPath).digest('hex')}.prob`;
-  return saveLocation && saveLocation !== '' ? join(saveLocation, file) : join(dirname(srcPath), '.cph', file);
-}
-
-export async function readCphProblem(srcPath: string, saveLocation?: string): Promise<CphProblem | null> {
-  try {
-    const text = await readFile(cphProbPath(srcPath, saveLocation), 'utf8');
-    const p = JSON.parse(text) as CphProblem;
-    return p && typeof p === 'object' && Array.isArray(p.tests) ? p : null;
-  } catch {
-    return null;
-  }
-}
+/** 7e15: a safe integer, far above CPH ms-timestamp ids (~1.8e12). Grader cases: GRADER_ID_BASE + grader testcase id. */
+export const GRADER_ID_BASE = 7_000_000_000_000_000;
+/** Statement samples: STATEMENT_ID_BASE + their number (1, 2, …). Above every grader marker, below MAX_SAFE_INTEGER. */
+export const STATEMENT_ID_BASE = 7_500_000_000_000_000;
 
 const ID_IN_URL = [
   /\/submissions\/direct_edit_problem\/(\d+)/,
@@ -60,27 +40,79 @@ const ID_IN_URL = [
   /\/testcases\/show_problem\/(\d+)/,
 ];
 
-/**
- * Problem a CPH file points at, if any: a grader URL on the same host, or a
- * problem name (CPH local problems are named `Local: <file>`).
- */
-export function matchCphProblem(cph: CphProblem, problems: Problem[], baseUrl: string): Problem | null {
+/** `.cph/<file>.prob`, in a path relative to a folder. */
+export const isProbPath = (rel: string): boolean => /(^|\/)\.cph\/[^/]+\.prob$/.test(rel);
+
+/** A `.prob` file, or null when it can't be used. */
+export async function readProb(path: string): Promise<CphProblem | null> {
   try {
-    const u = new URL(cph.url);
-    if (u.host === new URL(baseUrl).host) {
-      for (const re of ID_IN_URL) {
-        const m = re.exec(u.pathname);
-        if (m) {
-          const p = problems.find((x) => x.id === Number(m[1]));
-          if (p) return p;
-        }
-      }
+    const p = JSON.parse(await readFile(path, 'utf8')) as Partial<CphProblem> | null;
+    if (!p || !Array.isArray(p.tests)) return null;
+    const tests = p.tests.filter((t) => typeof t?.input === 'string' && typeof t?.output === 'string');
+    return { name: typeof p.name === 'string' ? p.name : '', url: typeof p.url === 'string' ? p.url : '', srcPath: typeof p.srcPath === 'string' ? p.srcPath : '', tests };
+  } catch {
+    return null;
+  }
+}
+
+/** The file a `.prob` belongs to: `srcPath`, or after a folder moved, the file its name gives next to `.cph/`. */
+export function sourceOf(probPath: string, srcPath: string, exists: (path: string) => boolean): string {
+  if (srcPath && exists(srcPath)) return srcPath;
+  const m = /^\.(.+)_[0-9a-f]{32}\.prob$/.exec(basename(probPath));
+  const beside = m && basename(dirname(probPath)) === '.cph' ? join(dirname(dirname(probPath)), m[1]) : null;
+  return beside && exists(beside) ? beside : srcPath;
+}
+
+/** The problem a URL on this server points at. */
+export function problemIdInUrl(url: string, baseUrl: string): number | null {
+  try {
+    const u = new URL(url);
+    if (u.host !== new URL(baseUrl).host) return null;
+    for (const re of ID_IN_URL) {
+      const m = re.exec(u.pathname);
+      if (m) return Number(m[1]);
     }
   } catch {
-    /* not a URL (local problems store the file path) */
+    /* not a URL (CPH's local problems store the file path) */
   }
-  const name = (cph.name ?? '').replace(/^Local:\s*/i, '').trim().toLowerCase();
-  if (!name) return null;
-  const hits = problems.filter((p) => p.name.toLowerCase() === name || p.fullName.toLowerCase() === name);
-  return hits.length === 1 ? hits[0] : null;
+  return null;
+}
+
+export interface ProbPlan {
+  /** Tied to this grader: imported, and part of the cleanup. Anything else belongs to CPH and is left alone. */
+  ours: boolean;
+  /** Where the cases go; null = the file's own list. */
+  problemId: number | null;
+  /** The link to save for the source file. */
+  linkTo: number | null;
+}
+
+/** What to do with one `.prob`. `linked`: the problem the source is linked to; `nameMatch`: what its name or folder matches. */
+export function planProb(p: Pick<CphProblem, 'url' | 'tests'>, baseUrl: string, linked: number | null, nameMatch: number | null): ProbPlan {
+  const byUrl = problemIdInUrl(p.url, baseUrl);
+  const problemId = byUrl ?? linked ?? nameMatch;
+  return { ours: problemId !== null || p.tests.some((t) => t.id >= GRADER_ID_BASE), problemId, linkTo: linked === null ? byUrl : null };
+}
+
+export interface OldCase {
+  input: string;
+  expected: string;
+  testcaseId?: number;
+}
+
+/** A `.prob`'s tests by their badge: the id says where each came from. */
+export function casesBySource(tests: readonly CphTest[]): Record<CaseSource, OldCase[]> {
+  const out: Record<CaseSource, OldCase[]> = { grader: [], sample: [], custom: [] };
+  for (const t of tests) {
+    const c = { input: t.input, expected: t.output };
+    if (t.id >= STATEMENT_ID_BASE) out.sample.push(c);
+    else if (t.id >= GRADER_ID_BASE) out.grader.push({ ...c, testcaseId: t.id - GRADER_ID_BASE });
+    else out.custom.push(c);
+  }
+  return out;
+}
+
+/** The binary CPH leaves beside a source. */
+export function binaryOf(src: string): string {
+  return join(dirname(src), `${parse(src).name}.bin`);
 }

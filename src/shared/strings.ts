@@ -317,6 +317,16 @@ const EN_S = {
   testsTab: (name: string) => (name ? `Tests: ${name}` : 'Tests'),
   compareTab: (n: number) => `Case ${n}: Expected ↔ Actual`,
 
+  migration: {
+    notice: (n: number) =>
+      `Grader Submit now has its own test runner. Your links and test cases are already copied over, so ${n === 1 ? "1 old file in this folder isn't needed any more. Move it to the Trash?" : `${n} old files in this folder aren't needed any more. Move them to the Trash?`}`,
+    moveToTrash: 'Move to Trash',
+    whatsNew: "What's New",
+    dontAskAgain: "Don't Ask Again",
+    noTrash: (n: number) => `${plural(n, 'old file')} couldn't be moved to the Trash. Delete permanently? This can't be undone.`,
+    deleteForever: 'Delete Permanently',
+    moved: (n: number) => `Moved ${plural(n, 'old file')} to the Trash.`,
+  },
   errors: {
     checkConnection: (msg: string) => `${msg} Check your internet connection.`,
     unexpected: (msg: string) => `Something went wrong: ${msg}`,

@@ -373,6 +373,12 @@ export class Links {
     else if (pick?.id === 'statement') await h.openStatement(problemId);
   }
 
+  /** The problem a file's name or folder matches, ignoring links. */
+  nameMatch(fsPath: string): number | null {
+    const h = this.host;
+    return matchFile(this.sourceFile(fsPath), h.problems, h.cfg.baseUrl, h.cfg.fileNamePattern.pattern)?.problemId ?? null;
+  }
+
   /** Re-run matching for the active file, ignoring the saved link; ask before replacing a manual link. */
   async autoDetect(): Promise<void> {
     const h = this.host;

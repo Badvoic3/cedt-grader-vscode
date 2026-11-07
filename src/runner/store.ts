@@ -161,6 +161,21 @@ export class CaseStore {
     }).then((file) => ({ file, added, kept }));
   }
 
+  /** Cases from an old file, by badge, best first. Returns how many were new. */
+  async importCases(owner: CaseOwner, groups: Readonly<Record<CaseSource, readonly IncomingCase[]>>): Promise<number> {
+    let added = 0;
+    await this.change(owner, (f) => {
+      let cases = f.cases;
+      for (const source of ['grader', 'sample', 'custom'] as const) {
+        const m = mergeCases(cases, groups[source], source, this.newId);
+        cases = m.cases;
+        added += m.added;
+      }
+      return added ? { ...f, cases } : null;
+    });
+    return added;
+  }
+
   add(owner: CaseOwner, c: Pick<RunnerCase, 'input' | 'expected'> = { input: '', expected: '' }): Promise<CaseList> {
     return this.change(owner, (f) => ({ ...f, cases: [...f.cases, { id: this.newId(), source: 'custom', input: c.input, expected: c.expected }] }));
   }

@@ -37,6 +37,7 @@ import { BINARY_EXTS } from './mapping/findByName';
 import { EXTENSION_LANGUAGE } from './grader/languages';
 import { remapPath } from './mapping/mappingOps';
 import { importOldLinks } from './migration/importLinks';
+import { migrateOldFiles } from './migration/oldFiles';
 import { cleanName, placeholder, resolveProblem } from './mapping/match';
 import { MappingStore } from './mapping/store';
 import { matchNote, type MatchInfo, NO_MATCH_INFO } from './mapping/linkActions';
@@ -111,6 +112,8 @@ export class GraderController implements vscode.Disposable {
   /** The active file was explicitly unlinked (auto-detection is off for it). */
   private notLinked = false;
   private fileEventTimer: ReturnType<typeof setTimeout> | undefined;
+  /** Old `.prob` files and the cleanup notice were looked at in this window. */
+  private oldFilesChecked = false;
   /** The problem the statement tab last followed (undefined: not yet). */
   private followedProblemId: number | null | undefined = undefined;
   /** Statement PDFs / descriptions on disk (shared by the statement tabs and "Load sample cases"). */
@@ -241,6 +244,7 @@ export class GraderController implements vscode.Disposable {
       for (const id of [...this.unavailableIds]) if (ids.has(id)) this.unavailableIds.delete(id);
       this.links.invalidateIndex(); // the index depends on the problem list
       if (this.fileUri) void this.setActiveFile(this.fileUri);
+      void this.migrateOldFiles();
     };
     this.disposables.push(
       this.output,
@@ -273,7 +277,11 @@ export class GraderController implements vscode.Disposable {
           this.emit();
         });
       }),
-      vscode.workspace.onDidChangeWorkspaceFolders(() => void this.importOldLinks().then(() => this.links.refreshMappedIds()).then(() => this.emit())),
+      vscode.workspace.onDidChangeWorkspaceFolders(() => {
+        this.oldFilesChecked = false;
+        void this.importOldLinks().then(() => this.links.refreshMappedIds()).then(() => this.emit());
+        if (this.data.problemList()) void this.migrateOldFiles();
+      }),
     );
   }
 
@@ -341,6 +349,29 @@ export class GraderController implements vscode.Disposable {
       await importOldLinks(this.ctx, this.mapping);
     } catch (err) {
       this.log(`old links not imported: ${err instanceof Error ? err.message : err}`);
+    }
+  }
+
+  /** `.prob` import and the cleanup notice: once per window, with a problem list to match against. */
+  private async migrateOldFiles(): Promise<void> {
+    if (this.oldFilesChecked) return;
+    this.oldFilesChecked = true;
+    try {
+      await migrateOldFiles({
+        ctx: this.ctx,
+        mapping: this.mapping,
+        cases: this.cases,
+        baseUrl: this.cfg.baseUrl,
+        nameMatch: (src) => this.links.nameMatch(src),
+        problemName: (id) => this.problems.find((p) => p.id === id)?.name,
+        changed: async () => {
+          await this.links.refreshMappedIds();
+          if (this.fileUri) await this.setActiveFile(this.fileUri);
+          await this.runner.refresh();
+        },
+      });
+    } catch (err) {
+      this.log(`old files not imported: ${err instanceof Error ? err.message : err}`);
     }
   }
 

@@ -16,6 +16,10 @@ export const KEYS = {
   legacyMapping: 'cedtGrader.mapping',
   /** Workspace folders whose `.cedt-grader.json` was copied into the link table. "Clear Cached Data" leaves it, or cleared links would return. */
   linksImported: 'cedtGrader.linksImported',
+  /** Workspace folders whose `.prob` files were imported (a case the user deleted must not return). */
+  probsImported: 'cedtGrader.probsImported',
+  /** Workspace folders with nothing old left, or where the user answered the cleanup notice. */
+  cleanupSettled: 'cedtGrader.cleanupSettled',
   /** Files explicitly marked "not linked" (also globalState for files outside any folder). */
   unlinked: 'cedtGrader.unlinked',
   /** Remembered auto-matches (file name / folder / suggestion) of files that were open. */
