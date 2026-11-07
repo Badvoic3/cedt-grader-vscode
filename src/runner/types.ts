@@ -79,6 +79,8 @@ export interface CompileFailure {
   message: string;
   file: string | null;
   line: number | null;
+  /** Said above the compiler's text when we know what went wrong. */
+  hint?: string;
 }
 
 /** The part of a spawned process the runner uses; a fake in tests. */

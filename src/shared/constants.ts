@@ -93,6 +93,32 @@ export const TIMING = {
   focusDelayMs: 150,
 } as const;
 
+/** The built-in runner. */
+export const RUNNER = {
+  /** Output kept for showing, per stream. The compare limit is `max(this, 2 × expected size)`. */
+  displayBytes: 64 * 1024,
+  defaultTimeSeconds: 10,
+  defaultMemoryMB: 1024,
+  /** Kill at the limit plus this, so the real time can be shown (the grader does the same). */
+  graceMs: 500,
+  /** No run lasts longer, whatever the limit. */
+  hardStopMs: 60_000,
+  compileTimeoutMs: 60_000,
+  /** Compiler text kept; the grader cuts at the same length. */
+  compileMessageChars: 15_000,
+  /** After `'exit'`, wait this long for the streams to end. */
+  closeDeadlineMs: 2_000,
+  /** Peak memory sampling on Linux, and the safety check on macOS. */
+  memoryPollLinuxMs: 100,
+  memoryPollMacMs: 500,
+  /** The panels hear about run progress at most this often. */
+  updateMs: 100,
+  /** Builds kept in the build folder. */
+  keepBuilds: 30,
+  /** Stack for C / C++ where the linker sets it: the grader limits the stack only by memory. */
+  stackBytes: 512 * 1024 * 1024,
+} as const;
+
 /** Webview timings and sizes (sidebar and statement viewer). */
 export const PANEL = {
   /** Hover / focus delay before a tooltip appears. */

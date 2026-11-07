@@ -363,6 +363,33 @@
           "default": "showFirst",
           "markdownDescription": "%config.panel.topicClickOrder.description%"
         },
+        "cedtGrader.runner.defaultTimeLimitSeconds": {
+          "type": "number",
+          "default": 10,
+          "minimum": 0.1,
+          "maximum": 60,
+          "markdownDescription": "%config.runner.defaultTimeLimitSeconds.description%"
+        },
+        "cedtGrader.runner.defaultMemoryLimitMB": {
+          "type": "number",
+          "default": 1024,
+          "minimum": 1,
+          "markdownDescription": "%config.runner.defaultMemoryLimitMB.description%"
+        },
+        "cedtGrader.runner.compilerPaths": {
+          "type": "object",
+          "default": {},
+          "additionalProperties": { "type": "string" },
+          "scope": "application",
+          "markdownDescription": "%config.runner.compilerPaths.description%"
+        },
+        "cedtGrader.runner.extraCompileArgs": {
+          "type": "object",
+          "default": {},
+          "additionalProperties": { "type": "array", "items": { "type": "string" } },
+          "scope": "application",
+          "markdownDescription": "%config.runner.extraCompileArgs.description%"
+        },
         "cedtGrader.baseUrl": {
           "type": "string",
           "default": "https://cedt-grader.nattee.net",

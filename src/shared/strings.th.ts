@@ -17,7 +17,7 @@ import type { Strings } from './strings';
  * Everything else was reviewed at checkpoint B (2026-11-03). Add keys here
  * when a new text is translated without review.
  */
-export const TH_REVIEW: readonly string[] = ['S.common.dismiss', 'S.crash.notice', 'S.crash.report', 'S.crash.review', 'S.crash.reviewTitle', 'S.files.saveHere', 'S.folder.cancelRestores', 'S.folder.cancelStopsMatch', 'S.folder.cancelUnlinksFile', 'S.folder.replaceFilesQ', 'W.websiteTip', 'S.requestLogOff', 'W.crashTitle', 'G.statusGradingTip', 'G.statusChooseTip', 'G.statusOpenTip', 'G.logInFirst', 'W.server', 'W.serverLine', 'W.changeServer', 'W.checkingServer', 'W.serverWorks', 'W.useDefaultServer', 'S.account.serverInvalid', 'S.account.settingsNotSaved', 'S.account.serverIncompatible', 'S.account.serverUnreachable', 'S.account.insecureTitle', 'S.account.insecureDetail', 'S.account.insecureSend', 'W.crashNote', 'W.crashReport', 'W.crashReportLabel', 'W.crashTitle', 'W.defaultOrderReversed', 'W.sortedBy', 'S.cache.custom', 'S.cache.customDetail'];
+export const TH_REVIEW: readonly string[] = ['S.common.dismiss', 'S.crash.notice', 'S.crash.report', 'S.crash.review', 'S.crash.reviewTitle', 'S.files.saveHere', 'S.folder.cancelRestores', 'S.folder.cancelStopsMatch', 'S.folder.cancelUnlinksFile', 'S.folder.replaceFilesQ', 'W.websiteTip', 'S.requestLogOff', 'W.crashTitle', 'G.statusGradingTip', 'G.statusChooseTip', 'G.statusOpenTip', 'G.logInFirst', 'W.server', 'W.serverLine', 'W.changeServer', 'W.checkingServer', 'W.serverWorks', 'W.useDefaultServer', 'S.account.serverInvalid', 'S.account.settingsNotSaved', 'S.account.serverIncompatible', 'S.account.serverUnreachable', 'S.account.insecureTitle', 'S.account.insecureDetail', 'S.account.insecureSend', 'W.crashNote', 'W.crashReport', 'W.crashReportLabel', 'W.crashTitle', 'W.defaultOrderReversed', 'W.sortedBy', 'S.cache.custom', 'S.cache.customDetail', 'S.runner'];
 
 export const TH: Strings = {
   HOW_LINKED: {
@@ -305,6 +305,15 @@ export const TH: Strings = {
       },
     },
 
+    runner: {
+      missingTool: (tools) => `รันไม่ได้: ไม่พบ ${tools} ในเครื่อง หรือไม่ได้อยู่ใน PATH`,
+      compileTimedOut: 'คอมไพล์นานเกิน 60 วินาที จึงหยุดแล้ว',
+      compilerFailed: (why) => `เปิดคอมไพเลอร์ไม่ได้: ${why}`,
+      bitsStdc: 'Apple clang ไม่มี <bits/stdc++.h> ให้ include เฉพาะ header ที่ใช้ หรือติดตั้ง GCC',
+      untrusted: 'ต้องเชื่อถือ workspace นี้ก่อนจึงจะรันเทสได้ เพราะการรันจะคอมไพล์และเปิดโค้ดในนั้น',
+      noFile: 'เปิดไฟล์โค้ดก่อนจึงจะรันเทสได้',
+      noLanguage: 'ไม่ทราบว่าไฟล์นี้เป็นภาษาอะไร',
+    },
     runTests: {
       noTests: 'ยังไม่มี test case ให้รัน โปรดโหลด test case ก่อน',
       noTestsShort: 'โหลด test case ก่อน',

@@ -60,6 +60,7 @@ import { type AskOptions, type InlinePrompt, InlinePrompts } from './flows/promp
 import { countedSubmissionId } from './flows/results';
 import { ServerFlow } from './flows/server';
 import { SubmitFlow } from './flows/submit';
+import { Runner } from './flows/runner';
 import { TestCases } from './flows/testcases';
 
 export { SUBMISSION_SCHEME };
@@ -134,6 +135,7 @@ export class GraderController implements vscode.Disposable {
   private readonly folder: FolderMode;
   private readonly links: Links;
   private readonly tests: TestCases;
+  private readonly runner: Runner;
   private readonly submitFlow: SubmitFlow;
   private readonly attachments: Attachments;
   private readonly cache: CacheCare;
@@ -194,6 +196,7 @@ export class GraderController implements vscode.Disposable {
       new TestcaseStore(ctx.globalStorageUri.fsPath, () => this.client, (l) => this.requestLog(l), (p) => this.cache.written(p)),
       pdfjsLoader(vscode.Uri.joinPath(ctx.extensionUri, 'dist', 'pdfjs').fsPath, vscode.Uri.joinPath(ctx.extensionUri, 'media', 'dist', 'pdfjs').fsPath),
     );
+    this.runner = new Runner(this.host);
     this.data.onChange = () => this.emit();
     this.data.onError = (e, key) => {
       if (e instanceof ProblemUnavailableError) {
@@ -282,6 +285,7 @@ export class GraderController implements vscode.Disposable {
       get folder() { return c.folder; },
       get links() { return c.links; },
       get tests() { return c.tests; },
+      get runner() { return c.runner; },
       get submitFlow() { return c.submitFlow; },
       get attachments() { return c.attachments; },
       get fileUri() { return c.fileUri; },
@@ -492,6 +496,7 @@ export class GraderController implements vscode.Disposable {
     this.submitFlow.stop();
     this.submitFlow.pendingPoll = null;
     this.submitFlow.results.clear();
+    this.runner.reset();
     this.expandedSubmission = null;
     this.data.clear();
   }
@@ -1182,6 +1187,7 @@ export class GraderController implements vscode.Disposable {
     this.applyLanguageChoice();
     this.emit();
     this.followStatement(uri, problem);
+    void this.runner.onActiveFile();
     // One problem only (the top suggestion at most, never several candidates).
     this.data.focusProblem(problem ? problem.id : null);
     if (!entry) this.links.maybeOfferReconnect(uri);
@@ -1214,6 +1220,7 @@ export class GraderController implements vscode.Disposable {
 
   /** Update mappings (and per-file state) for files renamed or moved inside VS Code. */
   private async onFilesRenamed(files: readonly { oldUri: vscode.Uri; newUri: vscode.Uri }[]): Promise<void> {
+    for (const f of files) void this.runner.onMoved(f.oldUri.fsPath, f.newUri.fsPath);
     const moved: { from: string; to: string }[] = [];
     for (const f of files) moved.push(...(await this.mapping.rename(f.oldUri, f.newUri)));
     // Auto-matches follow the file only while the new name still matches.

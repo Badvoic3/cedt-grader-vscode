@@ -2,7 +2,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { readdir, readFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { writeAtomic } from '../data/cacheFiles';
-import { pathKey } from '../mapping/paths';
+import { pathKey, remapPath } from '../mapping/paths';
 import { caseKey } from './compare';
 import type { CaseList, CaseOwner, CaseSource, RunnerCase } from './types';
 
@@ -201,6 +201,16 @@ export class CaseStore {
     if (!cases.length) return;
     await this.change(to, (f) => ({ ...f, cases: mergeCases(f.cases, cases, 'custom', this.newId).cases }));
     await this.queued(path, () => rm(path, { force: true }));
+  }
+
+  /** A file or folder moved: every unlinked list at or below `oldPath` follows it. */
+  async moved(oldPath: string, newPath: string): Promise<void> {
+    for (const { path, owner } of await this.allLists()) {
+      if (!('file' in owner)) continue;
+      const file = (JSON.parse(await readFile(path, 'utf8').catch(() => 'null')) as Partial<CaseList> | null)?.file;
+      const to = typeof file === 'string' ? remapPath(file, oldPath, newPath) : null;
+      if (file && to) await this.moveUnlinked(file, { file: to });
+    }
   }
 
   private async allLists(): Promise<{ path: string; owner: CaseOwner }[]> {

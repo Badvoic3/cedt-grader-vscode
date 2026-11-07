@@ -8,6 +8,7 @@ import { filterSourceFiles } from '../mapping/findByName';
 import {
   asksSubmitOrOpen,
   CODE_FILE,
+  compileSet,
   detectFolderRoles,
   type FolderRoles,
   folderRole,
@@ -210,6 +211,15 @@ export class FolderMode {
     if (!this.link) return this.host.fileUri;
     const p = submitFilePath(this.link.fsPath, this.role('run')?.file);
     return p ? vscode.Uri.file(p) : null;
+  }
+
+  /** What the runner compiles for the run file, from what is on disk now (a save may have added a `main()`). */
+  async compileFiles(): Promise<{ sources: string[]; leftOut: string[] } | null> {
+    const link = this.link;
+    if (!link) return null;
+    await this.load(link, this.matched);
+    const run = this.role('run')?.file;
+    return run ? compileSet(this.files, this.texts, run) : null;
   }
 
   /** Source files of a folder (relative, "/" separators, path order; build output and binaries skipped). */

@@ -305,6 +305,15 @@ const EN_S = {
     },
   },
 
+  runner: {
+    missingTool: (tools: string) => `Can't run this: ${tools} isn't installed, or isn't on PATH.`,
+    compileTimedOut: 'Compiling took over 60 seconds and was stopped.',
+    compilerFailed: (why: string) => `The compiler couldn't start: ${why}`,
+    bitsStdc: "<bits/stdc++.h> doesn't come with Apple clang. Include the headers you use, or install GCC.",
+    untrusted: 'Trust this workspace to run tests: running compiles and starts the code in it.',
+    noFile: 'Open a source file to run tests.',
+    noLanguage: "Can't tell which language this file is.",
+  },
   runTests: {
     noTests: 'There are no test cases to run yet. Load the test cases first.',
     noTestsShort: 'load the test cases first',

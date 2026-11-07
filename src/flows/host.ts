@@ -11,6 +11,7 @@ import type { Attachments } from './attachments';
 import type { FolderMode } from './folderMode';
 import type { Links } from './links';
 import type { AskOptions, InlinePrompt, InlinePrompts } from './prompts';
+import type { Runner } from './runner';
 import type { SubmitFlow } from './submit';
 import type { TestCases } from './testcases';
 
@@ -37,6 +38,7 @@ export interface Host {
   readonly folder: FolderMode;
   readonly links: Links;
   readonly tests: TestCases;
+  readonly runner: Runner;
   readonly submitFlow: SubmitFlow;
   readonly attachments: Attachments;
 

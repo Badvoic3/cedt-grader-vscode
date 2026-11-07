@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { CACHE, DEFAULT_BASE_URL } from './shared/constants';
+import { CACHE, DEFAULT_BASE_URL, RUNNER } from './shared/constants';
 import { normalizeServerUrl } from './shared/serverUrl';
 import type { LangSetting } from './shared/i18n';
 import { checkPattern, type PatternCheck } from './mapping/namePattern';
@@ -34,8 +34,25 @@ export interface GraderConfig {
   panelOpenOnStartup: boolean;
   /** Topic pill clicks: show only first (default) or hide first (`cedtGrader.panel.topicClickOrder`). */
   topicClickOrder: 'showFirst' | 'hideFirst';
+  /** Run limits when the grader gives none (`cedtGrader.runner.*`). */
+  runnerDefaultTimeSeconds: number;
+  runnerDefaultMemoryMB: number;
+  /** Tool name → path. These run programs, so they are read from the user's settings only. */
+  runnerCompilerPaths: Record<string, string>;
+  /** Language → extra compiler arguments (`cpp`, `c`, `java`, `rust`, `go`, `haskell`). */
+  runnerExtraCompileArgs: Record<string, string[]>;
   /** `en` (default), `th`, or `auto` (follow VS Code's display language). */
   displayLanguage: LangSetting;
+}
+
+function stringRecord(v: unknown): Record<string, string> {
+  if (!v || typeof v !== 'object') return {};
+  return Object.fromEntries(Object.entries(v).filter((e): e is [string, string] => typeof e[1] === 'string' && !!e[1]));
+}
+
+function argsRecord(v: unknown): Record<string, string[]> {
+  if (!v || typeof v !== 'object') return {};
+  return Object.fromEntries(Object.entries(v).filter((e): e is [string, string[]] => Array.isArray(e[1]) && e[1].every((a) => typeof a === 'string')));
 }
 
 /**
@@ -68,5 +85,9 @@ export function readConfig(): GraderConfig {
     topicClickOrder: c.get<string>('panel.topicClickOrder', 'showFirst') === 'hideFirst' ? 'hideFirst' : 'showFirst',
     fileNamePattern: checkPattern(c.get<string>('fileNamePattern', '{name}.{ext}')),
     cacheMaxMB: Math.max(CACHE.maxMbMinimum, Number(c.get('cacheMaxMB', CACHE.maxMbDefault)) || CACHE.maxMbDefault),
+    runnerDefaultTimeSeconds: Math.max(0.1, Number(c.get('runner.defaultTimeLimitSeconds', RUNNER.defaultTimeSeconds)) || RUNNER.defaultTimeSeconds),
+    runnerDefaultMemoryMB: Math.max(1, Number(c.get('runner.defaultMemoryLimitMB', RUNNER.defaultMemoryMB)) || RUNNER.defaultMemoryMB),
+    runnerCompilerPaths: stringRecord(userValue<unknown>('runner.compilerPaths', {})),
+    runnerExtraCompileArgs: argsRecord(userValue<unknown>('runner.extraCompileArgs', {})),
   };
 }
