@@ -1,6 +1,6 @@
 import { join } from 'node:path';
 import type { MappingEntry, StoredLink } from '../mapping/linkTable';
-import { normalizeRelPath, pathKey } from '../mapping/paths';
+import { normalizeRelPath, pathKey, ROOT_KEY } from '../mapping/paths';
 
 /**
  * Links as v1.0.0 and older kept them, read only to copy them into the link
@@ -15,7 +15,7 @@ export interface MappingFileData {
 
 export const MAPPING_FILE_NAME = '.cedt-grader.json';
 
-export function emptyMapping(): MappingFileData {
+function emptyMapping(): MappingFileData {
   return { version: 1, files: {} };
 }
 
@@ -64,7 +64,6 @@ export function insideWorkspace(rel: string): boolean {
 }
 
 /** The key of a link on the workspace folder itself. */
-export const ROOT_KEY = '.';
 
 /** A path's key in `.cedt-grader.json`: the canonical relative path, or `.` for the workspace folder. */
 export function mappingKey(rel: string): string {

@@ -214,6 +214,8 @@ export const MATCH = {
 // ------------------------------------------------------------------ limits
 
 export const LIMITS = {
+  /** Files looked through for old `.prob` files: names only, so far more than the match index. */
+  oldFilesScanMax: 100_000,
   /** A link write takes milliseconds: a lock this old was left by a crash. */
   linkLockStaleMs: 5_000,
   /** How long a link write waits for another window before it fails. */

@@ -18,6 +18,7 @@ const env = vi.hoisted(() => ({
   folders: [] as { uri: { fsPath: string }; name: string; index: number }[],
   answers: [] as (string | undefined)[],
   notices: [] as string[],
+  told: [] as string[],
   warnings: [] as string[],
   warnAnswer: undefined as string | undefined,
   trash: [] as string[],
@@ -184,7 +185,7 @@ describe('migrateOldFiles', () => {
     problemName: (id) => (gone.has(id) ? undefined : `p${id}`),
     changed: async () => void changed++,
     ask: async (_text, buttons, detail) => {
-      if (buttons.length === 1) return undefined; // the "moved" message
+      if (buttons.length === 1) return void env.told.push(_text); // the "moved" message
       env.notices.push(detail ?? '');
       return env.answers.shift();
     },
@@ -199,7 +200,7 @@ describe('migrateOldFiles', () => {
     w = mkdtempSync(join(tmpdir(), 'cedt-old-'));
     storage = mkdtempSync(join(tmpdir(), 'cedt-oldst-'));
     env.folders = [{ uri: { fsPath: w }, name: 'w', index: 0 }];
-    Object.assign(env, { answers: [], notices: [], warnings: [], warnAnswer: undefined, trash: [], noTrash: false, opened: [], saveLocation: '' });
+    Object.assign(env, { answers: [], notices: [], told: [], warnings: [], warnAnswer: undefined, trash: [], noTrash: false, opened: [], saveLocation: '' });
     for (const k of Object.keys(names)) delete names[k];
     gone.clear();
     live = true;
@@ -275,6 +276,24 @@ describe('migrateOldFiles', () => {
     prob('z.cpp', 'https://other.example/problems/1', [G(1)]);
     await run();
     expect((await cases.read({ file: src })).cases).toHaveLength(1);
+  });
+
+  it('two .prob files for one source count its binary once', async () => {
+    write('a.cpp');
+    write('a.bin');
+    prob('a.cpp', URL_OF(11), [G(1)]);
+    write(`.cph/.a.cpp_${'b'.repeat(32)}.prob`, JSON.stringify({ name: 'x', url: URL_OF(11), tests: [G(1)], srcPath: join(w, 'a.cpp') }));
+    await run();
+    expect(env.notices).toEqual([S.migration.noticeDetail(3)]);
+  });
+
+  it('a link saved for another server stays', async () => {
+    const a = { fsPath: write('a.cpp') } as never;
+    await mapping.set(a, { problemId: 8, name: 'p8', baseUrl: 'https://other.example' });
+    prob('a.cpp', URL_OF(11), [G(1)]);
+    await run();
+    expect((await mapping.get(a, 'https://other.example'))?.problemId).toBe(8);
+    expect(await listOf(11)).toHaveLength(1);
   });
 
   it('a .prob that becomes ours later is imported before it is offered', async () => {
@@ -469,6 +488,7 @@ describe('migrateOldFiles', () => {
     await run();
     expect(env.warnings).toEqual([S.migration.noTrash(1)]);
     expect(existsSync(p)).toBe(true);
+    expect(env.told).toEqual([]); // nothing moved, so nothing to report
     expect(ctx.globalState.get(KEYS.cleanupSettled)).toBeUndefined();
     env.answers = ['trash'];
     env.warnAnswer = S.migration.deleteForever;

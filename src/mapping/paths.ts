@@ -64,3 +64,6 @@ export function isInside(p: string, folder: string, caseInsensitive = CASE_INSEN
 export function isAtOrInside(p: string, folder: string, caseInsensitive = CASE_INSENSITIVE_FS): boolean {
   return remapPath(p, folder, folder, caseInsensitive) !== null;
 }
+
+/** A workspace folder's own key, where keys are relative to it. */
+export const ROOT_KEY = '.';

@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { addMissing, inScope, LinkTable, type Links, type MappingEntry, type StoredLink } from './linkTable';
 import { affectedByDelete, expired, fileLinksInside, type LocatedEntry, nearestFolderLink, planRename, submitFileAfterMove, submitFileDeleted, unlinkedAround } from './mappingOps';
-import { isAtOrInside, normalizeAbsPath, normalizeRelPath, pathKey, remapPath } from './paths';
+import { isAtOrInside, normalizeAbsPath, normalizeRelPath, pathKey, remapPath, ROOT_KEY } from './paths';
 import { type AutoMatch, autoAfterDelete, autoAfterRename } from './problemFiles';
 import { LIMITS } from '../shared/constants';
 import { KEYS } from '../shared/stateKeys';
@@ -11,7 +11,6 @@ const UNLINKED_KEY = KEYS.unlinked;
 /** Remembered auto-matches (file name, folder name, suggestion) of files that were open. */
 const AUTO_KEY = KEYS.autoMatches;
 /** The key of the workspace folder itself in "not linked". */
-const ROOT_KEY = '.';
 
 /** A saved link without what only the table needs. */
 function entryOf(link: StoredLink): MappingEntry {
@@ -143,11 +142,14 @@ export class MappingStore {
 
   /** Folder mode: remember (or forget → detect again) the file Submit sends / the file the runner runs, relative to the folder. */
   async setFolderRole(folder: vscode.Uri, baseUrl: string, role: 'submitFile' | 'runFile', rel: string | undefined): Promise<void> {
-    const e = await this.get(folder, baseUrl);
-    if (!e?.folder) return;
-    const rest = { ...e };
-    delete rest[role];
-    await this.set(folder, rel ? { ...rest, [role]: rel } : rest);
+    const k = pathKey(folder.fsPath);
+    await this.table.change((links) => {
+      const link = links[k];
+      if (!link?.folder || link.staleSince || (link.baseUrl && link.baseUrl !== baseUrl)) return false;
+      const next = { ...link };
+      delete next[role];
+      links[k] = rel ? { ...next, [role]: rel } : next;
+    });
   }
 
   async setUnlinked(uri: vscode.Uri, on: boolean): Promise<void> {
@@ -331,7 +333,10 @@ export class MappingStore {
   /** Re-link a mapping that belonged to a file moved outside VS Code. */
   async reconnect(from: LocatedEntry, to: vscode.Uri): Promise<void> {
     const { staleSince: _drop, ...entry } = from.entry;
-    await this.set(vscode.Uri.file(from.fsPath), undefined);
-    await this.set(to, entry);
+    await this.table.change((links) => {
+      delete links[pathKey(from.fsPath)];
+      links[pathKey(to.fsPath)] = this.linkFor(to.fsPath, entry);
+    });
+    if (this.isUnlinked(to)) await this.setUnlinked(to, false);
   }
 }

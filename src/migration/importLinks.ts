@@ -1,4 +1,6 @@
 import * as vscode from 'vscode';
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
 import type { MappingStore } from '../mapping/store';
 import { pathKey } from '../mapping/paths';
 import { KEYS } from '../shared/stateKeys';
@@ -18,12 +20,13 @@ export async function importOldLinks(ctx: vscode.ExtensionContext, store: Mappin
   const done = ctx.globalState.get<string[]>(KEYS.linksImported, []);
   const fresh = (vscode.workspace.workspaceFolders ?? []).filter((f) => !done.includes(pathKey(f.uri.fsPath)));
   const files: { folder: string; text: string }[] = [];
+  const unread = new Set<string>();
   for (const folder of fresh) {
     try {
       const bytes = await vscode.workspace.fs.readFile(vscode.Uri.joinPath(folder.uri, MAPPING_FILE_NAME));
       files.push({ folder: folder.uri.fsPath, text: new TextDecoder().decode(bytes) });
     } catch {
-      /* no file in this folder */
+      if (existsSync(join(folder.uri.fsPath, MAPPING_FILE_NAME))) unread.add(folder.uri.fsPath); // tried again on the next start
     }
   }
   const added = await store.addMissing(
@@ -38,6 +41,7 @@ export async function importOldLinks(ctx: vscode.ExtensionContext, store: Mappin
   for (const memento of [ctx.workspaceState, ctx.globalState]) {
     for (const k of [KEYS.mappings, KEYS.legacyMapping]) if (memento.get(k) !== undefined) await memento.update(k, undefined);
   }
-  if (fresh.length) await ctx.globalState.update(KEYS.linksImported, [...ctx.globalState.get<string[]>(KEYS.linksImported, []), ...fresh.map((f) => pathKey(f.uri.fsPath))]);
+  const finished = fresh.filter((f) => !unread.has(f.uri.fsPath));
+  if (finished.length) await ctx.globalState.update(KEYS.linksImported, [...ctx.globalState.get<string[]>(KEYS.linksImported, []), ...finished.map((f) => pathKey(f.uri.fsPath))]);
   return added;
 }

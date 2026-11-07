@@ -1,5 +1,5 @@
 /** MappingStore over the link table: real files, a fake VS Code workspace. Nothing may appear in the user's folders. */
-import { mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -126,6 +126,14 @@ describe('MappingStore', () => {
     expect(await store.everyEntry()).toHaveLength(1);
   });
 
+  it('two windows setting folder roles at once keep both', async () => {
+    const folder = uri(join(w, 'pkg'));
+    await store.set(folder, link(1, { folder: true, baseUrl: BASE }));
+    const other = new MappingStore(ctx as never);
+    await Promise.all([store.setFolderRole(folder, BASE, 'submitFile', 'a.h'), other.setFolderRole(folder, BASE, 'runFile', 'main.cpp')]);
+    expect(await new MappingStore(ctx as never).get(folder, BASE)).toMatchObject({ submitFile: 'a.h', runFile: 'main.cpp' });
+  });
+
   it('reconnect moves a stale link and clears staleness', async () => {
     await store.set(uri(join(w, 'a.cpp')), link(1, { staleSince: '2026-01-01T00:00:00.000Z' }));
     const [from] = await store.everyEntry();
@@ -231,6 +239,16 @@ describe('MappingStore', () => {
     it('a workspace with nothing old writes nothing', async () => {
       await run();
       expect(readdirSync(storage)).toEqual([]);
+    });
+
+    it('a file it cannot read now is tried again on the next start', async () => {
+      const file = join(w, '.cedt-grader.json');
+      mkdirSync(file); // it exists, reading fails
+      await run();
+      expect(ctx.globalState.get(KEYS.linksImported)).toBeUndefined();
+      rmSync(file, { recursive: true });
+      writeFileSync(file, OLD);
+      expect(await run()).toBe(2);
     });
 
     it('a table it cannot write leaves everything to try again', async () => {
