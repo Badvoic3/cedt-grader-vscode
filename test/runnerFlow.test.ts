@@ -497,7 +497,8 @@ describe('Runner', () => {
       expect(r.testsView().runs.has(second)).toBe(true);
     });
 
-    it('a storage folder that can\'t run programs either ends in a message, with no case left running', async () => {
+    // Exit code 126 is how `sh` and `time` say it; Windows has neither.
+    it.skipIf(process.platform === 'win32')('a storage folder that can\'t run programs either ends in a message, with no case left running', async () => {
       await store.add(P, { input: 'a\n', expected: 'a\n' });
       const p = programs({ run: (c) => setImmediate(() => c.child.finish(126)) });
       const r = make(p);
