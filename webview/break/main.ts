@@ -16,7 +16,7 @@ const D = JSON.parse(document.getElementById('break-data')!.textContent!) as Bre
 const L = D.texts;
 
 const cv = document.getElementById('c') as HTMLCanvasElement;
-const g = cv.getContext('2d', { alpha: false })!;
+const g = cv.getContext('2d')!;
 const card = document.getElementById('card')!;
 const foot = document.getElementById('foot')!;
 const back = document.getElementById('back') as HTMLButtonElement;
@@ -24,7 +24,6 @@ const css = getComputedStyle(document.documentElement);
 /** A theme colour as VS Code gives it to webviews (with the user's colour customizations). */
 const themeColor = (name: string) => css.getPropertyValue(`--vscode-${name.replace(/\./g, '-')}`).trim();
 const transparent = (c: string) => !c || c === 'transparent' || /^#(?:[0-9a-f]{3}0|[0-9a-f]{6}00)$/i.test(c) || /rgba\([^)]*,\s*0(?:\.0+)?\)$/.test(c);
-const BG = themeColor('editor.background') || '#1f1f1f';
 const FG = themeColor('editor.foreground') || D.colors.fg || '#cccccc';
 const dpr = Math.min(devicePixelRatio || 1, 2);
 // The tab loads hidden, at a placeholder size: the first frame is drawn on a screen-sized canvas, and the real
@@ -434,7 +433,16 @@ let phase: 'run' | 'exit' = 'run', exit: ExitMotion | null = null, exitParts: Pa
 /** Where the parts were before this frame: their speed on screen, which the way back carries on. */
 let beforeX = new Float32Array(0), beforeY = new Float32Array(0);
 function clear(fade = 1): void {
-  g.globalAlpha = alpha = fade; g.fillStyle = BG; g.fillRect(0, 0, W, H); g.globalAlpha = alpha = 1;
+  g.globalAlpha = 1;
+  if (fade === 1) {
+    g.clearRect(0, 0, W, H);
+  } else {
+    g.globalCompositeOperation = 'destination-out';
+    g.fillStyle = `rgba(0, 0, 0, ${1 - fade})`;
+    g.fillRect(0, 0, W, H);
+    g.globalCompositeOperation = 'source-over';
+  }
+  alpha = 1;
 }
 function frame(): void {
   const now = performance.now();

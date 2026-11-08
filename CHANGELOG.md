@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.1.1 — 2026-11-09
+
+### Break scenes & theme colouring
+- **Custom VS Code theme token and background colors in break scenes:** fixed character colors and background colors in **Falling Code** (`sand`) and the other break scenes when using third-party or custom VS Code themes. Space-separated parent/descendant TextMate scope selectors (such as `"source.elixir entity.name.function"` or `"meta.import.js variable.other"`) and `-` exclusions (`"keyword - keyword.operator"`) now match only when their parent scopes are present, semantic token fallback probes all matching TextMate scopes and contributed semantic token supertypes (`contributes.semanticTokenTypes`), and themes with scopeless root `tokenColors` entries no longer override the editor default foreground. The break tab canvas also uses transparent framebuffer alpha and clears frames cleanly with `clearRect` (and `destination-out` for trails), letting the webview's fully resolved `--vscode-editor-background` render the background so standard themes, custom themes, color customizations (`workbench.colorCustomizations`), and macOS Vibrancy / transparency extensions match the code editor seamlessly.
+
 ## 1.1.0 — 2026-11-08
 
 **Highlights:** a **built-in code & test runner** with a side-by-side **Tests** split view (no external runner extension or `.in` / `.out` files needed); **zero workspace clutter** (links and test cases now live in VS Code's hidden storage, with automatic import and a 1-click cleanup for old files); **Secondary Sidebar** placement on the right by default; **Explorer badges** for scores and topic tags; **server selector & compatibility check** at login; optional **first-full-score celebrations, Trophies, and 5 interactive break scenes**; a **subtle depth** visual look; and a new [**User Guide (`USERGUIDE.md`)**](USERGUIDE.md). Requires **VS Code 1.106 or newer**.

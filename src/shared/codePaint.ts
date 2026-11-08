@@ -57,18 +57,42 @@ export function customRules(custom: unknown, themeNames: readonly string[]): Rul
   return rules;
 }
 
-/** The style of the most specific rule for one scope (a rule scope matches itself and its dotted children). */
+/** How a space-separated chain of rule scopes matches `probe` (VS Code's `matchesScope` in ColorThemeData): -1 = no match. */
+function matchChain(chain: readonly string[], probe: readonly string[]): number {
+  if (!chain[0] || probe.length < chain.length) return -1;
+  let score = -1;
+  for (const part of chain) {
+    let hit = -1;
+    for (let n = probe.length - 1; n >= 0; n--) {
+      if (probe[n] === part || probe[n].startsWith(`${part}.`)) {
+        hit = (n + 1) * 65536 + part.length;
+        break;
+      }
+    }
+    if (hit < 0) return -1;
+    score = hit;
+  }
+  return score;
+}
+
+/**
+ * The style of the most specific rule for `scope` (a rule scope matches itself and its dotted children; a parent
+ * selector like "source.elixir entity.name.function" only matches when the parent scope is in `scope` too).
+ */
 export function scopeStyle(rules: readonly Rule[], scope: string): Style | null {
-  let fg: string | undefined, fs: string | undefined, fgLen = -1, fsLen = -1;
+  const probe = scope.trim().split(/\s+/).filter(Boolean);
+  if (!probe.length) return null;
+  let fg: string | undefined, fs: string | undefined, fgScore = -1, fsScore = -1;
   for (const r of rules) {
     if (!r.settings || r.scope === undefined) continue;
-    const list = Array.isArray(r.scope) ? r.scope : String(r.scope).split(',');
+    const list = Array.isArray(r.scope) ? r.scope.flatMap((x) => String(x).split(/[|,]/)) : String(r.scope).split(/[|,]/);
     for (const raw of list) {
-      // Parent selectors ("source.cpp entity.name") match on their last part; exclusions ("a - b") on the part before.
-      const s = raw.split(' - ')[0].trim().split(/\s+/).pop() ?? '';
-      if (!s || (scope !== s && !scope.startsWith(`${s}.`))) continue;
-      if (r.settings.foreground && s.length >= fgLen) { fg = r.settings.foreground; fgLen = s.length; }
-      if (r.settings.fontStyle !== undefined && s.length >= fsLen) { fs = r.settings.fontStyle; fsLen = s.length; }
+      const [pos, ...negs] = raw.replace(/^[LR]:/, '').trim().split(/\s+-\s+/);
+      if (!pos || negs.some((neg) => matchChain(neg.trim().split(/\s+/), probe) >= 0)) continue;
+      const score = matchChain(pos.trim().split(/\s+/), probe);
+      if (score < 0) continue;
+      if (r.settings.foreground && score >= fgScore) { fg = r.settings.foreground; fgScore = score; }
+      if (r.settings.fontStyle !== undefined && score >= fsScore) { fs = r.settings.fontStyle; fsScore = score; }
     }
   }
   return fg === undefined && fs === undefined ? null : { foreground: fg, fontStyle: fs };
@@ -108,10 +132,13 @@ const SEMANTIC_DEFAULTS: Record<string, string[]> = {
   'interface.defaultLibrary': ['support.class'],
   'variable.defaultLibrary': ['support.variable', 'support.other.variable'],
   'variable.readonly.defaultLibrary': ['support.constant'],
+  'property.defaultLibrary': ['support.variable.property'],
   'property.readonly.defaultLibrary': ['support.constant.property'],
   'function.defaultLibrary': ['support.function'],
   'member.defaultLibrary': ['support.function'],
 };
+
+const DEFAULT_SUPER_TYPES: Record<string, string> = { member: 'method' };
 
 export interface SemanticRule {
   selector: string;
@@ -133,8 +160,8 @@ export function semanticRules(map: unknown): SemanticRule[] {
   return out;
 }
 
-/** VS Code's selector score: -1 = no match; language +10, a named type +100, each modifier +100. */
-export function selectorScore(selector: string, type: string, modifiers: readonly string[], language: string): number {
+/** VS Code's selector score: -1 = no match; language +10, a named type +100 (−1 per superType step), each modifier +100. */
+export function selectorScore(selector: string, type: string, modifiers: readonly string[], language: string, superTypes: Record<string, string> = DEFAULT_SUPER_TYPES): number {
   const [main, lang] = selector.split(':');
   const [t, ...mods] = main.split('.');
   let score = 0;
@@ -143,8 +170,10 @@ export function selectorScore(selector: string, type: string, modifiers: readonl
     score += 10;
   }
   if (t !== '*') {
-    if (t !== type) return -1;
-    score += 100;
+    let cur: string | undefined = type, depth = 0;
+    while (cur && cur !== t && depth < 6) { cur = superTypes[cur]; depth++; }
+    if (cur !== t) return -1;
+    score += 100 - depth;
   }
   for (const m of mods) if (!modifiers.includes(m)) return -1;
   return score + mods.length * 100;
@@ -156,34 +185,37 @@ export interface SemanticContext {
   /** Selector → TextMate scopes to probe: the defaults plus `semanticTokenScopes` from extensions. */
   scopes: Record<string, string[]>;
   textMate: readonly Rule[];
+  /** Token type → parent token type (`member` → `method` plus `semanticTokenTypes` from extensions). */
+  superTypes: Record<string, string>;
 }
 
-export function semanticContext(rules: SemanticRule[], contributed: Record<string, string[]>, textMate: readonly Rule[]): SemanticContext {
-  return { rules, scopes: { ...SEMANTIC_DEFAULTS, ...contributed }, textMate };
+export function semanticContext(rules: SemanticRule[], contributed: Record<string, string[]>, textMate: readonly Rule[], superTypes: Record<string, string> = {}): SemanticContext {
+  return { rules, scopes: { ...SEMANTIC_DEFAULTS, ...contributed }, textMate, superTypes: { ...DEFAULT_SUPER_TYPES, ...superTypes } };
 }
 
 /** The style a semantic token gets (null = keep the TextMate colour). */
 export function semanticStyle(ctx: SemanticContext, type: string, modifiers: readonly string[], language: string): Style | null {
   let fg: string | undefined, fs: string | undefined, fgScore = -1, fsScore = -1;
   for (const r of ctx.rules) {
-    const s = selectorScore(r.selector, type, modifiers, language);
+    const s = selectorScore(r.selector, type, modifiers, language, ctx.superTypes);
     if (s < 0) continue;
     if (r.style.foreground && s >= fgScore) { fg = r.style.foreground; fgScore = s; }
     if (r.style.fontStyle !== undefined && s >= fsScore) { fs = r.style.fontStyle; fsScore = s; }
   }
   if (fg === undefined || fs === undefined) {
-    // What the theme's rules didn't set comes from the TextMate scopes of the best default selector.
-    let best = -1, probe: string[] = [];
+    // What the theme's semantic rules didn't set comes from the TextMate scopes of the matching default selectors.
+    const lockFg = fg !== undefined, lockFs = fs !== undefined;
+    let bestFg = -1, bestFs = -1;
     for (const [sel, scopes] of Object.entries(ctx.scopes)) {
-      const s = selectorScore(sel, type, modifiers, language);
-      if (s > best) { best = s; probe = scopes; }
-    }
-    for (const scope of probe) {
-      const st = scopeStyle(ctx.textMate, scope);
-      if (!st) continue;
-      if (fg === undefined) fg = st.foreground;
-      if (fs === undefined) fs = st.fontStyle;
-      break;
+      const s = selectorScore(sel, type, modifiers, language, ctx.superTypes);
+      if (s < 0) continue;
+      for (const scope of scopes) {
+        const st = scopeStyle(ctx.textMate, scope);
+        if (!st) continue;
+        if (!lockFg && st.foreground && s >= bestFg) { fg = st.foreground; bestFg = s; }
+        if (!lockFs && st.fontStyle !== undefined && s >= bestFs) { fs = st.fontStyle; bestFs = s; }
+        break;
+      }
     }
   }
   return fg === undefined && fs === undefined ? null : { foreground: fg, fontStyle: fs };

@@ -1,8 +1,8 @@
 /* The break tab (webview/break/main.ts). Colours follow the theme. */
-html, body { margin: 0; height: 100%; overflow: hidden; background: var(--vscode-editor-background); color: var(--vscode-foreground); font-family: var(--vscode-font-family); user-select: none; }
+html, body { margin: 0; height: 100%; overflow: hidden; background: var(--vscode-editor-background, #1e1e1e); color: var(--vscode-foreground); font-family: var(--vscode-font-family); user-select: none; }
 canvas { position: fixed; inset: 0; touch-action: none; }
 .card { position: fixed; left: 50%; top: 38%; transform: translate(-50%, -50%); text-align: center; max-width: min(440px, 86vw); padding: 18px 24px; border-radius: 10px; pointer-events: none; opacity: 0;
-  background: color-mix(in srgb, var(--vscode-editor-background) 82%, transparent); }
+  background: color-mix(in srgb, var(--vscode-editor-background, #1e1e1e) 82%, transparent); }
 .card h1 { margin: 0 0 6px; font-size: 22px; font-weight: 600; }
 .card p { margin: 4px 0; color: var(--vscode-descriptionForeground); }
 .card .clock { display: flex; align-items: center; justify-content: center; gap: 14px; margin: 8px 0 2px; }

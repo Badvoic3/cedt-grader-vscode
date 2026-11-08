@@ -21,6 +21,7 @@ interface Contributes {
   grammars?: (Omit<GrammarInfo, 'file'> & { path?: string })[];
   languages?: { id?: string; configuration?: string }[];
   semanticTokenScopes?: { language?: string; scopes?: Record<string, string[]> }[];
+  semanticTokenTypes?: { id?: string; superType?: string }[];
 }
 const contributes = (ext: vscode.Extension<unknown>) => ((ext.packageJSON as { contributes?: Contributes }).contributes ?? {});
 
@@ -40,23 +41,27 @@ export function activeTheme(): ActiveTheme | null {
     const k = vscode.window.activeColorTheme.kind;
     label = wb.get<string>(k === vscode.ColorThemeKind.Light ? 'preferredLightColorTheme' : k === vscode.ColorThemeKind.HighContrast ? 'preferredHighContrastColorTheme' : k === vscode.ColorThemeKind.HighContrastLight ? 'preferredHighContrastLightColorTheme' : 'preferredDarkColorTheme') ?? label;
   }
-  const norm = (s: string) => s.replace(/^Default /, '');
+  const norm = (s: string) => s.replace(/^Default /, '').trim();
   for (const ext of vscode.extensions.all) {
-    const t = (contributes(ext).themes ?? []).find((x) => x.path && (norm(x.id ?? x.label ?? '') === norm(label) || x.label === label));
+    const t = (contributes(ext).themes ?? []).find((x) => x.path && [x.id, x.label, path.basename(x.path)].some((n) => n && (n === label || norm(n) === norm(label))));
     if (!t?.path) continue;
     const file = path.join(ext.extensionPath, t.path);
     const files = new Map<ThemeJson, string>();
     const read = (f: string): ThemeJson | null => {
-      const j = parseJsonc(readFileSync(f, 'utf8'));
-      if (j) {
-        files.set(j, f);
-        // tokenColors may name a JSON file of rules.
-        if (typeof j.tokenColors === 'string' && j.tokenColors.endsWith('.json')) {
-          const r = parseJsonc(readFileSync(path.join(path.dirname(f), j.tokenColors), 'utf8')) as unknown;
-          j.tokenColors = Array.isArray(r) ? r : ((r as ThemeJson | null)?.tokenColors as ThemeJson['tokenColors']);
+      try {
+        const j = parseJsonc(readFileSync(f, 'utf8'));
+        if (j) {
+          files.set(j, f);
+          // tokenColors may name a JSON file of rules.
+          if (typeof j.tokenColors === 'string' && j.tokenColors.endsWith('.json')) {
+            const r = parseJsonc(readFileSync(path.join(path.dirname(f), j.tokenColors), 'utf8')) as unknown;
+            j.tokenColors = Array.isArray(r) ? r : ((r as ThemeJson | null)?.tokenColors ?? (r as ThemeJson | null)?.settings);
+          }
         }
+        return j;
+      } catch {
+        return null;
       }
-      return j;
     };
     const first = read(file);
     if (!first) return null;
@@ -100,23 +105,33 @@ function contributedSemanticScopes(): Record<string, string[]> {
   return out;
 }
 
+function contributedSemanticSuperTypes(): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const ext of vscode.extensions.all) {
+    for (const t of contributes(ext).semanticTokenTypes ?? []) if (t.id && t.superType) out[t.id] = t.superType;
+  }
+  return out;
+}
+
 async function withTimeout<T>(p: Thenable<T>, ms: number): Promise<T | undefined> {
   return Promise.race([Promise.resolve(p), new Promise<undefined>((r) => setTimeout(() => r(undefined), ms))]);
 }
 
 /** Semantic token styles for lines `from`…`to` (null when off, or no provider answers in time). */
 async function semanticSpans(doc: vscode.TextDocument, theme: ActiveTheme, rules: Rule[], from: number, to: number): Promise<SemanticSpan[] | null> {
-  const setting = vscode.workspace.getConfiguration('editor', doc).get<boolean | string>('semanticHighlighting.enabled', 'configuredByTheme');
-  const custom = vscode.workspace.getConfiguration('editor', doc).get<Record<string, unknown>>('semanticTokenColorCustomizations');
-  const blocks = themeBlocks(custom, theme.names);
-  const userEnabled = blocks.reduce<boolean | undefined>((v, b) => (typeof b.enabled === 'boolean' ? b.enabled : v), undefined);
+  const cfg = vscode.workspace.getConfiguration('editor', doc);
+  const setting = cfg.get<boolean | string>('semanticHighlighting.enabled', 'configuredByTheme');
+  const blocks = themeBlocks(cfg.get<Record<string, unknown>>('semanticTokenColorCustomizations'), theme.names);
+  const tmBlocks = themeBlocks(cfg.get<Record<string, unknown>>('tokenColorCustomizations'), theme.names);
+  const userEnabled = blocks.reduce<boolean | undefined>((v, b) => (typeof b.enabled === 'boolean' ? b.enabled : v), undefined)
+    ?? tmBlocks.reduce<boolean | undefined>((v, b) => (typeof b.semanticHighlighting === 'boolean' ? b.semanticHighlighting : v), undefined);
   const on = setting === true || (setting === 'configuredByTheme' && (userEnabled ?? theme.semanticHighlighting ?? false));
   if (!on) return null;
   const legend = await withTimeout(vscode.commands.executeCommand<vscode.SemanticTokensLegend | undefined>('vscode.provideDocumentSemanticTokensLegend', doc.uri), 400);
   if (!legend) return null;
   const tokens = await withTimeout(vscode.commands.executeCommand<vscode.SemanticTokens | undefined>('vscode.provideDocumentSemanticTokens', doc.uri), 800);
   if (!tokens?.data) return null;
-  const ctx = semanticContext([...semanticRules(theme.semanticTokenColors), ...blocks.flatMap((b) => semanticRules(b.rules))], contributedSemanticScopes(), rules);
+  const ctx = semanticContext([...semanticRules(theme.semanticTokenColors), ...blocks.flatMap((b) => semanticRules(b.rules))], contributedSemanticScopes(), rules, contributedSemanticSuperTypes());
   const out: SemanticSpan[] = [];
   const d = tokens.data;
   let line = 0, col = 0;

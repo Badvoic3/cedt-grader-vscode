@@ -14,16 +14,18 @@ export interface TokenColors {
   preproc: string | null;
   variable: string | null;
   fg: string | null;
+  bg?: string | null;
 }
 
-interface Rule { scope?: string | string[]; settings?: { foreground?: string; fontStyle?: string } }
-export interface ThemeJson { include?: string; colors?: Record<string, string>; tokenColors?: Rule[] | string; semanticHighlighting?: boolean; semanticTokenColors?: Record<string, unknown> }
+interface Rule { scope?: string | string[]; settings?: { foreground?: string; background?: string; fontStyle?: string } }
+export interface ThemeJson { include?: string; colors?: Record<string, string>; tokenColors?: Rule[] | string; settings?: Rule[]; semanticHighlighting?: boolean; semanticTokenColors?: Record<string, unknown> }
 
 /** JSON with comments and trailing commas, as theme files often are. Returns null when it can't be read. */
 export function parseJsonc(text: string): ThemeJson | null {
   try {
-    const noComments = text.replace(/("(?:\\.|[^"\\])*")|\/\*[\s\S]*?\*\/|\/\/[^\n]*/g, (_m, str: string | undefined) => str ?? '');
-    const parsed: unknown = JSON.parse(noComments.replace(/,(\s*[}\]])/g, '$1'));
+    const noComments = text.replace(/^\uFEFF/, '').replace(/("(?:\\.|[^"\\])*")|\/\*[\s\S]*?\*\/|\/\/[^\n]*/g, (_m, str: string | undefined) => str ?? '');
+    const noTrailing = noComments.replace(/("(?:\\.|[^"\\])*")|,(\s*[}\]])/g, (_m, str: string | undefined, close: string | undefined) => str ?? close ?? '');
+    const parsed: unknown = JSON.parse(noTrailing);
     return parsed && typeof parsed === 'object' ? (parsed as ThemeJson) : null;
   } catch {
     return null;
@@ -40,7 +42,14 @@ export function collectTheme(first: ThemeJson, load: (include: string, from: The
   const rules: Rule[] = [], colors: Record<string, string> = {}, semanticTokenColors: Record<string, unknown> = {};
   let semanticHighlighting: boolean | undefined;
   for (const t of chain.reverse()) {
-    if (Array.isArray(t.tokenColors)) rules.push(...t.tokenColors);
+    for (const list of [t.settings, t.tokenColors]) {
+      if (!Array.isArray(list)) continue;
+      for (const r of list) {
+        if (!r.scope && r.settings?.foreground && !colors['editor.foreground']) colors['editor.foreground'] = r.settings.foreground;
+        if (!r.scope && r.settings?.background && !colors['editor.background']) colors['editor.background'] = r.settings.background;
+        rules.push(r);
+      }
+    }
     Object.assign(colors, t.colors ?? {});
     Object.assign(semanticTokenColors, t.semanticTokenColors ?? {});
     if (typeof t.semanticHighlighting === 'boolean') semanticHighlighting = t.semanticHighlighting;
@@ -69,7 +78,8 @@ export function tokenColors(theme: { rules: Rule[]; colors: Record<string, strin
     keyword: c('keyword.control'), storage: c('storage.type'), type: c('entity.name.type'), string: c('string.quoted.double'),
     number: c('constant.numeric'), comment: c('comment.line.double-slash'), func: c('entity.name.function'),
     preproc: c('keyword.control.directive'), variable: c('variable'), fg: theme.colors['editor.foreground'] ?? null,
+    bg: theme.colors['editor.background'] ?? null,
   };
 }
 
-export const NO_COLORS: TokenColors = { keyword: null, storage: null, type: null, string: null, number: null, comment: null, func: null, preproc: null, variable: null, fg: null };
+export const NO_COLORS: TokenColors = { keyword: null, storage: null, type: null, string: null, number: null, comment: null, func: null, preproc: null, variable: null, fg: null, bg: null };

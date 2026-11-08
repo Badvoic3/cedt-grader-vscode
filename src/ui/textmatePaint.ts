@@ -73,6 +73,7 @@ export async function paintCode(input: PaintInput): Promise<CodePaint | null> {
   const languageIds = new Map<string, number>();
   const langNum = (id: string) => languageIds.get(id) ?? (languageIds.set(id, languageIds.size + 1), languageIds.size);
 
+  const scopedRules = input.rules.filter((r) => r.scope && (!Array.isArray(r.scope) || r.scope.length > 0)) as tm.IRawTheme['settings'];
   const registry = new tm.Registry({
     onigLib: Promise.resolve({ createOnigScanner: (p) => onig.createOnigScanner(p), createOnigString: (s) => onig.createOnigString(s) }),
     loadGrammar: async (scope) => {
@@ -81,7 +82,7 @@ export async function paintCode(input: PaintInput): Promise<CodePaint | null> {
       return tm.parseRawGrammar(readFileSync(g.file, 'utf8'), g.file);
     },
     getInjections: (scope) => injections.get(scope),
-    theme: { settings: [{ settings: { foreground: DEFAULT_SENTINEL } }, ...(input.rules as tm.IRawTheme['settings'])] },
+    theme: { settings: [{ settings: { foreground: DEFAULT_SENTINEL } }, ...scopedRules] },
   });
   const main = byScope.get(input.scopeName);
   const embedded: Record<string, number> = {};

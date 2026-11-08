@@ -7,15 +7,19 @@ import { paintCode } from '../src/ui/textmatePaint';
 
 describe('editor colours: theme rules', () => {
   const rules = [
-    { scope: 'keyword', settings: { foreground: '#111111' } },
+    { scope: 'keyword - keyword.operator', settings: { foreground: '#111111' } },
     { scope: ['keyword.control', 'storage.type'], settings: { foreground: '#222222', fontStyle: 'italic' } },
+    { scope: 'entity.name.function', settings: { foreground: '#82aaff' } },
+    { scope: 'source.elixir entity.name.function', settings: { foreground: '#addb67' } },
     { scope: 'source.cpp entity.name.function', settings: { foreground: '#333333' } },
   ];
 
-  it('the most specific scope wins; parent selectors match on their last part', () => {
-    expect(scopeStyle(rules, 'keyword.operator')).toEqual({ foreground: '#111111', fontStyle: undefined });
+  it('the most specific scope wins; parent selectors only match when the parent scope is present; exclusions exclude', () => {
+    expect(scopeStyle(rules, 'keyword.other')).toEqual({ foreground: '#111111', fontStyle: undefined });
+    expect(scopeStyle(rules, 'keyword.operator')).toBeNull();
     expect(scopeStyle(rules, 'keyword.control.flow')).toEqual({ foreground: '#222222', fontStyle: 'italic' });
-    expect(scopeStyle(rules, 'entity.name.function.cpp')).toEqual({ foreground: '#333333', fontStyle: undefined });
+    expect(scopeStyle(rules, 'entity.name.function.cpp')).toEqual({ foreground: '#82aaff', fontStyle: undefined });
+    expect(scopeStyle(rules, 'source.cpp entity.name.function.cpp')).toEqual({ foreground: '#333333', fontStyle: undefined });
     expect(scopeStyle(rules, 'string')).toBeNull();
   });
 
@@ -55,10 +59,14 @@ describe('editor colours: semantic tokens', () => {
     expect(semanticStyle(ctx, 'label', [], 'cpp')).toBeNull();
   });
 
-  it('scopes an extension contributes for its language are probed', () => {
-    const ctx = semanticContext([], { 'function:cpp': ['support.function'] }, tm);
+  it('scopes an extension contributes for its language are probed, falling back to broader selectors and superTypes', () => {
+    const ctx = semanticContext([], { 'function:cpp': ['support.function'], 'variable.local:cpp': ['variable.other.local.cpp'] }, tm, { operatorOverload: 'function' });
     expect(semanticStyle(ctx, 'function', [], 'cpp')?.foreground).toBe('#ffffff');
     expect(semanticStyle(ctx, 'function', [], 'python')?.foreground).toBe('#dcdcaa');
+    // variable.other.local.cpp has no rule in tm, so variable (score 100) still matches variable.other.readwrite.
+    expect(semanticStyle(ctx, 'variable', ['local'], 'cpp')?.foreground).toBe('#9cdcfe');
+    // operatorOverload inherits from function (score 99).
+    expect(semanticStyle(ctx, 'operatorOverload', [], 'cpp')?.foreground).toBe('#ffffff');
   });
 });
 
@@ -126,9 +134,10 @@ describe('editor colours: the real grammar engine', () => {
     expect(last[3]).toBe('fg'); // a space in the default colour
   });
 
-  it('out of time on the lines above: the visible lines are still coloured, starting fresh', async () => {
-    const p = (await paintCode({ wasm, grammars: [{ scopeName: 'source.mini', file, language: 'mini' }], scopeName: 'source.mini', rules, lines: ['"open', '"open', 'if 1'], first: 2, semantic: null, brackets: null, budgetMs: -1 }))!;
-    expect(expand(p, 0).slice(0, 2)).toEqual(['#C586C0', '#C586C0']);
+  it('out of time on the lines above: the visible lines are still coloured, starting fresh; scopeless rules never override default fg', async () => {
+    const withRoot = [{ settings: { foreground: '#FF00FF' } }, ...rules];
+    const p = (await paintCode({ wasm, grammars: [{ scopeName: 'source.mini', file, language: 'mini' }], scopeName: 'source.mini', rules: withRoot, lines: ['"open', '"open', 'if 1'], first: 2, semantic: null, brackets: null, budgetMs: -1 }))!;
+    expect(expand(p, 0)).toEqual(['#C586C0', '#C586C0', 'fg', 'fg']);
   });
 
   it('no grammar for the scope: null', async () => {
