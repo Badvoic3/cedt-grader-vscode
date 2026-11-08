@@ -7,6 +7,24 @@
 [![CI](https://img.shields.io/github/actions/workflow/status/Badvoic3/cedt-grader-vscode/ci.yml?branch=main&style=flat-square&label=CI)](https://github.com/Badvoic3/cedt-grader-vscode/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg?style=flat-square)](LICENSE)
 
+## Quickstart
+
+Requires **VS Code 1.106 or newer**.
+
+<p align="center">
+  <img src="media/readme/install.png" width="420" alt="Installing Grader Submit in VS Code Extensions and opening the Grader panel on the right">
+</p>
+
+1. **Install:** Open **Extensions** (<kbd>Cmd</kbd>+<kbd>Shift</kbd>+<kbd>X</kbd> / <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>X</kbd>), search **Grader Submit** (`Badvoic3.cedt-grader-submit`), and click **Install** (or install a `.vsix` from [Releases](https://github.com/Badvoic3/cedt-grader-vscode/releases/latest)).
+2. **Log in:** The **Grader** panel opens on the **right side** (Secondary Sidebar). Check `Server:` (click **✎** to use another `cafe-grader-web` address), enter your username and password, and click **Log in**.
+3. **Open code:** Open your solution file (e.g. `00_Intro_11.cpp`) or an unzipped package folder. Files named like a problem match automatically; otherwise pick one under **Current problem**.
+4. **Test locally:** Click **Load test cases** or **Load samples**, then press **Run tests** (or **Open tests** to inspect inputs, outputs, and diffs beside your code).
+5. **Submit:** Press **Submit to Grader** to grade and see per-test verdicts and your updated counted score.
+
+**Documentation:** [**User Guide (`USERGUIDE.md`)**](USERGUIDE.md) · [**Developer Guide (`DEVGUIDE.md`)**](DEVGUIDE.md) · [**Support (`SUPPORT.md`)**](SUPPORT.md) · [**Changelog (`CHANGELOG.md`)**](CHANGELOG.md)
+
+---
+
 **A fast, zero-clutter VS Code workflow for [cafe-grader-web](https://github.com/nattee/cafe-grader-web) servers — match problems, read PDF statements, run local test cases, and submit code from one sidebar.**
 
 - **Built-in local test runner** — Download grader test cases or extract sample cases directly from the statement PDF, compile and run locally with side-by-side diffs, and keep your project folder 100% clean.
@@ -30,18 +48,6 @@
   <br>
   <em>Left: Full Grader panel. Center: Current problem section. Right: Built-in Tests split view with inline diffs.</em>
 </p>
-
-## Quickstart (< 60s)
-
-Requires **VS Code 1.106 or newer**.
-
-1. **Install:** Open **Extensions** (<kbd>Cmd</kbd>+<kbd>Shift</kbd>+<kbd>X</kbd> / <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>X</kbd>), search **Grader Submit** (`Badvoic3.cedt-grader-submit`), and click **Install** (or install a `.vsix` from [Releases](https://github.com/Badvoic3/cedt-grader-vscode/releases/latest)).
-2. **Log in:** The **Grader** panel opens on the **right side** (Secondary Sidebar). Check `Server:` (click **✎** to use another `cafe-grader-web` address), enter your username and password, and click **Log in**.
-3. **Open code:** Open your solution file (e.g. `00_Intro_11.cpp`) or an unzipped package folder. Files named like a problem match automatically; otherwise pick one under **Current problem**.
-4. **Test locally:** Click **Load test cases** or **Load samples**, then press **Run tests** (or **Open tests** to inspect inputs, outputs, and diffs beside your code).
-5. **Submit:** Press **Submit to Grader** to grade and see per-test verdicts and your updated counted score.
-
-**Documentation:** [**User Guide (`USERGUIDE.md`)**](USERGUIDE.md) · [**Developer Guide (`DEVGUIDE.md`)**](DEVGUIDE.md) · [**Support (`SUPPORT.md`)**](SUPPORT.md) · [**Changelog (`CHANGELOG.md`)**](CHANGELOG.md)
 
 ---
 

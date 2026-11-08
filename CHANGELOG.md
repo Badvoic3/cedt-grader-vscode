@@ -1,6 +1,6 @@
 # Changelog
 
-## 1.1.0
+## 1.1.0 — 2026-11-08
 
 **Highlights:** a **built-in code & test runner** with a side-by-side **Tests** split view (no external runner extension or `.in` / `.out` files needed); **zero workspace clutter** (links and test cases now live in VS Code's hidden storage, with automatic import and a 1-click cleanup for old files); **Secondary Sidebar** placement on the right by default; **Explorer badges** for scores and topic tags; **server selector & compatibility check** at login; optional **first-full-score celebrations, Trophies, and 5 interactive break scenes**; a **subtle depth** visual look; and a new [**User Guide (`USERGUIDE.md`)**](USERGUIDE.md). Requires **VS Code 1.106 or newer**.
 
@@ -12,7 +12,7 @@
 ### Built-in code & test runner
 - **Compile and run test cases locally** without CPH: supports `C++` (`-std=gnu++17 -O2 -DEVAL`), `C` (`-std=gnu11 -O2 -DEVAL`), `Python`, `Java`, `Rust`, `Go`, `Haskell`, `Ruby`, `Pascal`, and `PHP`.
 - **Tests split view** (**Open tests** / `Grader: Open Tests`): opens in a locked editor group beside your code with per-case verdicts (`Passed`, `Wrong Answer`, `Time Limit`, `Runtime Error`, `Compile Error`), runtime (`ms`), estimated peak memory (`MB` on macOS and Linux), line-numbered **Input / Expected / Actual**, collapsible **Stderr** (stderr never fails a passing case), inline line/token diff, **Compare in VS Code**, and **Use as expected**.
-- **Load test cases & Load samples** sit side by side in **Current problem** and in the **Tests** view. Every case carries a source badge (**Grader**, **PDF Sample**, or **Custom**) and is deduplicated automatically. Add, edit, reorder, or delete cases inline.
+- **Load test cases & Load samples** sit side by side at the top of the **Tests** view. Every case carries a source badge (**Grader**, **PDF Sample**, or **Custom**) and is deduplicated automatically. Add, edit, reorder, or delete cases inline.
 - **Fast cached builds:** compiled binaries live in `<os.tmpdir()>/cedt-grader-bin/` (keyed by source, included headers, compiler, and flags, with automatic fallback if `/tmp` is mounted `noexec`). Configure compilers and flags with `cedtGrader.runner.compilerPaths`, `cedtGrader.runner.extraCompileArgs`, `cedtGrader.runner.defaultTimeLimitSeconds`, and `cedtGrader.runner.defaultMemoryLimitMB`.
 
 ### Hidden storage & one-time cleanup

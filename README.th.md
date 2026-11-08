@@ -7,6 +7,24 @@
 [![CI](https://img.shields.io/github/actions/workflow/status/Badvoic3/cedt-grader-vscode/ci.yml?branch=main&style=flat-square&label=CI)](https://github.com/Badvoic3/cedt-grader-vscode/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg?style=flat-square)](LICENSE)
 
+## เริ่มต้นใช้งานอย่างรวดเร็ว
+
+ต้องใช้ **VS Code 1.106 ขึ้นไป**
+
+<p align="center">
+  <img src="media/readme/install.th.png" width="420" alt="การติดตั้ง Grader Submit ในหน้า Extensions ของ VS Code และการเปิดแผง Grader ทางด้านขวา">
+</p>
+
+1. **ติดตั้ง:** เปิดหน้า **Extensions** (<kbd>Cmd</kbd>+<kbd>Shift</kbd>+<kbd>X</kbd> / <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>X</kbd>) ค้นหา **Grader Submit** (`Badvoic3.cedt-grader-submit`) แล้วคลิก **Install** (หรือติดตั้งไฟล์ `.vsix` จากหน้า [Releases](https://github.com/Badvoic3/cedt-grader-vscode/releases/latest))
+2. **เข้าสู่ระบบ:** แผง **Grader** จะเปิดขึ้นทาง**ด้านขวา**ของหน้าต่าง (Secondary Sidebar) ตรวจสอบบรรทัด `เซิร์ฟเวอร์:` (คลิก **✎** หากต้องการเปลี่ยน URL ของเซิร์ฟเวอร์ `cafe-grader-web`) กรอกชื่อผู้ใช้และรหัสผ่าน แล้วกด **เข้าสู่ระบบ**
+3. **เปิดไฟล์โค้ด:** เปิดไฟล์คำตอบของคุณ (เช่น `00_Intro_11.cpp`) หรือโฟลเดอร์แพ็กเกจที่แตกไฟล์แล้ว หากตั้งชื่อตรงกับโจทย์ระบบจะจับคู่ให้อัตโนมัติ หรือคลิกเลือกเองในส่วน **โจทย์ปัจจุบัน**
+4. **รันทดสอบบนเครื่อง:** คลิก **โหลด test case** หรือ **โหลดตัวอย่าง** จากนั้นกด **รันทดสอบ** (หรือกด **เปิดหน้าทดสอบ** เพื่อดูอินพุต ผลลัพธ์ และจุดที่ต่างกันข้างโค้ดของคุณ)
+5. **ส่งงาน:** กด **Submit ไปยัง Grader** เพื่อส่งตรวจและดูผลตรวจรายเคสพร้อมคะแนนที่นับทันที
+
+**เอกสารคู่มือ:** [**คู่มือการใช้งาน (`USERGUIDE.th.md`)**](USERGUIDE.th.md) · [**คู่มือสำหรับนักพัฒนา (`DEVGUIDE.md`)**](DEVGUIDE.md) · [**การขอความช่วยเหลือ (`SUPPORT.md`)**](SUPPORT.md) · [**ประวัติการเปลี่ยนแปลง (`CHANGELOG.md`)**](CHANGELOG.md)
+
+---
+
 **เขียน ทดสอบ และส่งโค้ดไปยังเซิร์ฟเวอร์ [cafe-grader-web](https://github.com/nattee/cafe-grader-web) ได้ครบจบใน VS Code โดยไม่สร้างไฟล์รกในโปรเจกต์ — จับคู่โจทย์อัตโนมัติ อ่านโจทย์ PDF รัน test case บนเครื่อง และดูผลตรวจได้จากแผงด้านข้างเดียว**
 
 - **ตัวรันทดสอบในตัว (Built-in Local Test Runner)** — ดาวน์โหลด test case จาก Grader หรือดึงตัวอย่างอินพุต/เอาต์พุตจากตารางใน PDF ของโจทย์โดยตรง คอมไพล์และรันเทียบผลแบบเคียงข้างกันโดยไม่ทิ้งไฟล์ชั่วคราวในโฟลเดอร์งาน
@@ -30,18 +48,6 @@
   <br>
   <em>ซ้าย: แผง Grader แบบเต็ม · กลาง: ส่วนโจทย์ปัจจุบัน · ขวา: หน้าต่างทดสอบในตัวพร้อมเทียบความต่างของผลลัพธ์</em>
 </p>
-
-## เริ่มต้นใช้งานอย่างรวดเร็ว (< 60 วินาที)
-
-ต้องใช้ **VS Code 1.106 ขึ้นไป**
-
-1. **ติดตั้ง:** เปิดหน้า **Extensions** (<kbd>Cmd</kbd>+<kbd>Shift</kbd>+<kbd>X</kbd> / <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>X</kbd>) ค้นหา **Grader Submit** (`Badvoic3.cedt-grader-submit`) แล้วคลิก **Install** (หรือติดตั้งไฟล์ `.vsix` จากหน้า [Releases](https://github.com/Badvoic3/cedt-grader-vscode/releases/latest))
-2. **เข้าสู่ระบบ:** แผง **Grader** จะเปิดขึ้นทาง**ด้านขวา**ของหน้าต่าง (Secondary Sidebar) ตรวจสอบบรรทัด `เซิร์ฟเวอร์:` (คลิก **✎** หากต้องการเปลี่ยน URL ของเซิร์ฟเวอร์ `cafe-grader-web`) กรอกชื่อผู้ใช้และรหัสผ่าน แล้วกด **เข้าสู่ระบบ**
-3. **เปิดไฟล์โค้ด:** เปิดไฟล์คำตอบของคุณ (เช่น `00_Intro_11.cpp`) หรือโฟลเดอร์แพ็กเกจที่แตกไฟล์แล้ว หากตั้งชื่อตรงกับโจทย์ระบบจะจับคู่ให้อัตโนมัติ หรือคลิกเลือกเองในส่วน **โจทย์ปัจจุบัน**
-4. **รันทดสอบบนเครื่อง:** คลิก **โหลด test case** หรือ **โหลดตัวอย่าง** จากนั้นกด **รันทดสอบ** (หรือกด **เปิดหน้าทดสอบ** เพื่อดูอินพุต ผลลัพธ์ และจุดที่ต่างกันข้างโค้ดของคุณ)
-5. **ส่งงาน:** กด **Submit ไปยัง Grader** เพื่อส่งตรวจและดูผลตรวจรายเคสพร้อมคะแนนที่นับทันที
-
-**เอกสารคู่มือ:** [**คู่มือการใช้งาน (`USERGUIDE.th.md`)**](USERGUIDE.th.md) · [**คู่มือสำหรับนักพัฒนา (`DEVGUIDE.md`)**](DEVGUIDE.md) · [**การขอความช่วยเหลือ (`SUPPORT.md`)**](SUPPORT.md) · [**ประวัติการเปลี่ยนแปลง (`CHANGELOG.md`)**](CHANGELOG.md)
 
 ---
 
