@@ -1502,4 +1502,86 @@ describe.runIf(existsSync(resolve(__dirname, '../esbuild.mjs')))('sidebar webvie
       expect(sent).toContainEqual({ type: 'webviewError', message: 'Uncaught TypeError: boom', stack: err.stack ?? '' });
     });
   });
+
+  describe('celebration and trophies', () => {
+    const full: ViewState = {
+      ...loggedIn,
+      result: { ...loggedIn.result!, points: 100, verdicts: loggedIn.result!.verdicts.map((v) => ({ ...v, ok: true, kind: 'correct' })), improvement: null },
+    };
+    const party = (id: number, extra: object = {}) => ({ id, problemId: 1360, submissionId: 2460977, problemName: '00_Intro_11', streak: 3, topic: { name: 'ComProg', solved: 5, total: 5 }, at: Date.now(), ...extra });
+    const trophies = { firsts: 12, streak: 3, best: 5, wholeTopics: 0, topics: [{ name: 'ComProg', solved: 5, total: 5 }, { name: '<b>Graph</b>', solved: 1, total: 4 }] };
+    const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
+    const reduce = (dom: JSDOM) => Object.assign(dom.window, { matchMedia: (q: string) => ({ matches: q.includes('reduce') }) });
+
+    it('plays once per id: ring, confetti, ribbon, then the trophy toast; later renders keep only the ring and the ribbon', async () => {
+      const { doc, post, saved } = boot();
+      post({ ...full, celebrate: party(1) });
+      const row = doc.querySelector('#sec-result .score-row')!;
+      expect(row.classList.contains('fun-play')).toBe(true);
+      expect(row.querySelector('.fun-ring')).not.toBeNull();
+      expect(row.querySelector('.fun-ribbon')!.textContent).toBe('First 100!');
+      expect(doc.querySelectorAll('#sec-result .fun-confetti i')).toHaveLength(56);
+      expect(doc.querySelector('.fun-toast')).toBeNull(); // comes after the ribbon
+      expect((saved() as { celebrated: number }).celebrated).toBe(1);
+      // A re-render (legend opened, history arrived…) doesn't play it again.
+      post({ ...full, celebrate: party(1), history: { ...full.history, loading: true } });
+      post({ ...full, celebrate: party(1), result: { ...full.result!, improvement: 'Counted score improved: 70 → 100.' } });
+      const again = doc.querySelector('#sec-result .score-row')!;
+      expect(again.classList.contains('fun-play')).toBe(false);
+      expect(again.querySelector('.fun-ribbon')).not.toBeNull();
+      // Another submission's card has none.
+      post({ ...full, celebrate: party(1), result: { ...full.result!, submissionId: 5 } });
+      expect(doc.querySelector('#sec-result .fun-ribbon')).toBeNull();
+    });
+
+    it('a stale celebration (the panel opened much later) and a compile error never play', () => {
+      const { doc, post } = boot();
+      post({ ...full, celebrate: party(2, { at: Date.now() - 120_000 }) });
+      expect(doc.querySelector('#sec-result .fun-play')).toBeNull();
+      expect(doc.querySelector('#sec-result .fun-ribbon')).not.toBeNull();
+      post({ ...full, celebrate: party(3), result: { ...full.result!, compileError: true, verdicts: [], compilerMessage: 'e' } });
+      expect(doc.querySelector('#sec-result .fun-ribbon')).toBeNull();
+    });
+
+    it('reduced motion: no animation and no confetti; the toast says it all, as a status, with a labelled close button', async () => {
+      const { dom, doc, post } = boot('th');
+      reduce(dom);
+      post({ ...full, celebrate: party(4) });
+      expect(doc.querySelector('#sec-result .fun-play')).toBeNull();
+      expect(doc.querySelector('.fun-confetti')).toBeNull();
+      await wait(5);
+      const toast = doc.querySelector('.fun-toast')!;
+      expect(toast.getAttribute('role')).toBe('status');
+      expect(toast.textContent).toContain('ได้ถ้วยรางวัลใหม่');
+      expect(toast.textContent).toContain('100 ครั้งแรก · 00_Intro_11');
+      expect(toast.textContent).toContain('ทำต่อเนื่อง 3 วัน · ComProg: ผ่าน 5 จาก 5 ข้อ');
+      const close = toast.querySelector<HTMLButtonElement>('button')!;
+      expect(close.getAttribute('aria-label')).toBe('ปิด');
+      expect(close.dataset.tip).toBe('ปิด');
+      close.click();
+      expect(doc.querySelector('.fun-toast')).toBeNull();
+    });
+
+    it('the Trophies section: collapsed by default, shown only with the fun extras on, opened by Show Trophies', () => {
+      const { dom, doc, post } = boot();
+      const sec = () => doc.querySelector<HTMLDetailsElement>('#sec-trophies')!;
+      const sections = { sections: ['account', 'current', 'result', 'history', 'trophies', 'problems'] as ViewState['layout']['sections'], compact: false };
+      post({ ...loggedIn, layout: sections, trophies: null });
+      expect(sec().hidden).toBe(true);
+      post({ ...loggedIn, layout: sections, trophies });
+      expect(sec().hidden).toBe(false);
+      expect(sec().open).toBe(false);
+      expect([...sec().querySelectorAll('.fun-tile b')].map((b) => b.textContent)).toEqual(['12', '3', '0']);
+      expect(sec().querySelector('.fun-tile.locked')!.textContent).toContain('whole topics');
+      expect(sec().textContent).toContain('day streak · best 5');
+      expect(sec().querySelectorAll('.fun-topic')).toHaveLength(2);
+      expect([...sec().querySelectorAll('.fun-topic .ellipsis')].map((e) => e.textContent)).toEqual(['ComProg', '<b>Graph</b>']); // text, never HTML
+      expect(sec().querySelector('b b')).toBeNull();
+      expect([...sec().querySelectorAll<HTMLElement>('.fun-topic .bar i')].map((i) => i.style.width)).toEqual(['100%', '25%']);
+      dom.window.dispatchEvent(new dom.window.MessageEvent('message', { data: { type: 'focus', target: 'trophies' } }));
+      expect(sec().open).toBe(true);
+      post({ ...loggedIn, layout: sections, trophies: { ...trophies, topics: [] } });
+      expect(sec().textContent).toContain('Progress per topic appears');
+    });
+  });
 });

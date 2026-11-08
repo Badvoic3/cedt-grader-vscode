@@ -2,7 +2,7 @@
  * Panel layout (settings `cedtGrader.panel.sections`, `cedtGrader.panel.compact`).
  * No `vscode` import: the host validates the setting, the webview applies it.
  */
-export const SECTION_IDS = ['account', 'current', 'result', 'history', 'problems'] as const;
+export const SECTION_IDS = ['account', 'current', 'result', 'history', 'trophies', 'problems'] as const;
 export type SectionId = (typeof SECTION_IDS)[number];
 
 /** Sections to show, in order: known ids only, no duplicates; an empty list means all (default order). */

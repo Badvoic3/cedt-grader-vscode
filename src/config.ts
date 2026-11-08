@@ -47,6 +47,8 @@ export interface GraderConfig {
   explorerBadge: BadgeMode;
   /** Explorer badges in colour (`cedtGrader.explorer.colors`). */
   explorerColors: boolean;
+  /** The fun extras' master switch (`cedtGrader.fun.enabled`): the trophies follow it. */
+  funEnabled: boolean;
   /** The first-full-score celebration (`cedtGrader.fun.celebrate`, off when `cedtGrader.fun.enabled` is off). */
   funCelebrate: boolean;
   /** The break reminder (`cedtGrader.fun.breakReminder`, off when `cedtGrader.fun.enabled` is off). */
@@ -100,6 +102,7 @@ export function readConfig(): GraderConfig {
     fileNamePattern: checkPattern(c.get<string>('fileNamePattern', '{name}.{ext}')),
     explorerBadge: ((v) => (v === 'tag' || v === 'off' ? v : 'score'))(c.get<string>('explorer.badge', 'score')),
     explorerColors: c.get<boolean>('explorer.colors', true) !== false,
+    funEnabled: c.get<boolean>('fun.enabled', true) !== false,
     funCelebrate: c.get<boolean>('fun.enabled', true) !== false && c.get<boolean>('fun.celebrate', true) !== false,
     funBreakReminder: c.get<boolean>('fun.enabled', true) !== false && c.get<boolean>('fun.breakReminder', true) !== false,
     funBreakMinutes: Math.max(BREAK.minMinutes, Math.round(Number(c.get('fun.breakMinutes', BREAK.defaultMinutes)) || BREAK.defaultMinutes)),

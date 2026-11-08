@@ -2,7 +2,7 @@ import { TIMING } from '../shared/constants';
 import { randomBytes } from 'node:crypto';
 import * as vscode from 'vscode';
 import type { GraderController } from '../controller';
-import { type FromWebview, isFromWebview, type ToWebview } from '../shared/messages';
+import { type FocusTarget, type FromWebview, isFromWebview, type ToWebview } from '../shared/messages';
 import { currentLang } from '../shared/i18n';
 
 /**
@@ -53,7 +53,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider, vscode.Dispo
     this.view.webview.html = this.html(this.view.webview, vscode.Uri.joinPath(this.extensionUri, 'media'));
   }
 
-  focus(target: 'login' | 'problem-search' | 'submit' | 'result'): void {
+  focus(target: FocusTarget): void {
     this.post({ type: 'focus', target });
   }
 

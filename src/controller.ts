@@ -48,7 +48,7 @@ import { KEYS } from './shared/stateKeys';
 import { SecretLedger, type SecretKind, secretKey } from './shared/secrets';
 import { cleanTagFilter, cleanTopicFilter, otherTags } from './shared/tags';
 import { currentLang, resolveLang, setLanguage } from './shared/i18n';
-import type { HistoryEntry, ProblemFilter, ProblemView, SubmissionDetailView, ViewState } from './shared/messages';
+import type { CelebrateView, FocusTarget, HistoryEntry, ProblemFilter, ProblemView, SubmissionDetailView, TrophiesView, ViewState } from './shared/messages';
 import { Attachments } from './flows/attachments';
 import { CacheCare } from './flows/cache';
 import { ExplorerBadges } from './flows/explorerBadges';
@@ -61,6 +61,7 @@ import { countedSubmissionId } from './flows/results';
 import { ServerFlow } from './flows/server';
 import { BreakReminder } from './flows/breakReminder';
 import { pickScene, type BreakScene } from './flows/breakRules';
+import { normalizeFirstFull, shouldCelebrate, topicOf, trophyStats, type FirstFull } from './flows/celebrate';
 import { BreakPanel } from './ui/breakPanel';
 import { SubmitFlow } from './flows/submit';
 import { Runner } from './flows/runner';
@@ -143,6 +144,9 @@ export class GraderController implements vscode.Disposable {
   /** Registered by `extension.ts`. */
   readonly badges: ExplorerBadges;
   readonly breakReminder: BreakReminder;
+  /** The celebration on the Result card (one-shot per id), and the id of the next one. */
+  private celebration: CelebrateView | null = null;
+  private celebrationSeq = 0;
   readonly breakPanel: BreakPanel;
   private readonly prompts: InlinePrompts;
   private readonly folder: FolderMode;
@@ -345,6 +349,7 @@ export class GraderController implements vscode.Disposable {
         activity: () => c.breakReminder?.activity(),
         // After the run or submit has fully ended, so "running" / "grading" no longer hold the prompt back.
         boundary: (kind) => void setTimeout(() => c.breakReminder?.boundary(kind), 0),
+        finished: (problem, final, after) => c.finishedSubmission(problem, final, after),
       },
       allowedLanguages: (p) => c.allowedLanguages(p),
       allSourceExts: () => c.allSourceExts(),
@@ -622,6 +627,7 @@ export class GraderController implements vscode.Disposable {
   private resetSessionState(): void {
     this.accountStatus = 'logged-out';
     this.breakReminder?.resetSession();
+    this.celebration = null;
     // Nothing started for the previous account carries over: a Retry or poll would reach the new server.
     this.loginAttempt++;
     this.connection = null;
@@ -880,6 +886,8 @@ export class GraderController implements vscode.Disposable {
       connection: this.connection,
       submit: { enabled, busy, reason, label: S.submitLabel },
       result: results.get(target?.fsPath) ?? null,
+      celebrate: this.celebration,
+      trophies: this.trophies(),
       gradingElsewhere: busy && gradingFile !== null && gradingFile !== target?.fsPath ? (results.get(gradingFile)?.problemName ?? S.submit.anotherFile) : null,
       history: problem
         ? { ...this.historyView(problem), ...(unavailable ? { stale: true } : {}) }
@@ -1398,7 +1406,7 @@ export class GraderController implements vscode.Disposable {
     this.focusTarget?.('problem-search');
   }
   /** Set by the sidebar provider: focus something inside the panel. */
-  focusTarget: ((t: 'login' | 'problem-search' | 'submit' | 'result') => void) | null = null;
+  focusTarget: ((t: FocusTarget) => void) | null = null;
 
   /** Command-palette flow: searchable QuickPick of the cached problem list. */
   async chooseProblemQuickPick(apply: (problemId: number) => Promise<void> = (id) => this.links.mapCurrentFile(id)): Promise<void> {
@@ -1453,6 +1461,71 @@ export class GraderController implements vscode.Disposable {
   }
 
   /** The main panel's Run tests: the split opens unless every case passed. */
+  // ------------------------------------------------------ celebration and trophies
+
+  private firstFullKey(): string {
+    return `${KEYS.funFirstFullPrefix}:${this.cfg.baseUrl}:${this.cfg.username}`;
+  }
+  private firstFull(): FirstFull {
+    return normalizeFirstFull(this.ctx.globalState.get(this.firstFullKey()));
+  }
+
+  /** A final verdict: record a problem's first full score, and celebrate it unless it was full before. */
+  private finishedSubmission(problem: Problem, final: SubmissionDetail, countedAfter: number | null): void {
+    const firstFull = this.firstFull();
+    const verdict = shouldCelebrate({
+      bestBefore: problem.bestScore,
+      countedAfter,
+      points: final.points,
+      verdicts: final.verdicts,
+      compileError: final.compileError,
+      known: String(problem.id) in firstFull,
+    });
+    if (verdict === 'none') return;
+    const now = Date.now();
+    firstFull[problem.id] = verdict === 'celebrate' ? now : 0;
+    void this.ctx.globalState.update(this.firstFullKey(), firstFull).then(undefined, (err) => this.logError('Saving trophies failed', err));
+    if (verdict === 'celebrate' && this.cfg.funCelebrate) this.celebrate(problem.id, final.id, firstFull, now);
+  }
+
+  private celebrate(problemId: number | null, submissionId: number | null, firstFull: FirstFull, now: number): void {
+    const list = this.data.problemList();
+    const problems = this.problems.map((p) => ({ id: p.id, status: problemStatus(p), tags: p.tags ?? [] }));
+    const stats = trophyStats(firstFull, problems, this.topics(list), now);
+    const p = problemId === null ? undefined : this.problemById(problemId);
+    this.celebration = {
+      id: ++this.celebrationSeq,
+      problemId: problemId ?? -1,
+      submissionId,
+      problemName: p ? cleanName(p.name) : '',
+      streak: stats.streak,
+      topic: topicOf(problems.find((x) => x.id === problemId), stats.topics),
+      at: now,
+    };
+    this.breakReminder.celebrated();
+    this.emit();
+  }
+
+  private trophies(): TrophiesView | null {
+    if (!this.cfg.funEnabled) return null;
+    const problems = this.problems.map((p) => ({ id: p.id, status: problemStatus(p), tags: p.tags ?? [] }));
+    return trophyStats(this.firstFull(), problems, this.topics(this.data.problemList()), Date.now());
+  }
+
+  /** Play the celebration again on the Result card shown now (nothing is recorded). */
+  async playCelebration(): Promise<void> {
+    await vscode.commands.executeCommand('cedtGrader.panel.focus');
+    const r = this.state().result;
+    this.celebrate(r?.problemId ?? this.currentProblem()?.id ?? null, r?.submissionId ?? null, this.firstFull(), Date.now());
+    this.focusTarget?.('result');
+  }
+
+  /** Open the Trophies section in the panel. */
+  async showTrophies(): Promise<void> {
+    await vscode.commands.executeCommand('cedtGrader.panel.focus');
+    this.focusTarget?.('trophies');
+  }
+
   /** Open the break tab: `scene`, or the setting's (random by default, never the last one). Works whatever the timer or the settings say. */
   async takeBreak(scene?: BreakScene): Promise<void> {
     const chosen = scene ?? pickScene(this.cfg.funBreakScene, this.breakReminder.lastScene(), Math.random);

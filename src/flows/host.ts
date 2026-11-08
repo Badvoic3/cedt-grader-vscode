@@ -2,8 +2,9 @@ import type * as vscode from 'vscode';
 import type { GraderConfig } from '../config';
 import type { DataService } from '../data/dataService';
 import type { StatementStore } from '../data/statementStore';
-import type { GraderProvider, Language, Problem } from '../grader';
+import type { GraderProvider, Language, Problem, SubmissionDetail } from '../grader';
 import type { MatchSource } from '../mapping/match';
+import type { FocusTarget } from '../shared/messages';
 import type { MappingStore } from '../mapping/store';
 import type { CaseStore } from '../runner/store';
 import type { Attachments } from './attachments';
@@ -52,8 +53,11 @@ export interface Host {
   readonly languages: Language[];
   /** Logged in, or able to log in by itself: a logged-out person's scores stay off the screen. */
   canShowScores(): boolean;
-  /** The break reminder's feeds: work (a run, a submit) and task boundaries. */
-  readonly fun: { activity(): void; boundary(kind: BoundaryKind): void };
+  /**
+   * The fun extras' feeds: work (a run, a submit) and task boundaries for the break reminder, and each final
+   * verdict for the first-full-score celebration (`problem` as it was before the submission).
+   */
+  readonly fun: { activity(): void; boundary(kind: BoundaryKind): void; finished(problem: Problem, final: SubmissionDetail, countedAfter: number | null): void };
   allowedLanguages(p: Pick<Problem, 'permittedLanguageIds'>): Language[];
   /** Every known source extension (server languages + fallback table), without the dot. */
   allSourceExts(): string[];
@@ -94,5 +98,5 @@ export interface Host {
   /** Pick a problem for the active file; `apply` replaces the default (link what the picker chose to that file). */
   chooseProblemQuickPick(apply?: (problemId: number) => Promise<void>): Promise<void>;
   /** Set by the sidebar provider: focus something inside the panel. */
-  focus(target: 'login' | 'problem-search' | 'submit' | 'result'): void;
+  focus(target: FocusTarget): void;
 }

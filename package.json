@@ -270,6 +270,18 @@
         "category": "%command.category%"
       },
       {
+        "command": "cedtGrader.playCelebration",
+        "title": "%command.playCelebration.title%",
+        "category": "%command.category%",
+        "icon": "$(sparkle)"
+      },
+      {
+        "command": "cedtGrader.showTrophies",
+        "title": "%command.showTrophies.title%",
+        "category": "%command.category%",
+        "icon": "$(star-full)"
+      },
+      {
         "command": "cedtGrader.openWalkthrough",
         "title": "%command.openWalkthrough.title%",
         "category": "%command.category%",
@@ -368,6 +380,7 @@
               "current",
               "result",
               "history",
+              "trophies",
               "problems"
             ],
             "enumDescriptions": [
@@ -375,6 +388,7 @@
               "%config.panel.sections.current%",
               "%config.panel.sections.result%",
               "%config.panel.sections.history%",
+              "%config.panel.sections.trophies%",
               "%config.panel.sections.problems%"
             ]
           },
@@ -383,6 +397,7 @@
             "current",
             "result",
             "history",
+            "trophies",
             "problems"
           ],
           "markdownDescription": "%config.panel.sections.description%"

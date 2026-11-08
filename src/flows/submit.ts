@@ -222,6 +222,7 @@ export class SubmitFlow {
     const updated = h.currentProblem();
     const after = updated ? countedScore(updated.bestScore, updated.list?.cost ?? 0, updated.list?.rawSum ?? false) : null;
     this.updateResult(key, { improvement: describeImprovement(countedBefore, after, final.points) });
+    h.fun.finished(problem, final, after);
     // A task boundary for the break reminder: progress, never a failure.
     if ((final.points ?? 0) >= SERVER_SCORE_CAP || (after !== null && (countedBefore === null || after > countedBefore))) h.fun.boundary('verdict-pass');
     if (shouldRevealResult({ revealResultAfterSubmit: h.cfg.revealResultAfterSubmit, gradedFile: key, activeFile: h.folder.targetUri()?.fsPath ?? null })) {

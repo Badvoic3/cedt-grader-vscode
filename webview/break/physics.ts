@@ -95,6 +95,9 @@ export function ride(p: Part, tx: number, ty: number, t: number, dt: number): vo
  * little more damped; real characters regain full opacity and size, copies fade as they merge into their source.
  * The last frame puts every real character exactly on its home.
  */
+/** The way back never takes longer than this. */
+export const EXIT_MAX_MS = 2500;
+
 export class ExitMotion {
   private items: { p: Part; ed: number; qx: number; qy: number; qvx: number; qvy: number; k: number; dmp: number; fa: number; fs: number; d0: number }[] = [];
 
@@ -125,7 +128,7 @@ export class ExitMotion {
       p.s = it.fs + (1 - it.fs) * along;
       if (p.copy ? p.a > 0.02 : dist > 0.5 || Math.hypot(it.qvx, it.qvy) > 20) busy = true;
     }
-    if (t > 2500) busy = false; // never longer than this: the last step lands everything
+    if (t > EXIT_MAX_MS) busy = false; // never longer than this: the last step lands everything
     if (!busy) for (const it of this.items) { const p = it.p; p.x = p.hx; p.y = p.hy; p.a = p.copy ? 0 : 1; p.s = 1; }
     return busy;
   }

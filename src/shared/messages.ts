@@ -98,6 +98,27 @@ export interface ResultView {
   message: string | null;
 }
 
+/** The first-full-score celebration, played once per `id` (Play Celebration replays it with a new id). */
+export interface CelebrateView {
+  id: number;
+  problemId: number;
+  /** The submission whose Result card carries it (null = whatever result is shown for the problem). */
+  submissionId: number | null;
+  problemName: string;
+  streak: number;
+  topic: { name: string; solved: number; total: number } | null;
+  /** When it was started (ms): a panel that opens much later shows the ribbon without playing it. */
+  at: number;
+}
+
+export interface TrophiesView {
+  firsts: number;
+  streak: number;
+  best: number;
+  wholeTopics: number;
+  topics: { name: string; solved: number; total: number }[];
+}
+
 export interface HistoryEntry {
   submissionId: number;
   number: number | null;
@@ -237,6 +258,10 @@ export interface ViewState {
   };
   /** Result for the active file only. */
   result: ResultView | null;
+  /** The celebration on the Result card (null = none). Optional for older test states. */
+  celebrate?: CelebrateView | null;
+  /** The Trophies section (null = the fun extras are off). Optional for older test states. */
+  trophies?: TrophiesView | null;
   /** Problem name of a submission being graded for another file, if any. */
   gradingElsewhere: string | null;
   history: {
@@ -266,8 +291,11 @@ export interface ViewState {
   };
 }
 
+/** What the host can focus or open inside the panel. */
+export type FocusTarget = 'login' | 'problem-search' | 'submit' | 'result' | 'trophies';
+
 /** Host → webview. */
-export type ToWebview = { type: 'state'; state: ViewState } | { type: 'focus'; target: 'login' | 'problem-search' | 'submit' | 'result' };
+export type ToWebview = { type: 'state'; state: ViewState } | { type: 'focus'; target: FocusTarget };
 
 /** Webview → host. The password is only ever carried by `login`. */
 export type FromWebview =

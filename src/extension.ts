@@ -108,6 +108,8 @@ function start(ctx: vscode.ExtensionContext, crash: CrashReporter): void {
     command('cedtGrader.clearCache', () => controller.clearCachedData()),
     command('cedtGrader.cleanUpOldFiles', () => controller.cleanUpOldFiles()),
     command('cedtGrader.takeBreak', () => controller.takeBreak()),
+    command('cedtGrader.playCelebration', () => controller.playCelebration()),
+    command('cedtGrader.showTrophies', () => controller.showTrophies()),
     command('cedtGrader.takeBreak.sand', () => controller.takeBreak('sand')),
     command('cedtGrader.takeBreak.donut3d', () => controller.takeBreak('donut3d')),
     command('cedtGrader.takeBreak.donut2d', () => controller.takeBreak('donut2d')),

@@ -691,3 +691,57 @@ body.compact .problem-row .row-actions { top: 50%; bottom: auto; transform: tran
 body.compact .btn.big { min-height: 26px; padding: 3px 10px; font-size: 1em; }
 body.compact .tile { width: 12px; height: 12px; font-size: 8px; }
 body.compact .history-row { padding: 1px 4px; }
+
+/* ---- First-full-score celebration (Result card) and the Trophies section; mockup docs/research/mockups-fun (combo 1 + 2 + 4) ---- */
+.score-row.fun-row { flex-wrap: wrap; row-gap: 4px; align-items: center; }
+.score-row.fun-row .score { white-space: nowrap; }
+.section-body.fun-host { position: relative; }
+.fun-ring { width: 30px; height: 30px; flex: none; margin-right: 8px; position: relative; border-radius: 50%; }
+.fun-ring svg { width: 30px; height: 30px; transform: rotate(-90deg); display: block; }
+.fun-ring .track { stroke: color-mix(in srgb, var(--muted) 35%, transparent); }
+.fun-ring .arc { stroke: var(--ok); stroke-linecap: round; stroke-dasharray: 100 100; }
+.fun-ring .codicon { position: absolute; inset: 0; display: grid; place-items: center; color: var(--ok); font-size: 14px; }
+.fun-ribbon { margin-left: auto; align-self: center; white-space: nowrap; display: inline-flex; align-items: center; gap: 4px; padding: 1px 8px 1px 6px;
+  border-radius: var(--vscode-cornerRadius-small, 4px); font-weight: 600; font-size: .9em;
+  color: var(--vscode-badge-foreground); background: color-mix(in srgb, var(--ok) 28%, var(--vscode-sideBar-background));
+  border: 1px solid color-mix(in srgb, var(--ok) 60%, transparent); }
+body.vscode-light .fun-ribbon { color: var(--vscode-foreground); }
+body.vscode-high-contrast .fun-ribbon { background: #000; border-color: var(--vscode-contrastBorder); color: #fff; }
+.fun-ribbon .codicon { color: var(--ok); font-size: 14px; }
+.fun-play .fun-ring { animation: fun-glow 900ms ease-out 1000ms both; }
+.fun-play .fun-ring .arc { animation: fun-fill 900ms cubic-bezier(.4,0,.2,1) 100ms both; }
+.fun-play .fun-ring .codicon { animation: fun-pop 300ms ease-out 950ms both; }
+.fun-play .score { animation: fun-text 900ms ease-out 1000ms both; }
+.fun-play .fun-ribbon { animation: fun-pop 420ms cubic-bezier(.3,1.6,.5,1) 1100ms both; }
+.fun-confetti { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+.fun-confetti i { position: absolute; left: var(--x0); top: var(--y0); width: 6px; height: 3px; border-radius: 1px; background: var(--c); opacity: 0;
+  animation: fun-burst 1500ms cubic-bezier(.15,.7,.3,1) var(--d) forwards; }
+@keyframes fun-burst {
+  0% { opacity: 1; transform: translate(0,0) rotate(0); }
+  45% { opacity: 1; transform: translate(var(--dx), var(--dy)) rotate(var(--r)); }
+  100% { opacity: 0; transform: translate(calc(var(--dx) * 1.25), calc(var(--dy) + 46px)) rotate(calc(var(--r) * 2)); }
+}
+@keyframes fun-pop { from { opacity: 0; transform: translateY(-6px) scale(.6); } to { opacity: 1; transform: none; } }
+@keyframes fun-fill { from { stroke-dashoffset: 30; } to { stroke-dashoffset: 0; } }
+@keyframes fun-glow { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--ok) 0%, transparent); } 35% { box-shadow: 0 0 0 5px color-mix(in srgb, var(--ok) 35%, transparent); } 100% { box-shadow: 0 0 0 9px color-mix(in srgb, var(--ok) 0%, transparent); } }
+@keyframes fun-text { 35% { text-shadow: 0 0 10px color-mix(in srgb, var(--ok) 70%, transparent); } }
+.fun-toast { position: fixed; left: 8px; right: 8px; bottom: 8px; z-index: 20; display: grid; grid-template-columns: auto 1fr auto; gap: 2px 8px; align-items: start; padding: 8px 10px;
+  background: var(--vscode-editorWidget-background, var(--vscode-menu-background)); color: var(--vscode-foreground);
+  border: 1px solid var(--vscode-widget-border); border-radius: 6px; box-shadow: 0 4px 14px rgba(0,0,0,.35); animation: fun-up 360ms cubic-bezier(.2,.9,.3,1.2) both; }
+.fun-toast > .codicon:first-child { grid-row: span 3; font-size: 20px; color: var(--vscode-charts-yellow); margin-top: 1px; }
+.fun-toast strong { font-weight: 600; }
+.fun-toast .icon-btn { grid-column: 3; grid-row: 1; }
+.fun-toast .sub { grid-column: 2; color: var(--muted); font-size: .9em; }
+@keyframes fun-up { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: none; } }
+#sec-trophies .section-body { display: grid; gap: 8px; }
+.fun-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(68px, 1fr)); gap: 6px; }
+.fun-tile { border: 1px solid var(--vscode-widget-border); border-radius: 6px; padding: 5px 6px; display: grid; gap: 1px; justify-items: start; align-content: start; }
+.fun-tile .codicon { font-size: 16px; }
+.fun-tile b { font-size: 1.25em; font-variant-numeric: tabular-nums; }
+.fun-tile span { color: var(--muted); font-size: .85em; }
+.fun-tile.locked { opacity: .45; border-style: dashed; }
+.fun-topic { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 8px; align-items: center; }
+.fun-topic .codicon { color: var(--ok); font-size: 12px; margin-left: 2px; vertical-align: -1px; }
+.fun-topic .bar { grid-column: 1 / -1; height: 4px; border-radius: 2px; background: color-mix(in srgb, var(--muted) 25%, transparent); overflow: hidden; }
+.fun-topic .bar i { display: block; height: 100%; background: var(--ok); }
+@media (prefers-reduced-motion: reduce) { .fun-play *, .fun-play, .fun-toast { animation: none !important; } }

@@ -16,11 +16,11 @@ import { menuLabelMax, middleEllipsis } from './text';
 import { appendChildren, type Child, el, icon } from './dom';
 import { summaryPill } from './runSummary';
 import { FlowList } from './flowList';
-import { DEFAULT_BASE_URL, PANEL, SERVER_SCORE_CAP } from '../src/shared/constants';
+import { CELEBRATE, DEFAULT_BASE_URL, PANEL, SERVER_SCORE_CAP } from '../src/shared/constants';
 import { filterProblems, matches, sorts, sortProblems } from './filters';
 import { cycleTopic, topicState } from '../src/shared/tags';
 import { installTooltips } from './tooltip';
-import type { FromWebview, HistoryEntry, ProblemFilter, ProblemView, ScoreView, SubmissionDetailView, ToWebview, VerdictView, ViewState } from '../src/shared/messages';
+import type { CelebrateView, FromWebview, HistoryEntry, ProblemFilter, ProblemView, ResultView, ScoreView, SubmissionDetailView, ToWebview, VerdictView, ViewState } from '../src/shared/messages';
 
 interface VsCodeApi {
   postMessage(m: FromWebview): void;
@@ -35,11 +35,13 @@ interface UiState {
   filter: string;
   /** Problem list scroll position (kept across re-renders, hide/show and restarts). */
   listScroll?: number;
+  /** The last celebration played (`CelebrateView.id`): each one plays once, also across hide/show. */
+  celebrated?: number;
 }
 
 const vscode = acquireVsCodeApi();
 const ui: UiState = { collapsed: {}, filter: '', ...(vscode.getState() ?? {}) };
-const saveUi = () => vscode.setState({ collapsed: ui.collapsed, filter: ui.filter, listScroll: ui.listScroll });
+const saveUi = () => vscode.setState({ collapsed: ui.collapsed, filter: ui.filter, listScroll: ui.listScroll, celebrated: ui.celebrated });
 const send = (m: FromWebview) => vscode.postMessage(m);
 
 // A bug in this script: the host offers a report (the panel itself may be broken, so it doesn't rely on it).
@@ -237,11 +239,11 @@ const megabytes = (kb: number | null) => (kb === null ? '–' : `${(kb / 1024).t
 
 const app = document.getElementById('app')!;
 
-function section(id: string, title: string, actions: HTMLElement[] = []) {
+function section(id: string, title: string, actions: HTMLElement[] = [], collapsedByDefault = false) {
   const body = el('div', { class: 'section-body' });
   const details = el(
     'details',
-    { class: 'section', id: `sec-${id}`, open: !ui.collapsed[id] },
+    { class: 'section', id: `sec-${id}`, open: !(ui.collapsed[id] ?? collapsedByDefault) },
     el('summary', {}, icon('chevron-right', 'chev'), el('span', { class: 'section-title' }, title), el('span', { class: 'section-actions' }, ...actions)),
     body,
   );
@@ -358,6 +360,7 @@ const sHistory = section('history', W.sectionHistory, [
   }),
   iconButton('refresh', W.refreshHistory, () => send({ type: 'refreshHistory' })),
 ]);
+const sTrophies = section('trophies', W.sectionTrophies, [], true);
 const sProblems = section('problems', W.sectionProblems, [iconButton('refresh', W.refreshProblems, () => send({ type: 'refreshProblems' }))]);
 const banner = el('div', { class: 'banner', role: 'alert', hidden: true });
 const promptBar = el('div', { class: 'prompt', role: 'status', hidden: true });
@@ -793,7 +796,10 @@ function renderResult(s: ViewState): void {
   if (r.phase === 'done' || ((r.phase === 'timeout' || r.phase === 'error') && r.verdicts.length)) {
     const st = scoreText(r.points, activeRawSum());
     const text = r.compileError ? W.compilationError : r.points !== null ? st.text : (r.message ?? W.graded);
-    b.append(el('div', { class: 'row score-row' }, el('span', { class: `score ${r.compileError ? 'score-zero' : scoreClass(r.points, activeRawSum())}`, title: r.compileError ? undefined : (st.tip ?? undefined) }, text)));
+    const scoreRow = el('div', { class: 'row score-row' }, el('span', { class: `score ${r.compileError ? 'score-zero' : scoreClass(r.points, activeRawSum())}`, title: r.compileError ? undefined : (st.tip ?? undefined) }, text));
+    b.append(scoreRow);
+    const party = celebrationFor(s, r);
+    if (party) celebrateOn(scoreRow, b, party);
     if (r.verdicts.length) {
       b.append(verdictStrip(r.verdicts));
     } else if (r.comment && !r.compileError) b.append(plainComment(r.comment));
@@ -814,6 +820,127 @@ function renderResult(s: ViewState): void {
     b.append(el('div', { class: r.phase === 'error' ? 'error' : 'notice' }, icon(r.phase === 'error' ? 'error' : 'clock'), ' ', r.message ?? ''));
   }
   if (r.phase !== 'submitting' && r.phase !== 'grading') {
+  }
+}
+
+// -------------------------------------------------------------- celebration and trophies
+
+/** The celebration that belongs on this Result card, if any. */
+function celebrationFor(s: ViewState, r: ResultView): CelebrateView | null {
+  const c = s.celebrate;
+  if (!c || c.problemId !== r.problemId || r.compileError) return null;
+  return c.submissionId === null || c.submissionId === r.submissionId ? c : null;
+}
+
+const reducedMotion = () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
+
+/**
+ * The ring and the "First 100!" ribbon stay on the card; the first time a celebration is shown (and only while it
+ * is fresh) the ring fills, confetti bursts from it, the ribbon pops and the trophy toast slides up.
+ */
+function celebrateOn(row: HTMLElement, body: HTMLElement, c: CelebrateView): void {
+  const ring = el('span', { class: 'fun-ring', 'aria-hidden': 'true' });
+  const svg = (cls: string) => {
+    const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+    for (const [k, v] of Object.entries({ class: cls, cx: '18', cy: '18', r: '15.9', fill: 'none', 'stroke-width': '3', pathLength: '100' })) circle.setAttribute(k, v);
+    return circle;
+  };
+  const pic = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  pic.setAttribute('viewBox', '0 0 36 36');
+  pic.append(svg('track'), svg('arc'));
+  ring.append(pic, icon('check'));
+  row.prepend(ring);
+  row.classList.add('fun-row');
+  row.append(el('span', { class: 'fun-ribbon' }, icon('sparkle-filled'), W.fun.first));
+  const play = ui.celebrated !== c.id && Date.now() - c.at < CELEBRATE.freshMs;
+  if (!play) return;
+  ui.celebrated = c.id;
+  saveUi();
+  const still = reducedMotion();
+  if (!still) {
+    row.classList.add('fun-play');
+    body.classList.add('fun-host');
+    const box = el('div', { class: 'fun-confetti', 'aria-hidden': 'true' });
+    const colors = ['green', 'yellow', 'blue', 'purple', 'red', 'orange'];
+    // The ring's centre in the card (a closed section has no layout yet: the ring's usual place).
+    const x0 = ring.offsetWidth ? ring.offsetLeft + ring.offsetWidth / 2 : 23;
+    const y0 = ring.offsetHeight ? ring.offsetTop + ring.offsetHeight / 2 : 40;
+    for (let i = 0; i < CELEBRATE.confettiPieces; i++) {
+      const a = Math.random() * Math.PI * 2;
+      const v = 40 + Math.random() * 80;
+      const piece = el('i');
+      const props: Record<string, string> = {
+        '--x0': `${x0}px`,
+        '--y0': `${y0}px`,
+        '--dx': `${Math.cos(a) * v * 1.4}px`,
+        '--dy': `${Math.sin(a) * v * 0.7 - 30}px`,
+        '--r': `${(Math.random() - 0.5) * 720}deg`,
+        '--c': `var(--vscode-charts-${colors[i % colors.length]})`,
+        '--d': `${CELEBRATE.confettiDelayMs + Math.floor(Math.random() * 120)}ms`,
+      };
+      for (const [k, v2] of Object.entries(props)) piece.style.setProperty(k, v2);
+      box.append(piece);
+    }
+    body.append(box);
+    setTimeout(() => box.remove(), CELEBRATE.confettiDelayMs + 1800);
+  }
+  showTrophyToast(c, still ? 0 : CELEBRATE.toastDelayMs);
+}
+
+let toastTimer: ReturnType<typeof setTimeout> | undefined;
+function showTrophyToast(c: CelebrateView, delay: number): void {
+  document.querySelector('.fun-toast')?.remove();
+  clearTimeout(toastTimer);
+  const close = () => {
+    clearTimeout(toastTimer);
+    toast.remove();
+  };
+  const more = [c.streak > 0 ? W.fun.streak(c.streak) : null, c.topic ? W.fun.topic(c.topic.name, c.topic.solved, c.topic.total) : null].filter((x): x is string => !!x);
+  const toast = el('div', { class: 'fun-toast', role: 'status' },
+    icon('star-full'),
+    el('strong', {}, W.fun.unlocked),
+    iconButton('close', W.fun.close, close),
+    c.problemName ? el('span', { class: 'sub' }, W.fun.firstOn(c.problemName)) : null,
+    more.length ? el('span', { class: 'sub' }, more.join(' · ')) : null,
+  );
+  const autoClose = () => {
+    toastTimer = setTimeout(() => (toast.matches(':hover, :focus-within') ? autoClose() : close()), CELEBRATE.toastMs);
+  };
+  toastTimer = setTimeout(() => {
+    document.body.append(toast);
+    tooltip.refresh();
+    autoClose();
+  }, delay);
+}
+
+function renderTrophies(s: ViewState): void {
+  const b = sTrophies.body;
+  b.replaceChildren();
+  const t = s.trophies;
+  if (!t) return;
+  const tile = (name: string, n: number, label: string) => el('div', { class: `fun-tile${n ? '' : ' locked'}` }, icon(name), el('b', {}, String(n)), el('span', {}, label));
+  b.append(
+    el('div', { class: 'fun-tiles' },
+      tile('pass-filled', t.firsts, W.fun.firsts),
+      tile('flame', t.streak, `${W.fun.days} · ${W.fun.best(t.best)}`),
+      tile('verified-filled', t.wholeTopics, W.fun.wholeTopics),
+    ),
+  );
+  if (!t.topics.length) {
+    b.append(el('p', { class: 'muted small' }, W.fun.noTopics));
+    return;
+  }
+  b.append(el('div', { class: 'muted small' }, W.fun.topics));
+  for (const x of t.topics) {
+    const fill = el('i');
+    fill.style.width = `${x.total ? (x.solved / x.total) * 100 : 0}%`;
+    b.append(
+      el('div', { class: 'fun-topic', title: W.fun.topic(x.name, x.solved, x.total) },
+        el('span', { class: 'ellipsis' }, x.name),
+        el('span', { class: 'muted small' }, W.fun.topicCount(x.solved, x.total), x.solved === x.total ? icon('check') : null),
+        el('div', { class: 'bar', 'aria-hidden': 'true' }, fill),
+      ),
+    );
   }
 }
 
@@ -1366,7 +1493,8 @@ function sectionKeys(s: ViewState): Record<string, string> {
     prompt: j([s.prompt, promptNearSubmit(s)]),
     account: j([s.account, s.baseUrl, showLoginForm]),
     current: j([promptNearSubmit(s) ? s.prompt : null, s.notLinked, s.linkedNotice, s.linkedFiles, s.file, s.problem, s.languages, s.submit, s.matching, s.testcases, s.gradingElsewhere, s.folder, s.folderMode, s.attachment, s.runTests, pickerOpen, pickerOpen ? s.problems : s.problems.loaded]),
-    result: j([s.result, legendOpen === 'result', s.problem?.score.rawSum]),
+    result: j([s.result, s.celebrate ?? null, legendOpen === 'result', s.problem?.score.rawSum]),
+    trophies: j(s.trophies ?? null),
     history: j([pid, s.history, legendOpen === 'history', s.problem?.score.rawSum]),
     problems: j([{ ...s.problems, items: s.problems.items.length }, problemHits(s).length, ui.filter, s.attachment]),
   };
@@ -1382,11 +1510,12 @@ function applyLayout(s: ViewState): void {
     document.body.classList.toggle('compact', compact);
     lastKeys.delete('problems');
   }
-  const order = visibleSections(s.layout?.sections ?? [], s.account.status === 'logged-in');
+  // Trophies only while the fun extras are on.
+  const order = visibleSections(s.layout?.sections ?? [], s.account.status === 'logged-in').filter((id) => id !== 'trophies' || !!s.trophies);
   const key = order.join(',');
   if (key === sectionOrderKey) return;
   sectionOrderKey = key;
-  const all: Record<SectionId, ReturnType<typeof section>> = { account: sAccount, current: sCurrent, result: sResult, history: sHistory, problems: sProblems };
+  const all: Record<SectionId, ReturnType<typeof section>> = { account: sAccount, current: sCurrent, result: sResult, history: sHistory, trophies: sTrophies, problems: sProblems };
   for (const [id, sec] of Object.entries(all) as [SectionId, ReturnType<typeof section>][]) {
     sec.details.hidden = !order.includes(id);
     // No line above the first visible section (the hidden banner / prompt come first, so :first-child never matches).
@@ -1413,6 +1542,7 @@ function render(): void {
     current: renderCurrent,
     result: renderResult,
     history: renderHistory,
+    trophies: renderTrophies,
     problems: renderProblems,
   };
   for (const [name, fn] of Object.entries(renderers)) {
@@ -1486,6 +1616,12 @@ window.addEventListener('message', (ev: MessageEvent<ToWebview>) => {
       ui.collapsed.result = false;
       sResult.details.open = true;
       sResult.details.scrollIntoView?.({ block: 'nearest' });
+    } else if (m.target === 'trophies') {
+      if (sTrophies.details.hidden) return; // fun extras off, or hidden by cedtGrader.panel.sections
+      ui.collapsed.trophies = false;
+      sTrophies.details.open = true;
+      saveUi();
+      sTrophies.details.scrollIntoView?.({ block: 'nearest' });
     } else {
       document.getElementById('submit-btn')?.focus();
     }

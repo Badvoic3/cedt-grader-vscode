@@ -97,7 +97,6 @@ export const TIMING = {
   focusDelayMs: 150,
 } as const;
 
-/** The built-in runner. */
 /** Break reminder (option B of docs/research/break-interval.md, kept by the user 2026-11-07). */
 export const BREAK = {
   defaultMinutes: 90,
@@ -122,6 +121,20 @@ export const BREAK = {
   breakSeconds: 300,
 } as const;
 
+/** The first-full-score celebration on the Result card (mockup combo 1 + 2 + 4, picked 2026-11-07). */
+export const CELEBRATE = {
+  /** Ring fill → confetti → ribbon → trophy toast. */
+  confettiDelayMs: 950,
+  ribbonDelayMs: 1_100,
+  toastDelayMs: 1_900,
+  confettiPieces: 56,
+  /** The toast closes by itself after this long, unless the pointer or the keyboard is on it. */
+  toastMs: 10_000,
+  /** A panel that opens later than this after the celebration shows the ribbon without playing it. */
+  freshMs: 60_000,
+} as const;
+
+/** The built-in runner. */
 export const RUNNER = {
   /** Output kept for showing, per stream. The compare limit is `max(this, 2 × expected size)`. */
   displayBytes: 64 * 1024,

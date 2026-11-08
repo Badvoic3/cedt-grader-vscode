@@ -4,7 +4,7 @@
  * textContent. Drawing: one glyph atlas (each character + colour drawn once), the loop stops when nothing moves
  * and while the tab is hidden, slow scenes draw at 30 fps.
  */
-import { clamp01, easeInOut, ExitMotion, makePart, type Part, projectTorus, ride, SandGrid, seeded, Swarm, SWARM, torusPoints } from './physics';
+import { clamp01, easeInOut, EXIT_MAX_MS, ExitMotion, makePart, type Part, projectTorus, ride, SandGrid, seeded, Swarm, SWARM, torusPoints } from './physics';
 import type { BreakData } from '../../src/shared/breakData';
 
 declare function acquireVsCodeApi(): { postMessage(msg: unknown): void };
@@ -248,14 +248,21 @@ function frame(): void {
   if (phase === 'exit') for (const p of parts) glyph(p); else S.draw();
   if (phase === 'run') updateCard(now - tStart);
   if (busy) requestAnimationFrame(frame);
-  else { running = false; if (phase === 'exit') vscode.postMessage({ type: 'closed' }); }
+  else { running = false; if (phase === 'exit') close(); }
 }
 function kick(): void {
   if (!running && !reduced && !document.hidden) { running = true; last = performance.now(); requestAnimationFrame(frame); }
 }
+/** Tell the host the way back is over (once): it closes the tab and gives the keyboard back to the code. */
+let closed = false;
+function close(): void {
+  if (!closed) { closed = true; vscode.postMessage({ type: 'closed' }); }
+}
 function startExit(): void {
   if (phase === 'exit') return;
-  if (reduced) { vscode.postMessage({ type: 'closed' }); return; }
+  if (reduced) { close(); return; }
+  // Frames stop while the window is hidden or behind another one: the tab closes on time anyway.
+  setTimeout(close, EXIT_MAX_MS + 500);
   phase = 'exit'; tExit = performance.now();
   card.style.transition = 'opacity 250ms'; card.style.opacity = '0'; back.style.opacity = '0'; foot.textContent = '';
   exit = new ExitMotion(S.parts, rnd);

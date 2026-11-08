@@ -84,7 +84,7 @@ describe('Runner', () => {
       emit: () => void emits++,
       tellInline: async (_: unknown, msg: string) => void told.push(msg),
       describe: (e: unknown) => String(e),
-      fun: { activity: () => undefined, boundary: () => undefined },
+      fun: { activity: () => undefined, boundary: () => undefined, finished: () => undefined },
     };
   });
   afterEach(() => rm(dir, { recursive: true, force: true }));

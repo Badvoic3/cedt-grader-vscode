@@ -426,3 +426,45 @@ describe('changing account while something is still going on', () => {
     expect(c.state().account.error).toBeTruthy();
   });
 });
+
+describe('first-full-score celebration (real controller)', () => {
+  const problem = { id: 77, name: 'p77', bestScore: 40, tags: [] } as never;
+  const final = (points: number, ok = true) => ({ id: 9, points, compileError: false, verdicts: [{ index: 1, ok, label: '' }] }) as never;
+  const host = (c: GraderController) => (c as unknown as { host: { fun: { finished(p: unknown, f: unknown, a: number | null): void } } }).host;
+  const key = `${KEYS.funFirstFullPrefix}:${DEFAULT_BASE_URL}:`;
+
+  it('records the first full score per account, celebrates it once, and never for a failing verdict', () => {
+    const { c, globalState } = start();
+    host(c).fun.finished(problem, final(60, false), 60);
+    expect(c.state().celebrate ?? null).toBeNull();
+    host(c).fun.finished(problem, final(100), 100);
+    const first = c.state().celebrate!;
+    expect(first).toMatchObject({ problemId: 77, submissionId: 9 });
+    expect(Object.keys(globalState.get(key) as object)).toEqual(['77']);
+    host(c).fun.finished(problem, final(100), 100);
+    expect(c.state().celebrate!.id).toBe(first.id); // known: not again
+    expect(c.state().trophies).toMatchObject({ firsts: 1, streak: 1 });
+  });
+
+  it('a problem full before is recorded silently; with the celebration off it is recorded too', () => {
+    const { c, globalState } = start();
+    host(c).fun.finished({ ...(problem as object), id: 78, bestScore: 100 } as never, final(100), 100);
+    v.settings.set('fun.celebrate', false);
+    for (const l of v.listeners) l({ affectsConfiguration: () => true });
+    host(c).fun.finished(problem, final(100), 100);
+    expect(c.state().celebrate ?? null).toBeNull();
+    expect(globalState.get(key)).toMatchObject({ '78': 0, '77': expect.any(Number) });
+  });
+
+  it('Play Celebration replays with a new id and records nothing; trophies follow fun.enabled', async () => {
+    const { c, globalState } = start();
+    await c.playCelebration();
+    expect(c.state().celebrate).toMatchObject({ id: 1, problemId: -1, problemName: '' });
+    await c.playCelebration();
+    expect(c.state().celebrate!.id).toBe(2);
+    expect(globalState.get(key)).toBeUndefined();
+    v.settings.set('fun.enabled', false);
+    for (const l of v.listeners) l({ affectsConfiguration: () => true });
+    expect(c.state().trophies).toBeNull();
+  });
+});
