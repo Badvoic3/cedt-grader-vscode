@@ -68,6 +68,17 @@ body:not(.mode-html) .text-view { display: none; }
   box-shadow: 0 2px 8px var(--vscode-widget-shadow, rgba(0, 0, 0, 0.3));
 }
 .tooltip[hidden] { display: none; }
+/* cedtGrader.panel.look */
+@keyframes fade-in { from { opacity: 0; } }
+body.fx .tooltip:not([hidden]) { animation: fade-in 90ms ease-out; }
+body.vscode-reduce-motion .tooltip { animation: none !important; }
+@media (prefers-reduced-motion: reduce) { .tooltip { animation: none !important; } }
+@media (prefers-reduced-transparency: no-preference) and (forced-colors: none) {
+  body.fx-frost:not(.vscode-high-contrast) .tooltip {
+    background: color-mix(in srgb, var(--vscode-editorHoverWidget-background, var(--vscode-editorWidget-background)) var(--glass-opacity, 80%), transparent);
+    backdrop-filter: blur(12px);
+  }
+}
 .note {
   position: absolute; top: var(--toolbar-height, 32px); left: 0; right: 0; z-index: 2; padding: 4px 10px; font-size: 12px;
   color: var(--vscode-inputValidation-warningForeground, var(--vscode-foreground));

@@ -1,4 +1,5 @@
 import { randomBytes } from 'node:crypto';
+import type { LookView } from '../shared/look';
 import * as vscode from 'vscode';
 import type { Runner } from '../flows/runner';
 import type { TestCases } from '../flows/testcases';
@@ -25,6 +26,7 @@ export class TestPanel implements vscode.Disposable {
   constructor(
     private readonly extensionUri: vscode.Uri,
     private readonly opts: {
+      look: () => LookView;
       runner: () => Runner;
       tests: () => TestCases;
       /** The statement's group when it isn't the code's: the tab goes there. */
@@ -120,13 +122,14 @@ export class TestPanel implements vscode.Disposable {
     const v = this.opts.runner().testsView();
     const keyChanged = this.sent.key !== v.key;
     const d = testsDelta(this.sent, v.key, v.cases, v.runs);
-    const head = JSON.stringify(v.head);
+    const look = this.opts.look();
+    const head = JSON.stringify([v.head, look]);
     const order = d.order.join();
     if (!d.fresh && !d.cases.length && !Object.keys(d.runs).length && head === this.sentHead && order === this.sentOrder) return;
     this.sentHead = head;
     this.sentOrder = order;
     panel.title = S.testsTab(v.head.title ?? '');
-    const m: ToTests = { type: 'state', head: v.head, ...d };
+    const m: ToTests = { type: 'state', head: v.head, look, ...d };
     void panel.webview.postMessage(m);
     if (keyChanged && panel.visible) this.opts.runner().fetchLimits();
   }

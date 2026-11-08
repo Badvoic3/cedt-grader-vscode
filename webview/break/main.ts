@@ -5,6 +5,7 @@
  * and while the tab is hidden, slow scenes draw at 30 fps.
  */
 import { clamp01, easeInOut, EXIT_MAX_MS, ExitMotion, makePart, type Part, pointerAway, projectTorus, ride, SandGrid, seeded, Swarm, SWARM, torusPoints } from './physics';
+import { reducedMotion } from '../look';
 import type { BreakData } from '../../src/shared/breakData';
 
 declare function acquireVsCodeApi(): { postMessage(msg: unknown): void };
@@ -39,7 +40,7 @@ g.font = fontOf(0);
 const LS = V.letterSpacing;
 const cw = g.measureText('M').width + LS, lh = D.font.lineHeight;
 const rnd = seeded(11);
-const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const reduced = reducedMotion();
 
 // ---- where the editor draws: VS Code's layout rules (glyph margin, line numbers, decorations lane), measured
 // with the same font, and the scroll snapped to a whole line by the host ----

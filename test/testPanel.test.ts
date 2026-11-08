@@ -47,6 +47,7 @@ vi.mock('vscode', () => {
 });
 
 import { StatementPanels } from '../src/ui/statementPanel';
+import { PLAIN_LOOK } from '../src/shared/look';
 import { TestPanel } from '../src/ui/testPanel';
 
 describe('TestPanel', () => {
@@ -70,8 +71,9 @@ describe('TestPanel', () => {
   let shared: number | undefined;
   const compare = vi.fn(async () => {});
   const openStatement = vi.fn(async () => {});
+  let look = PLAIN_LOOK;
   const make = () =>
-    new TestPanel('ext' as never, { runner: () => runner as never, tests: () => tests as never, sharedColumn: () => shared, started: Promise.resolve(), changed: () => {}, compare, openStatement, webviewError: vi.fn(), log: () => {} });
+    new TestPanel('ext' as never, { look: () => look, runner: () => runner as never, tests: () => tests as never, sharedColumn: () => shared, started: Promise.resolve(), changed: () => {}, compare, openStatement, webviewError: vi.fn(), log: () => {} });
   const send = async (m: unknown) => {
     v.onMessage(m);
     await new Promise((done) => setImmediate(done));
@@ -82,6 +84,22 @@ describe('TestPanel', () => {
     Object.assign(v, { groups: 1, created: [], panel: null, posted: [], commands: [], clipboard: [] });
     shared = undefined;
     view = makeView();
+  });
+
+  it('the state carries the look; a change of look alone is sent again', async () => {
+    const p = make();
+    await p.open();
+    await send({ type: 'ready' });
+    const states = () => v.posted.filter((m) => (m as { type: string }).type === 'state') as { look: unknown }[];
+    expect(states().at(-1)?.look).toEqual(PLAIN_LOOK);
+    const n = states().length;
+    p.update();
+    expect(states()).toHaveLength(n);
+    look = { on: true, frost: false, frostOpacity: 80 };
+    p.update();
+    expect(states()).toHaveLength(n + 1);
+    expect(states().at(-1)?.look).toEqual(look);
+    look = PLAIN_LOOK;
   });
 
   it('one group: opens beside the code without taking focus, and sizes the split it made', async () => {

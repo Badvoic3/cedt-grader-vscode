@@ -1,3 +1,4 @@
+import type { LookView } from './look';
 import type { Captured, CaseRun, CaseSource, CompileFailure, RunLimits, RunSummary } from '../runner/types';
 import type { SectionId } from './layout';
 /**
@@ -166,7 +167,7 @@ export interface ServerView {
 export interface ViewState {
   baseUrl: string;
   /** Panel layout settings (sections shown and their order, compact mode). */
-  layout: { sections: SectionId[]; compact: boolean };
+  layout: { sections: SectionId[]; compact: boolean; look: LookView };
   account: {
     status: 'logged-out' | 'logging-in' | 'logged-in';
     username: string;
@@ -379,6 +380,7 @@ export interface TestsHead {
 export interface ToTests {
   type: 'state';
   head: TestsHead;
+  look: LookView;
   fresh: boolean;
   order: string[];
   cases: TestCaseView[];

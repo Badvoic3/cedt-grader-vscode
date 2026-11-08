@@ -4,6 +4,7 @@
  * revealed instead, no problem closes the tab; view state stays per problem.
  */
 import { describe, expect, it, vi } from 'vitest';
+import { PLAIN_LOOK } from '../src/shared/look';
 import type { Statement, StatementStore } from '../src/data/statementStore';
 
 vi.mock('vscode', () => ({ Uri: { joinPath: (...parts: unknown[]) => ({ path: parts.map(String).join('/') }) } }));
@@ -42,12 +43,14 @@ function fakePanel() {
   return panel;
 }
 
+const look = { value: PLAIN_LOOK };
+
 function setup() {
   const gets: number[] = [];
   const store = { get: async (id: number): Promise<Statement> => (gets.push(id), { kind: 'pdf', bytes: new Uint8Array([id]) }) } as unknown as StatementStore;
   const saved: Record<string, unknown> = {};
   const memento = { get: <T>(k: string, f: T) => (saved[k] as T) ?? f, update: (k: string, v: unknown) => ((saved[k] = v), Promise.resolve()) };
-  const panels = new StatementPanels({ path: 'ext' } as never, store, { memento, besideColumn: () => undefined, beside: () => true, openInBrowser: () => {}, onError: () => 'x' });
+  const panels = new StatementPanels({ path: 'ext' } as never, store, { look: () => look.value, memento, besideColumn: () => undefined, beside: () => true, openInBrowser: () => {}, onError: () => 'x' });
   const revive = (id: number) => {
     const p = fakePanel();
     panels.revive(p as never, { problemId: id, name: `P${id}` });
@@ -109,5 +112,18 @@ describe('statement tab follows the active file', () => {
     const view = { page: 3, scale: '1.5', scrollTop: 10, scrollLeft: 0 };
     a.send({ type: 'viewState', state: view, problemId: 1 });
     expect(Object.keys(saved['cedtGrader.statementView'] as object)).toEqual(['1']);
+  });
+
+  it('the look reaches a tab when it is ready, and open tabs when the setting changes', async () => {
+    const { panels, revive, flush } = setup();
+    const p = revive(1);
+    p.send({ type: 'ready' });
+    await flush();
+    expect(p.posted[0]).toEqual({ type: 'look', look: PLAIN_LOOK });
+    p.posted.length = 0;
+    look.value = { on: true, frost: true, frostOpacity: 70 };
+    panels.lookChanged();
+    expect(p.posted).toEqual([{ type: 'look', look: look.value }]);
+    look.value = PLAIN_LOOK;
   });
 });

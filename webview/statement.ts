@@ -9,6 +9,7 @@ import { W } from '../src/shared/strings';
 import { pdfjsLib } from './pdfjs-global';
 import { EventBus, PDFFindController, PDFLinkService, PDFViewer } from 'pdfjs-dist/legacy/web/pdf_viewer.mjs';
 import type { FromStatement, StatementViewState, ToStatement } from '../src/ui/statementPanel';
+import { applyLook } from './look';
 import { buildToolbar, el } from './statementToolbar';
 import { installTooltips } from './tooltip';
 import { clampScale, handleZoomWheel, zoomKey } from './zoom';
@@ -207,12 +208,18 @@ window.addEventListener('keydown', (e) => {
 // --------------------------------------------------------------- messages
 
 function mode(m: 'loading' | 'pdf' | 'html' | 'message'): void {
-  body.className = `mode-${m}`;
+  // Only ours: VS Code's theme and reduce-motion classes and the look's stay on the body.
+  body.classList.remove('mode-loading', 'mode-pdf', 'mode-html', 'mode-message');
+  body.classList.add(`mode-${m}`);
 }
 
 window.addEventListener('message', (ev: MessageEvent<ToStatement>) => {
   const m = ev.data;
   if (!m || typeof m !== 'object') return;
+  if (m.type === 'look') {
+    applyLook(m.look);
+    return;
+  }
   titleEl.textContent = m.title;
   noteEl.textContent = m.note ?? '';
   noteEl.hidden = !m.note;

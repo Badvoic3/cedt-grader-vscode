@@ -67,6 +67,9 @@ import { SubmitFlow } from './flows/submit';
 import { Runner } from './flows/runner';
 import { TestCases } from './flows/testcases';
 
+/** VS Code's settings the panel's frost follows (src/shared/look.ts). */
+const FROST_SETTINGS = ['workbench.experimental.modernUI', 'workbench.modernUIFrostedGlass', 'workbench.modernUIFrostedGlassOpacity', 'workbench.reduceTransparency'];
+
 export { SUBMISSION_SCHEME };
 
 type Listener = (s: ViewState) => void;
@@ -239,6 +242,7 @@ export class GraderController implements vscode.Disposable {
       this.statementStore,
       {
         memento: ctx.globalState,
+        look: () => this.cfg.panelLook,
         beside: () => this.cfg.statementBeside,
         besideColumn: () => {
           const column = this.testPanel.column();
@@ -252,6 +256,7 @@ export class GraderController implements vscode.Disposable {
       },
     );
     this.testPanel = new TestPanel(ctx.extensionUri, {
+      look: () => this.cfg.panelLook,
       runner: () => this.runner,
       tests: () => this.tests,
       sharedColumn: () => {
@@ -285,7 +290,7 @@ export class GraderController implements vscode.Disposable {
         if (e && e.document.uri.scheme === 'file') void this.setActiveFile(e.document.uri);
       }),
       vscode.workspace.onDidChangeConfiguration((e) => {
-        if (e.affectsConfiguration('cedtGrader')) this.onConfigChanged();
+        if (e.affectsConfiguration('cedtGrader') || FROST_SETTINGS.some((k) => e.affectsConfiguration(k))) this.onConfigChanged();
       }),
       // Renames / moves inside VS Code (a folder rename moves every file inside it).
       vscode.workspace.onDidRenameFiles((e) => void this.onFilesRenamed(e.files)),
@@ -597,6 +602,10 @@ export class GraderController implements vscode.Disposable {
     const prev = this.cfg;
     this.cfg = readConfig();
     if (prev.displayLanguage !== this.cfg.displayLanguage) this.applyLanguage();
+    if (JSON.stringify(prev.panelLook) !== JSON.stringify(this.cfg.panelLook)) {
+      this.testPanel.update();
+      this.statements.lookChanged();
+    }
     if (prev.funBreakReminder !== this.cfg.funBreakReminder || prev.funBreakMinutes !== this.cfg.funBreakMinutes) this.breakReminder.refresh();
     if (JSON.stringify(prev.runnerCompilerPaths) !== JSON.stringify(this.cfg.runnerCompilerPaths)) this.runner.toolsChanged();
     if (prev.fileNamePattern.pattern !== this.cfg.fileNamePattern.pattern || prev.fileNamePattern.problem !== this.cfg.fileNamePattern.problem) {
@@ -841,7 +850,7 @@ export class GraderController implements vscode.Disposable {
 
     return {
       baseUrl: this.cfg.baseUrl,
-      layout: { sections: this.cfg.panelSections, compact: this.cfg.panelCompact },
+      layout: { sections: this.cfg.panelSections, compact: this.cfg.panelCompact, look: this.cfg.panelLook },
       account: {
         status: this.accountStatus,
         username: this.cfg.username,

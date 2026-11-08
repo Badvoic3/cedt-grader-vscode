@@ -5,7 +5,7 @@
   --radius: var(--vscode-cornerRadius-small, 2px);
   --radius-track: calc(var(--radius) + 2px);
   --ok: var(--vscode-testing-iconPassed, #388a34);
-  --bad: var(--vscode-testing-iconFailed, #e51400);
+  --bad: var(--vscode-testing-iconFailed, var(--vscode-errorForeground, #e51400)); /* High Contrast leaves the first one undefined */
   --warn: var(--vscode-editorWarning-foreground, #bf8803);
   --err: var(--vscode-errorForeground, #f14c4c);
   --muted: var(--vscode-descriptionForeground);
@@ -13,8 +13,19 @@
   --hc-border: var(--vscode-contrastBorder, transparent);
   --rim: color-mix(in srgb, var(--vscode-foreground) 14%, transparent);
   --sunken: color-mix(in srgb, var(--vscode-foreground) 6%, transparent);
+  --t-fast: 90ms;
+  --t-pop: 140ms;
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1); /* VS Code's widget curve */
+  --panel-bg: var(--vscode-sideBar-background, var(--vscode-editor-background));
+  --header-tint: var(--vscode-sideBarSectionHeader-background, transparent);
+  --raised: color-mix(in srgb, var(--vscode-foreground) 4%, var(--panel-bg));
+  --radius-card: var(--vscode-cornerRadius-medium, calc(var(--radius) + 2px));
+  --glass-opacity: 80%; /* applyLook sets VS Code's own value */
 }
-body.vscode-high-contrast { --rim: var(--vscode-contrastBorder, currentColor); --sunken: transparent; }
+body.vscode-high-contrast { --rim: var(--vscode-contrastBorder, currentColor); --sunken: transparent; --raised: var(--panel-bg); }
+/* Both switches: the OS's, and VS Code's workbench.reduceMotion. */
+@media (prefers-reduced-motion: reduce) { :root { --t-fast: 0ms; --t-pop: 0ms; } }
+body.vscode-reduce-motion { --t-fast: 0ms; --t-pop: 0ms; }
 
 * { box-sizing: border-box; }
 
@@ -49,7 +60,7 @@ body {
 }
 .section > summary::-webkit-details-marker { display: none; }
 .section > summary:focus-visible { outline: 1px solid var(--vscode-focusBorder); outline-offset: -1px; }
-.section > summary .chev { transition: transform 0.1s; }
+.section > summary .chev { transition: transform var(--t-fast) ease-out; }
 .section[open] > summary .chev { transform: rotate(90deg); }
 .section-title { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .section-actions { display: flex; }
@@ -451,7 +462,7 @@ input::placeholder { color: var(--vscode-input-placeholderForeground); }
 .run-pill.busy { color: var(--vscode-charts-blue, var(--muted)); }
 .run-pill.bad { color: var(--bad); }
 .run-pill.good { color: var(--ok); }
-.row-actions { display: inline-flex; flex: none; opacity: 0; transition: opacity 0.1s; }
+.row-actions { display: inline-flex; flex: none; opacity: 0; transition: opacity var(--t-fast); }
 /* Problem rows: the icons float over the row's bottom right (the full name / tags line), so the name keeps
    the row's width. The fade + background (row colour over the sidebar's, for see-through hover colours)
    keeps the text below from showing through. Hidden icons don't take clicks. */
@@ -469,8 +480,6 @@ input::placeholder { color: var(--vscode-input-placeholderForeground); }
 .problem-row .pill { min-width: calc(3ch + 12px); font-variant-numeric: tabular-nums; }
 .problem-row:hover .row-actions, .problem-row:focus-within .row-actions { opacity: 1; pointer-events: auto; }
 @media (hover: none) { .row-actions, .problem-row .row-actions { opacity: 1; pointer-events: auto; } }
-@media (prefers-reduced-motion: reduce) { .row-actions, .section > summary .chev { transition: none; } }
-body.vscode-reduce-motion .row-actions, body.vscode-reduce-motion .section > summary .chev { transition: none; }
 .picker-group { padding: 4px 4px 2px; text-transform: uppercase; font-size: 10px; letter-spacing: 0.04em; }
 
 
@@ -745,3 +754,58 @@ body.vscode-high-contrast .fun-ribbon { background: #000; border-color: var(--vs
 .fun-topic .bar { grid-column: 1 / -1; height: 4px; border-radius: 2px; background: color-mix(in srgb, var(--muted) 25%, transparent); overflow: hidden; }
 .fun-topic .bar i { display: block; height: 100%; background: var(--ok); }
 @media (prefers-reduced-motion: reduce) { .fun-play *, .fun-play, .fun-toast { animation: none !important; } }
+body.vscode-reduce-motion .fun-play *, body.vscode-reduce-motion .fun-play, body.vscode-reduce-motion .fun-toast { animation: none !important; }
+
+/* ------------------------------------------------------------ look: subtle
+   cedtGrader.panel.look, chosen from docs/research/mockups-look/. body.fx and body.fx-frost come from
+   webview/look.ts. Motion only on elements that persist or are made once: a section re-render rebuilds the rest. */
+@keyframes pop-in { from { opacity: 0; transform: translateY(-3px) scale(0.985); } }
+@keyframes fade-in { from { opacity: 0; } }
+body.fx .menu { transform-origin: top left; animation: pop-in var(--t-pop) var(--ease-out); }
+body.fx .tooltip:not([hidden]) { animation: fade-in var(--t-fast) ease-out; }
+body.fx .banner:not([hidden]), body.fx .prompt:not(#submit-prompt):not([hidden]) { animation: fade-in var(--t-pop) ease-out; }
+body.fx .btn { transition: background-color var(--t-fast), transform var(--t-fast); }
+body.fx .btn:active:not(:disabled) { transform: translateY(1px); }
+
+/* Sections slide open and shut. The content is clipped only while moving: confetti and the like may leave the section. */
+body.fx .section::details-content {
+  interpolate-size: allow-keywords;
+  height: 0; overflow: clip;
+  transition: height var(--t-pop) var(--ease-out), content-visibility var(--t-pop) allow-discrete;
+}
+body.fx .section[open]::details-content {
+  height: auto; overflow: visible;
+  transition: height var(--t-pop) var(--ease-out), content-visibility var(--t-pop) allow-discrete, overflow 0s linear var(--t-pop) allow-discrete;
+}
+
+/* Section headers stay in view, on a solid layer (the header colour is see-through in most themes). The line shows
+   only while one is stuck. */
+html:has(> body.fx) { scroll-padding-top: 26px; } /* a header must not cover what focus or scrollIntoView brings up */
+body.fx .section > summary {
+  position: sticky; top: 0; z-index: 3;
+  container-type: scroll-state;
+  background: linear-gradient(var(--header-tint), var(--header-tint)), var(--panel-bg);
+}
+body.fx .section > summary::after {
+  content: ''; position: absolute; inset: auto 0 -1px; height: 1px; background: var(--rim); opacity: 0; pointer-events: none;
+}
+@container scroll-state(stuck: top) { body.fx .section > summary::after { opacity: 1; } }
+
+body.fx .score-card {
+  border: 1px solid var(--rim); border-radius: var(--radius-card); background: var(--raised);
+  box-shadow: 0 1px 2px var(--vscode-widget-shadow, transparent);
+}
+body.fx .segmented .seg.active { box-shadow: 0 1px 2px var(--vscode-widget-shadow, transparent); }
+body.vscode-high-contrast.fx .score-card, body.vscode-high-contrast.fx .segmented .seg.active { box-shadow: none; }
+
+/* Frost on menus and tooltips only: never on rows or scrolling content. Solid unless everything allows it. */
+@media (prefers-reduced-transparency: no-preference) and (forced-colors: none) {
+  body.fx-frost:not(.vscode-high-contrast) .menu {
+    background: color-mix(in srgb, var(--vscode-menu-background, var(--vscode-editorWidget-background)) var(--glass-opacity), transparent);
+    backdrop-filter: blur(12px);
+  }
+  body.fx-frost:not(.vscode-high-contrast) .tooltip {
+    background: color-mix(in srgb, var(--vscode-editorHoverWidget-background, var(--vscode-editorWidget-background)) var(--glass-opacity), transparent);
+    backdrop-filter: blur(12px);
+  }
+}

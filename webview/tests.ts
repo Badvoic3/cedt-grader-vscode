@@ -6,6 +6,7 @@
  */
 import './lang'; // first: sets the display language before anything below builds elements
 import { type Child, el, icon } from './dom';
+import { applyLook } from './look';
 import { summaryPill } from './runSummary';
 import { installTooltips } from './tooltip';
 import { diffOutputs, type DiffLine, plainLines } from '../src/runner/diff';
@@ -469,6 +470,9 @@ window.addEventListener('blur', () => {
 });
 window.addEventListener('pagehide', flushEdits);
 window.addEventListener('message', (e: MessageEvent<ToTests>) => {
-  if (e.data?.type === 'state') onState(e.data);
+  if (e.data?.type === 'state') {
+    applyLook(e.data.look);
+    onState(e.data);
+  }
 });
 send({ type: 'ready' });

@@ -409,6 +409,19 @@
           "default": false,
           "markdownDescription": "%config.panel.compact.description%"
         },
+        "cedtGrader.panel.look": {
+          "type": "string",
+          "default": "subtle",
+          "enum": [
+            "subtle",
+            "plain"
+          ],
+          "enumDescriptions": [
+            "%config.panel.look.subtle%",
+            "%config.panel.look.plain%"
+          ],
+          "description": "%config.panel.look.description%"
+        },
         "cedtGrader.panel.openOnStartup": {
           "type": "boolean",
           "default": true,

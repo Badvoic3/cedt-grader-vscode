@@ -92,3 +92,15 @@ body.vscode-high-contrast .dl.add { outline: 1px dashed var(--vscode-diffEditor-
 .one-case { min-width: 0; border: 1px solid var(--rim); border-left: 3px solid var(--bad); border-radius: var(--radius); background: var(--sunken); }
 .oc-h { display: flex; align-items: center; gap: 5px; padding: 2px 2px 2px 6px; }
 .oc-h strong { font-weight: 600; }
+
+/* cedtGrader.panel.look: the title row stays in view (the toolbar is up to three rows at 262 px, too much to pin). */
+html:has(> body.fx) { scroll-padding-top: 40px; }
+body.fx .tv { padding-top: 0; }
+body.fx .th {
+  position: sticky; top: 0; z-index: 3; container-type: scroll-state;
+  margin: 0 -14px; padding: 6px 14px; background: var(--panel-bg);
+}
+body.fx .th::after { content: ''; position: absolute; inset: auto 0 0; height: 1px; background: var(--rim); opacity: 0; pointer-events: none; }
+@container scroll-state(stuck: top) { body.fx .th::after { opacity: 1; } }
+body.fx .card, body.fx .one-case { border-radius: var(--radius-card); background: var(--raised); box-shadow: 0 1px 2px var(--vscode-widget-shadow, transparent); }
+body.vscode-high-contrast.fx .card, body.vscode-high-contrast.fx .one-case { box-shadow: none; }

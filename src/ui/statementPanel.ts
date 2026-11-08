@@ -1,4 +1,5 @@
 import { G, S } from '../shared/strings';
+import type { LookView } from '../shared/look';
 import { currentLang } from '../shared/i18n';
 import { KEYS } from '../shared/stateKeys';
 import { randomBytes } from 'node:crypto';
@@ -27,7 +28,8 @@ export type ToStatement =
   | (Base & { type: 'loading' })
   | (Base & { type: 'pdf'; data: Uint8Array; view: StatementViewState | null })
   | (Base & { type: 'html'; html: string })
-  | (Base & { type: 'message'; text: string; error: boolean });
+  | (Base & { type: 'message'; text: string; error: boolean })
+  | { type: 'look'; look: LookView };
 
 /** Statement webview → host. */
 export type FromStatement =
@@ -58,6 +60,7 @@ export class StatementPanels implements vscode.Disposable {
     private readonly extensionUri: vscode.Uri,
     private readonly store: StatementStore,
     private readonly opts: {
+      look: () => LookView;
       /** globalState, for page/zoom/scroll when a tab is closed and reopened. */
       memento: { get<T>(key: string, fallback: T): T; update(key: string, value: unknown): Thenable<void> };
       beside: () => boolean;
@@ -67,6 +70,11 @@ export class StatementPanels implements vscode.Disposable {
       onError: (err: unknown) => string;
     },
   ) {}
+
+  /** The look setting changed: the open tabs follow. */
+  lookChanged(): void {
+    for (const p of this.panels.values()) void p.webview.postMessage({ type: 'look', look: this.opts.look() } satisfies ToStatement);
+  }
 
   static readonly viewType = 'cedtGrader.statement';
 
@@ -186,7 +194,10 @@ export class StatementPanels implements vscode.Disposable {
       void load(false);
     });
     panel.webview.onDidReceiveMessage((m: FromStatement) => {
-      if (m?.type === 'ready') void load(false);
+      if (m?.type === 'ready') {
+        post({ type: 'look', look: this.opts.look() });
+        void load(false);
+      }
       else if (m?.type === 'refresh') void load(true);
       else if (m?.type === 'openInBrowser') this.opts.openInBrowser(t.problemId);
       else if (m?.type === 'close') panel.dispose();

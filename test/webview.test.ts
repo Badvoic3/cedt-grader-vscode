@@ -4,6 +4,7 @@
  * never uses innerHTML for grader text, and sends typed messages.
  */
 import { execFileSync } from 'node:child_process';
+import { PLAIN_LOOK } from '../src/shared/look';
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { JSDOM } from 'jsdom';
@@ -35,7 +36,7 @@ const score = (counted: number | null, extra: Partial<ScoreView> = {}): ScoreVie
 
 const base: ViewState = {
   baseUrl: 'https://cedt-grader.nattee.net',
-  layout: { sections: ['account', 'current', 'result', 'history', 'problems'], compact: false },
+  layout: { sections: ['account', 'current', 'result', 'history', 'problems'], compact: false, look: PLAIN_LOOK },
   account: { status: 'logged-out', username: '', fullName: null, hasSavedPassword: false, rememberPassword: true, error: null, server: { draft: null, status: 'idle', message: null } },
   file: null,
   problem: null,
@@ -569,17 +570,17 @@ describe.runIf(existsSync(resolve(__dirname, '../esbuild.mjs')))('sidebar webvie
     const order = () => [...doc.querySelectorAll<HTMLElement>('#app > details.section')].filter((d) => !d.hidden).map((d) => d.id);
     post(loggedIn);
     expect(order()).toEqual(['sec-account', 'sec-current', 'sec-result', 'sec-history', 'sec-problems']);
-    post({ ...loggedIn, layout: { sections: ['current', 'problems', 'result'], compact: false } });
+    post({ ...loggedIn, layout: { sections: ['current', 'problems', 'result'], compact: false, look: PLAIN_LOOK } });
     expect(order()).toEqual(['sec-current', 'sec-problems', 'sec-result']);
     expect(doc.querySelector<HTMLElement>('#sec-history')!.hidden).toBe(true);
-    post({ ...base, layout: { sections: ['current', 'problems'], compact: false } });
+    post({ ...base, layout: { sections: ['current', 'problems'], compact: false, look: PLAIN_LOOK } });
     expect(order()).toEqual(['sec-account', 'sec-current', 'sec-problems']);
     expect(doc.body.classList.contains('compact')).toBe(false);
-    post({ ...loggedIn, layout: { sections: ['account', 'current', 'result', 'history', 'problems'], compact: true } });
+    post({ ...loggedIn, layout: { sections: ['account', 'current', 'result', 'history', 'problems'], compact: true, look: PLAIN_LOOK } });
     expect(doc.body.classList.contains('compact')).toBe(true);
     expect(order()).toHaveLength(5);
     // Hidden Result: the "result" focus after grading does nothing.
-    post({ ...loggedIn, layout: { sections: ['current'], compact: false } });
+    post({ ...loggedIn, layout: { sections: ['current'], compact: false, look: PLAIN_LOOK } });
     doc.defaultView!.dispatchEvent(new doc.defaultView!.MessageEvent('message', { data: { type: 'focus', target: 'result' } }));
     expect(doc.querySelector<HTMLElement>('#sec-result')!.hidden).toBe(true);
   });
@@ -590,11 +591,11 @@ describe.runIf(existsSync(resolve(__dirname, '../esbuild.mjs')))('sidebar webvie
     post(loggedIn);
     expect(doc.querySelector('#app > .banner')!.nextElementSibling).not.toBeNull(); // banner (hidden) before the sections
     expect(firsts()).toEqual(['sec-account']);
-    post({ ...loggedIn, layout: { sections: ['history', 'current'], compact: false } });
+    post({ ...loggedIn, layout: { sections: ['history', 'current'], compact: false, look: PLAIN_LOOK } });
     expect(firsts()).toEqual(['sec-history']);
-    post({ ...loggedIn, layout: { sections: ['problems'], compact: true } });
+    post({ ...loggedIn, layout: { sections: ['problems'], compact: true, look: PLAIN_LOOK } });
     expect(firsts()).toEqual(['sec-problems']);
-    post({ ...base, layout: { sections: ['problems'], compact: false } }); // logged out: Account comes back first
+    post({ ...base, layout: { sections: ['problems'], compact: false, look: PLAIN_LOOK } }); // logged out: Account comes back first
     expect(firsts()).toEqual(['sec-account']);
     const css = readFileSync(resolve(__dirname, '../webview/style.css'), 'utf8');
     expect(css).toMatch(/\.section\.first-visible\s*\{\s*border-top:\s*none/);
@@ -1335,7 +1336,7 @@ describe.runIf(existsSync(resolve(__dirname, '../esbuild.mjs')))('sidebar webvie
     post({ ...loggedIn, prompt: null });
     expect(doc.querySelector('#submit-prompt')).toBeNull();
     // Current problem hidden by the layout: the question goes to the top.
-    post({ ...loggedIn, layout: { sections: ['account', 'result', 'history', 'problems'], compact: false }, prompt: q });
+    post({ ...loggedIn, layout: { sections: ['account', 'result', 'history', 'problems'], compact: false, look: PLAIN_LOOK }, prompt: q });
     expect(doc.querySelector('#submit-prompt')).toBeNull();
     const bar = doc.querySelector<HTMLElement>('.prompt')!;
     expect(bar.hidden).toBe(false);
@@ -1562,10 +1563,18 @@ describe.runIf(existsSync(resolve(__dirname, '../esbuild.mjs')))('sidebar webvie
       expect(doc.querySelector('.fun-toast')).toBeNull();
     });
 
+    it('VS Code\'s reduce-motion setting alone also stops the animation', () => {
+      const { doc, post } = boot();
+      doc.body.classList.add('vscode-reduce-motion');
+      post({ ...full, celebrate: party(9) });
+      expect(doc.querySelector('#sec-result .fun-play')).toBeNull();
+      expect(doc.querySelector('.fun-confetti')).toBeNull();
+    });
+
     it('the Trophies section: collapsed by default, shown only with the fun extras on, opened by Show Trophies', () => {
       const { dom, doc, post } = boot();
       const sec = () => doc.querySelector<HTMLDetailsElement>('#sec-trophies')!;
-      const sections = { sections: ['account', 'current', 'result', 'history', 'trophies', 'problems'] as ViewState['layout']['sections'], compact: false };
+      const sections = { sections: ['account', 'current', 'result', 'history', 'trophies', 'problems'] as ViewState['layout']['sections'], compact: false, look: PLAIN_LOOK };
       post({ ...loggedIn, layout: sections, trophies: null });
       expect(sec().hidden).toBe(true);
       post({ ...loggedIn, layout: sections, trophies });
@@ -1585,3 +1594,19 @@ describe.runIf(existsSync(resolve(__dirname, '../esbuild.mjs')))('sidebar webvie
     });
   });
 });
+describe('panel look', () => {
+  it('the body classes and the frost opacity follow the state; plain removes them', () => {
+    const { doc, post } = boot();
+    const base = { sections: ['current'] as ViewState['layout']['sections'], compact: false };
+    post({ ...loggedIn, layout: { ...base, look: { on: true, frost: true, frostOpacity: 65 } } });
+    expect(doc.body.classList.contains('fx')).toBe(true);
+    expect(doc.body.classList.contains('fx-frost')).toBe(true);
+    expect(doc.documentElement.style.getPropertyValue('--glass-opacity')).toBe('65%');
+    post({ ...loggedIn, layout: { ...base, look: { on: true, frost: false, frostOpacity: 80 } } });
+    expect(doc.body.classList.contains('fx')).toBe(true);
+    expect(doc.body.classList.contains('fx-frost')).toBe(false);
+    post({ ...loggedIn, layout: { ...base, look: PLAIN_LOOK } });
+    expect(doc.body.classList.contains('fx')).toBe(false);
+  });
+});
+

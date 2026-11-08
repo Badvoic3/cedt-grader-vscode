@@ -16,6 +16,7 @@
  * `ffmpeg` is on PATH (or FFMPEG=<path>); otherwise Chrome's PNG is kept.
  */
 import { spawn, spawnSync } from 'node:child_process';
+import { PLAIN_LOOK } from '../src/shared/look';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -84,7 +85,7 @@ function sample() {
 
   const state: ViewState = {
     baseUrl: BASE_URL,
-    layout: { sections: ['account', 'current', 'result', 'history', 'problems'], compact: false },
+    layout: { sections: ['account', 'current', 'result', 'history', 'problems'], compact: false, look: PLAIN_LOOK },
     account: { status: 'logged-in', username: '6830000021', fullName: 'Somchai Jaidee', hasSavedPassword: true, rememberPassword: true, error: null, server: { draft: null, status: 'idle', message: null } },
     file: { path: 'grader/00_Intro_11.cpp', name: '00_Intro_11.cpp', languageGuess: 'C++', supported: true, renameTo: null },
     problem: { ...current, source: 'filename', sourceLabel: MATCH_SOURCE.filename, unavailable: false },

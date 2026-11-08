@@ -4,6 +4,7 @@ import { normalizeServerUrl } from './shared/serverUrl';
 import type { LangSetting } from './shared/i18n';
 import { checkPattern, type PatternCheck } from './mapping/namePattern';
 import { normalizeSections, type SectionId } from './shared/layout';
+import { type LookView, lookView } from './shared/look';
 import type { BadgeMode } from './mapping/explorerBadge';
 import { BREAK_SCENES, type BreakSceneSetting } from './flows/breakRules';
 
@@ -32,6 +33,8 @@ export interface GraderConfig {
   panelSections: SectionId[];
   /** Compact panel (`cedtGrader.panel.compact`). */
   panelCompact: boolean;
+  /** The panel's look (`cedtGrader.panel.look` and VS Code's frosted glass settings). */
+  panelLook: LookView;
   /** Show the panel when a window starts (`cedtGrader.panel.openOnStartup`). */
   panelOpenOnStartup: boolean;
   /** Topic pill clicks: show only first (default) or hide first (`cedtGrader.panel.topicClickOrder`). */
@@ -97,6 +100,12 @@ export function readConfig(): GraderConfig {
     revealResultAfterSubmit: c.get<boolean>('revealResultAfterSubmit', true) !== false,
     panelSections: normalizeSections(c.get<unknown>('panel.sections')),
     panelCompact: c.get<boolean>('panel.compact', false) === true,
+    panelLook: ((wb) => lookView(c.get<string>('panel.look', 'subtle'), {
+      modernUI: wb.get('experimental.modernUI'),
+      frostedGlass: wb.get('modernUIFrostedGlass'),
+      frostedGlassOpacity: wb.get('modernUIFrostedGlassOpacity'),
+      reduceTransparency: wb.get('reduceTransparency'),
+    }))(vscode.workspace.getConfiguration('workbench')),
     panelOpenOnStartup: c.get<boolean>('panel.openOnStartup', true) !== false,
     topicClickOrder: c.get<string>('panel.topicClickOrder', 'showFirst') === 'hideFirst' ? 'hideFirst' : 'showFirst',
     fileNamePattern: checkPattern(c.get<string>('fileNamePattern', '{name}.{ext}')),

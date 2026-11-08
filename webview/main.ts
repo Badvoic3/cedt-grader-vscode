@@ -6,6 +6,7 @@
  * access (CSP default-src 'none'); all actions are postMessage'd to the host.
  */
 import './lang'; // first: sets the display language before anything below builds elements
+import { applyLook, reducedMotion } from './look';
 import { G, HOW_LINKED, W, W_SOURCE } from '../src/shared/strings';
 import { dateLocale } from '../src/shared/i18n';
 import { type SectionId, visibleSections } from '../src/shared/layout';
@@ -832,7 +833,6 @@ function celebrationFor(s: ViewState, r: ResultView): CelebrateView | null {
   return c.submissionId === null || c.submissionId === r.submissionId ? c : null;
 }
 
-const reducedMotion = () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
 
 /**
  * The ring and the "First 100!" ribbon stay on the card; the first time a celebration is shown (and only while it
@@ -1504,6 +1504,7 @@ function sectionKeys(s: ViewState): Record<string, string> {
 let compactOn = false;
 let sectionOrderKey = '';
 function applyLayout(s: ViewState): void {
+  applyLook(s.layout?.look);
   const compact = !!s.layout?.compact;
   if (compact !== compactOn) {
     compactOn = compact;
