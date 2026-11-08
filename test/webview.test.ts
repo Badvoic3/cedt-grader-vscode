@@ -1576,9 +1576,9 @@ describe.runIf(existsSync(resolve(__dirname, '../esbuild.mjs')))('sidebar webvie
       await wait(5);
       const toast = doc.querySelector('.fun-toast')!;
       expect(toast.getAttribute('role')).toBe('status');
-      expect(toast.textContent).toContain('ได้ถ้วยรางวัลใหม่');
-      expect(toast.textContent).toContain('100 ครั้งแรก · 00_Intro_11');
-      expect(toast.textContent).toContain('ทำต่อเนื่อง 3 วัน · ComProg: ผ่าน 5 จาก 5 ข้อ');
+      expect(toast.textContent).toContain('ปลดล็อกถ้วยรางวัลใหม่');
+      expect(toast.textContent).toContain('ได้ 100 ครั้งแรก · 00_Intro_11');
+      expect(toast.textContent).toContain('ทำโจทย์ต่อเนื่อง 3 วัน · ComProg: ผ่านแล้ว 5 จาก 5 ข้อ');
       const close = toast.querySelector<HTMLButtonElement>('button')!;
       expect(close.getAttribute('aria-label')).toBe('ปิด');
       expect(close.dataset.tip).toBe('ปิด');

@@ -108,9 +108,10 @@ describe('Thai table (strings.th.ts)', () => {
     }
   });
 
-  it('review list names real keys', () => {
+  it('review list names real keys and is empty for release', () => {
     const paths = leaves.map((l) => l.path);
     for (const k of TH_REVIEW) expect(paths.some((p) => p === k || p.startsWith(`${k}.`)), k).toBe(true);
+    expect(TH_REVIEW).toEqual([]);
   });
 
   it('switching to Thai changes what callers read', () => {

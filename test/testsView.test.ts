@@ -403,6 +403,6 @@ describe('Test view', () => {
     const { doc, post } = boot('th');
     post({ fresh: true, head: head({ summary: { kind: 'done', passed: 3, total: 6 } }), order: ['a'], cases: [kase('a')] });
     expect(doc.querySelector('.run-pill')!.textContent).toBe('ผ่าน 3 / 6');
-    expect(doc.querySelector('.limit')!.textContent).toBe('จำกัด 1 วินาที · 256 MB จากเกรดเดอร์');
+    expect(doc.querySelector('.limit')!.textContent).toBe('จำกัด 1 วินาที · 256 MB (จาก Grader)');
   });
 });
