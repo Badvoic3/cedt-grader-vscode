@@ -1,7 +1,5 @@
 # Grader Submit — Developer Guide
 
-**English** · [ภาษาไทย](DEVGUIDE.th.md)
-
 [**← Back to README**](README.md) · [**User Guide (`USERGUIDE.md`)**](USERGUIDE.md) · [**Support (`SUPPORT.md`)**](SUPPORT.md) · [**Changelog (`CHANGELOG.md`)**](CHANGELOG.md)
 
 This guide explains how **Grader Submit** is structured, how to build, test, and package the extension locally, and how to extend its grader provider or local test runner.

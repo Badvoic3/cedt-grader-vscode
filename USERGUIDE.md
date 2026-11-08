@@ -47,9 +47,17 @@ Requires **VS Code 1.106 or newer**.
 - **Moving the Panel:** Drag the **Grader** title or icon to the left Activity Bar (Primary Sidebar) or bottom Panel. VS Code remembers your placement across restarts and updates.
 - **Cursor Note:** In Cursor (where the right sidebar is reserved for Cursor's AI pane), the **Grader** panel opens in the Primary Sidebar on the left.
 
+<p align="center">
+  <img src="media/readme/workbench.png" width="760" alt="Full macOS VS Code window showing Explorer file score badges on the left, C++ solution code in the center, the locked Tests split view with inline diffs beside the code, and the Grader panel in the Secondary Sidebar on the right">
+</p>
+
 ---
 
 ## 2. Account, Server Selection & Website Link
+
+<p align="center">
+  <img src="media/readme/account.png" width="380" alt="Logged-out Account section showing the Server line with edit button, Username and Password inputs, Remember password checkbox, Log in button, and How to use and Troubleshooting links">
+</p>
 
 - **Server Line (`Server: <host>`):** At the top of the logged-out **Account** section, `Server: cedt-grader.nattee.net` shows which `cafe-grader-web` server will receive your login.
 - **Changing the Server:** Click the **✎** (edit) button next to `Server:` to enter another `cafe-grader-web` URL (or set `cedtGrader.baseUrl` in your **User Settings**). As you type or press <kbd>Enter</kbd>, the extension checks whether the server is reachable and compatible (`Works with Grader Submit`) before your password is ever sent. Click **Use the default server** to switch back to `https://cedt-grader.nattee.net`.
@@ -144,9 +152,13 @@ Hover either dropdown (`Automatic: <file>`) to see why that file was selected, o
 
 Grader Submit includes a zero-configuration local test runner for **C++** (`gnu++17 -O2 -DEVAL`), **C** (`gnu11 -O2 -DEVAL`), **Python**, **Java**, **Rust**, **Go**, **Haskell**, **Ruby**, **Pascal**, and **PHP**.
 
+<p align="center">
+  <img src="media/readme/tests.png" width="380" alt="Built-in Tests split view showing 3 / 4 passed, Run all, Load test cases, Load samples, and an expanded Wrong Answer test case with inline Expected vs Actual diff">
+</p>
+
 ### Loading Cases
 
-In **Current problem** (and at the top of the **Tests** split view), two buttons sit side by side:
+At the top of the **Tests** split view (or from the Command Palette), two buttons sit side by side:
 
 - **Load test cases:** Downloads official test cases from the grader API (for problems that publish them). Cases are deduplicated automatically, and trailing `KEY: …` lines printed only by the grader's secret driver are stripped in Folder Mode so local runs match.
 - **Load samples:** Reads the example input/output table directly from the problem statement PDF — works on any problem with a ruled PDF example table, even when the grader hides official test cases.
@@ -219,6 +231,10 @@ Click the PDF icon (**Open statement** or `Grader: Open Problem Statement`) to o
 
 Grader Submit decorates files and Folder Mode folders in the VS Code Explorer and editor tabs without scanning the network:
 
+<p align="center">
+  <img src="media/readme/explorer.png" width="340" alt="VS Code Explorer sidebar showing linked source files and a package folder with counted score badges and status colours">
+</p>
+
 - **Badge Mode (`cedtGrader.explorer.badge`):**
   - `score` (default): shows `✓` for a full score (`100`), `0`–`99` for partial/zero scores, and `–` for untried problems.
   - `tag`: shows the first two letters of the problem's first topic tag (e.g. `GR`, `DP`), with all tags and the counted score in the hover tooltip.
@@ -230,6 +246,10 @@ Grader Submit decorates files and Folder Mode folders in the VS Code Explorer an
 ## 11. Celebrations, Trophies & Break Scenes
 
 Controlled by `cedtGrader.fun.enabled` (default `true`; turning it `false` hides Trophies and disables automatic triggers while keeping the manual Command Palette commands available):
+
+<p align="center">
+  <img src="media/readme/trophies.png" width="380" alt="Trophies section showing first 100s count, day streak with best streak, completed topics, and per-topic progress bars">
+</p>
 
 - **First-Full-Score Celebration (`cedtGrader.fun.celebrate`):** The first time a problem reaches a counted score of `100` (or passes every test on raw-sum / hint-capped problems), the Result card plays a ring fill, confetti burst, ribbon, and trophy toast. Replay anytime with **Grader: Play Celebration**.
 - **Trophies Section (`Grader: Show Trophies`):** Displays your total **First 100s**, current and best daily **Streak**, **Whole topics** completed, and progress bars for every course topic.

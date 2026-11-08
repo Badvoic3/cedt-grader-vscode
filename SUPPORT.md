@@ -1,7 +1,5 @@
 # Grader Submit — Support
 
-**English** · [ภาษาไทย](SUPPORT.th.md)
-
 [**← Back to README**](README.md) · [**User Guide (`USERGUIDE.md`)**](USERGUIDE.md) · [**Developer Guide (`DEVGUIDE.md`)**](DEVGUIDE.md) · [**Changelog (`CHANGELOG.md`)**](CHANGELOG.md)
 
 Need help with **Grader Submit**? Start with the resources below.

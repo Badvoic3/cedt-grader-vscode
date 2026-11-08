@@ -16,11 +16,19 @@
 > **Note:** This is an unofficial developer workflow extension. It is not made by the grader's maintainers.
 
 <p align="center">
-  <img src="media/readme/panel.png" width="320" alt="The Grader Submit panel in VS Code showing Account, Current problem with a counted score of 90 / 100, Result with per-test verdict tiles, History, and the Problems list">
-  &nbsp;&nbsp;
-  <img src="media/readme/current.png" width="320" alt="Current problem section showing 00_Intro_11.cpp matched by file name, counted score 90 / 100, side-by-side Load test cases and Load samples buttons, Run tests, Open tests, and Submit to Grader">
+  <img src="media/readme/workbench.png" width="760" alt="Full macOS VS Code window showing Explorer file score badges on the left, C++ solution code in the center, the locked Tests split view with inline diffs beside the code, and the Grader panel in the Secondary Sidebar on the right">
   <br>
-  <em>The Grader panel in the Secondary Sidebar and the Current problem workflow with side-by-side test loading and local test execution.</em>
+  <em>Full VS Code workflow: Explorer score badges on the left, code editor and locked Tests split view in the center, and the Grader panel in the Secondary Sidebar on the right.</em>
+</p>
+
+<p align="center">
+  <img src="media/readme/panel.png" width="260" alt="The Grader Submit panel in VS Code showing Account, Current problem with a counted score of 90 / 100, Result with per-test verdict tiles, History, and the Problems list">
+  &nbsp;&nbsp;
+  <img src="media/readme/current.png" width="260" alt="Current problem section showing 00_Intro_11.cpp matched by file name, counted score 90 / 100, side-by-side Load test cases and Load samples buttons, Run tests, Open tests, and Submit to Grader">
+  &nbsp;&nbsp;
+  <img src="media/readme/tests.png" width="260" alt="Built-in Tests split view showing 3 / 4 passed, Run all, Load test cases, Load samples, and an expanded Wrong Answer test case with inline Expected vs Actual diff">
+  <br>
+  <em>Left: Full Grader panel. Center: Current problem section. Right: Built-in Tests split view with inline diffs.</em>
 </p>
 
 ## Quickstart (< 60s)
@@ -66,6 +74,14 @@ Requires **VS Code 1.106 or newer**.
   <img src="media/readme/problems.png" width="320" alt="Problems section showing status filter tabs, search box, sort button, 3-state topic pills, Tags dropdown, and problem rows with counted scores">
   <br>
   <em>Left: Submission history with 1-click diffing against your open file. Right: Problems list with status, topic, and tag filters.</em>
+</p>
+
+<p align="center">
+  <img src="media/readme/explorer.png" width="320" alt="VS Code Explorer sidebar showing linked source files and a package folder with counted score badges and status colours">
+  &nbsp;&nbsp;
+  <img src="media/readme/trophies.png" width="320" alt="Trophies section showing first 100s count, day streak with best streak, completed topics, and per-topic progress bars">
+  <br>
+  <em>Left: Explorer score badges on linked files and folders. Right: Trophies section tracking full scores, streaks, and topic progress.</em>
 </p>
 
 ---
