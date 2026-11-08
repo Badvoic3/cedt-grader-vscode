@@ -547,15 +547,29 @@ describe.runIf(existsSync(resolve(__dirname, '../esbuild.mjs')))('sidebar webvie
     expect(header(doc).querySelector('[aria-label^="Link the whole folder"]')).not.toBeNull();
   });
 
-  it('troubleshooting link in the connection banner and under a login error; Result revealed after grading', () => {
+  it('how to use and troubleshooting links in the logged-out Account section and connection banner; Result revealed after grading', () => {
     const { doc, sent, post, dom } = boot();
+    // Logged-out normal form: both How to use and Troubleshooting sit on the bottom .account-help row.
+    post(base);
+    const helpLinks = () => [...doc.querySelectorAll<HTMLButtonElement>('#sec-account .account-help button')].map((b) => b.textContent?.trim());
+    expect(helpLinks()).toEqual(['How to use', 'Troubleshooting']);
+    const howBtn = doc.querySelector<HTMLButtonElement>('#sec-account .account-help button')!;
+    expect(howBtn.getAttribute('data-tip')).toBe('Open the user guide on GitHub');
+    howBtn.click();
+    expect(sent).toContainEqual({ type: 'openUserGuide' });
+    // Saved-login state also shows the bottom help row.
+    post({ ...base, account: { ...base.account, username: '6830000021', hasSavedPassword: true } });
+    expect(helpLinks()).toEqual(['How to use', 'Troubleshooting']);
+    // Login error state shows the error alert followed by the bottom help row.
+    post({ ...base, account: { ...base.account, error: 'Wrong username or password.' } });
+    expect(helpLinks()).toEqual(['How to use', 'Troubleshooting']);
+    // Logged in: the bottom help row is not in Account; Troubleshooting is in the connection banner.
     post({ ...loggedIn, connection: { kind: 'offline', title: 'No internet connection', message: 'x', action: 'retry' } });
+    expect(doc.querySelector('#sec-account .account-help')).toBeNull();
     const link = [...doc.querySelectorAll<HTMLButtonElement>('.banner button')].find((b) => b.textContent?.includes('Troubleshooting'))!;
     expect(link.getAttribute('data-tip')).toBe('Open the troubleshooting guide on GitHub');
     link.click();
     expect(sent).toContainEqual({ type: 'openTroubleshooting' });
-    post({ ...base, account: { ...base.account, error: 'Wrong username or password.' } });
-    expect(doc.querySelector('#sec-account')!.textContent).toContain('Troubleshooting');
     // Collapsed Result section: the host's "result" focus opens it.
     post(loggedIn);
     const result = doc.querySelector<HTMLDetailsElement>('#sec-result')!;

@@ -43,7 +43,7 @@ import { cleanName, placeholder, resolveProblem } from './mapping/match';
 import { MappingStore } from './mapping/store';
 import { matchNote, type MatchInfo, NO_MATCH_INFO } from './mapping/linkActions';
 import { nameMatchesProblem, renameProposal } from './mapping/renameToProblem';
-import { CELEBRATE, DEFAULT_BASE_URL, LIMITS, SUBMISSION_SCHEME, TIMING, troubleshootingUrl, WEB_PATHS } from './shared/constants';
+import { CELEBRATE, DEFAULT_BASE_URL, LIMITS, SUBMISSION_SCHEME, TIMING, troubleshootingUrl, userGuideUrl, WEB_PATHS } from './shared/constants';
 import { MATCH_SOURCE, S, W } from './shared/strings';
 import { KEYS } from './shared/stateKeys';
 import { SecretLedger, type SecretKind, secretKey } from './shared/secrets';
@@ -1638,6 +1638,11 @@ export class GraderController implements vscode.Disposable {
   }
 
   // ---------------------------------------------------------------- browser
+
+  /** User guide on GitHub, in the display language. */
+  async openUserGuide(): Promise<void> {
+    await vscode.env.openExternal(vscode.Uri.parse(userGuideUrl(currentLang()), true));
+  }
 
   /** README troubleshooting section on GitHub, in the display language. */
   async openTroubleshooting(): Promise<void> {

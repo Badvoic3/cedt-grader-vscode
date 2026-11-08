@@ -141,13 +141,11 @@ describe('VS Code texts (package.nls.json)', () => {
     }
   });
 
-  it('package.nls.th.json has exactly the English keys, no empty text, and its walkthrough pages exist', () => {
+  it('package.nls.th.json has exactly the English keys and no empty text', () => {
     const th = JSON.parse(readFileSync(join(root, 'package.nls.th.json'), 'utf8')) as Record<string, string>;
     expect(Object.keys(th).sort()).toEqual(Object.keys(en).sort());
     for (const [k, v] of Object.entries(th)) {
       expect(v.trim(), k).not.toBe('');
-      if (k.endsWith('.media')) expect(existsSync(join(root, v)), v).toBe(true);
-      // Command links in walkthrough steps stay the same.
       expect([...v.matchAll(/\(command:[^)]+\)/g)].map((m) => m[0]), k).toEqual([...en[k].matchAll(/\(command:[^)]+\)/g)].map((m) => m[0]));
     }
   });

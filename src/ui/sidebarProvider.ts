@@ -200,6 +200,9 @@ export class SidebarProvider implements vscode.WebviewViewProvider, vscode.Dispo
       case 'showCompilerMessage':
         await c.showCompilerMessage();
         return;
+      case 'openUserGuide':
+        await c.openUserGuide();
+        return;
       case 'openTroubleshooting':
         await c.openTroubleshooting();
         return;

@@ -576,6 +576,7 @@ body.vscode-high-contrast .segmented .seg.active, body.vscode-high-contrast .top
 .account-host .icon-btn { width: 18px; height: 18px; }
 .account-host .codicon { font-size: 12px; }
 .account-actions { margin-top: 6px; }
+.account-help { gap: 6px 12px; }
 .server-line { margin-bottom: 2px; }
 .server-line[hidden], .server-field[hidden] { display: none; }
 .server-field { display: flex; flex-direction: column; gap: 4px; margin-bottom: 4px; }

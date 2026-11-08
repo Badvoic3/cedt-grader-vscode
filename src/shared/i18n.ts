@@ -8,7 +8,7 @@ import { TH } from './strings.th';
  * read afterwards is in the new language. Grader content (problem names,
  * compiler messages) is never translated.
  *
- * VS Code's own texts (command titles, settings, walkthrough) come from
+ * VS Code's own texts (command titles, settings) come from
  * `package.nls*.json` and follow VS Code's display language instead.
  */
 export type Lang = 'en' | 'th';

@@ -59,7 +59,12 @@ window.addEventListener('unhandledrejection', (e) => {
  * Icon-only button: always a tooltip (`title`) and the same `aria-label`.
  * When disabled, the tooltip says why.
  */
-/** "Troubleshooting": the README section on GitHub (connection banner, login errors). */
+/** "How to use": the user guide on GitHub (logged-out Account section). */
+function howToUseLink(): HTMLButtonElement {
+  return el('button', { class: 'link small', type: 'button', title: W.howToUseTip, onclick: () => send({ type: 'openUserGuide' }) }, icon('book'), ' ', W.howToUse);
+}
+
+/** "Troubleshooting": the README section on GitHub (connection banner, logged-out Account section). */
 function troubleshootingLink(): HTMLButtonElement {
   return el('button', { class: 'link small', type: 'button', title: W.troubleshootingTip, onclick: () => send({ type: 'openTroubleshooting' }) }, icon('question'), ' ', W.troubleshooting);
 }
@@ -494,7 +499,8 @@ function renderAccount(s: ViewState): void {
     showServerStatus();
     if (!b.contains(loginForm)) b.append(loginForm);
   }
-  if (a.error) b.append(el('div', { class: 'error', role: 'alert' }, icon('error'), ' ', a.error), el('div', { class: 'row' }, troubleshootingLink()));
+  if (a.error) b.append(el('div', { class: 'error', role: 'alert' }, icon('error'), ' ', a.error));
+  b.append(el('div', { class: 'row gap account-help' }, howToUseLink(), troubleshootingLink()));
 }
 
 function openPicker(): void {

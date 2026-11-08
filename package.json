@@ -284,10 +284,10 @@
         "icon": "$(star-full)"
       },
       {
-        "command": "cedtGrader.openWalkthrough",
-        "title": "%command.openWalkthrough.title%",
+        "command": "cedtGrader.openUserGuide",
+        "title": "%command.openUserGuide.title%",
         "category": "%command.category%",
-        "icon": "$(rocket)"
+        "icon": "$(book)"
       },
       {
         "command": "cedtGrader.openTroubleshooting",
@@ -319,7 +319,7 @@
           "group": "9_data@1"
         },
         {
-          "command": "cedtGrader.openWalkthrough",
+          "command": "cedtGrader.openUserGuide",
           "when": "view == cedtGrader.panel",
           "group": "8_help@1"
         },
@@ -702,70 +702,6 @@
           "highContrast": "terminal.ansiMagenta",
           "highContrastLight": "terminal.ansiMagenta"
         }
-      }
-    ],
-    "walkthroughs": [
-      {
-        "id": "cedtGrader.start",
-        "title": "%walkthrough.title%",
-        "description": "%walkthrough.description%",
-        "steps": [
-          {
-            "id": "openPanel",
-            "title": "%walkthrough.openPanel.title%",
-            "description": "%walkthrough.openPanel.description%",
-            "media": {
-              "markdown": "%walkthrough.openPanel.media%"
-            },
-            "completionEvents": [
-              "onView:cedtGrader.panel"
-            ]
-          },
-          {
-            "id": "login",
-            "title": "%walkthrough.login.title%",
-            "description": "%walkthrough.login.description%",
-            "media": {
-              "markdown": "%walkthrough.login.media%"
-            },
-            "completionEvents": [
-              "onContext:cedtGrader.loggedIn"
-            ]
-          },
-          {
-            "id": "openFile",
-            "title": "%walkthrough.openFile.title%",
-            "description": "%walkthrough.openFile.description%",
-            "media": {
-              "markdown": "%walkthrough.openFile.media%"
-            },
-            "completionEvents": [
-              "onContext:cedtGrader.hasSourceFile"
-            ]
-          },
-          {
-            "id": "checkProblem",
-            "title": "%walkthrough.checkProblem.title%",
-            "description": "%walkthrough.checkProblem.description%",
-            "media": {
-              "markdown": "%walkthrough.checkProblem.media%"
-            },
-            "completionEvents": [
-              "onContext:cedtGrader.hasProblem"
-            ]
-          },
-          {
-            "id": "submit",
-            "title": "%walkthrough.submit.title%",
-            "description": "%walkthrough.submit.description%",
-            "media": {
-              "markdown": "%walkthrough.submit.media%"
-            },
-            "completionEvents": [
-              "onContext:cedtGrader.submitted"
-            ]
-          }
-        ]
       }
     ]
   }

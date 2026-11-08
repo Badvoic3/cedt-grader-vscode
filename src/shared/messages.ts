@@ -345,6 +345,7 @@ export type FromWebview =
   | { type: 'webviewError'; message: string; stack: string }
   | { type: 'showCompilerMessage' }
   | { type: 'openSettings' }
+  | { type: 'openUserGuide' }
   | { type: 'openTroubleshooting' };
 
 /** One case's texts in the Test view. `truncated`: too long to show whole, so it can't be edited there. */

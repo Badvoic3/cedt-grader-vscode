@@ -20,8 +20,18 @@ export const DEFAULT_BASE_URL = 'https://cedt-grader.nattee.net';
  */
 export const SERVER_SCORE_CAP = 100;
 
-/** The extension's GitHub repository (README, troubleshooting). Keep in sync with package.json `repository`. */
+/** The extension's GitHub repository (README, user guide, troubleshooting). Keep in sync with package.json `repository`. */
 export const REPO_URL = 'https://github.com/Badvoic3/cedt-grader-vscode';
+
+/** User guide on GitHub per display language. */
+export const USER_GUIDE = {
+  en: 'USERGUIDE.md',
+  th: 'USERGUIDE.th.md',
+} as const;
+
+export function userGuideUrl(lang: keyof typeof USER_GUIDE): string {
+  return `${REPO_URL}/blob/main/${USER_GUIDE[lang]}`;
+}
 
 /** README troubleshooting section per display language (GitHub heading anchors). */
 export const TROUBLESHOOTING = {

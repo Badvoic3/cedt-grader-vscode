@@ -19,7 +19,7 @@ describe('product name', () => {
 
   // Lower-case ids (`cedtGrader.*`, `.cedt-grader.json`, the default address) stay: nobody reads them as a name.
   it('no text anyone reads says CEDT', () => {
-    const read = [...files('src'), ...files('webview'), ...files('media/walkthrough'), 'package.json', 'package.nls.json', 'package.nls.th.json'];
+    const read = [...files('src'), ...files('webview'), 'package.json', 'package.nls.json', 'package.nls.th.json'];
     expect(read.filter((f) => /CEDT/.test(readFileSync(f, 'utf8')))).toEqual([]);
   });
 });

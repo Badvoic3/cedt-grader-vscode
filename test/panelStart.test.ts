@@ -84,7 +84,7 @@ describe('commands', () => {
 
   it('only commands that need no session skip the wait', () => {
     const direct = [...source.matchAll(/vscode\.commands\.registerCommand\('cedtGrader\.(\w+)'/g)].map((m) => m[1]).sort();
-    expect(direct).toEqual(['focus', 'openSettings', 'openWalkthrough', 'testCrashReport']);
+    expect(direct).toEqual(['focus', 'openSettings', 'testCrashReport']);
   });
 
   it('checks that the file is still active before loading a root package', () => {

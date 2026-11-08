@@ -511,6 +511,8 @@ const EN_W = {
   nFilesLinked: (n: string | number) => `${n} files are linked to this problem`,
   hideTheList: "Hide the list",
   dismiss: 'Dismiss',
+  howToUse: 'How to use',
+  howToUseTip: 'Open the user guide on GitHub',
   troubleshooting: 'Troubleshooting',
   troubleshootingTip: 'Open the troubleshooting guide on GitHub',
   renameToProblem: 'Rename file to match the problem',

@@ -9,7 +9,6 @@ import { GraderStatusBar } from './ui/statusBar';
 import { readConfig } from './config';
 import { CrashReporter } from './crashReporter';
 import { resolveLang, setLanguage } from './shared/i18n';
-import { WALKTHROUGH_CONTEXT, WALKTHROUGH_ID, walkthroughContext } from './shared/walkthrough';
 
 /**
  * Entry point. The sidebar (SidebarProvider) is the primary UI; the commands
@@ -35,7 +34,6 @@ function start(ctx: vscode.ExtensionContext, crash: CrashReporter): void {
   const controller = new GraderController(ctx, crash);
   const sidebar = new SidebarProvider(ctx.extensionUri, controller);
   const statusBar = new GraderStatusBar();
-  const walkthroughState: Record<string, boolean> = {};
 
   // Activation doesn't wait for `controller.init()`, so the panel can load meanwhile; commands do.
   const command = <A extends unknown[]>(id: string, run: (...args: A) => unknown) =>
@@ -61,19 +59,6 @@ function start(ctx: vscode.ExtensionContext, crash: CrashReporter): void {
     vscode.window.registerWebviewViewProvider(SidebarProvider.viewId, sidebar),
     vscode.window.registerFileDecorationProvider(controller.badges),
     controller.onState((s) => statusBar.update(s)),
-    // Getting Started walkthrough: steps complete through these context keys (set only when they change).
-    // VS Code opens the walkthrough once after the extension is installed (workbench.welcomePage.walkthroughs.openOnInstall).
-    controller.onState((s) => {
-      const next = walkthroughContext(s, walkthroughState[WALKTHROUGH_CONTEXT.submitted] === true);
-      for (const [key, value] of Object.entries(next)) {
-        if (walkthroughState[key] === value) continue;
-        walkthroughState[key] = value;
-        void vscode.commands.executeCommand('setContext', key, value);
-      }
-    }),
-    vscode.commands.registerCommand('cedtGrader.openWalkthrough', () =>
-      vscode.commands.executeCommand('workbench.action.openWalkthrough', `${ctx.extension.id}#${WALKTHROUGH_ID}`, false),
-    ),
 
     vscode.commands.registerCommand('cedtGrader.focus', () => reveal()),
     command('cedtGrader.login', async () => {
@@ -115,6 +100,7 @@ function start(ctx: vscode.ExtensionContext, crash: CrashReporter): void {
     command('cedtGrader.takeBreak.donut2d', () => controller.takeBreak('donut2d')),
     command('cedtGrader.takeBreak.breathe', () => controller.takeBreak('breathe')),
     command('cedtGrader.takeBreak.swarm', () => controller.takeBreak('swarm')),
+    command('cedtGrader.openUserGuide', () => controller.openUserGuide()),
     command('cedtGrader.openTroubleshooting', () => controller.openTroubleshooting()),
     // Read-only documents with the source of past submissions (for "Compare with current file").
     // Statement tabs reopen after a restart, from the disk cache (no request).

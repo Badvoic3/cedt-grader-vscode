@@ -4,7 +4,6 @@
 !dist/onig.wasm
 !media/icon.svg
 !media/icon.png
-!media/walkthrough/**
 !media/dist/**
 # No source maps: the production build (vscode:prepublish) empties dist/ and media/dist/ first.
 !package.json
