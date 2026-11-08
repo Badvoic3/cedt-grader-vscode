@@ -98,6 +98,30 @@ export const TIMING = {
 } as const;
 
 /** The built-in runner. */
+/** Break reminder (option B of docs/research/break-interval.md, kept by the user 2026-11-07). */
+export const BREAK = {
+  defaultMinutes: 90,
+  minMinutes: 30,
+  /** A gap without edits, runs or submits this long resets the timer; shorter gaps count as work. */
+  idleResetMs: 10 * 60_000,
+  /** The prompt comes only at a task boundary this long after the hint… */
+  promptAfterHintMs: 20 * 60_000,
+  /** …and no later than this (no boundary in the window: the hint stays, no prompt). */
+  promptWindowEndMs: 60 * 60_000,
+  snoozeMs: 30 * 60_000,
+  maxPromptsPerDay: 2,
+  /** A "day" for the prompt count and "Not today" starts at this local hour. */
+  dayStartsAtHour: 4,
+  /** No prompt this soon after a celebration. */
+  afterCelebrationMs: 10_000,
+  /** How often the timer looks at the clock. */
+  tickMs: 60_000,
+  /** Edits are counted at most this often. */
+  activityDebounceMs: 5_000,
+  /** The break tab's countdown. */
+  breakSeconds: 300,
+} as const;
+
 export const RUNNER = {
   /** Output kept for showing, per stream. The compare limit is `max(this, 2 × expected size)`. */
   displayBytes: 64 * 1024,

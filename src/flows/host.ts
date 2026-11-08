@@ -7,6 +7,7 @@ import type { MatchSource } from '../mapping/match';
 import type { MappingStore } from '../mapping/store';
 import type { CaseStore } from '../runner/store';
 import type { Attachments } from './attachments';
+import type { BoundaryKind } from './breakRules';
 import type { FolderMode } from './folderMode';
 import type { Links } from './links';
 import type { AskOptions, InlinePrompt, InlinePrompts } from './prompts';
@@ -51,6 +52,8 @@ export interface Host {
   readonly languages: Language[];
   /** Logged in, or able to log in by itself: a logged-out person's scores stay off the screen. */
   canShowScores(): boolean;
+  /** The break reminder's feeds: work (a run, a submit) and task boundaries. */
+  readonly fun: { activity(): void; boundary(kind: BoundaryKind): void };
   allowedLanguages(p: Pick<Problem, 'permittedLanguageIds'>): Language[];
   /** Every known source extension (server languages + fallback table), without the dot. */
   allSourceExts(): string[];

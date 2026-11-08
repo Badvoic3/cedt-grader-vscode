@@ -36,6 +36,7 @@ const copyAssets = {
       await copyFile('webview/style.css', 'media/dist/webview.css');
       await copyFile('webview/statement.css', 'media/dist/statement.css');
       await copyFile('webview/tests.css', 'media/dist/tests.css');
+      await copyFile('webview/break.css', 'media/dist/break.css');
       // pdf.js assets for the statement viewer (bundled; never loaded from a CDN). The legacy build,
       // like the host's: this worker also serves "Load sample cases" (src/data/pdfSamples.ts).
       const pdfjs = 'node_modules/pdfjs-dist';
@@ -101,7 +102,17 @@ const tests = await context({
   target: 'es2022',
 });
 
-const all = [host, webview, statement, tests];
+// The break tab (src/ui/breakPanel.ts).
+const breakTab = await context({
+  ...common,
+  entryPoints: ['webview/break/main.ts'],
+  outfile: 'media/dist/break.js',
+  platform: 'browser',
+  format: 'iife',
+  target: 'es2022',
+});
+
+const all = [host, webview, statement, tests, breakTab];
 if (watch) {
   await Promise.all(all.map((c) => c.watch()));
 } else {

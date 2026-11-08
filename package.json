@@ -239,6 +239,37 @@
         "icon": "$(trash)"
       },
       {
+        "command": "cedtGrader.takeBreak",
+        "title": "%command.takeBreak.title%",
+        "category": "%command.category%",
+        "icon": "$(coffee)"
+      },
+      {
+        "command": "cedtGrader.takeBreak.sand",
+        "title": "%command.takeBreak.sand.title%",
+        "category": "%command.category%"
+      },
+      {
+        "command": "cedtGrader.takeBreak.donut3d",
+        "title": "%command.takeBreak.donut3d.title%",
+        "category": "%command.category%"
+      },
+      {
+        "command": "cedtGrader.takeBreak.donut2d",
+        "title": "%command.takeBreak.donut2d.title%",
+        "category": "%command.category%"
+      },
+      {
+        "command": "cedtGrader.takeBreak.breathe",
+        "title": "%command.takeBreak.breathe.title%",
+        "category": "%command.category%"
+      },
+      {
+        "command": "cedtGrader.takeBreak.swarm",
+        "title": "%command.takeBreak.swarm.title%",
+        "category": "%command.category%"
+      },
+      {
         "command": "cedtGrader.openWalkthrough",
         "title": "%command.openWalkthrough.title%",
         "category": "%command.category%",
@@ -475,6 +506,48 @@
           "type": "boolean",
           "default": true,
           "description": "%config.explorer.colors.description%"
+        },
+        "cedtGrader.fun.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "%config.fun.enabled.description%"
+        },
+        "cedtGrader.fun.celebrate": {
+          "type": "boolean",
+          "default": true,
+          "description": "%config.fun.celebrate.description%"
+        },
+        "cedtGrader.fun.breakReminder": {
+          "type": "boolean",
+          "default": true,
+          "description": "%config.fun.breakReminder.description%"
+        },
+        "cedtGrader.fun.breakMinutes": {
+          "type": "number",
+          "default": 90,
+          "minimum": 30,
+          "description": "%config.fun.breakMinutes.description%"
+        },
+        "cedtGrader.fun.breakScene": {
+          "type": "string",
+          "default": "random",
+          "enum": [
+            "random",
+            "sand",
+            "donut3d",
+            "donut2d",
+            "breathe",
+            "swarm"
+          ],
+          "enumDescriptions": [
+            "%config.fun.breakScene.random%",
+            "%config.fun.breakScene.sand%",
+            "%config.fun.breakScene.donut3d%",
+            "%config.fun.breakScene.donut2d%",
+            "%config.fun.breakScene.breathe%",
+            "%config.fun.breakScene.swarm%"
+          ],
+          "description": "%config.fun.breakScene.description%"
         },
         "cedtGrader.statementFollowsFile": {
           "type": "boolean",

@@ -31,6 +31,7 @@ vi.mock('vscode', () => {
   const uri = (s: string) => ({ toString: () => s, fsPath: s, path: s, scheme: 'file' });
   return {
     ConfigurationTarget: { Global: 1, Workspace: 2, WorkspaceFolder: 3 },
+    StatusBarAlignment: { Left: 1, Right: 2 },
     EventEmitter: class { event = v.event; fire() {} dispose() {} },
     Uri: { parse: uri, file: uri, joinPath: (_: unknown, ...p: string[]) => uri(p.join('/')) },
     env: { language: 'en', openExternal: v.openExternal },
@@ -39,6 +40,7 @@ vi.mock('vscode', () => {
     window: {
       activeTextEditor: undefined,
       createOutputChannel: () => channel,
+      createStatusBarItem: () => ({ show() {}, hide() {}, dispose() {} }),
       onDidChangeActiveTextEditor: v.event,
       showWarningMessage: v.showWarningMessage,
       showErrorMessage: async () => undefined,
@@ -55,6 +57,7 @@ vi.mock('vscode', () => {
       onDidRenameFiles: v.event,
       onDidDeleteFiles: v.event,
       onDidSaveTextDocument: v.event,
+      onDidChangeTextDocument: v.event,
       onDidChangeWorkspaceFolders: v.event,
       createFileSystemWatcher: () => ({ onDidCreate: v.event, onDidDelete: v.event, onDidChange: v.event, dispose() {} }),
       asRelativePath: (p: unknown) => String(p),

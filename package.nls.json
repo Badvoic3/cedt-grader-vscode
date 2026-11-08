@@ -88,5 +88,22 @@
   "config.explorer.badge.score": "The counted score: ✓ for full score, – if not tried yet.",
   "config.explorer.badge.tag": "Two letters of the problem's first topic tag.",
   "config.explorer.badge.off": "No badges.",
-  "config.explorer.colors.description": "Colour Explorer badges and file names by score or tag. Turn off to keep the normal text colour."
+  "config.explorer.colors.description": "Colour Explorer badges and file names by score or tag. Turn off to keep the normal text colour.",
+  "command.takeBreak.title": "Take a Break",
+  "command.takeBreak.sand.title": "Take a Break: Falling Code",
+  "command.takeBreak.donut3d.title": "Take a Break: 3D Donut",
+  "command.takeBreak.donut2d.title": "Take a Break: 2D Donut",
+  "command.takeBreak.breathe.title": "Take a Break: Breathing",
+  "command.takeBreak.swarm.title": "Take a Break: Swarm",
+  "config.fun.enabled.description": "Turn on the fun extras: the celebration for a first full score, trophies, and the break reminder. Off turns all of them off; their commands still work.",
+  "config.fun.celebrate.description": "Celebrate the first time a problem passes every test or reaches a counted score of 100.",
+  "config.fun.breakReminder.description": "After a long stretch of work, suggest a short break: first a hint in the status bar, then, only at a natural stopping point, a small prompt (at most twice a day).",
+  "config.fun.breakMinutes.description": "Minutes of work (edits, runs and submits; a gap of 10 minutes starts the count again) before the break hint appears.",
+  "config.fun.breakScene.description": "What a break shows.",
+  "config.fun.breakScene.random": "A different scene each time.",
+  "config.fun.breakScene.sand": "Your code falls like sand; push it, scoop it, pour it.",
+  "config.fun.breakScene.donut3d": "Your code spins into a 3D donut.",
+  "config.fun.breakScene.donut2d": "Your code spins into a text donut.",
+  "config.fun.breakScene.breathe": "Your code forms a ring that grows and shrinks with your breath.",
+  "config.fun.breakScene.swarm": "Your code swirls after the mouse."
 }

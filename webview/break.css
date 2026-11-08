@@ -1,0 +1,16 @@
+/* The break tab (webview/break/main.ts). Colours follow the theme. */
+html, body { margin: 0; height: 100%; overflow: hidden; background: var(--vscode-editor-background); color: var(--vscode-foreground); font-family: var(--vscode-font-family); user-select: none; }
+canvas { position: fixed; inset: 0; touch-action: none; }
+.card { position: fixed; left: 50%; top: 38%; transform: translate(-50%, -50%); text-align: center; max-width: min(440px, 86vw); padding: 18px 24px; border-radius: 10px; pointer-events: none; opacity: 0;
+  background: color-mix(in srgb, var(--vscode-editor-background) 82%, transparent); }
+.card h1 { margin: 0 0 6px; font-size: 22px; font-weight: 600; }
+.card p { margin: 4px 0; color: var(--vscode-descriptionForeground); }
+.card .timer { font-size: 34px; font-weight: 300; font-variant-numeric: tabular-nums; margin: 8px 0 2px; }
+.card .small { font-size: 12px; margin-top: 10px; }
+.card .big { font-size: 30px; }
+.foot { position: fixed; left: 0; right: 0; bottom: 36px; text-align: center; font-size: 12px; color: var(--vscode-descriptionForeground); pointer-events: none; }
+.back { position: fixed; top: 10px; right: 12px; font: inherit; font-size: 12px; padding: 4px 10px; border-radius: var(--vscode-cornerRadius-small, 4px); cursor: pointer; transition: opacity 200ms;
+  color: var(--vscode-button-secondaryForeground); background: var(--vscode-button-secondaryBackground); border: 1px solid var(--vscode-button-border, transparent); }
+.back:hover { background: var(--vscode-button-secondaryHoverBackground); }
+.back:focus-visible { outline: 1px solid var(--vscode-focusBorder); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { .back { transition: none; } }

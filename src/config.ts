@@ -1,10 +1,11 @@
 import * as vscode from 'vscode';
-import { CACHE, DEFAULT_BASE_URL, RUNNER } from './shared/constants';
+import { BREAK, CACHE, DEFAULT_BASE_URL, RUNNER } from './shared/constants';
 import { normalizeServerUrl } from './shared/serverUrl';
 import type { LangSetting } from './shared/i18n';
 import { checkPattern, type PatternCheck } from './mapping/namePattern';
 import { normalizeSections, type SectionId } from './shared/layout';
 import type { BadgeMode } from './mapping/explorerBadge';
+import { BREAK_SCENES, type BreakSceneSetting } from './flows/breakRules';
 
 export interface GraderConfig {
   baseUrl: string;
@@ -46,6 +47,14 @@ export interface GraderConfig {
   explorerBadge: BadgeMode;
   /** Explorer badges in colour (`cedtGrader.explorer.colors`). */
   explorerColors: boolean;
+  /** The first-full-score celebration (`cedtGrader.fun.celebrate`, off when `cedtGrader.fun.enabled` is off). */
+  funCelebrate: boolean;
+  /** The break reminder (`cedtGrader.fun.breakReminder`, off when `cedtGrader.fun.enabled` is off). */
+  funBreakReminder: boolean;
+  /** Minutes of activity before the break hint (`cedtGrader.fun.breakMinutes`, at least 30). */
+  funBreakMinutes: number;
+  /** Which scene a break opens (`cedtGrader.fun.breakScene`). */
+  funBreakScene: BreakSceneSetting;
   /** `en` (default), `th`, or `auto` (follow VS Code's display language). */
   displayLanguage: LangSetting;
 }
@@ -91,6 +100,10 @@ export function readConfig(): GraderConfig {
     fileNamePattern: checkPattern(c.get<string>('fileNamePattern', '{name}.{ext}')),
     explorerBadge: ((v) => (v === 'tag' || v === 'off' ? v : 'score'))(c.get<string>('explorer.badge', 'score')),
     explorerColors: c.get<boolean>('explorer.colors', true) !== false,
+    funCelebrate: c.get<boolean>('fun.enabled', true) !== false && c.get<boolean>('fun.celebrate', true) !== false,
+    funBreakReminder: c.get<boolean>('fun.enabled', true) !== false && c.get<boolean>('fun.breakReminder', true) !== false,
+    funBreakMinutes: Math.max(BREAK.minMinutes, Math.round(Number(c.get('fun.breakMinutes', BREAK.defaultMinutes)) || BREAK.defaultMinutes)),
+    funBreakScene: ((v) => ((BREAK_SCENES as readonly string[]).includes(v) ? (v as BreakSceneSetting) : 'random'))(c.get<string>('fun.breakScene', 'random')),
     cacheMaxMB: Math.max(CACHE.maxMbMinimum, Number(c.get('cacheMaxMB', CACHE.maxMbDefault)) || CACHE.maxMbDefault),
     runnerDefaultTimeSeconds: Math.max(0.1, Number(c.get('runner.defaultTimeLimitSeconds', RUNNER.defaultTimeSeconds)) || RUNNER.defaultTimeSeconds),
     runnerDefaultMemoryMB: Math.max(1, Number(c.get('runner.defaultMemoryLimitMB', RUNNER.defaultMemoryMB)) || RUNNER.defaultMemoryMB),

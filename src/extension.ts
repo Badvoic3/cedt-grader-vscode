@@ -107,6 +107,12 @@ function start(ctx: vscode.ExtensionContext, crash: CrashReporter): void {
     command('cedtGrader.showRequestLog', () => controller.showRequestLog()),
     command('cedtGrader.clearCache', () => controller.clearCachedData()),
     command('cedtGrader.cleanUpOldFiles', () => controller.cleanUpOldFiles()),
+    command('cedtGrader.takeBreak', () => controller.takeBreak()),
+    command('cedtGrader.takeBreak.sand', () => controller.takeBreak('sand')),
+    command('cedtGrader.takeBreak.donut3d', () => controller.takeBreak('donut3d')),
+    command('cedtGrader.takeBreak.donut2d', () => controller.takeBreak('donut2d')),
+    command('cedtGrader.takeBreak.breathe', () => controller.takeBreak('breathe')),
+    command('cedtGrader.takeBreak.swarm', () => controller.takeBreak('swarm')),
     command('cedtGrader.openTroubleshooting', () => controller.openTroubleshooting()),
     // Read-only documents with the source of past submissions (for "Compare with current file").
     // Statement tabs reopen after a restart, from the disk cache (no request).

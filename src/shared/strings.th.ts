@@ -17,7 +17,7 @@ import type { Strings } from './strings';
  * Everything else was reviewed at checkpoint B (2026-11-03). Add keys here
  * when a new text is translated without review.
  */
-export const TH_REVIEW: readonly string[] = ['S.explorer', 'S.common.dismiss', 'S.crash.notice', 'S.crash.report', 'S.crash.review', 'S.crash.reviewTitle', 'S.files.saveHere', 'S.folder.cancelRestores', 'S.folder.cancelStopsMatch', 'S.folder.cancelUnlinksFile', 'S.folder.replaceFilesQ', 'W.websiteTip', 'S.requestLogOff', 'W.crashTitle', 'G.statusGradingTip', 'G.statusChooseTip', 'G.statusOpenTip', 'G.logInFirst', 'W.server', 'W.serverLine', 'W.changeServer', 'W.checkingServer', 'W.serverWorks', 'W.useDefaultServer', 'S.account.serverInvalid', 'S.account.settingsNotSaved', 'S.account.serverIncompatible', 'S.account.serverUnreachable', 'S.account.insecureTitle', 'S.account.insecureDetail', 'S.account.insecureSend', 'W.crashNote', 'W.crashReport', 'W.crashReportLabel', 'W.crashTitle', 'W.defaultOrderReversed', 'W.sortedBy', 'S.cache.custom', 'S.cache.customDetail', 'S.cache.linksDetail', 'S.migration', 'S.match.severalMatch', 'W.autoDetectAgainTip', 'S.runner', 'S.runTests', 'S.testsTab', 'S.compareTab', 'W.closeTests', 'W.closeStatement', 'W.compareInCode', 'W.compareInCodeTip', 'W.spacesDontCount', 'W.sampleTip', 'S.testcases.loaded', 'S.samples.loaded', 'W.loadTestCasesTip', 'W.runFileTip', 'W.runFileAsk', 'W.runTestsTip', 'W.stopTests', 'W.stopTestsTip', 'W.openTests', 'W.openTestsTip', 'W.runNoCases', 'W.runNotRun', 'W.runCompiling', 'W.runRunning', 'W.runPassed', 'W.runCompileError', 'W.testsNoFile', 'W.runAll', 'W.runAllTip', 'W.runAllNoCases', 'W.addCase', 'W.addCaseTip', 'W.testsLimit', 'W.noCasesLoad', 'W.noCasesAdd', 'W.nothingRun', 'W.leftOut', 'W.caseN', 'W.sourceGrader', 'W.sourceSample', 'W.sourceCustom', 'W.runCase', 'W.deleteCase', 'W.moveCaseTip', 'W.openCase', 'W.closeCase', 'W.caseInput', 'W.caseExpected', 'W.caseActual', 'W.caseStderr', 'W.editExpected', 'W.copyInput', 'W.copyExpected', 'W.copyActual', 'W.copyStderr', 'W.copyError', 'W.setExpected', 'W.setExpectedCut', 'W.textCut', 'W.outputCut', 'W.memoryEstimate', 'W.caseStopped', 'W.exitCode', 'W.exitSignal'];
+export const TH_REVIEW: readonly string[] = ['S.breakReminder', 'S.breakTab', 'S.explorer', 'S.common.dismiss', 'S.crash.notice', 'S.crash.report', 'S.crash.review', 'S.crash.reviewTitle', 'S.files.saveHere', 'S.folder.cancelRestores', 'S.folder.cancelStopsMatch', 'S.folder.cancelUnlinksFile', 'S.folder.replaceFilesQ', 'W.websiteTip', 'S.requestLogOff', 'W.crashTitle', 'G.statusGradingTip', 'G.statusChooseTip', 'G.statusOpenTip', 'G.logInFirst', 'W.server', 'W.serverLine', 'W.changeServer', 'W.checkingServer', 'W.serverWorks', 'W.useDefaultServer', 'S.account.serverInvalid', 'S.account.settingsNotSaved', 'S.account.serverIncompatible', 'S.account.serverUnreachable', 'S.account.insecureTitle', 'S.account.insecureDetail', 'S.account.insecureSend', 'W.crashNote', 'W.crashReport', 'W.crashReportLabel', 'W.crashTitle', 'W.defaultOrderReversed', 'W.sortedBy', 'S.cache.custom', 'S.cache.customDetail', 'S.cache.linksDetail', 'S.migration', 'S.match.severalMatch', 'W.autoDetectAgainTip', 'S.runner', 'S.runTests', 'S.testsTab', 'S.compareTab', 'W.closeTests', 'W.closeStatement', 'W.compareInCode', 'W.compareInCodeTip', 'W.spacesDontCount', 'W.sampleTip', 'S.testcases.loaded', 'S.samples.loaded', 'W.loadTestCasesTip', 'W.runFileTip', 'W.runFileAsk', 'W.runTestsTip', 'W.stopTests', 'W.stopTestsTip', 'W.openTests', 'W.openTestsTip', 'W.runNoCases', 'W.runNotRun', 'W.runCompiling', 'W.runRunning', 'W.runPassed', 'W.runCompileError', 'W.testsNoFile', 'W.runAll', 'W.runAllTip', 'W.runAllNoCases', 'W.addCase', 'W.addCaseTip', 'W.testsLimit', 'W.noCasesLoad', 'W.noCasesAdd', 'W.nothingRun', 'W.leftOut', 'W.caseN', 'W.sourceGrader', 'W.sourceSample', 'W.sourceCustom', 'W.runCase', 'W.deleteCase', 'W.moveCaseTip', 'W.openCase', 'W.closeCase', 'W.caseInput', 'W.caseExpected', 'W.caseActual', 'W.caseStderr', 'W.editExpected', 'W.copyInput', 'W.copyExpected', 'W.copyActual', 'W.copyStderr', 'W.copyError', 'W.setExpected', 'W.setExpectedCut', 'W.textCut', 'W.outputCut', 'W.memoryEstimate', 'W.caseStopped', 'W.exitCode', 'W.exitSignal'];
 
 export const TH: Strings = {
   HOW_LINKED: {
@@ -316,6 +316,28 @@ export const TH: Strings = {
     testsTab: (name) => (name ? `ทดสอบ: ${name}` : 'ทดสอบ'),
     compareTab: (n) => `เคส ${n}: ที่ควรได้ ↔ ที่ได้จริง`,
 
+    breakReminder: {
+      hint: 'พักไหม?',
+      hintTip: (worked) => `คุณเขียนโค้ดมา ${worked} แล้ว คลิกเพื่อพักสักครู่`,
+      prompt: (worked) => `คุณเขียนโค้ดมา ${worked} แล้ว พักสักครู่ไหม?`,
+      take: 'พักเลย',
+      snooze: 'เตือนอีกใน 30 นาที',
+      notToday: 'วันนี้ไม่ต้อง',
+      duration: (h, m) => (h ? `${h} ชม. ${m} นาที` : `${m} นาที`),
+    },
+    breakTab: {
+      title: 'พัก',
+      breakTitle: 'พักสักครู่',
+      breakDone: 'พร้อมเมื่อไรก็กลับมาได้',
+      breakSub: 'ลุกขึ้นยืน มองไกล ๆ แล้วดื่มน้ำสักหน่อย',
+      back: 'กด Esc หรือ “กลับไปที่โค้ด” เพื่อกลับไปที่โค้ด',
+      backBtn: 'กลับไปที่โค้ด',
+      moveMouse: 'ขยับเมาส์ แล้วโค้ดจะตามไป · คลิกเพื่อให้กระจาย',
+      sandHint: 'ลากผ่านกองทรายเพื่อดันมัน · กดค้างเพื่อตัก ปล่อยเพื่อเท',
+      donutHint: 'ลากเพื่อหมุน',
+      breatheIn: 'หายใจเข้า',
+      breatheOut: 'หายใจออก',
+    },
     explorer: {
       category: (names) => `หมวด: ${names}`,
       counted: (score) => `คะแนนที่นับ ${score}`,

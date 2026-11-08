@@ -317,6 +317,30 @@ const EN_S = {
   testsTab: (name: string) => (name ? `Tests: ${name}` : 'Tests'),
   compareTab: (n: number) => `Case ${n}: Expected ↔ Actual`,
 
+  breakReminder: {
+    /** Status bar, with a $(coffee) icon. */
+    hint: 'Break?',
+    hintTip: (worked: string) => `You've been coding for ${worked}. Click for a short break.`,
+    prompt: (worked: string) => `You've been coding for ${worked}. Take a short break?`,
+    take: 'Take a Break',
+    snooze: 'Snooze 30 min',
+    notToday: 'Not Today',
+    /** "1 h 30 min", "45 min". */
+    duration: (h: number, m: number) => (h ? `${h} h ${m} min` : `${m} min`),
+  },
+  breakTab: {
+    title: 'Break',
+    breakTitle: 'Time for a short break',
+    breakDone: 'Ready when you are',
+    breakSub: 'Stand up, look at something far away, have some water.',
+    back: 'Esc or Back to code returns to your code',
+    backBtn: 'Back to code',
+    moveMouse: 'Move the mouse: your code follows it · click to burst it',
+    sandHint: 'Move through the sand to push it · hold the button to scoop, let go to pour',
+    donutHint: 'Drag to spin it',
+    breatheIn: 'Breathe in',
+    breatheOut: 'Breathe out',
+  },
   explorer: {
     category: (names: string) => `Category: ${names}`,
     counted: (score: string) => `counted ${score}`,

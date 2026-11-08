@@ -59,6 +59,9 @@ import { Links } from './flows/links';
 import { type AskOptions, type InlinePrompt, InlinePrompts } from './flows/prompts';
 import { countedSubmissionId } from './flows/results';
 import { ServerFlow } from './flows/server';
+import { BreakReminder } from './flows/breakReminder';
+import { pickScene, type BreakScene } from './flows/breakRules';
+import { BreakPanel } from './ui/breakPanel';
 import { SubmitFlow } from './flows/submit';
 import { Runner } from './flows/runner';
 import { TestCases } from './flows/testcases';
@@ -139,6 +142,8 @@ export class GraderController implements vscode.Disposable {
   private readonly host: Host;
   /** Registered by `extension.ts`. */
   readonly badges: ExplorerBadges;
+  readonly breakReminder: BreakReminder;
+  readonly breakPanel: BreakPanel;
   private readonly prompts: InlinePrompts;
   private readonly folder: FolderMode;
   private readonly links: Links;
@@ -175,6 +180,15 @@ export class GraderController implements vscode.Disposable {
     this.host = this.makeHost();
     this.badges = new ExplorerBadges(this.host);
     this.mapping.onChanged = () => this.badges.refresh();
+    this.breakPanel = new BreakPanel(ctx.extensionUri, (m) => this.log(m));
+    this.breakReminder = new BreakReminder({
+      settings: () => ({ enabled: this.cfg.funBreakReminder, minutes: this.cfg.funBreakMinutes }),
+      holds: () => ({ grading: this.submitFlow.busy, running: this.runner.running, exam: this.client.contestPage === true }),
+      state: ctx.globalState,
+      account: () => `${this.cfg.baseUrl}:${this.cfg.username}`,
+      takeBreak: () => this.takeBreak(),
+      log: (m) => this.log(m),
+    });
     this.server = new ServerFlow({
       verified: () => this.ctx.globalState.get<string[]>(KEYS.verifiedServers, []),
       saveVerified: async (list) => void (await this.ctx.globalState.update(KEYS.verifiedServers, list)),
@@ -327,6 +341,11 @@ export class GraderController implements vscode.Disposable {
       get problems() { return c.problems; },
       get languages() { return c.languages; },
       canShowScores: () => c.client.isLoggedIn || c.hasSavedPassword,
+      fun: {
+        activity: () => c.breakReminder?.activity(),
+        // After the run or submit has fully ended, so "running" / "grading" no longer hold the prompt back.
+        boundary: (kind) => void setTimeout(() => c.breakReminder?.boundary(kind), 0),
+      },
       allowedLanguages: (p) => c.allowedLanguages(p),
       allSourceExts: () => c.allSourceExts(),
       get selectedLanguageId() { return c.selectedLanguageId; },
@@ -459,6 +478,7 @@ export class GraderController implements vscode.Disposable {
     this.isStarted = true;
     this.markStarted();
     this.badges.start();
+    this.breakReminder.start();
     if (this.panelVisible) this.setPanelVisible(true);
     this.emit();
     revealPanelOnStart(this.cfg.panelOpenOnStartup, this.panelVisible, (c, o) => vscode.commands.executeCommand(c, o)).then(undefined, (err) => this.logError('Reveal failed', err));
@@ -475,6 +495,8 @@ export class GraderController implements vscode.Disposable {
   dispose(): void {
     this.submitFlow.stop();
     this.badges.dispose();
+    this.breakReminder.dispose();
+    this.breakPanel.dispose();
     this.debugChannel?.dispose();
     for (const d of this.disposables) d.dispose();
   }
@@ -570,6 +592,7 @@ export class GraderController implements vscode.Disposable {
     const prev = this.cfg;
     this.cfg = readConfig();
     if (prev.displayLanguage !== this.cfg.displayLanguage) this.applyLanguage();
+    if (prev.funBreakReminder !== this.cfg.funBreakReminder || prev.funBreakMinutes !== this.cfg.funBreakMinutes) this.breakReminder.refresh();
     if (JSON.stringify(prev.runnerCompilerPaths) !== JSON.stringify(this.cfg.runnerCompilerPaths)) this.runner.toolsChanged();
     if (prev.fileNamePattern.pattern !== this.cfg.fileNamePattern.pattern || prev.fileNamePattern.problem !== this.cfg.fileNamePattern.problem) {
       // The matcher uses the pattern: rebuild the index and re-match the open file.
@@ -598,6 +621,7 @@ export class GraderController implements vscode.Disposable {
 
   private resetSessionState(): void {
     this.accountStatus = 'logged-out';
+    this.breakReminder?.resetSession();
     // Nothing started for the previous account carries over: a Retry or poll would reach the new server.
     this.loginAttempt++;
     this.connection = null;
@@ -1239,6 +1263,7 @@ export class GraderController implements vscode.Disposable {
     else if (!entry && list?.length && m.kind !== 'match') await this.mapping.dropAuto(uri);
     await this.links.refreshMappedIds();
     if (seq !== this.refreshSeq) return;
+    if (this.problem && problem && this.problem.id !== problem.id) this.breakReminder?.boundary('switch');
     this.problem = problem;
     // Cached name search only here; a missing search runs right after the first render.
     // Suggestions (confident ones only) behave like links for everything read-only.
@@ -1428,6 +1453,13 @@ export class GraderController implements vscode.Disposable {
   }
 
   /** The main panel's Run tests: the split opens unless every case passed. */
+  /** Open the break tab: `scene`, or the setting's (random by default, never the last one). Works whatever the timer or the settings say. */
+  async takeBreak(scene?: BreakScene): Promise<void> {
+    const chosen = scene ?? pickScene(this.cfg.funBreakScene, this.breakReminder.lastScene(), Math.random);
+    this.breakReminder.tookBreak(chosen);
+    this.breakPanel.show(chosen);
+  }
+
   async runTests(): Promise<void> {
     const summary = await this.runner.run();
     if (Runner.shouldOpenTests(summary) || (!summary && !this.runner.running && this.runner.summary().kind === 'no-cases' && this.fileUri)) await this.testPanel.open();

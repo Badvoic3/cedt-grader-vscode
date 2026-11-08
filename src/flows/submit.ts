@@ -15,7 +15,7 @@ import {
 import { problemSubtitle } from '../mapping/match';
 import { isAtOrInside, pathKey } from '../mapping/paths';
 import { submitQuestion } from '../mapping/suggestionGate';
-import { WEB_PATHS } from '../shared/constants';
+import { SERVER_SCORE_CAP, WEB_PATHS } from '../shared/constants';
 import type { ResultView } from '../shared/messages';
 import { HOW_LINKED, S } from '../shared/strings';
 import { needsSave, shouldRevealResult } from '../shared/submitOptions';
@@ -170,6 +170,7 @@ export class SubmitFlow {
       // Busy from here on (questions above don't lock the panel).
       this.busy = true;
       this.gradingFile = key;
+      h.fun.activity();
       this.setResult(key, newResult(problem, 'submitting', S.submit.submitting));
       const sub = await h.client.submit(problem.id, languageId!, doc.getText(), fileName);
       sentId = sub.id;
@@ -221,6 +222,8 @@ export class SubmitFlow {
     const updated = h.currentProblem();
     const after = updated ? countedScore(updated.bestScore, updated.list?.cost ?? 0, updated.list?.rawSum ?? false) : null;
     this.updateResult(key, { improvement: describeImprovement(countedBefore, after, final.points) });
+    // A task boundary for the break reminder: progress, never a failure.
+    if ((final.points ?? 0) >= SERVER_SCORE_CAP || (after !== null && (countedBefore === null || after > countedBefore))) h.fun.boundary('verdict-pass');
     if (shouldRevealResult({ revealResultAfterSubmit: h.cfg.revealResultAfterSubmit, gradedFile: key, activeFile: h.folder.targetUri()?.fsPath ?? null })) {
       h.focus('result');
     }

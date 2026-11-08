@@ -295,6 +295,7 @@ export class Runner {
 
       const st = this.state(target.owner);
       started = true;
+      h.fun.activity();
       for (const c of cases) st.runs.delete(c.id);
       Object.assign(st, { phase: 'compiling', failure: null, leftOut: target.leftOut, warnings: '' });
       this.changed(true);
@@ -314,7 +315,9 @@ export class Runner {
         const tip = nextSampleTip(list.sampleTip, list.cases, st.runs);
         if (tip.failedRuns !== (list.sampleTip?.failedRuns ?? 0)) await h.cases.setMeta(target.owner.problemId, { sampleTip: tip });
       }
-      return summarize(list.cases, st);
+      const summary = summarize(list.cases, st);
+      if (!abort.signal.aborted && allPassed(summary)) h.fun.boundary('tests-pass');
+      return summary;
     } finally {
       this.active = null;
       if (started) await this.reload();
