@@ -16,8 +16,8 @@ export interface TokenColors {
   fg: string | null;
 }
 
-interface Rule { scope?: string | string[]; settings?: { foreground?: string } }
-export interface ThemeJson { include?: string; colors?: Record<string, string>; tokenColors?: Rule[] | string }
+interface Rule { scope?: string | string[]; settings?: { foreground?: string; fontStyle?: string } }
+export interface ThemeJson { include?: string; colors?: Record<string, string>; tokenColors?: Rule[] | string; semanticHighlighting?: boolean; semanticTokenColors?: Record<string, unknown> }
 
 /** JSON with comments and trailing commas, as theme files often are. Returns null when it can't be read. */
 export function parseJsonc(text: string): ThemeJson | null {
@@ -34,15 +34,18 @@ export function parseJsonc(text: string): ThemeJson | null {
  * The rules and colours of a theme, following `include` (a base theme) through `load(relativePath)`; the
  * including theme wins. At most 5 levels, so a loop can't hang.
  */
-export function collectTheme(first: ThemeJson, load: (include: string, from: ThemeJson) => ThemeJson | null): { rules: Rule[]; colors: Record<string, string> } {
+export function collectTheme(first: ThemeJson, load: (include: string, from: ThemeJson) => ThemeJson | null): { rules: Rule[]; colors: Record<string, string>; semanticHighlighting?: boolean; semanticTokenColors: Record<string, unknown> } {
   const chain: ThemeJson[] = [];
   for (let t: ThemeJson | null = first; t && chain.length < 5; t = t.include ? load(t.include, t) : null) chain.push(t);
-  const rules: Rule[] = [], colors: Record<string, string> = {};
+  const rules: Rule[] = [], colors: Record<string, string> = {}, semanticTokenColors: Record<string, unknown> = {};
+  let semanticHighlighting: boolean | undefined;
   for (const t of chain.reverse()) {
     if (Array.isArray(t.tokenColors)) rules.push(...t.tokenColors);
     Object.assign(colors, t.colors ?? {});
+    Object.assign(semanticTokenColors, t.semanticTokenColors ?? {});
+    if (typeof t.semanticHighlighting === 'boolean') semanticHighlighting = t.semanticHighlighting;
   }
-  return { rules, colors };
+  return { rules, colors, semanticHighlighting, semanticTokenColors };
 }
 
 /** The foreground of the most specific rule matching `scope` (a rule scope matches itself and its dotted children); later rules win ties. */

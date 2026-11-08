@@ -1,6 +1,7 @@
 **
 !dist/extension.js
 !dist/pdfjs/**
+!dist/onig.wasm
 !media/icon.svg
 !media/icon.png
 !media/walkthrough/**

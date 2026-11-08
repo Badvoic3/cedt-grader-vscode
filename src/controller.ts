@@ -1530,7 +1530,7 @@ export class GraderController implements vscode.Disposable {
   async takeBreak(scene?: BreakScene): Promise<void> {
     const chosen = scene ?? pickScene(this.cfg.funBreakScene, this.breakReminder.lastScene(), Math.random);
     this.breakReminder.tookBreak(chosen);
-    this.breakPanel.show(chosen);
+    await this.breakPanel.show(chosen);
   }
 
   async runTests(): Promise<void> {

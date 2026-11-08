@@ -22,6 +22,8 @@ const copyHostPdfjs = {
     build.onEnd(async () => {
       await mkdir('dist/pdfjs', { recursive: true });
       await copyFile('node_modules/pdfjs-dist/legacy/build/pdf.min.mjs', 'dist/pdfjs/pdf.min.mjs');
+      // The grammar engine's regex library for the break tab's colours (src/ui/textmatePaint.ts).
+      await copyFile('node_modules/vscode-oniguruma/release/onig.wasm', 'dist/onig.wasm');
     });
   },
 };

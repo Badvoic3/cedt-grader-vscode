@@ -69,10 +69,10 @@ export function makePart(gi: number, hx: number, hy: number, row: number, col: n
  */
 export function ride(p: Part, tx: number, ty: number, t: number, dt: number): void {
   if (!p.on) {
+    p.ex = p.hx - tx;
+    p.ey = p.hy - ty;
+    p.evx = p.evy = 0;
     if (t < p.d) {
-      p.ex = p.hx - tx;
-      p.ey = p.hy - ty;
-      p.evx = p.evy = 0;
       p.x = p.hx;
       p.y = p.hy;
       return;
@@ -90,46 +90,48 @@ export function ride(p: Part, tx: number, ty: number, t: number, dt: number): vo
   p.y = ty + p.ey;
 }
 
-/**
- * The way back to the editor: every part leaves the scene at the speed it had (no stop), then springs home a
- * little more damped; real characters regain full opacity and size, copies fade as they merge into their source.
- * The last frame puts every real character exactly on its home.
- */
-/** The way back never takes longer than this. */
-export const EXIT_MAX_MS = 2500;
+/** The way back always ends by then: each part's glide has a fixed length, so nothing is cut short. */
+export const EXIT_MAX_MS = 1400;
 
+/**
+ * The way back: each part glides home on a curve that starts with its current speed and ends at its home with no
+ * speed (a cubic Hermite curve), in a fixed time between 700 ms and EXIT_MAX_MS (further parts take longer). Its
+ * opacity and size ease back to normal on the way; copies fade out. Deterministic, so the last frame is exactly the
+ * editor's layout and no part ever has to jump.
+ */
 export class ExitMotion {
-  private items: { p: Part; ed: number; qx: number; qy: number; qvx: number; qvy: number; k: number; dmp: number; fa: number; fs: number; d0: number }[] = [];
+  private items: { p: Part; T: number; qx: number; qy: number; tx: number; ty: number; fa: number; fs: number }[] = [];
 
   constructor(parts: readonly Part[], rnd: Rnd) {
     for (const p of parts) {
-      const v = Math.hypot(p.vx, p.vy), m = v > 2500 ? 2500 / v : 1, k = 18 + rnd() * 12, qx = p.x - p.hx, qy = p.y - p.hy;
-      this.items.push({ p, ed: rnd() * 120, qx, qy, qvx: p.vx * m, qvy: p.vy * m, k, dmp: 1.5 * Math.sqrt(k), fa: p.a, fs: p.s, d0: Math.hypot(qx, qy) + 1 });
+      const qx = p.x - p.hx, qy = p.y - p.hy, dist = Math.hypot(qx, qy);
+      const T = Math.min(EXIT_MAX_MS, 700 + dist * 0.5 + rnd() * 120);
+      // The start speed carries on, but never sends a part more than ~110 px the wrong way (0.148·T·v at most).
+      const v = Math.hypot(p.vx, p.vy), cap = 110 / (0.148 * (T / 1000)), m = v > cap ? cap / v : 1;
+      this.items.push({ p, T, qx, qy, tx: (T / 1000) * p.vx * m, ty: (T / 1000) * p.vy * m, fa: p.a, fs: p.s });
     }
   }
 
-  /** One frame; false once everything is home (at most 2.5 s). */
-  step(t: number, dt: number): boolean {
+  /** Progress of the slowest part, 0…1. */
+  progress(t: number): number {
+    let worst = 1;
+    for (const it of this.items) worst = Math.min(worst, clamp01(t / it.T));
+    return worst;
+  }
+
+  /** The frame at `t` ms after the way back started; false once everything is home. */
+  step(t: number, _dt = 0): boolean {
     let busy = false;
-    const n = Math.ceil(dt / 8), h = dt / 1000 / n;
     for (const it of this.items) {
-      for (let i = 0; i < n; i++) {
-        let ax = -it.qvx * 0.6, ay = -it.qvy * 0.6; // before its start it coasts, slowing down
-        if (t >= it.ed) {
-          ax = -it.k * it.qx - it.dmp * it.qvx; ay = -it.k * it.qy - it.dmp * it.qvy;
-          const am = Math.hypot(ax, ay);
-          if (am > 6000) { ax *= 6000 / am; ay *= 6000 / am; }
-        }
-        it.qvx += ax * h; it.qvy += ay * h; it.qx += it.qvx * h; it.qy += it.qvy * h;
-      }
-      const p = it.p, dist = Math.hypot(it.qx, it.qy), along = 1 - clamp01(dist / it.d0);
-      p.x = p.hx + it.qx; p.y = p.hy + it.qy;
-      p.a = p.copy ? it.fa * clamp01(dist / (0.3 * it.d0 + 12)) : it.fa + (1 - it.fa) * along;
+      const u = clamp01(t / it.T), p = it.p;
+      if (u < 1) busy = true;
+      const h00 = 2 * u * u * u - 3 * u * u + 1, h10 = u * u * u - 2 * u * u + u, along = easeInOut(u);
+      p.x = p.hx + h00 * it.qx + h10 * it.tx;
+      p.y = p.hy + h00 * it.qy + h10 * it.ty;
+      p.a = p.copy ? it.fa * (1 - along) : it.fa + (1 - it.fa) * along;
       p.s = it.fs + (1 - it.fs) * along;
-      if (p.copy ? p.a > 0.02 : dist > 0.5 || Math.hypot(it.qvx, it.qvy) > 20) busy = true;
+      if (u >= 1) { p.x = p.hx; p.y = p.hy; p.a = p.copy ? 0 : 1; p.s = 1; }
     }
-    if (t > EXIT_MAX_MS) busy = false; // never longer than this: the last step lands everything
-    if (!busy) for (const it of this.items) { const p = it.p; p.x = p.hx; p.y = p.hy; p.a = p.copy ? 0 : 1; p.s = 1; }
     return busy;
   }
 }
@@ -369,6 +371,20 @@ export class Fluid {
 
 /** Tuned against the user's recording (measured frame by frame): median speed 0.24 of the height per second, spread 0.13. */
 export const SWARM = { count: 650, spread: 0.18, swirl: 0.6, wander: 0.5, hold: 0.7, intro: 1.4 } as const;
+
+/**
+ * Is the pointer gone from the tab? A webview nested in VS Code's frames often gets no leave event, so besides one:
+ * it stopped right at an edge (it went out that way), or it hasn't moved for a while (the person looked away).
+ * While the button is held it always counts as here.
+ */
+export function pointerAway(q: { seen: boolean; inside: boolean; down: boolean; x: number; y: number; idleMs: number; W: number; H: number }): boolean {
+  if (!q.seen) return true;
+  if (q.down) return false;
+  if (!q.inside) return true;
+  const m = SWARM_AWAY.edgePx, atEdge = q.x < m || q.y < m || q.x > q.W - m || q.y > q.H - m;
+  return (atEdge && q.idleMs > SWARM_AWAY.edgeIdleMs) || q.idleMs > SWARM_AWAY.idleMs;
+}
+export const SWARM_AWAY = { edgePx: 28, edgeIdleMs: 250, idleMs: 5000 } as const;
 
 export class Swarm {
   readonly fluid: Fluid;

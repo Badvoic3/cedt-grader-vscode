@@ -119,6 +119,8 @@ export const BREAK = {
   activityDebounceMs: 5_000,
   /** The break tab's countdown. */
   breakSeconds: 300,
+  /** The break tab comes forward when its first frame is drawn, or after this long. */
+  tabLoadMs: 1_500,
 } as const;
 
 /** The first-full-score celebration on the Result card (mockup combo 1 + 2 + 4, picked 2026-11-07). */
