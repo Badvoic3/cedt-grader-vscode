@@ -101,7 +101,7 @@
   "command.takeBreak.swarm.title": "Take a Break: Swarm",
   "command.playCelebration.title": "Play Celebration",
   "command.showTrophies.title": "Show Trophies",
-  "config.fun.enabled.description": "Turn on the fun extras: the celebration for a first full score, trophies, and the break reminder. Off turns all of them off; their commands still work.",
+  "config.fun.enabled.description": "Turn on the fun extras: the celebration for a first full score, trophies, and the break reminder. Off turns all of them off; Play Celebration and Take a Break still work.",
   "config.fun.celebrate.description": "Celebrate the first time a problem passes every test or reaches a counted score of 100.",
   "config.fun.breakReminder.description": "After a long stretch of work, suggest a short break: first a hint in the status bar, then, only at a natural stopping point, a small prompt (at most twice a day).",
   "config.fun.breakMinutes.description": "Minutes of work (edits, runs and submits; a gap of 10 minutes starts the count again) before the break hint appears.",

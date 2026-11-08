@@ -1,4 +1,5 @@
 import { SERVER_SCORE_CAP } from '../shared/constants';
+import { tagKey } from '../shared/tags';
 import { dayKey } from './breakRules';
 
 /**
@@ -28,14 +29,20 @@ export interface FinishedSubmission {
   compileError: boolean;
   /** The problem is already in `FirstFull`. */
   known: boolean;
+  /** Its score is a raw sum with no maximum: 100 doesn't mean full. */
+  rawSum: boolean;
 }
 
 /** 'celebrate' = record it and play; 'record' = record it silently; 'none' = nothing to do. */
 export function shouldCelebrate(s: FinishedSubmission): 'celebrate' | 'record' | 'none' {
   const allPassed = !s.compileError && s.verdicts.length > 0 && s.verdicts.every((v) => v.ok);
-  const full = allPassed || (s.countedAfter ?? 0) >= SERVER_SCORE_CAP || (!s.compileError && (s.points ?? 0) >= SERVER_SCORE_CAP);
-  if (!full || s.known) return 'none';
-  return (s.bestBefore ?? 0) >= SERVER_SCORE_CAP ? 'record' : 'celebrate';
+  // A raw sum at 100 counts only when the server gives no per-test verdicts to go by.
+  const reached = s.rawSum
+    ? !s.compileError && !s.verdicts.length && (s.points ?? 0) >= SERVER_SCORE_CAP
+    : (s.countedAfter ?? 0) >= SERVER_SCORE_CAP || (!s.compileError && (s.points ?? 0) >= SERVER_SCORE_CAP);
+  if (!(allPassed || reached) || s.known) return 'none';
+  const fullBefore = (s.bestBefore ?? 0) >= SERVER_SCORE_CAP && !(s.rawSum && allPassed);
+  return fullBefore ? 'record' : 'celebrate';
 }
 
 export interface TopicProgress {
@@ -60,8 +67,6 @@ interface ProblemLike {
   status: 'solved' | 'inprogress' | 'untried';
   tags?: readonly string[];
 }
-
-const tagKey = (t: string) => t.trim().toLowerCase();
 
 /** Day number of a 4:00-to-4:00 day. */
 function dayNumber(t: number): number {

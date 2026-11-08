@@ -219,10 +219,15 @@ export class SubmitFlow {
     h.connectionOk();
     h.data.recordDetail(final);
     await h.data.afterSubmit(problem.id);
-    const updated = h.currentProblem();
+    // The submitted problem's own score: the active file may be on another problem by now.
+    const updated = h.problemById(problem.id);
     const after = updated ? countedScore(updated.bestScore, updated.list?.cost ?? 0, updated.list?.rawSum ?? false) : null;
     this.updateResult(key, { improvement: describeImprovement(countedBefore, after, final.points) });
-    h.fun.finished(problem, final, after);
+    try {
+      h.fun.finished(problem, final, after);
+    } catch (err) {
+      h.log(`Trophies: ${err instanceof Error ? err.message : String(err)}`); // the verdict itself is fine
+    }
     // A task boundary for the break reminder: progress, never a failure.
     if ((final.points ?? 0) >= SERVER_SCORE_CAP || (after !== null && (countedBefore === null || after > countedBefore))) h.fun.boundary('verdict-pass');
     if (shouldRevealResult({ revealResultAfterSubmit: h.cfg.revealResultAfterSubmit, gradedFile: key, activeFile: h.folder.targetUri()?.fsPath ?? null })) {

@@ -35,10 +35,10 @@ export function themeBlocks(custom: unknown, themeNames: readonly string[]): Rec
   if (!isObj(custom)) return [];
   const out: Record<string, unknown>[] = [custom];
   for (const [k, v] of Object.entries(custom)) {
-    const m = /^\[(.+)\]$/.exec(k);
-    if (!m || !isObj(v)) continue;
-    const pattern = new RegExp(`^${m[1].split('*').map((p) => p.replace(/[.+?^${}()|[\]\\]/g, '\\$&')).join('.*')}$`);
-    if (themeNames.some((n) => pattern.test(n))) out.push(v);
+    if (!k.startsWith('[') || !k.endsWith(']') || !isObj(v)) continue;
+    // One key can name several themes: "[Theme A][Theme *]".
+    const patterns = [...k.matchAll(/\[(.+?)\]/g)].map((m) => new RegExp(`^${m[1].split('*').map((p) => p.replace(/[.+?^${}()|[\]\\]/g, '\\$&')).join('.*')}$`));
+    if (themeNames.some((n) => patterns.some((p) => p.test(n)))) out.push(v);
   }
   return out;
 }

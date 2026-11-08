@@ -112,15 +112,8 @@ export class ExitMotion {
     }
   }
 
-  /** Progress of the slowest part, 0…1. */
-  progress(t: number): number {
-    let worst = 1;
-    for (const it of this.items) worst = Math.min(worst, clamp01(t / it.T));
-    return worst;
-  }
-
   /** The frame at `t` ms after the way back started; false once everything is home. */
-  step(t: number, _dt = 0): boolean {
+  step(t: number): boolean {
     let busy = false;
     for (const it of this.items) {
       const u = clamp01(t / it.T), p = it.p;
@@ -141,9 +134,9 @@ export class ExitMotion {
 // down; the pointer pushes grains it passes through, holding the button scoops grains up, letting go pours them.
 
 export class SandGrid {
-  readonly cols: number;
-  readonly rows: number;
-  private readonly grid: Int32Array;
+  cols: number;
+  rows: number;
+  private grid: Int32Array;
   readonly cellOf: { c: number; r: number; state: 'wait' | 'fall' | 'rest' | 'held'; v: number; acc: number; delay: number }[];
   private active = new Set<number>();
   readonly held: number[] = [];
@@ -238,13 +231,41 @@ export class SandGrid {
   }
 
   private pour(pc: number, pr: number): void {
-    pr = Math.max(0, pr);
+    pc = clamp(pc, 0, this.cols - 1);
+    pr = clamp(pr, 0, this.rows - 1);
     for (let n = 0; n < 5 && this.held.length; n++) {
-      let placed = false;
-      for (const dc of [0, -1, 1, -2, 2]) {
-        if (this.at(pc + dc, pr) === -1) { const k = this.held.pop()!; this.put(k, pc + dc, pr); const g = this.cellOf[k]; g.state = 'fall'; g.v = 0.5; this.active.add(k); placed = true; break; }
+      const cell = this.freeCell(pc, pr);
+      if (!cell) return;
+      const k = this.held.pop()!;
+      this.put(k, cell[0], cell[1]);
+      const g = this.cellOf[k]; g.state = 'fall'; g.v = 0.5; this.active.add(k);
+    }
+  }
+
+  /** The free cell nearest above (pc, pr): on a pile, its top; a column full to the top looks further along the top row. */
+  private freeCell(pc: number, pr: number): [number, number] | null {
+    for (let r = pr; r >= 0; r--) for (const dc of [0, -1, 1, -2, 2]) if (this.at(pc + dc, r) === -1) return [pc + dc, r];
+    for (let d = 3; d < this.cols; d++) for (const c of [pc - d, pc + d]) if (this.at(c, 0) === -1) return [c, 0];
+    return null;
+  }
+
+  /** The tab changed size: every grain keeps its place counted from the floor, and what no longer fits settles again. */
+  resize(W: number, H: number): void {
+    const rows = Math.max(1, Math.floor((H - this.oy) / this.lh)), shift = rows - this.rows;
+    this.cols = Math.ceil(W / this.cw) + 1;
+    this.rows = rows;
+    this.grid = new Int32Array(this.cols * rows).fill(-1);
+    const placed = this.cellOf.map((g, i) => ({ g, i })).filter(({ g }) => g.c >= 0).sort((a, b) => b.g.r - a.g.r);
+    for (const { g, i } of placed) {
+      const cell = this.freeCell(Math.min(g.c, this.cols - 1), clamp(g.state === 'wait' ? g.r : g.r + shift, 0, rows - 1));
+      if (cell) {
+        [g.c, g.r] = cell;
+        this.grid[g.r * this.cols + g.c] = i;
+        if (g.state !== 'wait') { g.state = 'fall'; g.v = 0; g.acc = 0; this.active.add(i); }
+      } else {
+        // A tab too small for every grain: the rest stay in the hand, and pour when there is room.
+        g.c = -1; g.r = -1; g.state = 'held'; this.active.delete(i); this.held.push(i);
       }
-      if (!placed) return;
     }
   }
 }
@@ -387,7 +408,7 @@ export function pointerAway(q: { seen: boolean; inside: boolean; down: boolean; 
 export const SWARM_AWAY = { edgePx: 28, edgeIdleMs: 250, idleMs: 5000 } as const;
 
 export class Swarm {
-  readonly fluid: Fluid;
+  fluid: Fluid;
   private readonly n: number;
   private readonly z: Float32Array;
   private readonly vz: Float32Array;
@@ -399,11 +420,11 @@ export class Swarm {
   private heads = new Int32Array(1);
   private time = 0;
   private intro = 0;
-  private readonly R: number;
+  private R: number;
   private last: { x: number; y: number } | null = null;
   private motion = { x: 0, y: 0 };
 
-  constructor(private readonly parts: Part[], private readonly W: number, private readonly H: number, private readonly half: { w: number; h: number }, rnd: Rnd) {
+  constructor(private readonly parts: Part[], private W: number, private H: number, private readonly half: { w: number; h: number }, rnd: Rnd) {
     this.fluid = new Fluid(W, H);
     this.n = parts.length;
     this.R = SWARM.spread * H;
@@ -415,6 +436,14 @@ export class Swarm {
       this.drag[i] = 10 * (1 - 0.3 * rnd() * rnd()); // some are carried less by the air: a looser tail
       this.wake[i] = ((p.copy ? rnd() * this.n : i) / this.n) * 0.5 + rnd() * 0.3; // the code peels off in reading order
     });
+  }
+
+  /** The tab changed size: new walls, and the air starts still. */
+  resize(W: number, H: number): void {
+    this.W = W;
+    this.H = H;
+    this.R = SWARM.spread * H;
+    this.fluid = new Fluid(W, H);
   }
 
   /** Depth of part i in −1 (far) … 1 (near). */

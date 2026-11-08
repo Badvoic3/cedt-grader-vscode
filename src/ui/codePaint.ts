@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import * as path from 'node:path';
 import * as vscode from 'vscode';
 import type { CodePaint } from '../shared/breakData';
+import { BREAK } from '../shared/constants';
 import { customRules, type Rule, semanticContext, semanticRules, semanticStyle, themeBlocks } from '../shared/codePaint';
 import { collectTheme, parseJsonc, type ThemeJson } from '../shared/themeTokens';
 import type { GrammarInfo, SemanticSpan } from './textmatePaint';
@@ -146,7 +147,7 @@ export async function editorPaint(editor: vscode.TextEditor, first: number, last
   const rules = [...theme.rules, ...customRules(cfg.get('tokenColorCustomizations'), theme.names)];
   const start = Math.max(0, first - LOOK_BACK);
   const lines: string[] = [];
-  for (let i = start; i <= last && i < doc.lineCount; i++) lines.push(doc.lineAt(i).text);
+  for (let i = start; i <= last && i < doc.lineCount; i++) lines.push(doc.lineAt(i).text.slice(0, BREAK.maxLineChars));
   const semantic = await semanticSpans(doc, theme, rules, first, last);
   const { paintCode } = await import('./textmatePaint');
   return paintCode({

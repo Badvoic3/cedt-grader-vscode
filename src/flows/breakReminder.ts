@@ -33,12 +33,13 @@ export class BreakReminder implements vscode.Disposable {
 
   constructor(private readonly deps: BreakReminderDeps) {
     this.timer = new BreakTimer(deps.settings().minutes);
-    this.item.name = S.breakReminder.take;
     this.item.command = 'cedtGrader.takeBreak';
     this.subs.push(
       this.item,
       vscode.workspace.onDidChangeTextDocument((e) => {
         if (e.document.uri.scheme !== 'file' || !e.contentChanges.length) return;
+        // The user's typing: not an extension, a formatter in the background, or a branch switch reloading open files.
+        if (!vscode.window.state.focused || vscode.window.activeTextEditor?.document !== e.document) return;
         const t = this.now();
         if (t - this.lastEdit < BREAK.activityDebounceMs) return;
         this.lastEdit = t;
@@ -72,7 +73,7 @@ export class BreakReminder implements vscode.Disposable {
     const day = this.day(t);
     this.timer.setMinutes(s.minutes);
     if (!this.timer.boundary(t, kind, this.deps.holds(), day)) return;
-    const shown = this.timer.prompted(day);
+    const shown = this.timer.prompted(day, t);
     void this.saveDay(shown);
     void this.prompt(t);
   }
@@ -94,6 +95,7 @@ export class BreakReminder implements vscode.Disposable {
   refresh(): void {
     const s = this.deps.settings();
     this.timer.setMinutes(s.minutes);
+    this.item.name = S.breakReminder.take;
     const t = this.now();
     if (!s.enabled || this.timer.show(t, this.day(t)) !== 'hint') {
       this.item.hide();
@@ -118,8 +120,9 @@ export class BreakReminder implements vscode.Disposable {
   private async prompt(t: number): Promise<void> {
     let answer: PromptAnswer = 'ignored';
     try {
-      // Non-modal: it never takes the keyboard. Closing it, or letting it hide, counts as ignored.
-      const take = S.breakReminder.take, snooze = S.breakReminder.snooze, notToday = S.breakReminder.notToday;
+      // Non-modal: it never takes the keyboard. Its promise stays open until the user closes or answers it, also
+      // after it hides by itself: BreakTimer stops waiting for it (BREAK.promptOpenMs).
+      const take = S.breakReminder.take, snooze = S.breakReminder.snooze(BREAK.snoozeMs / 60_000), notToday = S.breakReminder.notToday;
       const pick = await vscode.window.showInformationMessage(S.breakReminder.prompt(this.worked(t)), take, snooze, notToday);
       answer = pick === take ? 'take' : pick === snooze ? 'snooze' : pick === notToday ? 'not-today' : 'ignored';
     } catch (err) {

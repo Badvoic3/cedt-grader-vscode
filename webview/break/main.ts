@@ -6,6 +6,8 @@
  */
 import { clamp01, easeInOut, EXIT_MAX_MS, ExitMotion, makePart, type Part, pointerAway, projectTorus, ride, SandGrid, seeded, Swarm, SWARM, torusPoints } from './physics';
 import { reducedMotion } from '../look';
+import { installTooltips } from '../tooltip';
+import { lineEnd, placeLine, plainAscii } from './text';
 import type { BreakData } from '../../src/shared/breakData';
 
 declare function acquireVsCodeApi(): { postMessage(msg: unknown): void };
@@ -64,13 +66,13 @@ const resolve = (entry: string): string => {
 const KW = new Set('if else for while do return break continue switch case default try catch throw new delete using namespace def elif in not and or import from as class struct public private template typename const static'.split(' '));
 const TY = new Set('int long short char bool void double float auto string vector size_t unsigned signed std'.split(' '));
 const C = D.colors;
+const palette = D.paint?.palette.map(resolve) ?? [];
 /** One colour (and font style) per character: the host's paint, or the lexer. */
 function lineColors(line: string, row: number): { c: string[]; f: number[] } {
   const c = new Array<string>(line.length).fill(FG), f = new Array<number>(line.length).fill(0);
   const runs = D.paint?.runs[row];
   if (D.paint && runs) {
-    const pal = D.paint.palette.map(resolve);
-    for (let k = 0, x = 0; k < runs.length; k += 3) for (let n = 0; n < runs[k]; n++, x++) { c[x] = pal[runs[k + 1]]; f[x] = runs[k + 2]; }
+    for (let k = 0, x = 0; k < runs.length; k += 3) for (let n = 0; n < runs[k]; n++, x++) { c[x] = palette[runs[k + 1]]; f[x] = runs[k + 2]; }
     return { c, f };
   }
   const re = /(\/\/.*$|#.*$)|("(?:\\.|[^"])*"|'(?:\\.|[^'])*')|(\b\d+(?:\.\d+)?\b)|([A-Za-z_]\w*)|(\s+)|(.)/g;
@@ -89,32 +91,49 @@ function lineColors(line: string, row: number): { c: string[]; f: number[] } {
 
 const glyphKeys = new Map<string, number>(), glyphList: { ch: string; c: string; f: number }[] = [];
 const chars: Part[] = [];
-const ascii = /^[\x20-\x7e\t]*$/;
+// Plain text sits on columns. Any other line is measured by the browser's own layout, which is what the editor uses
+// (the canvas's measure differs for emoji): one hidden line, with tabs as spaces, and a range over each character.
+const ruler = document.createElement('div');
+ruler.style.cssText = `position:absolute;left:0;top:0;visibility:hidden;white-space:pre;font:${fontOf(0)};letter-spacing:${LS}px;font-feature-settings:"liga" 0,"calt" 0`;
+document.body.append(ruler);
+const range = document.createRange();
 D.lines.slice(0, rowsShown).forEach((line, row) => {
   const { c, f } = lineColors(line, row);
-  // Tabs go to the next tab stop; other text is placed by the font's own advances (the DOM does the same).
-  let col = 0, prefix = '';
-  const fast = ascii.test(line);
-  for (let i = 0; i < line.length; i++) {
-    const ch = line[i];
-    const at = fast ? col * cw : g.measureText(prefix).width + prefix.length * LS;
-    if (ch !== ' ' && ch !== '\t') {
-      const key = `${ch}\u0000${c[i]}\u0000${f[i]}`;
-      if (!glyphKeys.has(key)) { glyphKeys.set(key, glyphList.length); glyphList.push({ ch, c: c[i], f: f[i] }); }
-      chars.push(makePart(glyphKeys.get(key)!, X0 + at, Y0 + row * lh, row, col, rnd));
+  const fast = plainAscii(line);
+  if (!fast) ruler.textContent = lineEnd(line, V.tabSize).before;
+  for (const q of placeLine(line, V.tabSize)) {
+    let at = q.col * cw;
+    if (!fast) {
+      range.setStart(ruler.firstChild!, q.before.length);
+      range.setEnd(ruler.firstChild!, q.before.length + (q.ch === '\t' ? 1 : q.ch.length));
+      at = range.getBoundingClientRect().left;
     }
-    const step = ch === '\t' ? V.tabSize - (col % V.tabSize) : 1;
-    col += step;
-    prefix += ch === '\t' ? ' '.repeat(step) : ch;
+    if (X0 + at > W) break; // past the screen: a long line costs nothing more
+    if (q.ch !== ' ' && q.ch !== '\t') {
+      const col = c[q.index], bits = f[q.index], key = `${q.ch}\u0000${col}\u0000${bits}`;
+      if (!glyphKeys.has(key)) { glyphKeys.set(key, glyphList.length); glyphList.push({ ch: q.ch, c: col, f: bits }); }
+      chars.push(makePart(glyphKeys.get(key)!, X0 + at, Y0 + row * lh, row, q.col, rnd));
+    }
   }
 });
 
 // The atlas: each character + colour + style drawn once, on the editor's baseline (CSS centres the font's
-// ascent + descent in the line box).
-const gw = Math.ceil(cw * dpr) + 2, gh = Math.ceil(lh * dpr), PER = 64;
+// ascent + descent in the line box). A wide character (CJK, emoji) gets a wider slot.
+const gw = Math.ceil(cw * dpr) + 2, gh = Math.ceil(lh * dpr), atlasWidth = gw * 64;
 const atlas = document.createElement('canvas');
-atlas.width = gw * PER; atlas.height = gh * Math.max(1, Math.ceil(glyphList.length / PER));
 const ac = atlas.getContext('2d')!;
+const slotW = new Int32Array(glyphList.length), slotX = new Int32Array(glyphList.length), slotY = new Int32Array(glyphList.length);
+{
+  let x = 0, y = 0;
+  glyphList.forEach((q, i) => {
+    ac.font = fontOf(q.f, D.font.size * dpr);
+    const w = Math.min(atlasWidth, Math.max(gw, Math.ceil(ac.measureText(q.ch).width) + 2));
+    if (x + w > atlasWidth) { x = 0; y += gh; }
+    slotW[i] = w; slotX[i] = x; slotY[i] = y;
+    x += w;
+  });
+  atlas.width = atlasWidth; atlas.height = y + gh; // (this resets the context)
+}
 // The baseline exactly where the editor's DOM puts it: an invisible line with the editor's font and line height,
 // measured (the canvas only reports rounded font metrics), then floored to a device pixel as text is drawn.
 const baseCss = (() => {
@@ -130,7 +149,7 @@ const baseCss = (() => {
 const baseline = Math.floor(baseCss * dpr), ascent = (g.measureText('M').fontBoundingBoxAscent ?? D.font.size * 0.8) * dpr;
 ac.textBaseline = 'alphabetic';
 glyphList.forEach((q, i) => {
-  const gx = (i % PER) * gw + 1, gy = Math.floor(i / PER) * gh;
+  const gx = slotX[i] + 1, gy = slotY[i];
   ac.font = fontOf(q.f, D.font.size * dpr);
   ac.fillStyle = q.c;
   ac.fillText(q.ch, gx, gy + baseline);
@@ -143,9 +162,9 @@ glyphList.forEach((q, i) => {
 function glyph(p: Part, a = p.a, sc = p.s): void {
   if (a <= 0.01) return;
   if (a !== alpha) g.globalAlpha = alpha = Math.min(1, a);
-  const sx = (p.gi % PER) * gw, sy = Math.floor(p.gi / PER) * gh;
-  if (sc === 1) g.drawImage(atlas, sx, sy, gw, gh, Math.round(p.x * dpr) / dpr - 1 / dpr, Math.round(p.y * dpr) / dpr, gw / dpr, gh / dpr);
-  else g.drawImage(atlas, sx, sy, gw, gh, p.x - ((sc - 1) * cw) / 2, p.y - ((sc - 1) * lh) / 2, (gw / dpr) * sc, (gh / dpr) * sc);
+  const sx = slotX[p.gi], sy = slotY[p.gi], sw = slotW[p.gi];
+  if (sc === 1) g.drawImage(atlas, sx, sy, sw, gh, Math.round(p.x * dpr) / dpr - 1 / dpr, Math.round(p.y * dpr) / dpr, sw / dpr, gh / dpr);
+  else g.drawImage(atlas, sx, sy, sw, gh, p.x - ((sc - 1) * cw) / 2, p.y - ((sc - 1) * lh) / 2, (sw / dpr) * sc, (gh / dpr) * sc);
 }
 /** Copies of the code's own characters, leaving from their source's place (they make a shape dense). */
 function copies(total: number): Part[] {
@@ -190,14 +209,15 @@ const chrome = {
   lineBorder: themeColor('editor.lineHighlightBorder'),
   cursor: themeColor('editorCursor.foreground') || FG,
 };
-/** Where the cursor sits on its line (tabs expanded, as the characters are placed). */
+/** Where the cursor sits on its line, placed as the characters are (past the end of a cut line: nowhere). */
 const cursorX = (() => {
-  if (!V.cursor || cursorRow < 0 || cursorRow >= rowsShown) return -1;
-  const line = D.lines[cursorRow].slice(0, V.cursor.character);
-  let col = 0;
-  for (const ch of line) col += ch === '\t' ? V.tabSize - (col % V.tabSize) : 1;
-  return ascii.test(line) ? X0 + col * cw : X0 + g.measureText(line.replace(/\t/g, ' '.repeat(V.tabSize))).width;
+  if (!V.cursor || cursorRow < 0 || cursorRow >= rowsShown || V.cursor.character > D.lines[cursorRow].length) return -1;
+  const line = D.lines[cursorRow].slice(0, V.cursor.character), end = lineEnd(line, V.tabSize);
+  if (plainAscii(line)) return X0 + end.col * cw;
+  ruler.textContent = end.before;
+  return X0 + ruler.getBoundingClientRect().width;
 })();
+ruler.remove();
 function drawChrome(a: number): void {
   if (a <= 0.01) return;
   g.globalAlpha = alpha = a;
@@ -234,6 +254,15 @@ const pointer = { x: -1, y: -1, down: false, moved: false, seen: false, inside: 
 
 interface Scene {
   parts: Part[];
+  /** How many of `parts` are in use (all of them when absent). */
+  count?(): number;
+  /**
+   * How fast the scene's own clock runs against real time. These are the speeds the user approved on a 120 Hz screen
+   * (2026-11-08); they used to come from a bug that gave each frame the time since the last screen refresh.
+   */
+  pace: number;
+  /** The tab changed size. */
+  resize?(): void;
   /** One frame; false when nothing moves (the loop sleeps until the pointer moves). */
   step(dt: number, t: number): boolean;
   draw(): void;
@@ -256,7 +285,8 @@ function sandScene(): Scene {
   const grid = new SandGrid(W, H, cw, lh, ox, oy, chars, rnd);
   let acc = 0;
   return {
-    parts: chars, fps: 60, cardTop: '30%', hint: L.sandHint,
+    parts: chars, fps: 60, pace: 0.5, cardTop: '30%', hint: L.sandHint,
+    resize() { grid.resize(W, H); },
     step(dt, t) {
       acc += dt;
       for (let n = 0; acc >= 1000 / 60 && n < 4; n++) { acc -= 1000 / 60; grid.tick(t, pointer, pointer.moved); pointer.moved = false; }
@@ -267,7 +297,8 @@ function sandScene(): Scene {
         let tx: number, ty: number;
         if (cell.state === 'held') { const a = t * 0.004 + i, r = 4 + Math.sqrt(grid.held.indexOf(i) + 1) * 3.2; tx = pointer.x + Math.cos(a) * r - cw / 2; ty = pointer.y + Math.sin(a) * r * 0.7 - lh / 2; }
         else if (cell.c < 0) return;
-        else { tx = ox + cell.c * cw; ty = oy + cell.r * lh; if (cell.state === 'wait') { p.x = tx; p.y = ty; return; } }
+        else if (cell.state === 'wait') return; // still where the editor draws it (off the grid when the text isn't plain)
+        else { tx = ox + cell.c * cw; ty = oy + cell.r * lh; }
         const dx = tx - p.x, dy = ty - p.y;
         if (Math.abs(dx) + Math.abs(dy) > 0.2) { p.x += dx * k; p.y += dy * k; moving = true; } else { p.x = tx; p.y = ty; }
       });
@@ -280,16 +311,22 @@ function sandScene(): Scene {
 // (b, b2) donuts: every part flies from the code onto a point of the turning surface; the 2D donut snaps to the
 // character grid and keeps the front-most part in each cell
 function donutScene(snap: boolean): Scene {
-  const K1 = Math.min(W, H * 1.1) * 0.42, cx = W / 2, cy = H * 0.4, cols = Math.ceil(W / cw) + 1, rows = Math.ceil(H / lh) + 1;
+  let K1 = Math.min(W, H * 1.1) * 0.42, cx = W / 2, cy = H * 0.4, cols = Math.ceil(W / cw) + 1, rows = Math.ceil(H / lh) + 1;
   const want = Math.max(chars.length, Math.min(snap ? 3000 : 2200, Math.round(((K1 * K1) / (cw * lh)) * (snap ? 2.6 : 1.6))));
   const pts = torusPoints(want), parts = chars.concat(copies(pts.length));
-  parts.forEach((p, i) => { p.d = (p.row / 30) * 500 + rnd() * (p.copy ? 650 : 250); });
+  parts.forEach((p) => { p.d = (p.row / 30) * 500 + rnd() * (p.copy ? 650 : 250); });
   const where = parts.map((_, i) => pts[i % pts.length]);
-  const owner = new Int32Array(cols * rows), meta = parts.map(() => ({ L: 0, ooz: 0, X: 0, Y: 0, e: 0 }));
+  let owner = new Int32Array(cols * rows);
+  const meta = parts.map(() => ({ L: 0, ooz: 0, X: 0, Y: 0, e: 0 }));
   let A = 1, B = 0.6, vA = 0.9, vB = 0.45, slowFrames = 0, n = parts.length;
   const shade = (Lt: number) => (Lt > 0 ? Math.min(1, (snap ? 0.7 : 0.72) + Lt * (snap ? 0.21 : 0.2)) : snap ? 0.22 : 0.16);
   return {
-    get parts() { return parts.slice(0, n); }, fps: 30, cardTop: '86%', hint: L.donutHint, always: true,
+    parts, count: () => n, fps: 30, pace: 0.25, cardTop: '86%', hint: L.donutHint, always: true,
+    resize() {
+      K1 = Math.min(W, H * 1.1) * 0.42; cx = W / 2; cy = H * 0.4;
+      cols = Math.ceil(W / cw) + 1; rows = Math.ceil(H / lh) + 1;
+      owner = new Int32Array(cols * rows);
+    },
     step(dt, t) {
       const w0 = performance.now();
       if (!pointer.down) { vA += (0.9 - vA) * 0.02; vB += (0.45 - vB) * 0.02; }
@@ -331,7 +368,7 @@ function breatheScene(): Scene {
   chars.forEach((p) => (p.d = rnd() * 400));
   let lit = 1;
   return {
-    parts: chars, fps: 30, cardTop: '45%', always: true,
+    parts: chars, fps: 30, pace: 0.25, cardTop: '45%', always: true,
     step(dt, t) {
       const b = breath(t), s = t / 1000, cx = W / 2, cy = H * 0.45, R = Math.min(W, H) * (0.16 + 0.14 * b.p);
       word = t < 1800 ? '' : b.inh ? L.breatheIn : L.breatheOut;
@@ -360,7 +397,8 @@ function swarmScene(): Scene {
     y: H * 0.47 + H * 0.26 * Math.sin(t * 0.00041 + 1.7 + 1.1 * Math.cos(t * 0.00013)),
   });
   return {
-    parts, fps: 60, cardTop: '18%', trails: 0.55, ownSpeed: true, always: true,
+    parts, fps: 60, pace: 0.5, cardTop: '18%', trails: 0.55, ownSpeed: true, always: true,
+    resize() { swarm.resize(W, H); },
     step(dt, t) {
       if (!pointerAway({ ...pointer, idleMs: performance.now() - pointer.at, W, H })) { lead.x = pointer.x; lead.y = pointer.y; lead.vx = 0; lead.vy = 0; }
       else {
@@ -392,33 +430,38 @@ const makeScene = () => ({ sand: sandScene, donut3d: () => donutScene(false), do
 
 // ---- the loop: run, then the way back (everything springs home; the last frame is the editor's own layout) ----
 const CHROME_OUT_MS = 450;
-let phase: 'run' | 'exit' = 'run', exit: ExitMotion | null = null, tStart = performance.now(), tExit = 0, running = false, last = 0, lastDraw = 0;
+let phase: 'run' | 'exit' = 'run', exit: ExitMotion | null = null, exitParts: Part[] = [], tStart = performance.now(), tExit = 0, running = false, last = 0;
+/** Where the parts were before this frame: their speed on screen, which the way back carries on. */
+let beforeX = new Float32Array(0), beforeY = new Float32Array(0);
 function clear(fade = 1): void {
   g.globalAlpha = alpha = fade; g.fillStyle = BG; g.fillRect(0, 0, W, H); g.globalAlpha = alpha = 1;
 }
 function frame(): void {
-  const now = performance.now(), dt = Math.min(50, now - last);
+  const now = performance.now();
+  if (now - last < 1000 / (phase === 'exit' ? 60 : S.fps) - 2) { requestAnimationFrame(frame); return; }
+  const dt = Math.min(50, now - last); // since the last frame drawn, not the last screen refresh
   last = now;
-  if (now - lastDraw < 1000 / (phase === 'exit' ? 60 : S.fps) - 2) { requestAnimationFrame(frame); return; }
-  lastDraw = now;
-  const parts = S.parts;
   let busy: boolean;
-  if (phase === 'exit') busy = exit!.step(now - tExit, dt);
+  if (phase === 'exit') busy = exit!.step(now - tExit);
   else {
-    const before = S.ownSpeed ? null : parts.map((p) => [p.x, p.y]);
-    busy = S.step(dt, now - tStart) || !!S.always || now - tStart < CHROME_OUT_MS + 50;
-    if (before && dt > 0) parts.forEach((p, i) => { p.vx = ((p.x - before[i][0]) * 1000) / dt; p.vy = ((p.y - before[i][1]) * 1000) / dt; });
+    const parts = S.parts, n = S.count?.() ?? parts.length;
+    if (!S.ownSpeed) {
+      if (beforeX.length < n) { beforeX = new Float32Array(parts.length); beforeY = new Float32Array(parts.length); }
+      for (let i = 0; i < n; i++) { beforeX[i] = parts[i].x; beforeY[i] = parts[i].y; }
+    }
+    busy = S.step(dt * S.pace, now - tStart) || !!S.always || now - tStart < CHROME_OUT_MS + 50;
+    if (!S.ownSpeed && dt > 0) for (let i = 0; i < n; i++) { parts[i].vx = ((parts[i].x - beforeX[i]) * 1000) / dt; parts[i].vy = ((parts[i].y - beforeY[i]) * 1000) / dt; }
   }
   clear(S.trails && phase === 'run' ? S.trails : 1);
   // The editor's gutter and guides: gone as the code leaves, back as it lands (whole on the last frame).
   drawChrome(phase === 'exit' ? (busy ? easeInOut((now - tExit - 0.35 * EXIT_MAX_MS) / (0.55 * EXIT_MAX_MS)) : 1) : 1 - easeInOut((now - tStart) / CHROME_OUT_MS));
-  if (phase === 'exit') for (const p of parts) glyph(p); else S.draw();
+  if (phase === 'exit') for (const p of exitParts) glyph(p); else S.draw();
   if (phase === 'run') updateCard(now - tStart);
   if (busy) requestAnimationFrame(frame);
   else { running = false; if (phase === 'exit') landed(); }
 }
 function kick(): void {
-  if (!running && !reduced && !document.hidden) { running = true; last = performance.now(); requestAnimationFrame(frame); }
+  if (!running && S && !reduced && !document.hidden) { running = true; last = performance.now(); requestAnimationFrame(frame); }
 }
 /** Tell the host the way back is over (once): it closes the tab and gives the keyboard back to the code. */
 let closed = false;
@@ -437,12 +480,13 @@ function startExit(): void {
   setTimeout(() => {
     if (closed) return;
     exit?.step(Infinity);
-    clear(); drawChrome(1); for (const p of S.parts) glyph(p);
+    clear(); drawChrome(1); for (const p of exitParts) glyph(p);
     close();
   }, EXIT_MAX_MS + 1500);
   phase = 'exit'; tExit = performance.now();
   card.style.transition = 'opacity 250ms'; card.style.opacity = '0'; back.style.opacity = '0'; foot.textContent = '';
-  exit = new ExitMotion(S.parts, rnd);
+  exitParts = S.parts.slice(0, S.count?.() ?? S.parts.length);
+  exit = new ExitMotion(exitParts, rnd);
   kick();
 }
 
@@ -491,7 +535,8 @@ cv.addEventListener('pointerdown', (e) => {
   if (phase === 'run') S?.press?.();
   cv.setPointerCapture(e.pointerId); kick();
 });
-cv.addEventListener('pointerup', () => { pointer.down = false; kick(); });
+// However the press ends: a cancelled touch or a lost capture lets go too.
+for (const end of ['pointerup', 'pointercancel', 'lostpointercapture']) cv.addEventListener(end, () => { pointer.down = false; kick(); });
 document.addEventListener('visibilitychange', () => { if (!document.hidden) kick(); });
 
 // the first frame is the code exactly where the editor draws it
@@ -534,6 +579,16 @@ function start(): void {
   for (const p of chars) glyph(p, reduced ? 0.25 : p.a);
   // The keyboard starts on Back to code: Enter or Esc go back at once.
   back.focus();
+  // After the focus: the tooltip (how Esc works) waits for the pointer or a real Tab instead of covering the scene.
+  installTooltips();
+  addEventListener('resize', () => {
+    W = innerWidth; H = innerHeight;
+    size();
+    clear();
+    if (reduced) { drawChrome(0.25); for (const p of chars) glyph(p, 0.25); return; }
+    S.resize?.();
+    kick(); // a settled scene sleeps; a running one draws its next frame before this one shows
+  });
   if (reduced) return;
   S = makeScene();
   tStart = performance.now();

@@ -16,3 +16,7 @@ canvas { position: fixed; inset: 0; touch-action: none; }
 .back:hover { background: var(--vscode-button-secondaryHoverBackground); }
 .back:focus-visible { outline: 1px solid var(--vscode-focusBorder); outline-offset: 2px; }
 @media (prefers-reduced-motion: reduce) { .back { transition: none; } }
+.tooltip { position: fixed; z-index: 10; max-width: 320px; padding: 3px 7px; border-radius: 3px; font-size: 12px; line-height: 1.35; pointer-events: none;
+  color: var(--vscode-editorHoverWidget-foreground, var(--vscode-foreground)); background: var(--vscode-editorHoverWidget-background, var(--vscode-editorWidget-background));
+  border: 1px solid var(--vscode-editorHoverWidget-border, var(--vscode-widget-border, var(--vscode-contrastBorder, transparent))); box-shadow: 0 2px 8px var(--vscode-widget-shadow, rgba(0, 0, 0, 0.3)); }
+.tooltip[hidden] { display: none; }

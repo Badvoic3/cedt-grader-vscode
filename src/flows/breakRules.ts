@@ -77,7 +77,7 @@ export class BreakTimer {
   private hintAt: number | null = null;
   private snoozeUntil: number | null = null;
   private celebratedAt = -Infinity;
-  private promptOpen = false;
+  private promptAt: number | null = null;
 
   constructor(private minutes: number) {}
 
@@ -106,7 +106,12 @@ export class BreakTimer {
   /** The status bar: the hint after `minutes` of work, unless the user said "Not today". */
   show(t: number, day: BreakDay): BreakShow {
     if (day.notTodayUntil !== null && t < day.notTodayUntil) return 'none';
-    if (this.worked(t) < this.minutes * MINUTE) return 'none';
+    if (this.worked(t) < this.minutes * MINUTE) {
+      // The setting went up: the hint and its window start again from when it next shows.
+      this.hintAt = null;
+      this.snoozeUntil = null;
+      return 'none';
+    }
     if (this.hintAt === null) this.hintAt = t;
     return 'hint';
   }
@@ -116,7 +121,8 @@ export class BreakTimer {
    * (20–60 min, or 0–40 min after a snooze) to be open, the day's limit not reached, and nothing to hold it back.
    */
   boundary(t: number, _kind: BoundaryKind, holds: Holds, day: BreakDay): boolean {
-    if (this.show(t, day) !== 'hint' || this.hintAt === null || this.promptOpen) return false;
+    if (this.show(t, day) !== 'hint' || this.hintAt === null) return false;
+    if (this.promptAt !== null && t - this.promptAt < BREAK.promptOpenMs) return false;
     if (holds.grading || holds.running || holds.exam) return false;
     if (t - this.celebratedAt < BREAK.afterCelebrationMs) return false;
     if (day.prompts >= BREAK.maxPromptsPerDay) return false;
@@ -127,14 +133,14 @@ export class BreakTimer {
   }
 
   /** The prompt is on screen; the day's count goes up now, so an ignored prompt counts too. */
-  prompted(day: BreakDay): BreakDay {
-    this.promptOpen = true;
+  prompted(day: BreakDay, t: number): BreakDay {
+    this.promptAt = t;
     return { ...day, prompts: day.prompts + 1 };
   }
 
-  /** The user's answer (or none: the prompt was closed or hid by itself). */
+  /** The user's answer, whenever it comes (or none: the prompt was closed). */
   answer(t: number, a: PromptAnswer, day: BreakDay): BreakDay {
-    this.promptOpen = false;
+    this.promptAt = null;
     if (a === 'take') this.reset();
     if (a === 'snooze') this.snoozeUntil = t + BREAK.snoozeMs;
     if (a === 'not-today') return { ...day, notTodayUntil: nextDayStart(t) };

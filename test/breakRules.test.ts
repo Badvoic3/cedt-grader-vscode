@@ -43,8 +43,8 @@ describe('break timer', () => {
     for (const m of [0, 10, 19]) expect(timer.boundary(work(timer, hint, m, 1), 'verdict-pass', free, day)).toBe(false);
     work(timer, hint, 20, 1);
     expect(timer.boundary(hint + 20 * MIN, 'switch', free, day)).toBe(true);
-    day = timer.prompted(day);
-    expect(timer.boundary(hint + 21 * MIN, 'switch', free, day)).toBe(false); // one prompt at a time
+    day = timer.prompted(day, hint + 20 * MIN);
+    expect(timer.boundary(hint + 20 * MIN + 30_000, 'switch', free, day)).toBe(false); // one prompt at a time
     day = timer.answer(hint + 22 * MIN, 'ignored', day);
     work(timer, hint + 22 * MIN, 40);
     expect(timer.boundary(hint + 61 * MIN, 'tests-pass', free, day)).toBe(false); // window closed: the hint stays
@@ -72,11 +72,37 @@ describe('break timer', () => {
     timer.show(hint, day);
     let t = work(timer, hint, 20);
     expect(timer.boundary(t, 'switch', free, day)).toBe(true);
-    day = timer.answer(t, 'ignored', timer.prompted(day));
-    day = timer.answer(t, 'snooze', timer.prompted(day));
+    day = timer.answer(t, 'ignored', timer.prompted(day, t));
+    day = timer.answer(t, 'snooze', timer.prompted(day, t));
     t = work(timer, t, 30);
     expect(timer.boundary(t, 'switch', free, day)).toBe(false);
     expect(day.prompts).toBe(2);
+  });
+
+  it('a prompt VS Code has hidden, still unanswered, does not hold back the next one; a late answer still works', () => {
+    const timer = new BreakTimer(90);
+    let day = fresh();
+    const hint = work(timer, T0, 90);
+    timer.show(hint, day);
+    const t = work(timer, hint, 20);
+    day = timer.prompted(day, t); // its promise stays open: it never answers
+    const later = work(timer, t, 5);
+    expect(timer.boundary(later, 'switch', free, day)).toBe(true);
+    day = timer.answer(later, 'snooze', day);
+    expect(timer.boundary(work(timer, later, 5), 'switch', free, day)).toBe(false); // snoozed from when it was clicked
+  });
+
+  it('raising the minutes hides the hint and starts its window again', () => {
+    const timer = new BreakTimer(30);
+    const day = fresh();
+    const hint = work(timer, T0, 30);
+    expect(timer.show(hint, day)).toBe('hint');
+    timer.setMinutes(90);
+    expect(timer.show(hint, day)).toBe('none');
+    const again = work(timer, hint, 60);
+    expect(timer.show(again, day)).toBe('hint');
+    expect(timer.boundary(again, 'switch', free, day)).toBe(false); // too soon after the hint, not an old window
+    expect(timer.boundary(work(timer, again, 20), 'switch', free, day)).toBe(true);
   });
 
   it('snooze moves the prompt 30 minutes on', () => {
@@ -85,7 +111,7 @@ describe('break timer', () => {
     const hint = work(timer, T0, 90);
     timer.show(hint, day);
     let t = work(timer, hint, 20);
-    day = timer.answer(t, 'snooze', timer.prompted(day));
+    day = timer.answer(t, 'snooze', timer.prompted(day, t));
     t = work(timer, t, 25);
     expect(timer.boundary(t, 'switch', free, day)).toBe(false);
     t = work(timer, t, 5);

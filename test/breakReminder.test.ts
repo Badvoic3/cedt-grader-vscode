@@ -5,15 +5,22 @@ const v = vi.hoisted(() => ({
   edits: [] as ((e: unknown) => void)[],
   answer: undefined as string | undefined,
   prompts: [] as { text: string; buttons: string[]; modal: boolean }[],
+  focused: true,
+  activeDoc: { uri: { scheme: 'file' } } as unknown,
+  /** The prompt's promise stays open, as VS Code's does until the notification is closed. */
+  neverAnswers: false,
 }));
 
 vi.mock('vscode', () => ({
   StatusBarAlignment: { Left: 1, Right: 2 },
   window: {
     createStatusBarItem: () => v.item,
+    get state() { return { focused: v.focused }; },
+    get activeTextEditor() { return { document: v.activeDoc }; },
     showInformationMessage: async (text: string, ...rest: unknown[]) => {
       const modal = typeof rest[0] === 'object' && !!(rest[0] as { modal?: boolean }).modal;
       v.prompts.push({ text, buttons: rest.filter((x): x is string => typeof x === 'string'), modal });
+      if (v.neverAnswers) return new Promise(() => undefined);
       return v.answer;
     },
   },
@@ -39,14 +46,14 @@ function make(opts: { enabled?: boolean; exam?: boolean } = {}) {
     log: () => undefined,
     now: () => now,
   });
-  const edit = () => v.edits.at(-1)!({ document: { uri: { scheme: 'file' } }, contentChanges: [{}] });
+  const edit = () => v.edits.at(-1)!({ document: v.activeDoc, contentChanges: [{}] });
   const workFor = (minutes: number) => { for (let m = 0; m < minutes; m += 5) { now += 5 * MIN; edit(); } };
   return { r, store, took, edit, workFor, advance: (ms: number) => (now += ms) };
 }
 
 describe('break reminder in VS Code', () => {
   beforeEach(() => {
-    v.item.visible = false; v.edits.length = 0; v.prompts.length = 0; v.answer = undefined;
+    v.item.visible = false; v.edits.length = 0; v.prompts.length = 0; v.answer = undefined; v.focused = true; v.neverAnswers = false; v.item.name = '';
   });
 
   it('edits count as work; after 90 minutes the status bar shows the hint, and it opens a break', () => {
@@ -69,6 +76,42 @@ describe('break reminder in VS Code', () => {
     expect(v.item.visible).toBe(false);
   });
 
+  it("only the user's typing counts: not another file changing, nor anything while the window is in the background", () => {
+    const m = make();
+    m.edit(); // work starts
+    for (let i = 0; i < 40; i++) {
+      m.advance(5 * MIN);
+      v.edits.at(-1)!({ document: { uri: { scheme: 'file' } }, contentChanges: [{}] }); // format, branch switch, another extension
+      v.focused = false;
+      m.edit();
+      v.focused = true;
+    }
+    m.r.refresh();
+    expect(v.item.visible).toBe(false); // the idle gap reset the count
+  });
+
+  it('the status bar item has its name once the reminder runs, in the current language', () => {
+    const m = make();
+    m.r.refresh();
+    expect(v.item.name).toBe(S.breakReminder.take);
+  });
+
+  it('a prompt nobody answered (VS Code only hid it) lets a later boundary prompt again', async () => {
+    const m = make();
+    m.workFor(120);
+    v.neverAnswers = true;
+    m.r.boundary('verdict-pass');
+    await flush();
+    expect(v.prompts).toHaveLength(1);
+    m.r.boundary('verdict-pass');
+    await flush();
+    expect(v.prompts).toHaveLength(1); // still on screen
+    m.workFor(5);
+    m.r.boundary('verdict-pass');
+    await flush();
+    expect(v.prompts).toHaveLength(2);
+  });
+
   it('the prompt comes at a boundary in its window, never modal, and "Take a Break" opens the break', async () => {
     const m = make();
     m.workFor(95);
@@ -80,7 +123,7 @@ describe('break reminder in VS Code', () => {
     await flush();
     expect(v.prompts).toHaveLength(1);
     expect(v.prompts[0].modal).toBe(false);
-    expect(v.prompts[0].buttons).toEqual([S.breakReminder.take, S.breakReminder.snooze, S.breakReminder.notToday]);
+    expect(v.prompts[0].buttons).toEqual([S.breakReminder.take, S.breakReminder.snooze(30), S.breakReminder.notToday]);
     expect(m.took).toHaveLength(1);
     expect([...m.store.values()][0]).toMatchObject({ prompts: 1 });
   });

@@ -38,7 +38,7 @@ export const KEYS = {
   // ---- globalState
   /** Break reminder: this day's prompts, "Not today", the last break scene (`cedtGrader.fun.breakDay:<baseUrl>:<user>`). */
   funBreakDayPrefix: 'cedtGrader.fun.breakDay',
-  /** First full score per problem (`cedtGrader.fun.firstFull:<baseUrl>:<user>`): problem id → ISO date. */
+  /** First full score per problem (`cedtGrader.fun.firstFull:<baseUrl>:<user>`): problem id → when (epoch ms; 0 = already full when first seen). */
   funFirstFullPrefix: 'cedtGrader.fun.firstFull',
   /** Statement viewer page / zoom / scroll per problem. */
   statementView: 'cedtGrader.statementView',

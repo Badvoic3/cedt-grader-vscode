@@ -1514,6 +1514,15 @@ describe.runIf(existsSync(resolve(__dirname, '../esbuild.mjs')))('sidebar webvie
     const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
     const reduce = (dom: JSDOM) => Object.assign(dom.window, { matchMedia: (q: string) => ({ matches: q.includes('reduce') }) });
 
+    it('an older celebration coming back after a replay does not play again', () => {
+      const { doc, post } = boot();
+      post({ ...full, celebrate: party(5) });
+      expect(doc.querySelector('.fun-play')).not.toBeNull();
+      post({ ...full, celebrate: party(4) });
+      expect(doc.querySelector('.fun-play')).toBeNull();
+      expect(doc.querySelector('#sec-result .fun-ribbon')).not.toBeNull();
+    });
+
     it('plays once per id: ring, confetti, ribbon, then the trophy toast; later renders keep only the ring and the ribbon', async () => {
       const { doc, post, saved } = boot();
       post({ ...full, celebrate: party(1) });

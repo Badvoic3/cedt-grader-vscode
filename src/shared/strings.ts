@@ -323,10 +323,15 @@ const EN_S = {
     hintTip: (worked: string) => `You've been coding for ${worked}. Click for a short break.`,
     prompt: (worked: string) => `You've been coding for ${worked}. Take a short break?`,
     take: 'Take a Break',
-    snooze: 'Snooze 30 min',
+    snooze: (minutes: number) => `Snooze ${minutes} min`,
     notToday: 'Not Today',
     /** "1 h 30 min", "45 min". */
     duration: (h: number, m: number) => (h ? `${h} h ${m} min` : `${m} min`),
+  },
+  funCommands: {
+    playNeedsResult: 'Play Celebration needs a finished result. Submit a file first.',
+    trophiesOff: 'Trophies are off. Turn on Fun: Enabled in the settings to see them.',
+    trophiesLogIn: 'Log in to see your trophies.',
   },
   breakTab: {
     title: 'Break',

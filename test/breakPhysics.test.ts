@@ -47,7 +47,6 @@ describe('break tab motion', () => {
     expect(worstStep).toBeLessThan(45); // a glide: no frame moves a character far, the last one included
     for (const p of ps) expect([p.x, p.y, p.a, p.s]).toEqual([p.hx, p.hy, 1, 1]);
     expect(copy.a).toBe(0);
-    expect(exit.progress(EXIT_MAX_MS)).toBe(1);
   });
 
   it('falling code keeps every grain, through falling, pushing, scooping and pouring', () => {
@@ -62,6 +61,49 @@ describe('break tab motion', () => {
     expect(grid.held.length).toBeGreaterThan(0);
     pointer.down = false;
     frames(4000, (t) => grid.tick(5000 + t, pointer, false));
+    expect(grid.held.length).toBe(0);
+    expect(grid.count()).toBe(120);
+  });
+
+  it('pouring always lands: below the grid, off its side, or over a pile', () => {
+    const rnd = seeded(6), ps = parts(120, rnd), grid = new SandGrid(400, 300, 8, 18, 4, 2, ps, rnd);
+    const pointer = { x: 120, y: 250, seen: true, down: false };
+    frames(3000, (t) => grid.tick(t, pointer, false));
+    pointer.down = true;
+    for (let i = 0; i < 20; i++) grid.tick(3000 + i * 16, pointer, true);
+    expect(grid.held.length).toBeGreaterThan(0);
+    pointer.down = false;
+    pointer.y = 5000; pointer.x = -300; // the pointer stays out there
+    frames(4000, (t) => grid.tick(4000 + t, pointer, false));
+    expect(grid.held.length).toBe(0);
+    expect(grid.busy).toBe(false);
+    expect(grid.count()).toBe(120);
+  });
+
+  it('falling code follows a resized tab: no grain is lost, and the pile settles on the new floor', () => {
+    const rnd = seeded(7), ps = parts(120, rnd), grid = new SandGrid(400, 300, 8, 18, 4, 2, ps, rnd);
+    const pointer = { x: 120, y: 250, seen: false, down: false };
+    frames(3000, (t) => grid.tick(t, pointer, false));
+    for (const [W, H] of [[800, 600], [200, 150]]) {
+      grid.resize(W, H);
+      expect(grid.count()).toBe(120);
+      frames(4000, (t) => grid.tick(8000 + t, pointer, false));
+      expect(grid.count()).toBe(120);
+      expect(grid.busy).toBe(false);
+      expect(grid.cellOf.filter((g) => g.c >= 0).every((g) => g.c < grid.cols && g.r < grid.rows)).toBe(true);
+      expect(grid.cellOf.some((g) => g.r === grid.rows - 1)).toBe(true);
+    }
+  });
+
+  it('a tab too small for every grain keeps the rest in the hand, and pours them when it grows', () => {
+    const rnd = seeded(8), ps = parts(120, rnd), grid = new SandGrid(400, 300, 8, 18, 4, 2, ps, rnd);
+    const pointer = { x: 20, y: 20, seen: false, down: false };
+    frames(3000, (t) => grid.tick(t, pointer, false));
+    grid.resize(30, 40);
+    expect(grid.held.length).toBeGreaterThan(0);
+    expect(grid.count()).toBe(120);
+    grid.resize(400, 300);
+    frames(4000, (t) => grid.tick(8000 + t, pointer, false));
     expect(grid.held.length).toBe(0);
     expect(grid.count()).toBe(120);
   });
@@ -87,6 +129,10 @@ describe('break tab motion', () => {
     expect(ps.every((p) => p.x > -20 && p.x < W + 20 && p.y > -20 && p.y < H + 20)).toBe(true);
     swarm.burst(px, py);
     expect(ps.some((p) => Math.hypot(p.vx, p.vy) > 300)).toBe(true);
+    // A smaller tab: the walls move with it, and the swarm comes back inside.
+    swarm.resize(400, 300);
+    frames(4000, () => swarm.step(0.016, 200, 150));
+    expect(ps.every((p) => p.x > -20 && p.x < 420 && p.y > -20 && p.y < 320)).toBe(true);
   });
 
   it('the pointer counts as away with no leave event: stopped at an edge, or still for a while; never while held', () => {

@@ -852,7 +852,7 @@ function celebrateOn(row: HTMLElement, body: HTMLElement, c: CelebrateView): voi
   row.prepend(ring);
   row.classList.add('fun-row');
   row.append(el('span', { class: 'fun-ribbon' }, icon('sparkle-filled'), W.fun.first));
-  const play = ui.celebrated !== c.id && Date.now() - c.at < CELEBRATE.freshMs;
+  const play = (ui.celebrated ?? 0) < c.id && Date.now() - c.at < CELEBRATE.freshMs;
   if (!play) return;
   ui.celebrated = c.id;
   saveUi();

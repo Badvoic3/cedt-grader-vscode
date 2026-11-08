@@ -3,7 +3,7 @@ import { normalizeFirstFull, shouldCelebrate, streaks, topicOf, topicProgress, t
 
 const at = (d: number, h = 13) => new Date(2026, 10, d, h).getTime();
 const pass = (n: number) => Array.from({ length: n }, () => ({ ok: true }));
-const base = { bestBefore: 40, countedAfter: 100, points: 100, verdicts: pass(5), compileError: false, known: false };
+const base = { bestBefore: 40, countedAfter: 100, points: 100, verdicts: pass(5), compileError: false, known: false, rawSum: false };
 
 describe('first-full-score celebration', () => {
   it('fires the first time every test passes or the counted score reaches 100, and only once', () => {
@@ -17,8 +17,17 @@ describe('first-full-score celebration', () => {
     expect(shouldCelebrate({ ...base, countedAfter: 80 })).toBe('celebrate');
   });
 
-  it('a raw-sum problem at 100 counts without per-test verdicts', () => {
+  it('a problem at 100 counts without per-test verdicts', () => {
     expect(shouldCelebrate({ ...base, verdicts: [], points: 100, countedAfter: 100 })).toBe('celebrate');
+  });
+
+  it('a raw sum has no maximum: 100 with a failing test is not full, every test passing is, at any score', () => {
+    const raw = { ...base, rawSum: true };
+    expect(shouldCelebrate({ ...raw, verdicts: [{ ok: true }, { ok: false }], points: 100, countedAfter: 100 })).toBe('none');
+    expect(shouldCelebrate({ ...raw, verdicts: pass(4), points: 20, countedAfter: 20 })).toBe('celebrate');
+    expect(shouldCelebrate({ ...raw, bestBefore: 150, verdicts: pass(4), points: 500, countedAfter: 500 })).toBe('celebrate');
+    expect(shouldCelebrate({ ...raw, verdicts: [], points: 100, countedAfter: 100 })).toBe('celebrate'); // nothing else to go by
+    expect(shouldCelebrate({ ...raw, bestBefore: 150, compileError: true, verdicts: [], points: 0, countedAfter: 150 })).toBe('none');
   });
 
   it('a problem already full before is recorded silently', () => {

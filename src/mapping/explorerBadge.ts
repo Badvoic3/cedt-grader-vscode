@@ -2,6 +2,7 @@ import { scoreText, summarize } from '../grader/score';
 import type { Problem } from '../grader/types';
 import { SERVER_SCORE_CAP } from '../shared/constants';
 import { PICK_HOW, S } from '../shared/strings';
+import { tagKey } from '../shared/tags';
 import { cleanName } from './match';
 import type { LinkHow } from './problemFiles';
 
@@ -49,8 +50,6 @@ export function tagColor(tag: string): string {
   for (const c of tag.trim().toLowerCase()) hash = Math.imul(hash ^ (c.codePointAt(0) ?? 0), 16777619) >>> 0;
   return TAG_COLORS[hash % TAG_COLORS.length];
 }
-
-const tagKey = (t: string) => t.trim().toLowerCase();
 
 /** The tag a badge stands for: the first topic tag, or the first tag when none is a topic. */
 export function badgeTag(tags: readonly string[], topics: readonly string[]): string | undefined {

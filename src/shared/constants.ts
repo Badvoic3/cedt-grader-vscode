@@ -121,6 +121,10 @@ export const BREAK = {
   breakSeconds: 300,
   /** The break tab comes forward when its first frame is drawn, or after this long. */
   tabLoadMs: 1_500,
+  /** The tab draws from column 0 with no scrolling: past this no screen shows a line (a minified file's can be megabytes). */
+  maxLineChars: 2_000,
+  /** VS Code hides the prompt by itself but only closes it when the user does: after this it counts as ignored. */
+  promptOpenMs: 60_000,
 } as const;
 
 /** The first-full-score celebration on the Result card (mockup combo 1 + 2 + 4, picked 2026-11-07). */
@@ -134,6 +138,8 @@ export const CELEBRATE = {
   toastMs: 10_000,
   /** A panel that opens later than this after the celebration shows the ribbon without playing it. */
   freshMs: 60_000,
+  /** Play Celebration: the ring and the ribbon stay this long. */
+  replayMs: 6_000,
 } as const;
 
 /** The built-in runner. */

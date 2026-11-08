@@ -16,6 +16,10 @@ import { activeTheme, editorPaint } from './codePaint';
 export class BreakPanel implements vscode.Disposable {
   static readonly viewType = 'cedtGrader.break';
   private panel: vscode.WebviewPanel | null = null;
+  /** The code the open tab covers, when it can go back to it. */
+  private source: vscode.TextEditor | null = null;
+  /** The latest `show` (or `dispose`): an older one still getting its colours stops there. */
+  private run = 0;
 
   constructor(
     private readonly extensionUri: vscode.Uri,
@@ -28,18 +32,27 @@ export class BreakPanel implements vscode.Disposable {
 
   /** Show `scene` over the active editor's code (an empty tab when there is no editor). */
   async show(scene: BreakScene): Promise<void> {
+    const run = ++this.run;
+    const covered = this.panel ? this.source : null;
     this.panel?.dispose();
-    const editor = vscode.window.activeTextEditor;
+    let editor = vscode.window.activeTextEditor;
+    // With a break tab in front VS Code reports no active editor: start from the code that tab covered.
+    const reopened = !editor && !!covered && !covered.document.isClosed;
+    if (reopened) {
+      editor = await vscode.window.showTextDocument(covered.document, { viewColumn: covered.viewColumn, preserveFocus: false }).then((e) => e, () => undefined);
+      if (run !== this.run) return;
+    }
+    // A diff or a notebook can't be brought back by opening its document: the tab just opens over it and closes back to it.
+    const canReturn = !!editor && (reopened || showsPlainText(editor));
+    const shown = editor ? visibleLines(editor) : undefined;
     let paint: CodePaint | null = null;
-    let first = 0;
-    if (editor) {
-      first = editor.visibleRanges[0]?.start.line ?? 0;
-      const last = (editor.visibleRanges.at(-1)?.end.line ?? first + 60) + 1;
+    if (editor && shown) {
       try {
-        paint = await editorPaint(editor, first, last, vscode.Uri.joinPath(this.extensionUri, 'dist', 'onig.wasm').fsPath);
+        paint = await editorPaint(editor, shown.first, shown.last, vscode.Uri.joinPath(this.extensionUri, 'dist', 'onig.wasm').fsPath);
       } catch (err) {
         this.log(`Break tab colours: ${err instanceof Error ? err.message : String(err)}`);
       }
+      if (run !== this.run) return;
     }
     // The tab loads behind the code and comes forward once its first frame (the code, as the editor shows it) is
     // drawn: no empty tab in between.
@@ -50,13 +63,14 @@ export class BreakPanel implements vscode.Disposable {
       localResourceRoots: [vscode.Uri.joinPath(this.extensionUri, 'media')],
     });
     this.panel = panel;
-    let shown = false, ready = false;
+    this.source = canReturn ? editor! : null;
+    let forward = false, ready = false;
     /** The animation starts only once the tab is in front and has drawn its first frame. */
-    const go = () => { if (shown && ready) void panel.webview.postMessage({ type: 'go' }); };
+    const go = () => { if (forward && ready) void panel.webview.postMessage({ type: 'go' }); };
     const bringForward = () => {
       if (this.panel !== panel) return;
-      if (!shown) {
-        shown = true;
+      if (!forward) {
+        forward = true;
         // The editor lands on the line the tab's first frame starts with, right before the switch; then the keyboard
         // goes to the tab, so Esc works at once.
         const reveal = () => {
@@ -64,7 +78,7 @@ export class BreakPanel implements vscode.Disposable {
           panel.reveal(column, false);
           go();
         };
-        if (editor) void snapToLine(editor, (m) => this.log(m)).then(reveal, reveal);
+        if (editor && canReturn) void snapToLine(editor, (m) => this.log(m)).then(reveal, reveal);
         else reveal();
         return;
       }
@@ -78,18 +92,19 @@ export class BreakPanel implements vscode.Disposable {
       if (msg.type === 'ready') { ready = true; bringForward(); }
       if (msg.type === 'closed') {
         // The code first (the tab's last frame is the same picture), then the tab goes: no empty frame between.
-        if (!editor) { panel.dispose(); return; }
+        if (!editor || !canReturn) { panel.dispose(); return; }
         void vscode.window.showTextDocument(editor.document, { viewColumn: column, preserveFocus: false }).then(
           () => panel.dispose(),
           () => panel.dispose(),
         );
       }
     });
-    panel.webview.html = this.html(panel.webview, breakData(scene, editor, this.themeColors(), paint, first));
-    if (editor) void vscode.window.showTextDocument(editor.document, { viewColumn: column, preserveFocus: true });
+    panel.webview.html = this.html(panel.webview, breakData(scene, editor, paint ? NO_COLORS : this.themeColors(), paint, shown));
+    if (editor && canReturn) void vscode.window.showTextDocument(editor.document, { viewColumn: column, preserveFocus: true });
   }
 
   dispose(): void {
+    this.run++;
     this.panel?.dispose();
   }
 
@@ -153,20 +168,36 @@ export async function snapToLine(editor: vscode.TextEditor, log: (m: string) => 
   }
 }
 
+/** Is the editor's group showing it as an ordinary text tab (not one side of a diff, nor a notebook cell)? */
+function showsPlainText(editor: vscode.TextEditor): boolean {
+  const input = vscode.window.tabGroups.all.find((g) => g.viewColumn === editor.viewColumn)?.activeTab?.input;
+  return input instanceof vscode.TabInputText && input.uri.toString() === editor.document.uri.toString();
+}
+
+export interface VisibleLines {
+  first: number;
+  last: number;
+  lines: string[];
+}
+
+/** The editor's visible lines and one more, read together so their colours always belong to this text. */
+export function visibleLines(editor: vscode.TextEditor): VisibleLines {
+  const first = editor.visibleRanges[0]?.start.line ?? 0;
+  const last = (editor.visibleRanges.at(-1)?.end.line ?? first + 60) + 1;
+  const lines: string[] = [];
+  for (let i = first; i <= last && i < editor.document.lineCount; i++) lines.push(editor.document.lineAt(i).text.slice(0, BREAK.maxLineChars));
+  return { first, last, lines };
+}
+
 /** What the tab draws: the visible lines, their colours, and the editor's font and layout settings. */
-export function breakData(scene: BreakScene, editor: vscode.TextEditor | undefined, colors: TokenColors, paint: CodePaint | null = null, first?: number): BreakData {
+export function breakData(scene: BreakScene, editor: vscode.TextEditor | undefined, colors: TokenColors, paint: CodePaint | null = null, shown = editor && visibleLines(editor)): BreakData {
   const ed = vscode.workspace.getConfiguration('editor', editor?.document);
   const size = Number(ed.get('fontSize')) || 14;
   const lh = Number(ed.get('lineHeight')) || 0;
   // VS Code: 0 = the golden ratio of the font size, under 8 = a multiplier, else pixels.
   const lineHeight = lh >= 8 ? Math.round(lh) : lh > 0 ? Math.round(size * lh) : Math.round(size * (process.platform === 'darwin' ? 1.5 : 1.35));
-  const lines: string[] = [];
-  let firstLine = 0;
-  if (editor) {
-    firstLine = first ?? editor.visibleRanges[0]?.start.line ?? 0;
-    const last = (editor.visibleRanges.at(-1)?.end.line ?? firstLine + 60) + 1;
-    for (let i = firstLine; i <= last && i < editor.document.lineCount; i++) lines.push(editor.document.lineAt(i).text);
-  }
+  const lines = shown?.lines ?? [];
+  const firstLine = shown?.first ?? 0;
   const ln = ed.get<string>('lineNumbers');
   const view: EditorView = {
     firstLine,

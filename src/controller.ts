@@ -28,6 +28,7 @@ import {
   type SubmissionDetail,
   summarize,
   problemStatus,
+  type ProblemStatus,
 } from './grader';
 import { dirname } from 'node:path';
 import { TestcaseStore } from './data/testcaseStore';
@@ -42,7 +43,7 @@ import { cleanName, placeholder, resolveProblem } from './mapping/match';
 import { MappingStore } from './mapping/store';
 import { matchNote, type MatchInfo, NO_MATCH_INFO } from './mapping/linkActions';
 import { nameMatchesProblem, renameProposal } from './mapping/renameToProblem';
-import { DEFAULT_BASE_URL, LIMITS, SUBMISSION_SCHEME, TIMING, troubleshootingUrl, WEB_PATHS } from './shared/constants';
+import { CELEBRATE, DEFAULT_BASE_URL, LIMITS, SUBMISSION_SCHEME, TIMING, troubleshootingUrl, WEB_PATHS } from './shared/constants';
 import { MATCH_SOURCE, S, W } from './shared/strings';
 import { KEYS } from './shared/stateKeys';
 import { SecretLedger, type SecretKind, secretKey } from './shared/secrets';
@@ -150,6 +151,8 @@ export class GraderController implements vscode.Disposable {
   /** The celebration on the Result card (one-shot per id), and the id of the next one. */
   private celebration: CelebrateView | null = null;
   private celebrationSeq = 0;
+  /** A replay on screen: what comes back when it ends. */
+  private replay: { before: CelebrateView | null; timer: ReturnType<typeof setTimeout> } | null = null;
   readonly breakPanel: BreakPanel;
   private readonly prompts: InlinePrompts;
   private readonly folder: FolderMode;
@@ -349,7 +352,7 @@ export class GraderController implements vscode.Disposable {
       problemById: (id) => c.problemById(id),
       get problems() { return c.problems; },
       get languages() { return c.languages; },
-      canShowScores: () => c.client.isLoggedIn || c.hasSavedPassword,
+      canShowScores: () => c.canShowScores(),
       fun: {
         activity: () => c.breakReminder?.activity(),
         // After the run or submit has fully ended, so "running" / "grading" no longer hold the prompt back.
@@ -504,6 +507,7 @@ export class GraderController implements vscode.Disposable {
 
   dispose(): void {
     this.submitFlow.stop();
+    this.endReplay();
     this.badges.dispose();
     this.breakReminder.dispose();
     this.breakPanel.dispose();
@@ -636,6 +640,7 @@ export class GraderController implements vscode.Disposable {
   private resetSessionState(): void {
     this.accountStatus = 'logged-out';
     this.breakReminder?.resetSession();
+    this.endReplay();
     this.celebration = null;
     // Nothing started for the previous account carries over: a Retry or poll would reach the new server.
     this.loginAttempt++;
@@ -1489,22 +1494,26 @@ export class GraderController implements vscode.Disposable {
       verdicts: final.verdicts,
       compileError: final.compileError,
       known: String(problem.id) in firstFull,
+      rawSum: problem.list?.rawSum ?? false,
     });
     if (verdict === 'none') return;
     const now = Date.now();
     firstFull[problem.id] = verdict === 'celebrate' ? now : 0;
     void this.ctx.globalState.update(this.firstFullKey(), firstFull).then(undefined, (err) => this.logError('Saving trophies failed', err));
-    if (verdict === 'celebrate' && this.cfg.funCelebrate) this.celebrate(problem.id, final.id, firstFull, now);
+    if (verdict === 'celebrate' && this.cfg.funCelebrate) {
+      this.endReplay();
+      this.celebrate(problem.id, final.id, firstFull, now);
+    }
   }
 
-  private celebrate(problemId: number | null, submissionId: number | null, firstFull: FirstFull, now: number): void {
-    const list = this.data.problemList();
-    const problems = this.problems.map((p) => ({ id: p.id, status: problemStatus(p), tags: p.tags ?? [] }));
-    const stats = trophyStats(firstFull, problems, this.topics(list), now);
-    const p = problemId === null ? undefined : this.problemById(problemId);
+  private celebrate(problemId: number, submissionId: number | null, firstFull: FirstFull, now: number): void {
+    const problems = this.trophyProblems();
+    const stats = trophyStats(firstFull, problems, this.topics(this.data.problemList()), now);
+    const p = this.problemById(problemId);
     this.celebration = {
-      id: ++this.celebrationSeq,
-      problemId: problemId ?? -1,
+      // Always larger than the last one, also after a restart: the panel remembers the last id it played.
+      id: (this.celebrationSeq = Math.max(now, this.celebrationSeq + 1)),
+      problemId,
       submissionId,
       problemName: p ? cleanName(p.name) : '',
       streak: stats.streak,
@@ -1515,22 +1524,56 @@ export class GraderController implements vscode.Disposable {
     this.emit();
   }
 
-  private trophies(): TrophiesView | null {
-    if (!this.cfg.funEnabled) return null;
-    const problems = this.problems.map((p) => ({ id: p.id, status: problemStatus(p), tags: p.tags ?? [] }));
-    return trophyStats(this.firstFull(), problems, this.topics(this.data.problemList()), Date.now());
+  private trophyProblems(): { id: number; status: ProblemStatus; tags: string[] }[] {
+    return this.problems.map((p) => ({ id: p.id, status: problemStatus(p), tags: p.tags ?? [] }));
   }
 
-  /** Play the celebration again on the Result card shown now (nothing is recorded). */
+  /** Logged in, or able to log in by itself: a logged-out person's scores stay off the screen. */
+  private canShowScores(): boolean {
+    return this.client.isLoggedIn || this.hasSavedPassword;
+  }
+
+  private trophies(): TrophiesView | null {
+    if (!this.cfg.funEnabled || !this.canShowScores()) return null;
+    return trophyStats(this.firstFull(), this.trophyProblems(), this.topics(this.data.problemList()), Date.now());
+  }
+
+  /**
+   * Play the celebration again on the finished Result card shown now (nothing is recorded). The ring and the ribbon
+   * leave with the animation, whatever the score: only a real first full score keeps them.
+   */
   async playCelebration(): Promise<void> {
-    await vscode.commands.executeCommand('cedtGrader.panel.focus');
     const r = this.state().result;
-    this.celebrate(r?.problemId ?? this.currentProblem()?.id ?? null, r?.submissionId ?? null, this.firstFull(), Date.now());
+    if (!r || r.compileError || (r.phase !== 'done' && !r.verdicts.length)) {
+      void vscode.window.showInformationMessage(S.funCommands.playNeedsResult);
+      return;
+    }
+    await vscode.commands.executeCommand('cedtGrader.panel.focus');
+    const before = this.replay ? this.replay.before : this.celebration;
+    this.endReplay();
+    this.celebrate(r.problemId, r.submissionId, this.firstFull(), Date.now());
+    this.replay = {
+      before,
+      timer: setTimeout(() => {
+        this.replay = null;
+        this.celebration = before;
+        this.emit();
+      }, CELEBRATE.replayMs),
+    };
     this.focusTarget?.('result');
+  }
+
+  private endReplay(): void {
+    if (this.replay) clearTimeout(this.replay.timer);
+    this.replay = null;
   }
 
   /** Open the Trophies section in the panel. */
   async showTrophies(): Promise<void> {
+    if (!this.cfg.funEnabled || !this.canShowScores()) {
+      void vscode.window.showInformationMessage(this.cfg.funEnabled ? S.funCommands.trophiesLogIn : S.funCommands.trophiesOff);
+      return;
+    }
     await vscode.commands.executeCommand('cedtGrader.panel.focus');
     this.focusTarget?.('trophies');
   }

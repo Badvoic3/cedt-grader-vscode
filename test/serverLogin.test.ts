@@ -12,7 +12,7 @@ const v = vi.hoisted(() => {
   const settings = new Map<string, unknown>();
   const listeners: ((e: { affectsConfiguration: (s: string) => boolean }) => void)[] = [];
   const event = () => ({ dispose() {} });
-  return { settings, listeners, event, folders: undefined as { uri: { fsPath: string } }[] | undefined, failUpdate: null as string | null, showWarningMessage: vi.fn(async (..._: unknown[]): Promise<string | undefined> => undefined), openExternal: vi.fn(async () => true) };
+  return { messages: [] as string[], settings, listeners, event, folders: undefined as { uri: { fsPath: string } }[] | undefined, failUpdate: null as string | null, showWarningMessage: vi.fn(async (..._: unknown[]): Promise<string | undefined> => undefined), openExternal: vi.fn(async () => true) };
 });
 
 vi.mock('vscode', () => {
@@ -44,7 +44,7 @@ vi.mock('vscode', () => {
       onDidChangeActiveTextEditor: v.event,
       showWarningMessage: v.showWarningMessage,
       showErrorMessage: async () => undefined,
-      showInformationMessage: async () => undefined,
+      showInformationMessage: async (m: string) => void v.messages.push(m),
       tabGroups: { all: [], onDidChangeTabs: v.event },
     },
     workspace: {
@@ -69,7 +69,7 @@ vi.mock('vscode', () => {
 import type * as vscode from 'vscode';
 import { GraderController } from '../src/controller';
 import type { CrashReporter } from '../src/crashReporter';
-import { DEFAULT_BASE_URL } from '../src/shared/constants';
+import { CELEBRATE, DEFAULT_BASE_URL } from '../src/shared/constants';
 import { pathKey } from '../src/mapping/paths';
 import { KEYS } from '../src/shared/stateKeys';
 import { S } from '../src/shared/strings';
@@ -432,9 +432,17 @@ describe('first-full-score celebration (real controller)', () => {
   const final = (points: number, ok = true) => ({ id: 9, points, compileError: false, verdicts: [{ index: 1, ok, label: '' }] }) as never;
   const host = (c: GraderController) => (c as unknown as { host: { fun: { finished(p: unknown, f: unknown, a: number | null): void } } }).host;
   const key = `${KEYS.funFirstFullPrefix}:${DEFAULT_BASE_URL}:`;
+  const signedIn = (c: GraderController) => { (c as unknown as { hasSavedPassword: boolean }).hasSavedPassword = true; };
+  /** Play Celebration with this Result card on show. */
+  const play = (c: GraderController, result: object = {}) => {
+    const real = c.state.bind(c);
+    vi.spyOn(c, 'state').mockImplementationOnce(() => ({ ...real(), result: { phase: 'done', problemId: 77, submissionId: 9, compileError: false, verdicts: [{}], ...result } }) as never);
+    return c.playCelebration();
+  };
 
   it('records the first full score per account, celebrates it once, and never for a failing verdict', () => {
     const { c, globalState } = start();
+    signedIn(c);
     host(c).fun.finished(problem, final(60, false), 60);
     expect(c.state().celebrate ?? null).toBeNull();
     host(c).fun.finished(problem, final(100), 100);
@@ -456,15 +464,81 @@ describe('first-full-score celebration (real controller)', () => {
     expect(globalState.get(key)).toMatchObject({ '78': 0, '77': expect.any(Number) });
   });
 
-  it('Play Celebration replays with a new id and records nothing; trophies follow fun.enabled', async () => {
+  it('Play Celebration replays on a finished result with a larger id and records nothing; trophies follow fun.enabled', async () => {
     const { c, globalState } = start();
-    await c.playCelebration();
-    expect(c.state().celebrate).toMatchObject({ id: 1, problemId: -1, problemName: '' });
-    await c.playCelebration();
-    expect(c.state().celebrate!.id).toBe(2);
+    signedIn(c);
+    await play(c);
+    const first = c.state().celebrate!;
+    expect(first).toMatchObject({ problemId: 77, submissionId: 9 });
+    expect(first.id).toBeGreaterThan(Date.now() - 60_000); // larger than any id a panel saved before a restart
+    await play(c);
+    expect(c.state().celebrate!.id).toBeGreaterThan(first.id);
     expect(globalState.get(key)).toBeUndefined();
     v.settings.set('fun.enabled', false);
     for (const l of v.listeners) l({ affectsConfiguration: () => true });
     expect(c.state().trophies).toBeNull();
+    v.settings.delete('fun.enabled');
+  });
+
+  it('Play Celebration without a finished result says so, plays nothing and holds back no prompt', async () => {
+    const { c } = start();
+    v.messages.length = 0;
+    await c.playCelebration();
+    expect(c.state().celebrate ?? null).toBeNull();
+    await play(c, { phase: 'grading', verdicts: [] });
+    expect(c.state().celebrate ?? null).toBeNull();
+    await play(c, { compileError: true });
+    expect(c.state().celebrate ?? null).toBeNull();
+    expect(v.messages).toEqual([S.funCommands.playNeedsResult, S.funCommands.playNeedsResult, S.funCommands.playNeedsResult]);
+  });
+
+  it('a replay leaves with its animation, and a real first full score stays', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    try {
+      const { c } = start();
+      await play(c);
+      expect(c.state().celebrate).not.toBeNull();
+      vi.advanceTimersByTime(CELEBRATE.replayMs);
+      expect(c.state().celebrate ?? null).toBeNull(); // no "First 100!" stays beside a failing score
+      host(c).fun.finished(problem, final(100), 100);
+      const real = c.state().celebrate!;
+      await play(c);
+      await play(c);
+      expect(c.state().celebrate!.id).toBeGreaterThan(real.id);
+      vi.advanceTimersByTime(CELEBRATE.replayMs);
+      expect(c.state().celebrate!.id).toBe(real.id);
+      // A real one during a replay isn't overwritten when the replay ends.
+      await play(c);
+      host(c).fun.finished({ ...(problem as object), id: 79 } as never, final(100), 100);
+      const second = c.state().celebrate!;
+      expect(second.problemId).toBe(79);
+      vi.advanceTimersByTime(CELEBRATE.replayMs);
+      expect(c.state().celebrate!.id).toBe(second.id);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('a raw sum at 100 with a failing test is no first full score', () => {
+    const { c, globalState } = start();
+    host(c).fun.finished({ ...(problem as object), list: { rawSum: true } } as never, final(100, false), 100);
+    expect(c.state().celebrate ?? null).toBeNull();
+    expect(globalState.get(key)).toBeUndefined();
+  });
+
+  it('a logged-out person sees no trophies, and Show Trophies says why', async () => {
+    const { c } = start();
+    expect(c.state().trophies).toBeNull();
+    v.messages.length = 0;
+    await c.showTrophies();
+    expect(v.messages).toEqual([S.funCommands.trophiesLogIn]);
+    signedIn(c);
+    expect(c.state().trophies).not.toBeNull();
+    v.settings.set('fun.enabled', false);
+    for (const l of v.listeners) l({ affectsConfiguration: () => true });
+    v.messages.length = 0;
+    await c.showTrophies();
+    expect(v.messages).toEqual([S.funCommands.trophiesOff]);
+    v.settings.delete('fun.enabled');
   });
 });

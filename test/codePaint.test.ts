@@ -22,6 +22,8 @@ describe('editor colours: theme rules', () => {
   it('customizations: groups, TextMate rules, and blocks for this theme only (wildcards too)', () => {
     const custom = { comments: '#00ff00', '[Dark Modern]': { textMateRules: [{ scope: 'string', settings: { foreground: '#ff0000' } }] }, '[Light*]': { numbers: '#0000ff' }, '[*Dark*]': { keywords: { foreground: '#abcdef' } } };
     expect(themeBlocks(custom, ['Dark Modern'])).toHaveLength(3);
+    expect(themeBlocks({ '[Other][Dark*]': { numbers: '#111111' } }, ['Dark Modern'])).toHaveLength(2); // one key, two themes
+    expect(themeBlocks({ '[Other][Light*]': { numbers: '#111111' } }, ['Dark Modern'])).toHaveLength(1);
     const r = customRules(custom, ['Default Dark Modern', 'Dark Modern']);
     expect(scopeStyle(r, 'comment.line')?.foreground).toBe('#00ff00');
     expect(scopeStyle(r, 'string.quoted')?.foreground).toBe('#ff0000');
