@@ -1,5 +1,51 @@
 # Changelog
 
+## 1.1.0
+
+**Highlights:** a **built-in code & test runner** with a side-by-side **Tests** split view (no external runner extension or `.in` / `.out` files needed); **zero workspace clutter** (links and test cases now live in VS Code's hidden storage, with automatic import and a 1-click cleanup for old files); **Secondary Sidebar** placement on the right by default; **Explorer badges** for scores and topic tags; **server selector & compatibility check** at login; optional **first-full-score celebrations, Trophies, and 5 interactive break scenes**; a **subtle depth** visual look; and a new [**User Guide (`USERGUIDE.md`)**](USERGUIDE.md). Requires **VS Code 1.106 or newer**.
+
+### Product name & panel placement
+- **Renamed to Grader Submit** (command category and panel title **Grader**; extension ID stays `Badvoic3.cedt-grader-submit`, so updates and stored data carry over seamlessly).
+- **Opens on the right (Secondary Sidebar) by default** in VS Code 1.106+, keeping your file Explorer visible on the left. If you had moved it, your placement is kept. In Cursor (where the right sidebar is reserved for chat), it opens in the Primary Sidebar on the left.
+- **Open on startup** (`cedtGrader.panel.openOnStartup`, on by default): opens the panel when a window starts while leaving keyboard focus in your editor.
+
+### Built-in code & test runner
+- **Compile and run test cases locally** without CPH: supports `C++` (`-std=gnu++17 -O2 -DEVAL`), `C` (`-std=gnu11 -O2 -DEVAL`), `Python`, `Java`, `Rust`, `Go`, `Haskell`, `Ruby`, `Pascal`, and `PHP`.
+- **Tests split view** (**Open tests** / `Grader: Open Tests`): opens in a locked editor group beside your code with per-case verdicts (`Passed`, `Wrong Answer`, `Time Limit`, `Runtime Error`, `Compile Error`), runtime (`ms`), estimated peak memory (`MB` on macOS and Linux), line-numbered **Input / Expected / Actual**, collapsible **Stderr** (stderr never fails a passing case), inline line/token diff, **Compare in VS Code**, and **Use as expected**.
+- **Load test cases & Load samples** sit side by side in **Current problem** and in the **Tests** view. Every case carries a source badge (**Grader**, **PDF Sample**, or **Custom**) and is deduplicated automatically. Add, edit, reorder, or delete cases inline.
+- **Fast cached builds:** compiled binaries live in `<os.tmpdir()>/cedt-grader-bin/` (keyed by source, included headers, compiler, and flags, with automatic fallback if `/tmp` is mounted `noexec`). Configure compilers and flags with `cedtGrader.runner.compilerPaths`, `cedtGrader.runner.extraCompileArgs`, `cedtGrader.runner.defaultTimeLimitSeconds`, and `cedtGrader.runner.defaultMemoryLimitMB`.
+
+### Hidden storage & one-time cleanup
+- **Links and test cases moved out of your workspace:** file/folder problem links (`links/links.json`) and test cases (`runner-cases/`) are stored in VS Code's extension storage (`globalStorageUri`). The extension never creates `.cedt-grader.json`, `.cph/*.prob`, `.bin`, or `tests/*.in|out` files in your project folders.
+- **Automatic migration & 1-click cleanup:** opening a folder from `v1.0.0` silently imports existing `.cedt-grader.json` links and `.cph/*.prob` test cases into hidden storage, then offers an inline prompt to move leftover `.cedt-grader.json`, `.cph/*.prob` (only those belonging to this grader), and `<stem>.bin` files to the OS Trash. Re-run anytime with **Grader: Clean Up Old Files**.
+- **Clear Cached Data…** adds a separate **Custom test cases** option (unticked by default).
+
+### Folder Mode, workspace root & out-of-workspace files
+- **Workspace-root packages:** opening an unzipped package folder directly as your workspace root (`File → Open Folder…`) supports Folder Mode at the root and activates it automatically when both `main.cpp` (`Runs`) and `student.h` (`Submits`) are present.
+- **Files outside a workspace:** single files opened without a workspace folder (`code ~/Downloads/solution.cpp`) match by file name or immediate parent folder name, store links in hidden storage, and open directly when clicked in the Problems list.
+- **Sibling-file links:** choosing a problem or toggling Folder Mode in a non-auto-matched folder now consistently applies across all sibling files in that folder.
+
+### Account & server selection
+- **Server line (`Server: <host>`)** in the logged-out **Account** section shows the active `cafe-grader-web` server. Click **✎** to enter another server URL, check compatibility live (`Works with Grader Submit`) before sending your password, or reset with **Use the default server**. Plain `http://` addresses warn before sending credentials.
+- **Website icon (`🌐`)** next to `<username> · <host>` in the logged-in **Account** section opens the grader website in your browser.
+- **How to use** and **Troubleshooting** sit side by side at the bottom of the logged-out **Account** section and in the panel's **⋯** menu.
+
+### Explorer badges
+- **File and folder badges** in the VS Code Explorer and editor tabs (`cedtGrader.explorer.badge`): `score` (default: `✓` for 100, `0`–`99`, `–` untried), `tag` (first 2 letters of the first topic tag, with full tags and score in the tooltip), or `off`.
+- **Status and tag colours** (`cedtGrader.explorer.colors`, on by default): tints badges and file names by score status (green full score, amber in progress, red zero, grey untried; unconfirmed suggestions stay neutral) or deterministically by topic tag (`cedtGrader.explorer.*` theme color tokens).
+
+### Celebrations, Trophies & break scenes
+- **First-full-score celebration** (`cedtGrader.fun.celebrate`, on by default): plays a ring fill, confetti burst, ribbon, and trophy toast the first time a problem reaches a counted score of 100 or passes every test (`Grader: Play Celebration` replays it anytime).
+- **Trophies section** (`trophies` in `cedtGrader.panel.sections`, `Grader: Show Trophies`): tracks your First 100s, daily streak, completed topics, and per-topic progress bars.
+- **Gentle break reminder** (`cedtGrader.fun.breakReminder`, `cedtGrader.fun.breakMinutes` default `90`): shows a status-bar hint (`☕ Break?`) after 90 minutes of active coding and prompts only at a natural stopping point (at most twice a day, never during an exam).
+- **Five interactive break scenes** (`cedtGrader.fun.breakScene` and `Grader: Take a Break` commands): **Falling Code** (`sand`), **3D Donut** (`donut3d`), **2D Donut** (`donut2d`), **Breathing** (`breathe`), and **Swarm** (`swarm`), rendered from your open code with real syntax colours. Master toggle `cedtGrader.fun.enabled` turns all fun extras on or off.
+
+### Look & feel, documentation & reliability
+- **Subtle depth look** (`cedtGrader.panel.look`: `subtle` default, or `plain`): sticky section headers, raised cards, smooth section/menu animations (respecting `prefers-reduced-motion`), and frosted menus/tooltips when VS Code's own menus use frost.
+- **Problem list & sorting:** added **Default order (reversed)** and **Score (low → high / high → low)**; reload clears stale caches so newly published problems appear immediately.
+- **Crash reporting:** unexpected errors display a redacted inline report (no tokens, passwords, or personal paths) with a 1-click button to open a prefilled GitHub issue. Nothing is ever sent automatically.
+- **Documentation set:** replaced the in-app Getting Started walkthrough with [**`USERGUIDE.md`**](USERGUIDE.md), [**`DEVGUIDE.md`**](DEVGUIDE.md), and [**`SUPPORT.md`**](SUPPORT.md) (plus Thai counterparts), reachable from **How to use** in the panel and `Grader: How to Use`.
+
 ## 1.0.0 — 2026-11-04
 
 The first release on the VS Code Marketplace (search "CEDT Grader Submit", ID `Badvoic3.cedt-grader-submit`). Needs VS Code 1.90 or newer.
